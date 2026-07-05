@@ -1,0 +1,86 @@
+{
+  "$schema": "https://datapackage.org/profiles/2.0/datapackage.json",
+  "name": "edgar",
+  "title": "SEC EDGAR \u2014 Company Tickers",
+  "description": "Every company with securities registered with the U.S. Securities and Exchange Commission \u2014 its Central Index Key (CIK), ticker symbol, exchange and legal name, from the SEC's EDGAR system.",
+  "homepage": "https://meridian.online/datasets/edgar",
+  "licenses": [
+    {
+      "name": "other-pd",
+      "title": "Public domain (U.S. federal government work)",
+      "path": "https://www.sec.gov/privacy#dissemination"
+    }
+  ],
+  "sources": [
+    {
+      "title": "SEC EDGAR",
+      "path": "https://www.sec.gov/"
+    }
+  ],
+  "created": "2026-07-05T10:59:36Z",
+  "resources": [
+    {
+      "bytes": 273288,
+      "format": "parquet",
+      "hash": "sha256:6c6b9939f97e0e6c42722ac84b725e4f7d43d58eee50695ad5ce3412a209a4e5",
+      "mediatype": "application/vnd.apache.parquet",
+      "name": "edgar",
+      "path": "https://openlake.meridian.online/edgar.parquet",
+      "schema": {
+        "fields": [
+          {
+            "constraints": {
+              "pattern": "^[0-9]+$"
+            },
+            "name": "cik",
+            "type": "string",
+            "x-finetype-confidence": 0.85,
+            "x-finetype-label": "representation.identifier.numeric_code"
+          },
+          {
+            "constraints": {
+              "maxLength": 200,
+              "minLength": 2
+            },
+            "name": "company_name",
+            "type": "string",
+            "x-finetype-confidence": 0.7467,
+            "x-finetype-label": "representation.text.entity_name"
+          },
+          {
+            "constraints": {
+              "pattern": "^[A-Z]{2}[A-Z2-9]{3}$"
+            },
+            "name": "ticker",
+            "type": "string",
+            "x-finetype-confidence": 0.8208,
+            "x-finetype-label": "geography.transportation.unlocode"
+          },
+          {
+            "constraints": {
+              "maxLength": 100,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$"
+            },
+            "name": "exchange",
+            "type": "string",
+            "x-finetype-confidence": 1.0,
+            "x-finetype-enum-domain": {
+              "cohesion": 0.75,
+              "distinct": 4,
+              "domain": [
+                "CBOE",
+                "NYSE",
+                "Nasdaq",
+                "OTC"
+              ],
+              "open": true,
+              "rows": 10226
+            },
+            "x-finetype-label": "representation.text.word"
+          }
+        ]
+      }
+    }
+  ]
+}

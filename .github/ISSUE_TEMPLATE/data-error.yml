@@ -1,0 +1,31 @@
+name: Data error report
+description: A record in a published dataset doesn't match the authoritative source.
+title: "Data error: "
+labels: ["data-error"]
+body:
+  - type: dropdown
+    id: dataset
+    attributes:
+      label: Dataset
+      options:
+        - gleif
+        - edgar
+        - naics
+        - other / not sure
+    validations:
+      required: true
+  - type: input
+    id: record
+    attributes:
+      label: Which record?
+      description: The identifier of the affected row(s).
+      placeholder: e.g. LEI 529900T8BM49AURSDO55, CIK 0000320193, NAICS 541511
+    validations:
+      required: true
+  - type: textarea
+    id: detail
+    attributes:
+      label: What's wrong?
+      description: What the dataset says, what the source says, and a link to the source page if you have one.
+    validations:
+      required: true

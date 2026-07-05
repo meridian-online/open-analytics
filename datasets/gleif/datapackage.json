@@ -1,0 +1,154 @@
+{
+  "$schema": "https://datapackage.org/profiles/2.0/datapackage.json",
+  "name": "gleif",
+  "title": "GLEIF \u2014 Legal Entity Identifiers",
+  "description": "The Global Legal Entity Identifier Foundation's public register of legal entities \u2014 every entity with its 20-character LEI, legal name, country, jurisdiction and registration status.",
+  "homepage": "https://meridian.online/datasets/gleif",
+  "licenses": [
+    {
+      "name": "CC0-1.0",
+      "title": "CC0 1.0 Universal",
+      "path": "https://creativecommons.org/publicdomain/zero/1.0/"
+    }
+  ],
+  "sources": [
+    {
+      "title": "GLEIF golden copy",
+      "path": "https://www.gleif.org/"
+    }
+  ],
+  "created": "2026-07-05T10:59:35Z",
+  "resources": [
+    {
+      "bytes": 127418763,
+      "format": "parquet",
+      "hash": "sha256:07e1bb77d258ba5124d135d82fe0809b6a529b82d663d53ee35c7454ca2d86bb",
+      "mediatype": "application/vnd.apache.parquet",
+      "name": "gleif",
+      "path": "https://openlake.meridian.online/gleif.parquet",
+      "schema": {
+        "fields": [
+          {
+            "constraints": {
+              "pattern": "^[0-9]{4}[A-Z0-9]{14}[0-9]{2}$"
+            },
+            "name": "lei",
+            "type": "string",
+            "x-finetype-confidence": 1.0,
+            "x-finetype-label": "finance.securities.lei"
+          },
+          {
+            "constraints": {
+              "maxLength": 200,
+              "minLength": 2
+            },
+            "name": "legal_name",
+            "type": "string",
+            "x-finetype-confidence": 0.9864,
+            "x-finetype-label": "representation.text.entity_name"
+          },
+          {
+            "constraints": {
+              "pattern": "^[A-Z]{2}$"
+            },
+            "name": "country",
+            "type": "string",
+            "x-finetype-confidence": 0.9998,
+            "x-finetype-label": "geography.location.country_code"
+          },
+          {
+            "constraints": {
+              "maxLength": 100,
+              "minLength": 1
+            },
+            "name": "city",
+            "type": "string",
+            "x-finetype-confidence": 1.0,
+            "x-finetype-label": "geography.location.city"
+          },
+          {
+            "constraints": {
+              "pattern": "^[A-Z]{2}$"
+            },
+            "name": "jurisdiction",
+            "type": "string",
+            "x-finetype-confidence": 0.9685,
+            "x-finetype-label": "geography.location.country_code"
+          },
+          {
+            "name": "legal_form",
+            "type": "string",
+            "x-finetype-confidence": 0.454,
+            "x-finetype-label": "unknown"
+          },
+          {
+            "name": "entity_status",
+            "type": "boolean",
+            "x-finetype-confidence": 1.0,
+            "x-finetype-enum-domain": {
+              "cohesion": 1.0,
+              "distinct": 2,
+              "domain": [
+                "ACTIVE",
+                "INACTIVE"
+              ],
+              "open": true,
+              "rows": 99732
+            },
+            "x-finetype-label": "representation.boolean.terms"
+          },
+          {
+            "constraints": {
+              "maxLength": 100,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$"
+            },
+            "name": "registration_status",
+            "type": "string",
+            "x-finetype-confidence": 0.5403,
+            "x-finetype-enum-domain": {
+              "cohesion": 0.7139999866485596,
+              "distinct": 7,
+              "domain": [
+                "ANNULLED",
+                "DUPLICATE",
+                "ISSUED",
+                "LAPSED",
+                "PENDING_ARCHIVAL",
+                "PENDING_TRANSFER",
+                "RETIRED"
+              ],
+              "open": true,
+              "rows": 100000
+            },
+            "x-finetype-label": "representation.text.word"
+          },
+          {
+            "constraints": {
+              "maxLength": 10,
+              "minLength": 10,
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "format": "%Y-%m-%d",
+            "name": "initial_registration",
+            "type": "date",
+            "x-finetype-confidence": 1.0,
+            "x-finetype-label": "datetime.date.iso"
+          },
+          {
+            "constraints": {
+              "maxLength": 10,
+              "minLength": 10,
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "format": "%Y-%m-%d",
+            "name": "next_renewal",
+            "type": "date",
+            "x-finetype-confidence": 1.0,
+            "x-finetype-label": "datetime.date.iso"
+          }
+        ]
+      }
+    }
+  ]
+}

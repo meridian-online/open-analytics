@@ -1,0 +1,83 @@
+{
+  "$schema": "https://datapackage.org/profiles/2.0/datapackage.json",
+  "name": "naics",
+  "title": "NAICS \u2014 Industry Classification (2022)",
+  "description": "The 2022 North American Industry Classification System \u2014 the standard taxonomy for classifying business establishments by industry, from broad sectors down to specific national industries.",
+  "homepage": "https://meridian.online/datasets/naics",
+  "licenses": [
+    {
+      "name": "other-pd",
+      "title": "Public domain (U.S. Census Bureau)",
+      "path": "https://www.census.gov/naics/"
+    }
+  ],
+  "sources": [
+    {
+      "title": "U.S. Census Bureau",
+      "path": "https://www.census.gov/naics/"
+    }
+  ],
+  "created": "2026-07-05T10:59:36Z",
+  "resources": [
+    {
+      "bytes": 345758,
+      "format": "parquet",
+      "hash": "sha256:206f4f3c35748d273187f2928f74a8fdc1a3f2a351f1f4f53190b5b48d0e5c13",
+      "mediatype": "application/vnd.apache.parquet",
+      "name": "naics",
+      "path": "https://openlake.meridian.online/naics.parquet",
+      "schema": {
+        "fields": [
+          {
+            "constraints": {
+              "pattern": "^(11|2[1-3]|3[1-3]|42|4[4-5]|4[8-9]|5[1-6]|6[1-2]|7[1-2]|8[1-2]|92)[0-9]{0,4}$"
+            },
+            "name": "code",
+            "type": "string",
+            "x-finetype-confidence": 1.0,
+            "x-finetype-label": "identity.industry.naics"
+          },
+          {
+            "constraints": {
+              "maxLength": 200,
+              "minLength": 2
+            },
+            "name": "title",
+            "type": "string",
+            "x-finetype-confidence": 0.678,
+            "x-finetype-label": "representation.text.entity_name"
+          },
+          {
+            "constraints": {
+              "maxLength": 200,
+              "minLength": 2
+            },
+            "name": "level",
+            "type": "string",
+            "x-finetype-confidence": 0.8749,
+            "x-finetype-enum-domain": {
+              "cohesion": 0.6000000238418579,
+              "distinct": 5,
+              "domain": [
+                "industry_group",
+                "naics_industry",
+                "national_industry",
+                "sector",
+                "subsector"
+              ],
+              "open": true,
+              "rows": 2125
+            },
+            "x-finetype-label": "representation.text.entity_name"
+          },
+          {
+            "name": "description",
+            "type": "string",
+            "x-finetype-confidence": 1.0,
+            "x-finetype-label": "unknown"
+          }
+        ]
+      }
+    }
+  ]
+}
