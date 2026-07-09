@@ -71,10 +71,14 @@
             "x-finetype-label": "representation.text.entity_name"
           },
           {
+            "constraints": {
+              "maxLength": 65536,
+              "minLength": 1
+            },
             "name": "description",
             "type": "string",
             "x-finetype-confidence": 1.0,
-            "x-finetype-label": "unknown"
+            "x-finetype-label": "representation.text.plain_text"
           }
         ]
       }
