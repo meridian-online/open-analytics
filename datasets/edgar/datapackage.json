@@ -48,13 +48,10 @@
             "x-finetype-label": "representation.text.entity_name"
           },
           {
-            "constraints": {
-              "pattern": "^[A-Z]{2}[A-Z2-9]{3}$"
-            },
             "name": "ticker",
             "type": "string",
-            "x-finetype-confidence": 0.8208,
-            "x-finetype-label": "geography.transportation.unlocode"
+            "x-finetype-confidence": 0.6,
+            "x-finetype-label": "unknown"
           },
           {
             "constraints": {
