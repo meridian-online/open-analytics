@@ -56,16 +56,19 @@ steps:
     produces: [gleif_ra_sec]
     preconditions:
       - modified_after: { path: build/gleif_ra_sec.csv, period: 168h }
-  # TODO(backbone): fetch_ncen — SEC Form N-CEN datasets (quarterly ZIPs at
-  #   sec.gov/dera/data/form-n-cen-data-sets). REGISTRANT.tsv pairs the fund
-  #   registrant CIK ↔ LEI (100% populated) and maps series → registrant CIK. Adds
-  #   the authoritative fund-registrant layer; pin the URL + parse to CSV, then
-  #   UNION into models/tier.sql (§1).
+  - name: fetch_ncen
+    # SEC Form N-CEN (the annual fund filing itself — the most direct authority).
+    # REGISTRANT.tsv → registrant CIK ↔ LEI; FUND_REPORTED_INFO.tsv → series
+    # SERIES_ID ↔ LEI (~100% LEI fill). ~4 recent quarters cover the fund universe.
+    command: "mkdir -p build && bash scripts/fetch_ncen.sh 4 build/ncen"
+    produces: [ncen]
+    preconditions:
+      - modified_after: { path: build/ncen, period: 168h }
 
   # ── Load + normalize ───────────────────────────────────────────────────────────
   - name: load
     sql: models/load.sql
-    depends_on: [edgar_src, gleif_src, gleif_ra_sec]
+    depends_on: [edgar_src, gleif_src, gleif_ra_sec, ncen]
 
   # ── Resolve: probabilistic name match for the operating-company tail ───────────
   - name: resolve

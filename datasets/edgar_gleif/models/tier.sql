@@ -12,10 +12,20 @@
 --    data (Wikidata is kept out of the published pipeline; it's an out-of-band
 --    validation cross-check only).
 CREATE OR REPLACE TABLE authoritative AS
+-- 1a) GLEIF entities registered at SEC EDGAR (RA000665).
 SELECT key_type, key, lei, category, 'sec-registration' AS method,
        'authoritative' AS tier, 1.0 AS confidence
-FROM gleif_ra_sec;
--- 1c) TODO(backbone): UNION the SEC N-CEN registrant CIK↔LEI here once fetched.
+FROM gleif_ra_sec
+-- 1b) SEC N-CEN — registrant CIK ↔ LEI (the fund company/trust).
+UNION ALL BY NAME
+SELECT 'cik' AS key_type, key, lei, 'FUND' AS category, 'sec-ncen' AS method,
+       'authoritative' AS tier, 1.0 AS confidence
+FROM ncen_registrant
+-- 1c) SEC N-CEN — series SERIES_ID ↔ LEI (each fund series).
+UNION ALL BY NAME
+SELECT 'series' AS key_type, key, lei, 'FUND' AS category, 'sec-ncen' AS method,
+       'authoritative' AS tier, 1.0 AS confidence
+FROM ncen_series;
 
 -- Dedup identical edges (belt-and-braces; RA000665 shouldn't duplicate a key↔lei).
 CREATE OR REPLACE TABLE authoritative_d AS

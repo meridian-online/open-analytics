@@ -29,3 +29,15 @@ CREATE OR REPLACE TABLE gleif_ra_sec AS
     category
   FROM read_csv('build/gleif_ra_sec.csv', header=true, all_varchar=true)
   WHERE lei IS NOT NULL AND registered_as IS NOT NULL AND registered_as <> '';
+
+-- SEC Form N-CEN (the annual fund filing itself — most direct authority). Glob over
+-- the fetched quarters; union_by_name is robust to column-order drift across releases.
+-- REGISTRANT.tsv: registrant CIK ↔ LEI. FUND_REPORTED_INFO.tsv: series SERIES_ID ↔ LEI.
+CREATE OR REPLACE TABLE ncen_registrant AS
+  SELECT DISTINCT CAST(CIK AS BIGINT)::VARCHAR AS key, upper(trim(LEI)) AS lei
+  FROM read_csv('build/ncen/*/REGISTRANT.tsv', delim='\t', header=true, all_varchar=true, union_by_name=true)
+  WHERE LEI IS NOT NULL AND LEI <> '' AND CIK IS NOT NULL;
+CREATE OR REPLACE TABLE ncen_series AS
+  SELECT DISTINCT trim(SERIES_ID) AS key, upper(trim(LEI)) AS lei
+  FROM read_csv('build/ncen/*/FUND_REPORTED_INFO.tsv', delim='\t', header=true, all_varchar=true, union_by_name=true)
+  WHERE LEI IS NOT NULL AND LEI <> '' AND SERIES_ID IS NOT NULL AND SERIES_ID <> '';

@@ -17,10 +17,10 @@ freshness lever. The step DAG:
 
 1. **fetch** the source Datasets (`source.edgar`, `source.gleif`) from the openlake.
 2. **fetch** the deterministic backbone (no guessing) — **official sources only
-   (SEC + GLEIF)**: GLEIF SEC registrations (RA000665 → authoritative
-   `CIK/series ↔ LEI` + `entity.category`; ~all funds). *N-CEN registrant layer is
-   the next addition — see below.* No crowd-sourced data enters the published
-   dataset; Wikidata is used only as an out-of-band validation cross-check.
+   (SEC + GLEIF)**: GLEIF SEC registrations (RA000665 → `CIK/series ↔ LEI` +
+   `entity.category`) and **SEC Form N-CEN** (the annual fund filing → registrant
+   `CIK ↔ LEI` and series `SERIES_ID ↔ LEI`, ~100% LEI fill). No crowd-sourced data
+   enters the published dataset; Wikidata is an out-of-band validation cross-check only.
 3. **load / normalise** — type the tables, normalise CIK representation, derive the
    `key_type` (cik | series | class) from the SEC identifier scheme.
 4. **resolve** — probabilistic name match for the operating-company tail, via the
@@ -43,9 +43,6 @@ freshness lever. The step DAG:
 
 ## Scale & frontier (not yet wired)
 
-- **N-CEN**: SEC Form N-CEN datasets (`sec.gov/dera/data/form-n-cen-data-sets`) pair
-  the fund **registrant CIK ↔ LEI** (100% populated) and map **series → registrant
-  CIK**. Add a `fetch_ncen` step + UNION into `models/tier.sql` §1c.
 - **~500k-entity scale**: expanding EDGAR beyond ticker filers means the
   `splink_resolve` blocking rules must be tuned — the GLEIF blocking hotspots are the
   empty/short-name bucket (~136k), first-token `THE` (~66k) and `STICHTING` (~10k);
