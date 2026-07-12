@@ -92,7 +92,22 @@ steps:
   - name: package
     sql: models/package.sql
 
-  # publish + describe: see README.
-  #   • publish  → the out-of-repo publish pipeline reads build/edgar_gleif.parquet (boundary).
-  #   • describe → a finetype-profile step that EMITS datapackage.json is the planned
-  #     follow-up, retiring today's hand-checked descriptor.
+  # ── Describe: EMIT datapackage.json from the built Parquet ─────────────────────
+  # Retires the hand-checked descriptor. `finetype profile ... -o datapackage` reads
+  # build/edgar_gleif.parquet and types every column from its taxonomy — the
+  # machine-decidable half: per-field `type`/`format`, the `x-finetype-*` semantic
+  # labels + observed constraints, and the resource bytes/hash/format. scripts/
+  # describe.py then overlays descriptor.overrides.json — the hand-curated half
+  # finetype CANNOT infer: the package title/description/licenses/sources, the
+  # published resource `path`, per-field prose descriptions, and the relational
+  # metadata (primaryKey + foreignKeys with their x-evidence/x-confidence/x-status).
+  # Overrides win; finetype fills the rest. FINETYPE GAP: it emits one typed Data
+  # Resource and nothing above the field level (no package identity, no edges, no
+  # evidence), and its labels are only as good as the installed finetype — see
+  # README "Describe". Runs after `package`; hard-fails if a curated key references a
+  # column not in the Parquet (that drift is exactly what this step exists to catch).
+  - name: describe
+    command: "uv run --script scripts/describe.py --parquet build/edgar_gleif.parquet --overrides descriptor.overrides.json --out datapackage.json"
+
+  # publish: the out-of-repo publish pipeline reads build/edgar_gleif.parquet and this
+  # emitted datapackage.json (boundary — not an arcform step). See README.

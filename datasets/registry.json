@@ -13,7 +13,7 @@
       "aliases": [],
       "manifest": "https://openlake.meridian.online/manifest.json",
       "doi": null,
-      "protocol": null
+      "protocol": "datasets/gleif/arcform.yaml"
     },
     {
       "uid": "2a3364ec-4166-4f54-ba90-45c04ec8fb7e",
@@ -23,7 +23,7 @@
       "aliases": [],
       "manifest": "https://openlake.meridian.online/manifest.json",
       "doi": null,
-      "protocol": null
+      "protocol": "datasets/edgar/arcform.yaml"
     },
     {
       "uid": "c4e4a53c-1163-4a49-9629-73f444254f06",
@@ -33,7 +33,7 @@
       "aliases": [],
       "manifest": "https://openlake.meridian.online/manifest.json",
       "doi": null,
-      "protocol": null
+      "protocol": "datasets/naics/arcform.yaml"
     },
     {
       "uid": "bf8a9f2d-60d9-4843-a691-2f03ed52228f",

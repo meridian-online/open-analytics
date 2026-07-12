@@ -1,0 +1,42 @@
+# The `source.gleif` Protocol — the reproducible *definition* of how the GLEIF Legal
+# Entity Identifier Dataset is ingested from the official GLEIF golden copy. `arc run`
+# executes this manifest; one Run → one Dataset version (the freshness lever). See
+# ./README.md (the Protocol primitive).
+#
+# BOUNDARY — do NOT fold this into this manifest:
+#   • PUBLISH (content-addressed R2 upload + manifest/catalog pointer flip) stays in
+#     the out-of-repo publish pipeline and READS this Protocol's terminal output,
+#     build/gleif.parquet. It is not an arcform step.
+#
+# Produces: build/gleif.parquet  →  published as source.gleif
+name: gleif
+engine: duckdb
+engine_version: ">=1.2"
+db: build/gleif.db
+
+# Transient API/network blips shouldn't sink a run — retry fetches with backoff.
+defaults:
+  retry:
+    max_attempts: 3
+    backoff_sec: 2.0
+
+steps:
+  # ── Fetch: resolve the latest golden-copy full CSV, download (~470 MB zip), unzip ─
+  # The GLEIF golden copy is republished daily; the helper resolves the current
+  # full-file CSV URL from the publishes API, then downloads + unzips it.
+  - name: fetch_gleif
+    command: "bash scripts/fetch_gleif.sh build/gleif_src"
+    produces: [gleif_raw]
+    preconditions:
+      - modified_after: { path: build/gleif_src, period: 24h }
+
+  # ── Load + normalise: the published 10-field schema (dates sliced from ISO ts) ───
+  - name: load
+    sql: models/load.sql
+    depends_on: [gleif_raw]
+
+  # ── Package: the terminal Parquet output (adds the search corpus, sorted, zstd) ──
+  - name: package
+    sql: models/package.sql
+
+  # publish: the out-of-repo publish pipeline reads build/gleif.parquet (boundary).
