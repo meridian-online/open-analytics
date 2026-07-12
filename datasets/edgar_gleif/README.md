@@ -61,14 +61,14 @@ freshness lever. The step DAG:
     absent from the built Parquet — the descriptor-drift guard. Keep the sidecar in
     step with `models/package.sql`'s output columns.
 
-## Scale & frontier (not yet wired)
+## Scale
 
-- **~500k-entity scale**: expanding EDGAR beyond ticker filers means the
-  `splink_resolve` blocking rules must be tuned — the GLEIF blocking hotspots are the
-  empty/short-name bucket (~136k), first-token `THE` (~66k) and `STICHTING` (~10k);
-  add compound keys, stopword handling, and **country as a blocking dimension** (only
-  ~355k of 3.36M GLEIF entities are US). Individuals (insider Form 3/4/5 filers) stay
-  **excluded** — personal data, counsel-gated.
-- **Run**: needs the `arc` binary, a `uv` environment for the `splink_resolve` step,
-  and `finetype` on `PATH` for the `describe` step;
-  `arc run --param as_of=YYYY-MM-DD`.
+- **Full SEC-entity universe (wired).** `fetch_sec_entities` builds the ~1.05M-filer
+  resolution left side (cik-lookup + former names), and `splink_resolve`'s blocking is
+  tuned for it (compound keys, stopword handling, **country as a blocking dimension** —
+  only ~355k of 3.36M GLEIF entities are US). Individuals (insider Form 3/4/5 filers)
+  are left in but carry no LEI, so they never match — the **output is entity-only by
+  construction** (no PII published).
+- **Run**: needs the `arc` binary, a `uv` env for `splink_resolve`, and `finetype` on
+  `PATH` for `describe`; `arc run --param as_of=YYYY-MM-DD`. At full scale the resolve
+  step is real compute (~100M candidate pairs) — run it deliberately.

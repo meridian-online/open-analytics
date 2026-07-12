@@ -2,10 +2,13 @@
 -- Run by the `load` step (depends on all fetches). CIK representations differ across
 -- sources (EDGAR unpadded, GLEIF zero-padded) — normalise all to unpadded.
 
--- Source Datasets (already published, content-addressed).
+-- The SEC entity universe (the resolution left side + name/ticker enrichment source):
+-- ~1.05M named filers incl. former names, tickers where present. cik is already
+-- unpadded VARCHAR from the build. Multiple rows per CIK (former names) are collapsed
+-- downstream — package.sql dedups EDGAR to one row per CIK, tier.sql dedups edges.
 CREATE OR REPLACE TABLE edgar AS
-  SELECT CAST(cik AS BIGINT)::VARCHAR AS cik, company_name, ticker, exchange
-  FROM read_parquet('build/edgar.parquet');
+  SELECT cik, company_name, ticker, exchange
+  FROM read_parquet('build/sec_entities.parquet');
 
 CREATE OR REPLACE TABLE gleif AS
   SELECT upper(trim(lei)) AS lei, legal_name, country, city, jurisdiction,

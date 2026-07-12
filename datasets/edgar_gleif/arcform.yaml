@@ -44,6 +44,16 @@ steps:
     produces: [gleif_src]
     preconditions:
       - modified_after: { path: build/gleif.parquet, period: 24h }
+  - name: fetch_sec_entities
+    # The full SEC entity resolution universe — the crosswalk's LEFT SIDE at scale:
+    # ~1.05M named filers from cik-lookup (incl. SEC former names → extra match
+    # surface) + tickers where present. Individuals stay in — no LEI, so they never
+    # match; the output is entity-only by construction. See scripts/.
+    command: "bash scripts/fetch_sec_entities.sh build/sec_entities.parquet"
+    produces: [sec_entities]
+    depends_on: [edgar_src]
+    preconditions:
+      - modified_after: { path: build/sec_entities.parquet, period: 168h }
 
   # ── Deterministic backbone: authoritative CIK/series ↔ LEI (no guessing) ───────
   # Official sources ONLY (SEC + GLEIF) — no crowd-sourced data in the published
@@ -68,7 +78,7 @@ steps:
   # ── Load + normalize ───────────────────────────────────────────────────────────
   - name: load
     sql: models/load.sql
-    depends_on: [edgar_src, gleif_src, gleif_ra_sec, ncen]
+    depends_on: [sec_entities, gleif_src, gleif_ra_sec, ncen]
 
   # ── Resolve: probabilistic name match for the operating-company tail ───────────
   - name: resolve
@@ -78,10 +88,10 @@ steps:
     # match_probability/method/status. NOTE: at the ~500k-entity scale, the operator's
     # blocking rules must be tuned (empty-name + "THE"/"STICHTING" hotspots) and
     # country used as a blocking dimension — see README "Scale & frontier".
-    command: "uv run --script ../../../arcform/operators/splink_resolve/resolve.py --edgar build/edgar.parquet --gleif build/gleif.parquet --out build/resolved.parquet"
+    command: "uv run --script ../../../arcform/operators/splink_resolve/resolve.py --edgar build/sec_entities.parquet --gleif build/gleif.parquet --out build/resolved.parquet"
     produces: [resolved]
-    depends_on: [edgar_src, gleif_src]
-    timeout_sec: 7200
+    depends_on: [sec_entities, gleif_src]
+    timeout_sec: 14400
 
   # ── Tier: deterministic (authoritative) ∪ splink (confirmed/candidate) ─────────
   - name: tier
