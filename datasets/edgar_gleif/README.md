@@ -16,9 +16,11 @@ orthogonal facets:
 freshness lever. The step DAG:
 
 1. **fetch** the source Datasets (`source.edgar`, `source.gleif`) from the openlake.
-2. **fetch** the deterministic backbone (no guessing): GLEIF SEC registrations
-   (RA000665 → authoritative `CIK/series ↔ LEI` + `entity.category`) and Wikidata
-   (`CIK↔LEI`, CC0). *N-CEN registrant layer is the next addition — see below.*
+2. **fetch** the deterministic backbone (no guessing) — **official sources only
+   (SEC + GLEIF)**: GLEIF SEC registrations (RA000665 → authoritative
+   `CIK/series ↔ LEI` + `entity.category`; ~all funds). *N-CEN registrant layer is
+   the next addition — see below.* No crowd-sourced data enters the published
+   dataset; Wikidata is used only as an out-of-band validation cross-check.
 3. **load / normalise** — type the tables, normalise CIK representation, derive the
    `key_type` (cik | series | class) from the SEC identifier scheme.
 4. **resolve** — probabilistic name match for the operating-company tail, via the

@@ -46,19 +46,16 @@ steps:
       - modified_after: { path: build/gleif.parquet, period: 24h }
 
   # ── Deterministic backbone: authoritative CIK/series ↔ LEI (no guessing) ───────
+  # Official sources ONLY (SEC + GLEIF) — no crowd-sourced data in the published
+  # pipeline. Authority provides the link for funds; operating companies have no
+  # official CIK↔LEI, so they are resolved (name match) below.
   - name: fetch_gleif_sec_registrations
     # GLEIF entities registered at SEC EDGAR (RA000665): LEI + registeredAs (numeric
-    # CIK for operating cos, S…/C… series/class for funds) + entity.category.
+    # CIK for operating cos, S…/C… series/class for funds) + entity.category. ~all funds.
     command: "mkdir -p build && bash scripts/fetch_gleif_ra.sh RA000665 build/gleif_ra_sec.csv"
     produces: [gleif_ra_sec]
     preconditions:
       - modified_after: { path: build/gleif_ra_sec.csv, period: 168h }
-  - name: fetch_wikidata_cik_lei
-    # Wikidata (CC0): items carrying both an SEC CIK (P5531) and an LEI (P1278).
-    command: "mkdir -p build && bash scripts/fetch_wikidata_cik_lei.sh build/wd_cik_lei.csv"
-    produces: [wd_cik_lei]
-    preconditions:
-      - modified_after: { path: build/wd_cik_lei.csv, period: 168h }
   # TODO(backbone): fetch_ncen — SEC Form N-CEN datasets (quarterly ZIPs at
   #   sec.gov/dera/data/form-n-cen-data-sets). REGISTRANT.tsv pairs the fund
   #   registrant CIK ↔ LEI (100% populated) and maps series → registrant CIK. Adds
@@ -68,7 +65,7 @@ steps:
   # ── Load + normalize ───────────────────────────────────────────────────────────
   - name: load
     sql: models/load.sql
-    depends_on: [edgar_src, gleif_src, gleif_ra_sec, wd_cik_lei]
+    depends_on: [edgar_src, gleif_src, gleif_ra_sec]
 
   # ── Resolve: probabilistic name match for the operating-company tail ───────────
   - name: resolve

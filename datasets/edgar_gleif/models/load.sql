@@ -1,6 +1,6 @@
 -- Load the fetched sources into typed tables and normalise the join keys.
 -- Run by the `load` step (depends on all fetches). CIK representations differ across
--- sources (EDGAR unpadded, GLEIF/Wikidata zero-padded) — normalise all to unpadded.
+-- sources (EDGAR unpadded, GLEIF zero-padded) — normalise all to unpadded.
 
 -- Source Datasets (already published, content-addressed).
 CREATE OR REPLACE TABLE edgar AS
@@ -29,10 +29,3 @@ CREATE OR REPLACE TABLE gleif_ra_sec AS
     category
   FROM read_csv('build/gleif_ra_sec.csv', header=true, all_varchar=true)
   WHERE lei IS NOT NULL AND registered_as IS NOT NULL AND registered_as <> '';
-
--- Wikidata CIK↔LEI (CC0), CIK grain, unpadded.
-CREATE OR REPLACE TABLE wd_cik_lei AS
-  SELECT CAST(regexp_replace(cik, '\D', '', 'g') AS BIGINT)::VARCHAR AS key,
-         upper(trim(lei)) AS lei
-  FROM read_csv('build/wd_cik_lei.csv', header=true, all_varchar=true)
-  WHERE cik IS NOT NULL AND lei IS NOT NULL;
