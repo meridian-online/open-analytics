@@ -1,0 +1,45 @@
+{
+  "note": "Authoritative dataset registry. INVARIANTS: (1) `uid` is stable, opaque, and NEVER shown as an address; (2) a `uid` maps to exactly one dataset and is NEVER reused; (3) a retired slug is NEVER re-pointed at a different dataset. The human-friendly address is `<schema>.<name>` (self-documenting: source.* = raw ingested data, crosswalk.* = derived joins). `name` is the SQL-legal leaf, the web URL slug, and the R2 prefix leaf. On rename: keep `uid`, move the old slug into `aliases`, emit a 301 (web) + a compatibility VIEW at the old name (SQL). Data VERSIONS are a separate axis, handled by the content-addressed `<sha>.parquet` + manifest pointer.",
+  "schemas": {
+    "source": "Raw ingested reference data, one namespace per what-it-is.",
+    "crosswalk": "Derived joins between datasets — the materialised relationships (the product)."
+  },
+  "datasets": [
+    {
+      "uid": "0ebf1131-747f-4de6-bfd5-4be7e1d55963",
+      "schema": "source",
+      "name": "gleif",
+      "title": "GLEIF — Legal Entity Identifiers",
+      "aliases": [],
+      "manifest": "https://openlake.meridian.online/manifest.json",
+      "doi": null
+    },
+    {
+      "uid": "2a3364ec-4166-4f54-ba90-45c04ec8fb7e",
+      "schema": "source",
+      "name": "edgar",
+      "title": "SEC EDGAR — Company Tickers",
+      "aliases": [],
+      "manifest": "https://openlake.meridian.online/manifest.json",
+      "doi": null
+    },
+    {
+      "uid": "c4e4a53c-1163-4a49-9629-73f444254f06",
+      "schema": "source",
+      "name": "naics",
+      "title": "NAICS — Industry Classification",
+      "aliases": [],
+      "manifest": "https://openlake.meridian.online/manifest.json",
+      "doi": null
+    },
+    {
+      "uid": "bf8a9f2d-60d9-4843-a691-2f03ed52228f",
+      "schema": "crosswalk",
+      "name": "edgar_gleif",
+      "title": "EDGAR ↔ GLEIF — Company-to-LEI Crosswalk",
+      "aliases": [],
+      "manifest": "https://openlake.meridian.online/manifest.json",
+      "doi": null
+    }
+  ]
+}
