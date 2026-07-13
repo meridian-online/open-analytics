@@ -1,6 +1,6 @@
 {
   "$schema": "https://datapackage.org/profiles/2.0/datapackage.json",
-  "created": "2026-07-13T00:58:44Z",
+  "created": "2026-07-13T01:44:19Z",
   "description": "A resolved crosswalk linking SEC EDGAR registrants (CIK / ticker / fund series) to their GLEIF Legal Entity Identifier (LEI) — one row per asserted identity, each carrying its provenance tier, method and confidence. Authoritative edges come from official SEC/GLEIF registration (no guessing); the operating-company tail is linked by probabilistic name resolution (Fellegi-Sunter / Splink): exact normalized-name matches are confirmed (~95% precision), while name-only fuzzy matches are surfaced as candidates rather than auto-confirmed. A point-in-time snapshot, with an as-of date on every row.",
   "homepage": "https://meridian.online/datasets/edgar_gleif",
   "licenses": [
@@ -13,9 +13,9 @@
   "name": "edgar_gleif",
   "resources": [
     {
-      "bytes": 10344205,
+      "bytes": 10340971,
       "format": "parquet",
-      "hash": "sha256:9f5055791ea8094eaf8f8b28e5f851d67fc054f85a83788a681ecc1ddab7ca1c",
+      "hash": "sha256:d7c40b0e9e10a326b4db28fc7fcd289fa30645d6c840f9000929676b961a731e",
       "mediatype": "application/vnd.apache.parquet",
       "name": "edgar_gleif",
       "path": "https://openlake.meridian.online/edgar_gleif.parquet",
@@ -50,25 +50,20 @@
             "description": "The SEC-side identifier this edge is keyed on — an EDGAR CIK for operating companies / registrants, or an SEC series/class id for funds, per `key_type`.",
             "name": "key",
             "type": "integer",
-            "x-finetype-confidence": 0.6014,
+            "x-finetype-confidence": 0.7,
             "x-finetype-label": "representation.numeric.integer_number"
           },
           {
             "name": "ticker",
             "type": "string",
-            "x-finetype-confidence": 0.613,
+            "x-finetype-confidence": 0.6,
             "x-finetype-label": "unknown"
           },
           {
-            "constraints": {
-              "maxLength": 255,
-              "minLength": 1
-            },
             "name": "company_name",
             "type": "string",
-            "x-finetype-confidence": 0.9919,
-            "x-finetype-label": "identity.person.password",
-            "x-finetype-pii": true
+            "x-finetype-confidence": 0.6,
+            "x-finetype-label": "unknown"
           },
           {
             "constraints": {
@@ -81,13 +76,13 @@
           },
           {
             "constraints": {
-              "maxLength": 65536,
-              "minLength": 1
+              "maxLength": 200,
+              "minLength": 2
             },
             "name": "legal_name",
             "type": "string",
-            "x-finetype-confidence": 0.8248,
-            "x-finetype-label": "representation.text.plain_text"
+            "x-finetype-confidence": 0.7623,
+            "x-finetype-label": "representation.text.entity_name"
           },
           {
             "constraints": {
@@ -97,7 +92,7 @@
             "description": "GLEIF's authoritative entity category (e.g. GENERAL, FUND, BRANCH); GENERAL when unknown.",
             "name": "category",
             "type": "string",
-            "x-finetype-confidence": 0.8521,
+            "x-finetype-confidence": 0.8965,
             "x-finetype-enum-domain": {
               "cohesion": 0.5,
               "distinct": 4,
@@ -118,18 +113,16 @@
             },
             "name": "jurisdiction",
             "type": "string",
-            "x-finetype-confidence": 0.9999,
+            "x-finetype-confidence": 1.0,
             "x-finetype-label": "geography.location.state_code"
           },
           {
             "constraints": {
-              "maxLength": 100,
-              "minLength": 1,
-              "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$"
+              "pattern": "^[A-Z]{2}$"
             },
             "name": "reg_status",
             "type": "string",
-            "x-finetype-confidence": 0.9942,
+            "x-finetype-confidence": 0.6549,
             "x-finetype-enum-domain": {
               "cohesion": 0.8330000042915344,
               "distinct": 6,
@@ -144,7 +137,7 @@
               "open": true,
               "rows": 206891
             },
-            "x-finetype-label": "representation.text.word"
+            "x-finetype-label": "geography.location.state_code"
           },
           {
             "constraints": {
@@ -155,7 +148,7 @@
             "description": "How the edge was established. Authoritative: sec-registration (GLEIF RA000665) or sec-ncen (SEC Form N-CEN). Probabilistic: exact_name (identical normalized company name) or jaro_winkler (fuzzy name).",
             "name": "method",
             "type": "string",
-            "x-finetype-confidence": 0.4991,
+            "x-finetype-confidence": 0.6779,
             "x-finetype-enum-domain": {
               "cohesion": 0.5,
               "distinct": 4,
@@ -174,7 +167,7 @@
             "description": "Provenance tier, in precedence order: authoritative (deterministic SEC/GLEIF registration — no guessing), confirmed (exact normalized-name Splink match, ~95% precision), candidate (name-only fuzzy match, surfaced NOT asserted), ambiguous (one exact name matched more than one entity). A deterministic edge always wins over a name match for the same key.",
             "name": "tier",
             "type": "string",
-            "x-finetype-confidence": 0.7336,
+            "x-finetype-confidence": 0.5393,
             "x-finetype-label": "datetime.component.month_name"
           },
           {
@@ -207,7 +200,7 @@
             "description": "Lowercased, accent-stripped concatenation of the display name, legal name, ticker and LEI — a derived free-text search field, not a source attribute.",
             "name": "corpus",
             "type": "string",
-            "x-finetype-confidence": 0.9924,
+            "x-finetype-confidence": 0.8428,
             "x-finetype-label": "representation.text.plain_text"
           }
         ],
