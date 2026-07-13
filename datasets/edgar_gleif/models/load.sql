@@ -31,7 +31,12 @@ CREATE OR REPLACE TABLE gleif_ra_sec AS
          ELSE trim(registered_as) END AS key,
     category
   FROM read_csv('build/gleif_ra_sec.csv', header=true, all_varchar=true)
-  WHERE lei IS NOT NULL AND registered_as IS NOT NULL AND registered_as <> '';
+  WHERE lei IS NOT NULL AND registered_as IS NOT NULL AND registered_as <> ''
+    -- Keep only the three EDGAR identifier schemes. RA000665 also carries a handful
+    -- of SEC investment-adviser file numbers (`805-…`, Form ADV) — a different scheme
+    -- that maps to no EDGAR CIK/series/class, so they'd be orphan edges. Drop them.
+    AND (registered_as LIKE 'S%' OR registered_as LIKE 'C%'
+         OR regexp_full_match(registered_as, '[0-9]+'));
 
 -- SEC Form N-CEN (the annual fund filing itself — most direct authority). Glob over
 -- the fetched quarters; union_by_name is robust to column-order drift across releases.
