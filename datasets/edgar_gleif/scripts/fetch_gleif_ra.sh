@@ -21,20 +21,33 @@ total=$(curl -fsS -H "User-Agent: $UA" "$API?filter%5Bentity.registeredAt%5D=$RA
 echo "GLEIF $RA: $total records (cursor paging)" >&2
 max_iters=$(( total / 200 + 10 ))  # loop guard: never spin beyond the known record count
 
-echo "lei,registered_as,category" > "$OUT"
+# Atomic write: build into a .part temp and mv only on a verified-complete fetch. A
+# failed or partial fetch must leave NO output file — otherwise arc's modified_after
+# precondition treats the stale partial as "fresh" and SKIPS the re-fetch, silently
+# building on truncated data (the 10k-offset failure this step replaced did exactly
+# that: a partial CSV was mistaken for a complete one).
+TMP="$OUT.part"
+echo "lei,registered_as,category" > "$TMP"
 url="$API?filter%5Bentity.registeredAt%5D=$RA&page%5Bsize%5D=200&page%5Bcursor%5D=*"
 iters=0
 while [ -n "$url" ] && [ "$url" != "null" ]; do
   if [ "$iters" -ge "$max_iters" ]; then
     echo "error: cursor paging exceeded $max_iters iterations for $RA — aborting" >&2
-    exit 1
+    rm -f "$TMP"; exit 1
   fi
   resp=$(curl -fsS -H "User-Agent: $UA" "$url")
   n=$(echo "$resp" | jq -r '.data | length')
   [ "$n" -eq 0 ] && break
-  echo "$resp" | jq -r '.data[]? | [.attributes.lei, .attributes.entity.registeredAs, .attributes.entity.category] | @csv' >> "$OUT"
+  echo "$resp" | jq -r '.data[]? | [.attributes.lei, .attributes.entity.registeredAs, .attributes.entity.category] | @csv' >> "$TMP"
   url=$(echo "$resp" | jq -r '.links.next // ""')
   iters=$(( iters + 1 ))
   sleep 0.3
 done
-echo "wrote $(( $(wc -l < "$OUT") - 1 )) rows → $OUT" >&2
+got=$(( $(wc -l < "$TMP") - 1 ))
+# Refuse a materially short fetch (allow ~1 page of drift if GLEIF's count shifts mid-run).
+if [ "$got" -lt "$(( total - 200 ))" ]; then
+  echo "error: fetched only $got of $total records for $RA — refusing to write partial output" >&2
+  rm -f "$TMP"; exit 1
+fi
+mv "$TMP" "$OUT"
+echo "wrote $got rows → $OUT" >&2
