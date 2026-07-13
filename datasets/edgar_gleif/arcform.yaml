@@ -1,0 +1,138 @@
+# The EDGAR ↔ GLEIF crosswalk Protocol — the reproducible *definition* of how the
+# `crosswalk.edgar_gleif` Dataset is made. `arc run` executes this manifest; one Run
+# → one Dataset version (the freshness lever). See ./README.md (the Protocol primitive).
+#
+# BOUNDARY — do NOT fold these into this manifest:
+#   • the arcform ENGINE and the `splink_resolve` OPERATOR live in the `arcform`
+#     repo; this manifest only REFERENCES the operator (see the `resolve` step).
+#     A typed-operator registry that resolves operators by name+version is
+#     greenfield — for now the step calls the script by path.
+#   • PUBLISH (content-addressed R2 upload + manifest/catalog pointer flip) stays in
+#     the out-of-repo publish pipeline and READS this Protocol's terminal output,
+#     build/edgar_gleif.parquet. It is not an arcform step.
+#
+# Produces: build/edgar_gleif.parquet  →  published as crosswalk.edgar_gleif
+name: edgar_gleif
+engine: duckdb
+engine_version: ">=1.2"
+db: build/edgar_gleif.db
+
+params:
+  # Stamped on every row. Pin at run time: arc run --param as_of=2026-07-12
+  as_of:
+    default: ""
+  # The arcform operator library (sibling repo). Path-based until the typed-operator
+  # registry (name+version resolution) exists.
+  operators_dir:
+    default: "../../../arcform/operators"
+
+# Transient API/network blips shouldn't sink a run — retry fetches with backoff.
+defaults:
+  retry:
+    max_attempts: 3
+    backoff_sec: 2.0
+
+steps:
+  # ── Inputs: the published source Datasets (content-addressed openlake) ─────────
+  - name: fetch_edgar
+    command: "mkdir -p build && curl -fsSL https://openlake.meridian.online/edgar.parquet -o build/edgar.parquet"
+    produces: [edgar_src]
+    preconditions:
+      - modified_after: { path: build/edgar.parquet, period: 24h }
+  - name: fetch_gleif
+    command: "mkdir -p build && curl -fsSL https://openlake.meridian.online/gleif.parquet -o build/gleif.parquet"
+    produces: [gleif_src]
+    preconditions:
+      - modified_after: { path: build/gleif.parquet, period: 24h }
+  - name: fetch_sec_entities
+    # The full SEC entity resolution universe — the crosswalk's LEFT SIDE at scale:
+    # ~1.05M named filers from cik-lookup (incl. SEC former names → extra match
+    # surface) + tickers where present. Individuals stay in — no LEI, so they never
+    # match; the output is entity-only by construction. See scripts/.
+    command: "bash scripts/fetch_sec_entities.sh build/sec_entities.parquet"
+    produces: [sec_entities]
+    depends_on: [edgar_src]
+    preconditions:
+      - modified_after: { path: build/sec_entities.parquet, period: 168h }
+
+  # ── Deterministic backbone: authoritative CIK/series ↔ LEI (no guessing) ───────
+  # Official sources ONLY (SEC + GLEIF) — no crowd-sourced data in the published
+  # pipeline. Authority provides the link for funds; operating companies have no
+  # official CIK↔LEI, so they are resolved (name match) below.
+  - name: fetch_gleif_sec_registrations
+    # GLEIF entities registered at SEC EDGAR (RA000665): LEI + registeredAs (numeric
+    # CIK for operating cos, S…/C… series/class for funds) + entity.category. ~all funds.
+    command: "mkdir -p build && bash scripts/fetch_gleif_ra.sh RA000665 build/gleif_ra_sec.csv"
+    produces: [gleif_ra_sec]
+    preconditions:
+      - modified_after: { path: build/gleif_ra_sec.csv, period: 168h }
+  - name: fetch_ncen
+    # SEC Form N-CEN (the annual fund filing itself — the most direct authority).
+    # REGISTRANT.tsv → registrant CIK ↔ LEI; FUND_REPORTED_INFO.tsv → series
+    # SERIES_ID ↔ LEI (~100% LEI fill). ~4 recent quarters cover the fund universe.
+    command: "mkdir -p build && bash scripts/fetch_ncen.sh 4 build/ncen"
+    produces: [ncen]
+    preconditions:
+      - modified_after: { path: build/ncen, period: 168h }
+
+  # ── Load + normalize ───────────────────────────────────────────────────────────
+  - name: load
+    sql: models/load.sql
+    depends_on: [sec_entities, gleif_src, gleif_ra_sec, ncen]
+
+  # ── Resolve: probabilistic name match for the operating-company tail ───────────
+  - name: resolve
+    # Opaque command step today — first-class typed operators are greenfield. Frozen
+    # Fellegi-Sunter/Splink model (SEED=42, precision-first). Emits cik/ticker/
+    # company_name/lei/legal_name/jurisdiction/reg_status/match_weight/
+    # match_probability/method/status. NOTE: at the ~500k-entity scale, the operator's
+    # blocking rules must be tuned (empty-name + "THE"/"STICHTING" hotspots) and
+    # country used as a blocking dimension — see README "Scale & frontier".
+    command: "uv run --script ../../../arcform/operators/splink_resolve/resolve.py --edgar build/sec_entities.parquet --gleif build/gleif.parquet --out build/resolved.parquet"
+    produces: [resolved]
+    depends_on: [sec_entities, gleif_src]
+    timeout_sec: 14400
+
+  # ── Tier: deterministic (authoritative) ∪ splink (confirmed/candidate) ─────────
+  - name: tier
+    sql: models/tier.sql
+    depends_on: [resolved]
+    # Explicit output label so the downstream (opaque) package step can depend on it.
+    # tier's CREATE TABLE crosswalk_edges is auto-introspected too; this just pins the
+    # asset name the wiring below references.
+    produces: [crosswalk_edges]
+
+  # ── Package: the terminal Parquet output (adds as_of + corpus, zstd) ───────────
+  # WIRING IS LOAD-BEARING, not cosmetic. arc's sqlparser can't parse this step's
+  # `COPY … (COMPRESSION zstd)`, so it auto-introspects NO assets for it — without an
+  # explicit depends_on the step is a graph ISLAND. arc marks an unchanged SQL step
+  # stale only via asset-graph propagation, so an island silently SKIPS even after
+  # `tier` rewrites crosswalk_edges beneath it — shipping a stale Parquet on a run that
+  # reports success. The explicit depends_on reconnects it; produces feeds `describe`.
+  - name: package
+    sql: models/package.sql
+    depends_on: [crosswalk_edges]
+    produces: [edgar_gleif_parquet]
+
+  # ── Describe: EMIT datapackage.json from the built Parquet ─────────────────────
+  # Retires the hand-checked descriptor. `finetype profile ... -o datapackage` reads
+  # build/edgar_gleif.parquet and types every column from its taxonomy — the
+  # machine-decidable half: per-field `type`/`format`, the `x-finetype-*` semantic
+  # labels + observed constraints, and the resource bytes/hash/format. scripts/
+  # describe.py then overlays descriptor.overrides.json — the hand-curated half
+  # finetype CANNOT infer: the package title/description/licenses/sources, the
+  # published resource `path`, per-field prose descriptions, and the relational
+  # metadata (primaryKey + foreignKeys with their x-evidence/x-confidence/x-status).
+  # Overrides win; finetype fills the rest. FINETYPE GAP: it emits one typed Data
+  # Resource and nothing above the field level (no package identity, no edges, no
+  # evidence), and its labels are only as good as the installed finetype — see
+  # README "Describe". Runs after `package`; hard-fails if a curated key references a
+  # column not in the Parquet (that drift is exactly what this step exists to catch).
+  - name: describe
+    command: "uv run --script scripts/describe.py --parquet build/edgar_gleif.parquet --overrides descriptor.overrides.json --out datapackage.json"
+    # Command steps always run, but declare the real edge so the graph is honest (and
+    # describe stays downstream of package if a precondition is ever added).
+    depends_on: [edgar_gleif_parquet]
+
+  # publish: the out-of-repo publish pipeline reads build/edgar_gleif.parquet and this
+  # emitted datapackage.json (boundary — not an arcform step). See README.

@@ -1,0 +1,44 @@
+# The `source.edgar` Protocol — the reproducible *definition* of how the SEC EDGAR
+# company-tickers Dataset is ingested from the official SEC file. `arc run` executes
+# this manifest; one Run → one Dataset version (the freshness lever). See ./README.md.
+#
+# BOUNDARY — do NOT fold this into this manifest:
+#   • PUBLISH (content-addressed R2 upload + manifest/catalog pointer flip) stays in
+#     the out-of-repo publish pipeline and READS this Protocol's terminal output,
+#     build/edgar.parquet. It is not an arcform step.
+#
+# INFORMATION RETRIEVAL ONLY — this is a clean IR dataset. The EDGAR ↔ GLEIF
+# entity-resolution "join" is NOT done here; it lives in the crosswalk.edgar_gleif
+# Protocol (probabilistic name resolution, published back as a Dataset).
+#
+# Produces: build/edgar.parquet  →  published as source.edgar
+name: edgar
+engine: duckdb
+engine_version: ">=1.2"
+db: build/edgar.db
+
+# Transient API/network blips shouldn't sink a run — retry fetches with backoff.
+defaults:
+  retry:
+    max_attempts: 3
+    backoff_sec: 2.0
+
+steps:
+  # ── Fetch: the SEC's company_tickers_exchange.json ───────────────────────────────
+  # The SEC requires a User-Agent carrying contact info. Refreshed daily upstream.
+  - name: fetch_edgar
+    command: "mkdir -p build && curl -fsS -H 'User-Agent: Meridian Protocol (open-analytics; research@meridian.online)' https://www.sec.gov/files/company_tickers_exchange.json -o build/edgar.json"
+    produces: [edgar_raw]
+    preconditions:
+      - modified_after: { path: build/edgar.json, period: 24h }
+
+  # ── Load + normalise: flatten the columnar {fields, data} JSON to the 4-field schema ─
+  - name: load
+    sql: models/load.sql
+    depends_on: [edgar_raw]
+
+  # ── Package: the terminal Parquet output (adds the search corpus, sorted, zstd) ──
+  - name: package
+    sql: models/package.sql
+
+  # publish: the out-of-repo publish pipeline reads build/edgar.parquet (boundary).

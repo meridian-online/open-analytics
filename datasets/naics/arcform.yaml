@@ -1,0 +1,40 @@
+# The `source.naics` Protocol — the reproducible *definition* of how the NAICS 2022
+# industry-classification Dataset is ingested from the official U.S. Census file.
+# `arc run` executes this manifest; one Run → one Dataset version. See ./README.md.
+#
+# BOUNDARY — do NOT fold this into this manifest:
+#   • PUBLISH (content-addressed R2 upload + manifest/catalog pointer flip) stays in
+#     the out-of-repo publish pipeline and READS this Protocol's terminal output,
+#     build/naics.parquet. It is not an arcform step.
+#
+# Produces: build/naics.parquet  →  published as source.naics
+name: naics
+engine: duckdb
+engine_version: ">=1.2"
+db: build/naics.db
+
+# Transient API/network blips shouldn't sink a run — retry fetches with backoff.
+defaults:
+  retry:
+    max_attempts: 3
+    backoff_sec: 2.0
+
+steps:
+  # ── Fetch: the Census 2022 NAICS descriptions workbook ───────────────────────────
+  # The 2022 vintage is effectively frozen; re-fetch at most weekly.
+  - name: fetch_naics
+    command: "mkdir -p build && curl -fsS -H 'User-Agent: Meridian Protocol (open-analytics; research@meridian.online)' 'https://www.census.gov/naics/2022NAICS/2022_NAICS_Descriptions.xlsx' -o build/naics_desc.xlsx"
+    produces: [naics_raw]
+    preconditions:
+      - modified_after: { path: build/naics_desc.xlsx, period: 168h }
+
+  # ── Load + normalise: strip the trilateral 'T' marker, derive level, null blanks ─
+  - name: load
+    sql: models/load.sql
+    depends_on: [naics_raw]
+
+  # ── Package: the terminal Parquet output (adds the search corpus, sorted, zstd) ──
+  - name: package
+    sql: models/package.sql
+
+  # publish: the out-of-repo publish pipeline reads build/naics.parquet (boundary).

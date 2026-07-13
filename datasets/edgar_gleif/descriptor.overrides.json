@@ -1,0 +1,100 @@
+{
+  "title": "EDGAR ↔ GLEIF — company-to-LEI crosswalk",
+  "description": "A resolved crosswalk linking SEC EDGAR registrants (CIK / ticker / fund series) to their GLEIF Legal Entity Identifier (LEI) — one row per asserted identity, each carrying its provenance tier, method and confidence. Authoritative edges come from official SEC/GLEIF registration (no guessing); the operating-company tail is linked by probabilistic name resolution (Fellegi-Sunter / Splink): exact normalized-name matches are confirmed (~95% precision), while name-only fuzzy matches are surfaced as candidates rather than auto-confirmed. A point-in-time snapshot, with an as-of date on every row.",
+  "homepage": "https://meridian.online/datasets/edgar_gleif",
+  "licenses": [
+    {
+      "name": "CC0-1.0",
+      "title": "CC0 1.0 Universal",
+      "path": "https://creativecommons.org/publicdomain/zero/1.0/"
+    }
+  ],
+  "sources": [
+    {
+      "title": "SEC EDGAR — company tickers (public domain)",
+      "path": "https://www.sec.gov/"
+    },
+    {
+      "title": "GLEIF golden copy (CC0)",
+      "path": "https://www.gleif.org/"
+    }
+  ],
+  "resource": {
+    "path": "https://openlake.meridian.online/edgar_gleif.parquet"
+  },
+  "fields": {
+    "key_type": {
+      "description": "Scheme of the SEC identifier held in `key`: cik (operating company / registrant), series (fund series) or class (fund share class)."
+    },
+    "key": {
+      "description": "The SEC-side identifier this edge is keyed on — an EDGAR CIK for operating companies / registrants, or an SEC series/class id for funds, per `key_type`."
+    },
+    "category": {
+      "description": "GLEIF's authoritative entity category (e.g. GENERAL, FUND, BRANCH); GENERAL when unknown."
+    },
+    "method": {
+      "description": "How the edge was established. Authoritative: sec-registration (GLEIF RA000665) or sec-ncen (SEC Form N-CEN). Probabilistic: exact_name (identical normalized company name) or jaro_winkler (fuzzy name)."
+    },
+    "tier": {
+      "description": "Provenance tier, in precedence order: authoritative (deterministic SEC/GLEIF registration — no guessing), confirmed (exact normalized-name Splink match, ~95% precision), candidate (name-only fuzzy match, surfaced NOT asserted), ambiguous (one exact name matched more than one entity). A deterministic edge always wins over a name match for the same key."
+    },
+    "confidence": {
+      "description": "Edge confidence in [0, 1]: 1.0 for authoritative edges; the Fellegi-Sunter posterior match probability under the frozen resolution model for probabilistic edges."
+    },
+    "corpus": {
+      "description": "Lowercased, accent-stripped concatenation of the display name, legal name, ticker and LEI — a derived free-text search field, not a source attribute."
+    }
+  },
+  "primaryKey": [
+    "key_type",
+    "key",
+    "lei"
+  ],
+  "foreignKeys": [
+    {
+      "fields": [
+        "key"
+      ],
+      "reference": {
+        "resource": "edgar",
+        "fields": [
+          "cik"
+        ]
+      },
+      "x-package": "https://github.com/meridian-online/open-analytics/blob/main/datasets/edgar/datapackage.json",
+      "x-key-type": "cik",
+      "x-status": "confirmed",
+      "x-confidence": 1.0,
+      "x-evidence": "For key_type='cik' rows, `key` is the EDGAR Central Index Key exactly as reported by SEC EDGAR — the crosswalk is keyed on EDGAR's own CIK, so this edge is exact by construction. (series/class rows key on an SEC fund identifier and do not reference EDGAR.)"
+    },
+    {
+      "fields": [
+        "lei"
+      ],
+      "reference": {
+        "resource": "gleif",
+        "fields": [
+          "lei"
+        ]
+      },
+      "x-package": "https://github.com/meridian-online/open-analytics/blob/main/datasets/gleif/datapackage.json",
+      "x-status": "per-row (see the tier column)",
+      "x-confidence": "per-row (see the confidence column)",
+      "x-evidence": {
+        "method": "Fellegi-Sunter probabilistic record linkage (Splink), frozen model, for the operating-company tail; official SEC/GLEIF registration for authoritative edges",
+        "comparison": "normalized company name (exact, then Jaro-Winkler tiers)",
+        "blocking": [
+          "shared 6-character name prefix",
+          "shared first name token"
+        ],
+        "gleif_status_matched": [
+          "ISSUED",
+          "LAPSED",
+          "RETIRED"
+        ],
+        "tie_break": "ISSUED > LAPSED > RETIRED, then US jurisdiction",
+        "precision": "exact normalized-name matches auto-confirmed (~95% precision, spot-checked); name-only fuzzy matches surfaced as candidate, not confirmed"
+      }
+    }
+  ]
+}
