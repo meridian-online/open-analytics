@@ -1,57 +1,32 @@
 {
-  "$comment": "Self-derived finetype drift contract for source.naics (the finetype_validate@1 gate checks the terminal Parquet against this in CHECK-ONLY mode). Regenerate with finetype (>=0.6.50): finetype profile -f build/naics.parquet -o json-schema --stats | jq '{\"$comment\":...} + del(.properties[].pattern)'. Rationale: the per-type canonical 'pattern' regexes finetype emits encode idealised formats that legitimately-varied production data violates — here finetype's 'code' NAICS pattern rejects the official hyphenated sector ranges (31-33, 44-45, 48-49). The gate therefore enforces the OBSERVABLE envelope finetype measured — type, minLength/maxLength, numeric minimum/maximum, closed enum domains, and the x-finetype-* semantic labels — not the format ideal. So it is a pass-through on today's Run and a tripwire for future drift.",
+  "$comment": "Self-derived finetype drift contract for source.naics, checked by the in-engine finetype_validate@1 gate (the model-free `ft_validate` DuckDB table macro). ft_validate MELTS every column to VARCHAR, so this contract uses ONLY the string-surviving JSON-Schema keywords. ENFORCED: the `enum` closed domain on level; the `pattern` on code — which deliberately admits the official hyphenated sector ranges (31-33, 44-45, 48-49) alongside plain 2-6 digit codes, the exact case finetype's canonical NAICS regex rejects; and `minLength`/`maxLength` envelopes. NOT ENFORCED, by design: numeric ranges (a numeric `type` BACKFIRES to 100% reject once melted to VARCHAR); NULLs (invisible to ft_validate); and object-level `required` (documentation only). Free-text fields (title, description, corpus) carry LOOSE length envelopes with generous headroom (descriptions/corpus run to several KB), not tight formats. Derived from build/naics.parquet: a pass-through on today's 2,125 rows, a fail-closed tripwire for future drift (an unknown level, a malformed code).",
   "$id": "finetype://naics.parquet",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "properties": {
     "code": {
-      "maxLength": 6,
-      "minLength": 2,
       "type": "string",
-      "x-finetype-cardinality": 2125,
-      "x-finetype-label": "identity.industry.naics",
-      "x-finetype-null-rate": 0.0,
-      "x-finetype-pii": false
+      "pattern": "^[0-9]{2,6}(-[0-9]{2})?$",
+      "minLength": 2,
+      "maxLength": 6
     },
     "corpus": {
       "type": "string",
-      "x-finetype-label": "unknown",
-      "x-finetype-unknown-reason": "validation rejected 'alphanumeric_id': only 21% of values matched its format"
+      "minLength": 1,
+      "maxLength": 8192
     },
     "description": {
       "type": "string",
-      "x-finetype-label": "unknown",
-      "x-finetype-unknown-reason": "validation rejected 'alphanumeric_id': only 26% of values matched its format"
+      "minLength": 1,
+      "maxLength": 8192
     },
     "level": {
-      "maxLength": 17,
-      "minLength": 6,
       "type": "string",
-      "x-finetype-cardinality": 5,
-      "x-finetype-enum": {
-        "cohesion": 0.6000000238418579,
-        "distinct": 5,
-        "domain": [
-          "industry_group",
-          "naics_industry",
-          "national_industry",
-          "sector",
-          "subsector"
-        ],
-        "open": true,
-        "rows": 2125
-      },
-      "x-finetype-label": "representation.text.entity_name",
-      "x-finetype-null-rate": 0.0,
-      "x-finetype-pii": false
+      "enum": ["industry_group", "naics_industry", "national_industry", "sector", "subsector"]
     },
     "title": {
-      "maxLength": 118,
-      "minLength": 6,
       "type": "string",
-      "x-finetype-cardinality": 1432,
-      "x-finetype-label": "representation.text.entity_name",
-      "x-finetype-null-rate": 0.0,
-      "x-finetype-pii": false
+      "minLength": 1,
+      "maxLength": 256
     }
   },
   "required": [

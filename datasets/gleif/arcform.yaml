@@ -4,8 +4,9 @@
 # ./README.md (the Protocol primitive).
 #
 # MOSTLY-CONFIG. The terminal COPY is now parquet_export; datapackage_describe emits the
-# descriptor from the built Parquet; finetype_validate gates it against the self-derived
-# finetype contract. The FETCH is still an opaque `command:` step by design — see its
+# descriptor from the built Parquet. The finetype_validate drift gate is DEFERRED until
+# the first full-scale Run exists to derive its contract from — see the validate note at
+# the tail of this manifest. The FETCH is still an opaque `command:` step by design — see its
 # note: the golden copy is republished DAILY and its URL is resolved at run time from a
 # JSON API (not an HTML index), so it is neither a stable pinnable URL nor an
 # html_link_discover target; and it is a ~470 MB zip. Converting it to typed operators
@@ -74,23 +75,22 @@ steps:
       out: datapackage.json
 
   # ── Validate: GATE the built Parquet against the self-derived finetype contract ──
-  # finetype_validate (CHECK-ONLY) checks the terminal Parquet against schema.finetype.json
-  # (self-derived from THIS Parquet — see its $comment). Pass-through on the snapshot it
-  # was derived from, a fail-closed drift tripwire for future Runs; writes nothing, so
-  # build/gleif.parquet is untouched.
-  #
-  # NOTE — unlike edgar / edgar_gleif / naics, schema.finetype.json is NOT checked in
-  # yet: deriving it needs the ~470 MB golden-copy Parquet, and the GLEIF download is
-  # bandwidth-throttled (~100 KB/s) where this was built, so the first Run has not yet
-  # produced it. Generate it once on the first successful Run, identically to the other
-  # datasets, then commit it:
-  #   finetype profile -f build/gleif.parquet -o json-schema --stats \
-  #     | jq 'del(.properties[].pattern)' > schema.finetype.json
-  - name: validate
-    op: finetype_validate@1
-    with:
-      parquet: build/gleif.parquet
-      schema: schema.finetype.json
+  # DEFERRED — NO validate step yet, on purpose. The finetype_validate@1 gate needs a
+  # checked-in schema.finetype.json derived from THIS dataset's own Parquet, and that
+  # Parquet does not exist yet: deriving it needs the ~470 MB golden-copy, and the GLEIF
+  # download is bandwidth-throttled (~100 KB/s) where this was built, so the first
+  # full-scale Run has not completed. Wiring the gate against a non-existent schema hard-
+  # fails every `arc run` at validate, so the step is intentionally omitted until then —
+  # not left dangling. On the first successful Run, derive the contract from the built
+  # Parquet with the same string-surviving keyword discipline as edgar / naics /
+  # edgar_gleif (type:string + enum/pattern/minLength/maxLength; see any of their
+  # schema.finetype.json $comment for the enforce-vs-inert rules), commit it as
+  # schema.finetype.json, then add the validate step here:
+  #   - name: validate
+  #     op: finetype_validate@1
+  #     with:
+  #       parquet: build/gleif.parquet
+  #       schema: schema.finetype.json
 
   # publish: the out-of-repo publish pipeline reads build/gleif.parquet + the emitted
   # datapackage.json (boundary — not an arc step). See README.

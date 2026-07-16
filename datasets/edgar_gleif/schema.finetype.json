@@ -1,189 +1,78 @@
 {
-  "$comment": "Self-derived finetype drift contract for crosswalk.edgar_gleif (the finetype_validate@1 gate checks the terminal Parquet against this in CHECK-ONLY mode). Regenerate with finetype (>=0.6.50): finetype profile -f build/edgar_gleif.parquet -o json-schema --stats | jq '{\"$comment\":...} + del(.properties[].pattern)'. Rationale: the per-type canonical 'pattern' regexes finetype emits encode idealised formats (2-letter jurisdiction codes, digit-leading LEIs, integer keys, restricted name char-classes) that legitimately-varied production data violates — ISO-3166-2 subdivisions like US-DE, real LEIs beginning with letters, SEC series IDs (S0000...), company names containing '&'. The gate therefore enforces the OBSERVABLE envelope finetype measured — type, minLength/maxLength, numeric minimum/maximum, closed enum domains, and the x-finetype-* semantic labels — not the format ideal. So it is a pass-through on today's byte-equivalence Run and a tripwire for future drift.",
+  "$comment": "Self-derived finetype drift contract for crosswalk.edgar_gleif, checked by the in-engine finetype_validate@1 gate (the model-free `ft_validate` DuckDB table macro). ft_validate MELTS every column to VARCHAR, so this contract uses ONLY the string-surviving JSON-Schema keywords. ENFORCED: `enum` closed domains on key_type / tier / method / category / reg_status; `pattern` shapes on lei (ISO 17442: 18 alnum + 2 check digits), key (CIK digits or S…/CEF… series ids), as_of (ISO date), confidence (a [0,1] decimal string), jurisdiction, ticker; and `minLength`/`maxLength` envelopes. NOT ENFORCED, by design: numeric ranges — a `type: number`/`minimum`/`maximum` BACKFIRES once a column is VARCHAR-melted (it rejects 100% of rows), so confidence/key carry a string `pattern`, not a numeric range; NULLs — ft_validate treats NULL and empty/whitespace as INVISIBLE (no not-null enforcement), so nullable columns (reg_status, jurisdiction, ticker, company_name, legal_name) still pass; and object-level `required` (documentation only — the macro is per-column). Free-text fields (company_name, legal_name, corpus) carry LOOSE length envelopes (gross-corruption tripwires with headroom), not tight formats. Derived from build/edgar_gleif.parquet: every current row passes (a pass-through today), and a value outside a closed enum or a shape break trips it (a fail-closed drift tripwire for future Runs). Regenerate from the built Parquet with the same keyword discipline after an intentional schema change.",
   "$id": "finetype://edgar_gleif.parquet",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "properties": {
     "as_of": {
-      "maxLength": 10,
-      "minLength": 10,
       "type": "string",
-      "x-finetype-cardinality": 1,
-      "x-finetype-label": "datetime.date.iso",
-      "x-finetype-null-rate": 0.0,
-      "x-finetype-pii": false
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+      "minLength": 10,
+      "maxLength": 10
     },
     "category": {
-      "maxLength": 26,
-      "minLength": 4,
       "type": "string",
-      "x-finetype-cardinality": 4,
-      "x-finetype-enum": {
-        "cohesion": 0.5,
-        "distinct": 4,
-        "domain": [
-          "FUND",
-          "GENERAL",
-          "RESIDENT_GOVERNMENT_ENTITY",
-          "SOLE_PROPRIETOR"
-        ],
-        "open": true,
-        "rows": 207099
-      },
-      "x-finetype-label": "representation.text.word",
-      "x-finetype-null-rate": 0.0,
-      "x-finetype-pii": false
+      "enum": ["FUND", "GENERAL", "RESIDENT_GOVERNMENT_ENTITY", "SOLE_PROPRIETOR"]
     },
     "company_name": {
-      "maxLength": 134,
-      "minLength": 2,
       "type": "string",
-      "x-finetype-cardinality": 200192,
-      "x-finetype-label": "representation.text.plain_text",
-      "x-finetype-null-rate": 0.0004,
-      "x-finetype-pii": false
+      "minLength": 1,
+      "maxLength": 256
     },
     "confidence": {
-      "maximum": 1.0,
-      "minimum": 0.801603,
       "type": "string",
-      "x-finetype-cardinality": 4,
-      "x-finetype-label": "representation.numeric.decimal_number",
-      "x-finetype-null-rate": 0.0,
-      "x-finetype-pii": false
+      "pattern": "^[01](\\.[0-9]+)?$",
+      "minLength": 1,
+      "maxLength": 15
     },
     "corpus": {
       "type": "string",
-      "x-finetype-label": "unknown",
-      "x-finetype-unknown-reason": "no type matched with sufficient confidence"
+      "minLength": 1,
+      "maxLength": 512
     },
     "jurisdiction": {
-      "maxLength": 6,
-      "minLength": 2,
       "type": "string",
-      "x-finetype-cardinality": 230,
-      "x-finetype-label": "geography.location.state_code",
-      "x-finetype-null-rate": 0.0009,
-      "x-finetype-pii": false
+      "pattern": "^[A-Za-z0-9-]+$",
+      "minLength": 2,
+      "maxLength": 6
     },
     "key": {
-      "maximum": 8711071617.0,
-      "minimum": 1750.0,
       "type": "string",
-      "x-finetype-cardinality": 202241,
-      "x-finetype-label": "representation.numeric.integer_number",
-      "x-finetype-null-rate": 0.0,
-      "x-finetype-pii": false
+      "pattern": "^[A-Z]*[0-9]+$",
+      "minLength": 4,
+      "maxLength": 10
     },
     "key_type": {
-      "maxLength": 6,
-      "minLength": 3,
       "type": "string",
-      "x-finetype-cardinality": 2,
-      "x-finetype-enum": {
-        "cohesion": 1.0,
-        "distinct": 2,
-        "domain": [
-          "cik",
-          "series"
-        ],
-        "open": true,
-        "rows": 207099
-      },
-      "x-finetype-label": "representation.text.word",
-      "x-finetype-null-rate": 0.0,
-      "x-finetype-pii": false
+      "enum": ["cik", "series"]
     },
     "legal_name": {
-      "maxLength": 246,
-      "minLength": 2,
       "type": "string",
-      "x-finetype-cardinality": 138455,
-      "x-finetype-label": "representation.file.excel_format",
-      "x-finetype-null-rate": 0.0009,
-      "x-finetype-pii": false
+      "minLength": 1,
+      "maxLength": 512
     },
     "lei": {
-      "maxLength": 20,
-      "minLength": 20,
       "type": "string",
-      "x-finetype-cardinality": 138921,
-      "x-finetype-label": "finance.securities.lei",
-      "x-finetype-null-rate": 0.0,
-      "x-finetype-pii": false
+      "pattern": "^[A-Z0-9]{18}[0-9]{2}$",
+      "minLength": 20,
+      "maxLength": 20
     },
     "method": {
-      "maxLength": 16,
-      "minLength": 8,
       "type": "string",
-      "x-finetype-cardinality": 4,
-      "x-finetype-enum": {
-        "cohesion": 0.5,
-        "distinct": 4,
-        "domain": [
-          "exact_name",
-          "jaro_winkler",
-          "sec-ncen",
-          "sec-registration"
-        ],
-        "open": true,
-        "rows": 207099
-      },
-      "x-finetype-label": "representation.text.word",
-      "x-finetype-null-rate": 0.0,
-      "x-finetype-pii": false
+      "enum": ["exact_name", "jaro_winkler", "sec-ncen", "sec-registration"]
     },
     "reg_status": {
-      "maxLength": 16,
-      "minLength": 6,
       "type": "string",
-      "x-finetype-cardinality": 6,
-      "x-finetype-enum": {
-        "cohesion": 0.8330000042915344,
-        "distinct": 6,
-        "domain": [
-          "ANNULLED",
-          "DUPLICATE",
-          "ISSUED",
-          "LAPSED",
-          "PENDING_TRANSFER",
-          "RETIRED"
-        ],
-        "open": true,
-        "rows": 206918
-      },
-      "x-finetype-label": "representation.text.word",
-      "x-finetype-null-rate": 0.0009,
-      "x-finetype-pii": false
+      "enum": ["ANNULLED", "DUPLICATE", "ISSUED", "LAPSED", "PENDING_TRANSFER", "RETIRED"]
     },
     "ticker": {
-      "maxLength": 7,
-      "minLength": 1,
       "type": "string",
-      "x-finetype-cardinality": 5526,
-      "x-finetype-label": "finance.securities.ticker",
-      "x-finetype-null-rate": 0.9694,
-      "x-finetype-pii": false
+      "pattern": "^[A-Z0-9.-]+$",
+      "minLength": 1,
+      "maxLength": 7
     },
     "tier": {
-      "maxLength": 13,
-      "minLength": 9,
       "type": "string",
-      "x-finetype-cardinality": 4,
-      "x-finetype-enum": {
-        "cohesion": 1.0,
-        "distinct": 4,
-        "domain": [
-          "ambiguous",
-          "authoritative",
-          "candidate",
-          "confirmed"
-        ],
-        "open": true,
-        "rows": 207099
-      },
-      "x-finetype-label": "representation.text.word",
-      "x-finetype-null-rate": 0.0,
-      "x-finetype-pii": false
+      "enum": ["ambiguous", "authoritative", "candidate", "confirmed"]
     }
   },
   "required": [

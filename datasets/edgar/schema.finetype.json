@@ -1,64 +1,33 @@
 {
-  "$comment": "Self-derived finetype drift contract for source.edgar (the finetype_validate@1 gate checks the terminal Parquet against this in CHECK-ONLY mode). Regenerate with finetype (>=0.6.50): finetype profile -f build/edgar.parquet -o json-schema --stats | jq '{\"$comment\":...} + del(.properties[].pattern)'. Rationale: the per-type canonical 'pattern' regexes finetype emits encode idealised/inferred formats that legitimately-varied production data violates — here finetype types 'ticker' as a 2-letter geographic state_code and 'cik' as a strict numeric_code, whose regexes reject real exchange tickers and CIKs. The gate therefore enforces the OBSERVABLE envelope finetype measured — type, minLength/maxLength, numeric minimum/maximum, closed enum domains, and the x-finetype-* semantic labels — not the format ideal. So it is a pass-through on today's Run and a tripwire for future drift.",
+  "$comment": "Self-derived finetype drift contract for source.edgar, checked by the in-engine finetype_validate@1 gate (the model-free `ft_validate` DuckDB table macro). ft_validate MELTS every column to VARCHAR, so this contract uses ONLY the string-surviving JSON-Schema keywords. ENFORCED: the `enum` closed domain on exchange; `pattern` shapes on cik (all digits — SEC CIKs are unpadded here) and ticker; and `minLength`/`maxLength` envelopes. NOT ENFORCED, by design: numeric ranges — a `type: number` BACKFIRES once a column is VARCHAR-melted (rejects 100%), so cik carries a digit `pattern`, not a numeric type; NULLs — ft_validate treats NULL and empty/whitespace as INVISIBLE, so nullable columns (exchange ~1.9%, ticker) still pass; and object-level `required` (documentation only). Free-text fields (company_name, corpus) carry LOOSE length envelopes with headroom, not tight formats. Derived from build/edgar.parquet: a pass-through on today's rows, a fail-closed tripwire for future drift (an unknown exchange, a non-digit cik, a shape break).",
   "$id": "finetype://edgar.parquet",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "properties": {
     "cik": {
-      "maxLength": 7,
-      "minLength": 4,
       "type": "string",
-      "x-finetype-cardinality": 8017,
-      "x-finetype-label": "representation.identifier.numeric_code",
-      "x-finetype-null-rate": 0.0,
-      "x-finetype-pii": false
+      "pattern": "^[0-9]+$",
+      "minLength": 1,
+      "maxLength": 10
     },
     "company_name": {
-      "maxLength": 71,
-      "minLength": 2,
       "type": "string",
-      "x-finetype-cardinality": 8017,
-      "x-finetype-label": "representation.text.plain_text",
-      "x-finetype-null-rate": 0.0,
-      "x-finetype-pii": false
+      "minLength": 1,
+      "maxLength": 256
     },
     "corpus": {
-      "maxLength": 80,
-      "minLength": 10,
       "type": "string",
-      "x-finetype-cardinality": 10426,
-      "x-finetype-label": "representation.text.plain_text",
-      "x-finetype-null-rate": 0.0,
-      "x-finetype-pii": false
+      "minLength": 1,
+      "maxLength": 256
     },
     "exchange": {
-      "maxLength": 6,
-      "minLength": 3,
       "type": "string",
-      "x-finetype-cardinality": 4,
-      "x-finetype-enum": {
-        "cohesion": 0.75,
-        "distinct": 4,
-        "domain": [
-          "CBOE",
-          "NYSE",
-          "Nasdaq",
-          "OTC"
-        ],
-        "open": true,
-        "rows": 10233
-      },
-      "x-finetype-label": "representation.text.word",
-      "x-finetype-null-rate": 0.0185,
-      "x-finetype-pii": false
+      "enum": ["CBOE", "NYSE", "Nasdaq", "OTC"]
     },
     "ticker": {
-      "maxLength": 7,
-      "minLength": 1,
       "type": "string",
-      "x-finetype-cardinality": 10425,
-      "x-finetype-label": "geography.location.state_code",
-      "x-finetype-null-rate": 0.0001,
-      "x-finetype-pii": false
+      "pattern": "^[A-Z0-9.-]+$",
+      "minLength": 1,
+      "maxLength": 7
     }
   },
   "required": [
