@@ -1,0 +1,64 @@
+{
+  "$comment": "Self-derived finetype drift contract for source.naics (the finetype_validate@1 gate checks the terminal Parquet against this in CHECK-ONLY mode). Regenerate with finetype (>=0.6.50): finetype profile -f build/naics.parquet -o json-schema --stats | jq '{\"$comment\":...} + del(.properties[].pattern)'. Rationale: the per-type canonical 'pattern' regexes finetype emits encode idealised formats that legitimately-varied production data violates — here finetype's 'code' NAICS pattern rejects the official hyphenated sector ranges (31-33, 44-45, 48-49). The gate therefore enforces the OBSERVABLE envelope finetype measured — type, minLength/maxLength, numeric minimum/maximum, closed enum domains, and the x-finetype-* semantic labels — not the format ideal. So it is a pass-through on today's Run and a tripwire for future drift.",
+  "$id": "finetype://naics.parquet",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "code": {
+      "maxLength": 6,
+      "minLength": 2,
+      "type": "string",
+      "x-finetype-cardinality": 2125,
+      "x-finetype-label": "identity.industry.naics",
+      "x-finetype-null-rate": 0.0,
+      "x-finetype-pii": false
+    },
+    "corpus": {
+      "type": "string",
+      "x-finetype-label": "unknown",
+      "x-finetype-unknown-reason": "validation rejected 'alphanumeric_id': only 21% of values matched its format"
+    },
+    "description": {
+      "type": "string",
+      "x-finetype-label": "unknown",
+      "x-finetype-unknown-reason": "validation rejected 'alphanumeric_id': only 26% of values matched its format"
+    },
+    "level": {
+      "maxLength": 17,
+      "minLength": 6,
+      "type": "string",
+      "x-finetype-cardinality": 5,
+      "x-finetype-enum": {
+        "cohesion": 0.6000000238418579,
+        "distinct": 5,
+        "domain": [
+          "industry_group",
+          "naics_industry",
+          "national_industry",
+          "sector",
+          "subsector"
+        ],
+        "open": true,
+        "rows": 2125
+      },
+      "x-finetype-label": "representation.text.entity_name",
+      "x-finetype-null-rate": 0.0,
+      "x-finetype-pii": false
+    },
+    "title": {
+      "maxLength": 118,
+      "minLength": 6,
+      "type": "string",
+      "x-finetype-cardinality": 1432,
+      "x-finetype-label": "representation.text.entity_name",
+      "x-finetype-null-rate": 0.0,
+      "x-finetype-pii": false
+    }
+  },
+  "required": [
+    "code",
+    "level",
+    "title"
+  ],
+  "title": "naics",
+  "type": "object"
+}
