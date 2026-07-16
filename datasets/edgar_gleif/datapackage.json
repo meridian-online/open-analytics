@@ -56,14 +56,14 @@
           {
             "name": "ticker",
             "type": "string",
-            "x-finetype-confidence": 0.6,
-            "x-finetype-label": "unknown"
+            "x-finetype-confidence": 0.9,
+            "x-finetype-label": "finance.securities.ticker"
           },
           {
             "name": "company_name",
             "type": "string",
-            "x-finetype-confidence": 0.6,
-            "x-finetype-label": "unknown"
+            "x-finetype-confidence": 0.9746,
+            "x-finetype-label": "representation.text.plain_text"
           },
           {
             "constraints": {
@@ -81,8 +81,8 @@
             },
             "name": "legal_name",
             "type": "string",
-            "x-finetype-confidence": 0.7623,
-            "x-finetype-label": "representation.text.entity_name"
+            "x-finetype-confidence": 0.957,
+            "x-finetype-label": "representation.file.excel_format"
           },
           {
             "constraints": {
@@ -92,7 +92,7 @@
             "description": "GLEIF's authoritative entity category (e.g. GENERAL, FUND, BRANCH); GENERAL when unknown.",
             "name": "category",
             "type": "string",
-            "x-finetype-confidence": 0.8965,
+            "x-finetype-confidence": 0.8802,
             "x-finetype-enum-domain": {
               "cohesion": 0.5,
               "distinct": 4,
@@ -105,7 +105,7 @@
               "open": true,
               "rows": 207071
             },
-            "x-finetype-label": "geography.location.region"
+            "x-finetype-label": "representation.text.word"
           },
           {
             "constraints": {
@@ -122,7 +122,7 @@
             },
             "name": "reg_status",
             "type": "string",
-            "x-finetype-confidence": 0.6549,
+            "x-finetype-confidence": 0.9897,
             "x-finetype-enum-domain": {
               "cohesion": 0.8330000042915344,
               "distinct": 6,
@@ -137,7 +137,7 @@
               "open": true,
               "rows": 206891
             },
-            "x-finetype-label": "geography.location.state_code"
+            "x-finetype-label": "representation.text.word"
           },
           {
             "constraints": {
@@ -167,8 +167,8 @@
             "description": "Provenance tier, in precedence order: authoritative (deterministic SEC/GLEIF registration — no guessing), confirmed (exact normalized-name Splink match, ~95% precision), candidate (name-only fuzzy match, surfaced NOT asserted), ambiguous (one exact name matched more than one entity). A deterministic edge always wins over a name match for the same key.",
             "name": "tier",
             "type": "string",
-            "x-finetype-confidence": 0.5393,
-            "x-finetype-label": "datetime.component.month_name"
+            "x-finetype-confidence": 0.6,
+            "x-finetype-label": "representation.text.word"
           },
           {
             "constraints": {
@@ -200,8 +200,8 @@
             "description": "Lowercased, accent-stripped concatenation of the display name, legal name, ticker and LEI — a derived free-text search field, not a source attribute.",
             "name": "corpus",
             "type": "string",
-            "x-finetype-confidence": 0.8428,
-            "x-finetype-label": "representation.text.plain_text"
+            "x-finetype-confidence": 0.6,
+            "x-finetype-label": "unknown"
           }
         ],
         "foreignKeys": [
