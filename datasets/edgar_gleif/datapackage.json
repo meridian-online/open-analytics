@@ -1,6 +1,6 @@
 {
   "$schema": "https://datapackage.org/profiles/2.0/datapackage.json",
-  "created": "2026-07-17T03:27:09Z",
+  "created": "2026-07-17T23:25:15Z",
   "description": "A resolved crosswalk linking SEC EDGAR registrants (CIK / ticker / fund series) to their GLEIF Legal Entity Identifier (LEI) — one row per asserted identity, each carrying its provenance tier, method and confidence. Authoritative edges come from official SEC/GLEIF registration (no guessing); the operating-company tail is linked by probabilistic name resolution (Fellegi-Sunter / Splink): exact normalized-name matches are confirmed (~95% precision), while name-only fuzzy matches are surfaced as candidates rather than auto-confirmed. A point-in-time snapshot, with an as-of date on every row.",
   "homepage": "https://meridian.online/datasets/edgar_gleif",
   "licenses": [
@@ -83,14 +83,13 @@
           },
           {
             "constraints": {
-              "maxLength": 100,
-              "minLength": 1,
-              "pattern": "^[#0.,;\\[\\]$€£¥%EeAaPpMm/dDyYhHsS ?:\"\\-+()<>=@*!\\w]*$"
+              "maxLength": 200,
+              "minLength": 2
             },
             "name": "legal_name",
             "type": "string",
             "x-finetype-confidence": 0.957,
-            "x-finetype-label": "representation.file.excel_format"
+            "x-finetype-label": "representation.text.entity_name"
           },
           {
             "constraints": {
