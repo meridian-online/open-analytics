@@ -6,14 +6,17 @@ orthogonal facets:
 
 | File | Facet | Answers |
 |---|---|---|
-| `arcform.yaml` (+ `models/`, `scripts/`, `descriptor.overrides.json`) | **Protocol** — how it's made | run `arc run` → produces the Dataset **and** its descriptor |
+| `arcform.yaml` (+ `models/`, `descriptor.overrides.json`) | **Protocol** — how it's made | run `arc run` → produces the Dataset **and** its descriptor |
 | `datapackage.json` | **Descriptor** — what it is | schema, finetype labels, foreignKeys/evidence — **emitted** by the `describe` step, no longer hand-authored |
 | `../registry.json` (this dataset's entry) | **Address** — how it's found | stable `uid`, `crosswalk.edgar_gleif`, manifest pointer |
 
 ## The Protocol
 
 `arc run` (arcform) executes `arcform.yaml`. One **Run** → one Dataset version — the
-freshness lever. The step DAG:
+freshness lever. The Protocol is **all-config**: every step is a `sql:` model or a
+typed `op:` operator from the arcform catalog (`http_fetch`, `gleif_ra_fetch`,
+`archive_extract`, `parquet_export`, `splink_resolve`, `datapackage_describe`) — there
+are **no opaque `command:`/shell steps**. The step DAG:
 
 1. **fetch** the source Datasets (`source.edgar`, `source.gleif`) from the openlake.
 2. **fetch** the deterministic backbone (no guessing) — **official sources only
@@ -27,15 +30,19 @@ freshness lever. The step DAG:
    `splink_resolve` operator (frozen Fellegi-Sunter model, precision-first).
 5. **tier** — combine `authoritative` ∪ `confirmed` ∪ `candidate`; a deterministic
    edge always wins over a name match for the same key.
-6. **package** — enrich from the sources, stamp `as_of`, write the terminal Parquet.
+6. **package** — enrich from the sources, stamp `as_of`, materialise the terminal edge
+   table; the `parquet_export` operator writes it to `build/edgar_gleif.parquet` (a
+   first-class produced asset, not an unparseable `COPY` graph-island). A **total**
+   `order_by` (`company_name` is not unique — 6,906 ties) makes the bytes reproducible.
 7. **describe** — emit `datapackage.json` from the built Parquet (see Boundaries).
 
 ## Boundaries (deliberate)
 
-- The arcform **engine** and the **`splink_resolve` operator** live in the `arcform`
-  repo; this Protocol only *references* the operator. (A typed-operator registry that
-  resolves operators by name+version is greenfield; for now the `resolve` step calls
-  the script by path.)
+- The arcform **engine** and the **operator catalog** live in the `arcform` repo; this
+  Protocol only *references* operators by `name@version` (e.g. `splink_resolve@1`). The
+  operators embed their frozen script bytes (`resolve.py`, `describe.py`, the dlt
+  paginator), so `@1` addresses an exact, reproducible implementation — the path-call
+  the `resolve`/`describe`/fetch steps used before is retired.
 - **Publish** — the content-addressed R2 upload + `manifest.json` / catalog pointer
   flip — stays in the out-of-repo publish pipeline. It *reads* this Protocol's terminal output
   `build/edgar_gleif.parquet`; it is not an arcform step.
@@ -45,9 +52,9 @@ freshness lever. The step DAG:
     from its taxonomy — the *machine-decidable* half: per-field `type` / `format`,
     the `x-finetype-*` semantic labels + observed constraints, and the resource
     `bytes` / `hash` / `format` (computed straight from the Parquet).
-  - `scripts/describe.py` overlays **`descriptor.overrides.json`** — the *curated*
-    half finetype cannot infer — and writes `datapackage.json`. Overrides win;
-    finetype fills the rest.
+  - the `datapackage_describe` operator (which embeds the former `describe.py`) overlays
+    **`descriptor.overrides.json`** — the *curated* half finetype cannot infer — and
+    writes `datapackage.json`. Overrides win; finetype fills the rest.
   - **finetype gap (deliberate split, not a workaround).** finetype emits exactly
     one typed Data Resource and nothing above the field level: no package identity
     (`title` / `description` / `homepage` / `licenses` / `sources`), no published
@@ -63,12 +70,16 @@ freshness lever. The step DAG:
 
 ## Scale
 
-- **Full SEC-entity universe (wired).** `fetch_sec_entities` builds the ~1.05M-filer
-  resolution left side (cik-lookup + former names), and `splink_resolve`'s blocking is
+- **Full SEC-entity universe (wired).** `fetch_cik_lookup` (http_fetch) +
+  `build_sec_entities` (`models/sec_entities.sql`) + `export_sec_entities`
+  (parquet_export) build the ~1.05M-filer resolution left side (cik-lookup + former
+  names), and `splink_resolve`'s blocking is
   tuned for it (compound keys, stopword handling, **country as a blocking dimension** —
   only ~355k of 3.36M GLEIF entities are US). Individuals (insider Form 3/4/5 filers)
   are left in but carry no LEI, so they never match — the **output is entity-only by
   construction** (no PII published).
-- **Run**: needs the `arc` binary, a `uv` env for `splink_resolve`, and `finetype` on
-  `PATH` for `describe`; `arc run --param as_of=YYYY-MM-DD`. At full scale the resolve
-  step is real compute (~100M candidate pairs) — run it deliberately.
+- **Run**: needs the `arc` binary, `uv` on `PATH` (the `splink_resolve`, `gleif_ra_fetch`,
+  and `datapackage_describe` operators run their frozen scripts via `uv run`), and
+  `finetype` on `PATH` (the describe operator shells out to it); `arc run --param
+  as_of=YYYY-MM-DD`. At full scale the resolve step is real compute (~100M candidate
+  pairs) — run it deliberately.
