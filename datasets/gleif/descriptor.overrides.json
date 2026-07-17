@@ -1,0 +1,60 @@
+{
+  "name": "gleif",
+  "title": "GLEIF — Legal Entity Identifiers",
+  "description": "The Global Legal Entity Identifier Foundation's public register of legal entities — every entity with its 20-character LEI, legal name, country, jurisdiction and registration status.",
+  "homepage": "https://meridian.online/datasets/gleif",
+  "licenses": [
+    {
+      "name": "CC0-1.0",
+      "title": "CC0 1.0 Universal",
+      "path": "https://creativecommons.org/publicdomain/zero/1.0/"
+    }
+  ],
+  "sources": [
+    {
+      "title": "GLEIF golden copy",
+      "path": "https://www.gleif.org/"
+    }
+  ],
+  "resource": {
+    "path": "https://openlake.meridian.online/gleif.parquet"
+  },
+  "fields": {
+    "lei": {
+      "description": "The 20-character ISO 17442 Legal Entity Identifier — the entity's globally unique key in the GLEIF register."
+    },
+    "legal_name": {
+      "description": "The entity's official legal name, as recorded in the GLEIF golden copy."
+    },
+    "country": {
+      "description": "ISO 3166-1 country code of the entity's legal address."
+    },
+    "city": {
+      "description": "City of the entity's legal address."
+    },
+    "jurisdiction": {
+      "description": "ISO 3166 code of the legal jurisdiction under which the entity is constituted."
+    },
+    "legal_form": {
+      "description": "ELF (Entity Legal Form) code classifying the entity's legal form."
+    },
+    "entity_status": {
+      "description": "Whether the entity is operational (ACTIVE) or not, per the GLEIF register."
+    },
+    "registration_status": {
+      "description": "LEI registration lifecycle status (e.g. ISSUED, LAPSED, RETIRED)."
+    },
+    "initial_registration": {
+      "description": "Date the LEI was first registered (calendar date sliced from the golden-copy timestamp)."
+    },
+    "next_renewal": {
+      "description": "Date the LEI registration is next due for renewal."
+    },
+    "corpus": {
+      "description": "Lowercased, accent-stripped concatenation of legal name + city + country — a derived free-text search field, not a source attribute."
+    }
+  },
+  "primaryKey": [
+    "lei"
+  ]
+}

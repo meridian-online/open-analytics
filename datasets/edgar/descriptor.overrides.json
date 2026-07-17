@@ -1,0 +1,43 @@
+{
+  "name": "edgar",
+  "title": "SEC EDGAR — Company Tickers",
+  "description": "Every company with securities registered with the U.S. Securities and Exchange Commission — its Central Index Key (CIK), ticker symbol, exchange and legal name, from the SEC's EDGAR system.",
+  "homepage": "https://meridian.online/datasets/edgar",
+  "licenses": [
+    {
+      "name": "other-pd",
+      "title": "Public domain (U.S. federal government work)",
+      "path": "https://www.sec.gov/privacy#dissemination"
+    }
+  ],
+  "sources": [
+    {
+      "title": "SEC EDGAR",
+      "path": "https://www.sec.gov/"
+    }
+  ],
+  "resource": {
+    "path": "https://openlake.meridian.online/edgar.parquet"
+  },
+  "fields": {
+    "cik": {
+      "description": "SEC EDGAR Central Index Key — the registrant's identifier in EDGAR, as an unpadded numeric string."
+    },
+    "company_name": {
+      "description": "Legal name of the registrant as carried in the SEC company-tickers file."
+    },
+    "ticker": {
+      "description": "Exchange ticker symbol for the registrant's security."
+    },
+    "exchange": {
+      "description": "Listing venue for the ticker (e.g. NYSE, Nasdaq, CBOE, OTC)."
+    },
+    "corpus": {
+      "description": "Lowercased, accent-stripped concatenation of name + ticker + exchange — a derived free-text search field, not a source attribute."
+    }
+  },
+  "primaryKey": [
+    "cik",
+    "ticker"
+  ]
+}

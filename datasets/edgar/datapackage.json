@@ -1,28 +1,21 @@
 {
   "$schema": "https://datapackage.org/profiles/2.0/datapackage.json",
-  "name": "edgar",
-  "title": "SEC EDGAR \u2014 Company Tickers",
-  "description": "Every company with securities registered with the U.S. Securities and Exchange Commission \u2014 its Central Index Key (CIK), ticker symbol, exchange and legal name, from the SEC's EDGAR system.",
+  "created": "2026-07-16T09:47:02Z",
+  "description": "Every company with securities registered with the U.S. Securities and Exchange Commission — its Central Index Key (CIK), ticker symbol, exchange and legal name, from the SEC's EDGAR system.",
   "homepage": "https://meridian.online/datasets/edgar",
   "licenses": [
     {
       "name": "other-pd",
-      "title": "Public domain (U.S. federal government work)",
-      "path": "https://www.sec.gov/privacy#dissemination"
+      "path": "https://www.sec.gov/privacy#dissemination",
+      "title": "Public domain (U.S. federal government work)"
     }
   ],
-  "sources": [
-    {
-      "title": "SEC EDGAR",
-      "path": "https://www.sec.gov/"
-    }
-  ],
-  "created": "2026-07-05T10:59:36Z",
+  "name": "edgar",
   "resources": [
     {
-      "bytes": 273288,
+      "bytes": 278865,
       "format": "parquet",
-      "hash": "sha256:6c6b9939f97e0e6c42722ac84b725e4f7d43d58eee50695ad5ce3412a209a4e5",
+      "hash": "sha256:7268dce550c684114472ecd59bfdc1fa1615fe30f16dcab19634d2796b803d0a",
       "mediatype": "application/vnd.apache.parquet",
       "name": "edgar",
       "path": "https://openlake.meridian.online/edgar.parquet",
@@ -32,6 +25,7 @@
             "constraints": {
               "pattern": "^[0-9]+$"
             },
+            "description": "SEC EDGAR Central Index Key — the registrant's identifier in EDGAR, as an unpadded numeric string.",
             "name": "cik",
             "type": "string",
             "x-finetype-confidence": 0.85,
@@ -39,19 +33,24 @@
           },
           {
             "constraints": {
-              "maxLength": 200,
-              "minLength": 2
+              "maxLength": 65536,
+              "minLength": 1
             },
+            "description": "Legal name of the registrant as carried in the SEC company-tickers file.",
             "name": "company_name",
             "type": "string",
-            "x-finetype-confidence": 0.7467,
-            "x-finetype-label": "representation.text.entity_name"
+            "x-finetype-confidence": 0.9531,
+            "x-finetype-label": "representation.text.plain_text"
           },
           {
+            "constraints": {
+              "pattern": "^[A-Z]{2}$"
+            },
+            "description": "Exchange ticker symbol for the registrant's security.",
             "name": "ticker",
             "type": "string",
-            "x-finetype-confidence": 0.6,
-            "x-finetype-label": "unknown"
+            "x-finetype-confidence": 0.6538,
+            "x-finetype-label": "geography.location.state_code"
           },
           {
             "constraints": {
@@ -59,6 +58,7 @@
               "minLength": 1,
               "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$"
             },
+            "description": "Listing venue for the ticker (e.g. NYSE, Nasdaq, CBOE, OTC).",
             "name": "exchange",
             "type": "string",
             "x-finetype-confidence": 1.0,
@@ -72,12 +72,34 @@
                 "OTC"
               ],
               "open": true,
-              "rows": 10226
+              "rows": 10233
             },
             "x-finetype-label": "representation.text.word"
+          },
+          {
+            "constraints": {
+              "maxLength": 65536,
+              "minLength": 1
+            },
+            "description": "Lowercased, accent-stripped concatenation of name + ticker + exchange — a derived free-text search field, not a source attribute.",
+            "name": "corpus",
+            "type": "string",
+            "x-finetype-confidence": 0.974,
+            "x-finetype-label": "representation.text.plain_text"
           }
+        ],
+        "primaryKey": [
+          "cik",
+          "ticker"
         ]
       }
     }
-  ]
+  ],
+  "sources": [
+    {
+      "path": "https://www.sec.gov/",
+      "title": "SEC EDGAR"
+    }
+  ],
+  "title": "SEC EDGAR — Company Tickers"
 }

@@ -1,0 +1,90 @@
+{
+  "$comment": "Self-derived finetype drift contract for crosswalk.edgar_gleif, checked by the in-engine finetype_validate@1 gate (the model-free `ft_validate` DuckDB table macro). ft_validate MELTS every column to VARCHAR, so this contract uses ONLY the string-surviving JSON-Schema keywords. ENFORCED: `enum` closed domains on key_type / tier / method / category / reg_status; `pattern` shapes on lei (ISO 17442: 18 alnum + 2 check digits), key (CIK digits or S…/CEF… series ids), as_of (ISO date), confidence (a [0,1] decimal string), jurisdiction, ticker; and `minLength`/`maxLength` envelopes. NOT ENFORCED, by design: numeric ranges — a `type: number`/`minimum`/`maximum` BACKFIRES once a column is VARCHAR-melted (it rejects 100% of rows), so confidence/key carry a string `pattern`, not a numeric range; NULLs — ft_validate treats NULL and empty/whitespace as INVISIBLE (no not-null enforcement), so nullable columns (reg_status, jurisdiction, ticker, company_name, legal_name) still pass; and object-level `required` (documentation only — the macro is per-column). Free-text fields (company_name, legal_name, corpus) carry LOOSE length envelopes (gross-corruption tripwires with headroom), not tight formats. Derived from build/edgar_gleif.parquet: every current row passes (a pass-through today), and a value outside a closed enum or a shape break trips it (a fail-closed drift tripwire for future Runs). Regenerate from the built Parquet with the same keyword discipline after an intentional schema change.",
+  "$id": "finetype://edgar_gleif.parquet",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "as_of": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+      "minLength": 10,
+      "maxLength": 10
+    },
+    "category": {
+      "type": "string",
+      "enum": ["FUND", "GENERAL", "RESIDENT_GOVERNMENT_ENTITY", "SOLE_PROPRIETOR"]
+    },
+    "company_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "confidence": {
+      "type": "string",
+      "pattern": "^[01](\\.[0-9]+)?$",
+      "minLength": 1,
+      "maxLength": 15
+    },
+    "corpus": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "jurisdiction": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9-]+$",
+      "minLength": 2,
+      "maxLength": 6
+    },
+    "key": {
+      "type": "string",
+      "pattern": "^[A-Z]*[0-9]+$",
+      "minLength": 4,
+      "maxLength": 10
+    },
+    "key_type": {
+      "type": "string",
+      "enum": ["cik", "series"]
+    },
+    "legal_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "lei": {
+      "type": "string",
+      "pattern": "^[A-Z0-9]{18}[0-9]{2}$",
+      "minLength": 20,
+      "maxLength": 20
+    },
+    "method": {
+      "type": "string",
+      "enum": ["exact_name", "jaro_winkler", "sec-ncen", "sec-registration"]
+    },
+    "reg_status": {
+      "type": "string",
+      "enum": ["ANNULLED", "DUPLICATE", "ISSUED", "LAPSED", "PENDING_TRANSFER", "RETIRED"]
+    },
+    "ticker": {
+      "type": "string",
+      "pattern": "^[A-Z0-9.-]+$",
+      "minLength": 1,
+      "maxLength": 7
+    },
+    "tier": {
+      "type": "string",
+      "enum": ["ambiguous", "authoritative", "candidate", "confirmed"]
+    }
+  },
+  "required": [
+    "as_of",
+    "category",
+    "confidence",
+    "key",
+    "key_type",
+    "lei",
+    "method",
+    "tier"
+  ],
+  "title": "edgar_gleif",
+  "type": "object"
+}

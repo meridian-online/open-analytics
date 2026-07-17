@@ -200,6 +200,22 @@ steps:
       row_group_size: 50000
       order_by: "company_name, key_type, key, lei"
 
+  # ── Validate: GATE the built Parquet against the self-derived finetype contract ─
+  # finetype_validate makes finetype LOAD-BEARING, not just post-hoc descriptive:
+  # `finetype validate` (CHECK-ONLY) types every column and checks the terminal Parquet
+  # against schema.finetype.json. That contract is self-derived from THIS Parquet
+  # (finetype profile -o json-schema --stats, relaxed to the observable envelope — see
+  # the schema's $comment), so every current row passes: a pass-through today, a
+  # fail-closed DRIFT tripwire for future Runs (a value outside a closed enum, a length
+  # past the envelope, a range break → the run fails). CHECK-ONLY writes nothing and
+  # never reorders/drops rows, so build/edgar_gleif.parquet stays byte-identical — this
+  # step READS the output, it does not touch it.
+  - name: validate
+    op: finetype_validate@1
+    with:
+      parquet: build/edgar_gleif.parquet
+      schema: schema.finetype.json
+
   # ── Describe: EMIT datapackage.json from the built Parquet ─────────────────────
   # datapackage_describe embeds the retired scripts/describe.py: `finetype profile … -o
   # datapackage` types the columns; descriptor.overrides.json overlays the hand-curated

@@ -1,0 +1,42 @@
+{
+  "name": "naics",
+  "title": "NAICS — Industry Classification (2022)",
+  "description": "The 2022 North American Industry Classification System — the standard taxonomy for classifying business establishments by industry, from broad sectors down to specific national industries.",
+  "homepage": "https://meridian.online/datasets/naics",
+  "licenses": [
+    {
+      "name": "other-pd",
+      "title": "Public domain (U.S. Census Bureau)",
+      "path": "https://www.census.gov/naics/"
+    }
+  ],
+  "sources": [
+    {
+      "title": "U.S. Census Bureau",
+      "path": "https://www.census.gov/naics/"
+    }
+  ],
+  "resource": {
+    "path": "https://openlake.meridian.online/naics.parquet"
+  },
+  "fields": {
+    "code": {
+      "description": "NAICS 2022 code — 2 digits (or a hyphenated sector range) down to a 6-digit national industry; the hierarchy is read from the code length."
+    },
+    "title": {
+      "description": "Official Census title for the code, with the trilateral-comparable superscript 'T' marker stripped."
+    },
+    "level": {
+      "description": "Hierarchy level derived from the code shape: sector, subsector, industry_group, naics_industry or national_industry."
+    },
+    "description": {
+      "description": "Official Census description of the industry; NULL for codes that defer to a child code."
+    },
+    "corpus": {
+      "description": "Lowercased, accent-stripped concatenation of title + description — a derived free-text search field, not a source attribute."
+    }
+  },
+  "primaryKey": [
+    "code"
+  ]
+}
