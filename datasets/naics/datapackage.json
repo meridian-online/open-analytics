@@ -1,6 +1,6 @@
 {
   "$schema": "https://datapackage.org/profiles/2.0/datapackage.json",
-  "created": "2026-07-16T09:50:03Z",
+  "created": "2026-07-17T23:25:15Z",
   "description": "The 2022 North American Industry Classification System — the standard taxonomy for classifying business establishments by industry, from broad sectors down to specific national industries.",
   "homepage": "https://meridian.online/datasets/naics",
   "licenses": [
@@ -44,13 +44,14 @@
           },
           {
             "constraints": {
-              "maxLength": 200,
-              "minLength": 2
+              "maxLength": 100,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$"
             },
             "description": "Hierarchy level derived from the code shape: sector, subsector, industry_group, naics_industry or national_industry.",
             "name": "level",
             "type": "string",
-            "x-finetype-confidence": 0.8749,
+            "x-finetype-confidence": 0.6,
             "x-finetype-enum-domain": {
               "cohesion": 0.6000000238418579,
               "distinct": 5,
@@ -64,7 +65,7 @@
               "open": true,
               "rows": 2125
             },
-            "x-finetype-label": "representation.text.entity_name"
+            "x-finetype-label": "representation.text.word"
           },
           {
             "description": "Official Census description of the industry; NULL for codes that defer to a child code.",
