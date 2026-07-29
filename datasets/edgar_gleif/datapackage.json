@@ -1,6 +1,6 @@
 {
   "$schema": "https://datapackage.org/profiles/2.0/datapackage.json",
-  "created": "2026-07-17T23:25:15Z",
+  "created": "2026-07-29T07:27:00Z",
   "description": "A resolved crosswalk linking SEC EDGAR registrants (CIK / ticker / fund series) to their GLEIF Legal Entity Identifier (LEI) — one row per asserted identity, each carrying its provenance tier, method and confidence. Authoritative edges come from official SEC/GLEIF registration (no guessing); the operating-company tail is linked by probabilistic name resolution (Fellegi-Sunter / Splink): exact normalized-name matches are confirmed (~95% precision), while name-only fuzzy matches are surfaced as candidates rather than auto-confirmed. A point-in-time snapshot, with an as-of date on every row.",
   "homepage": "https://meridian.online/datasets/edgar_gleif",
   "licenses": [
@@ -88,7 +88,7 @@
             },
             "name": "legal_name",
             "type": "string",
-            "x-finetype-confidence": 0.957,
+            "x-finetype-confidence": 0.9571,
             "x-finetype-label": "representation.text.entity_name"
           },
           {
@@ -100,7 +100,7 @@
             "description": "GLEIF's authoritative entity category (e.g. GENERAL, FUND, BRANCH); GENERAL when unknown.",
             "name": "category",
             "type": "string",
-            "x-finetype-confidence": 0.8802,
+            "x-finetype-confidence": 0.8803,
             "x-finetype-enum-domain": {
               "cohesion": 0.5,
               "distinct": 4,
@@ -158,7 +158,7 @@
             "description": "How the edge was established. Authoritative: sec-registration (GLEIF RA000665) or sec-ncen (SEC Form N-CEN). Probabilistic: exact_name (identical normalized company name) or jaro_winkler (fuzzy name).",
             "name": "method",
             "type": "string",
-            "x-finetype-confidence": 0.6875,
+            "x-finetype-confidence": 0.6873,
             "x-finetype-enum-domain": {
               "cohesion": 0.5,
               "distinct": 4,

@@ -1,6 +1,6 @@
 {
   "$schema": "https://datapackage.org/profiles/2.0/datapackage.json",
-  "created": "2026-07-17T23:25:16Z",
+  "created": "2026-07-29T07:26:58Z",
   "description": "Every company with securities registered with the U.S. Securities and Exchange Commission — its Central Index Key (CIK), ticker symbol, exchange and legal name, from the SEC's EDGAR system.",
   "homepage": "https://meridian.online/datasets/edgar",
   "licenses": [
@@ -84,7 +84,7 @@
             "description": "Lowercased, accent-stripped concatenation of name + ticker + exchange — a derived free-text search field, not a source attribute.",
             "name": "corpus",
             "type": "string",
-            "x-finetype-confidence": 0.974,
+            "x-finetype-confidence": 0.9741,
             "x-finetype-label": "representation.text.plain_text"
           }
         ],
