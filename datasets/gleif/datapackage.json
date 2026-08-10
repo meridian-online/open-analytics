@@ -1,28 +1,21 @@
 {
   "$schema": "https://datapackage.org/profiles/2.0/datapackage.json",
-  "name": "gleif",
-  "title": "GLEIF \u2014 Legal Entity Identifiers",
-  "description": "The Global Legal Entity Identifier Foundation's public register of legal entities \u2014 every entity with its 20-character LEI, legal name, country, jurisdiction and registration status.",
+  "created": "2026-08-10T23:53:23Z",
+  "description": "The Global Legal Entity Identifier Foundation's public register of legal entities — every entity with its 20-character LEI, legal name, country, jurisdiction and registration status.",
   "homepage": "https://meridian.online/datasets/gleif",
   "licenses": [
     {
       "name": "CC0-1.0",
-      "title": "CC0 1.0 Universal",
-      "path": "https://creativecommons.org/publicdomain/zero/1.0/"
+      "path": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "title": "CC0 1.0 Universal"
     }
   ],
-  "sources": [
-    {
-      "title": "GLEIF golden copy",
-      "path": "https://www.gleif.org/"
-    }
-  ],
-  "created": "2026-07-05T10:59:35Z",
+  "name": "gleif",
   "resources": [
     {
-      "bytes": 127418763,
+      "bytes": 128008473,
       "format": "parquet",
-      "hash": "sha256:07e1bb77d258ba5124d135d82fe0809b6a529b82d663d53ee35c7454ca2d86bb",
+      "hash": "sha256:de9b31365ea9a90de6c0367e40537611ec1bc0400d48f3aa6155258eac6e232f",
       "mediatype": "application/vnd.apache.parquet",
       "name": "gleif",
       "path": "https://openlake.meridian.online/gleif.parquet",
@@ -30,8 +23,9 @@
         "fields": [
           {
             "constraints": {
-              "pattern": "^[0-9]{4}[A-Z0-9]{14}[0-9]{2}$"
+              "pattern": "^[A-Z0-9]{4}[A-Z0-9]{14}[0-9]{2}$"
             },
+            "description": "The 20-character ISO 17442 Legal Entity Identifier — the entity's globally unique key in the GLEIF register.",
             "name": "lei",
             "type": "string",
             "x-finetype-confidence": 1.0,
@@ -42,18 +36,20 @@
               "maxLength": 200,
               "minLength": 2
             },
+            "description": "The entity's official legal name, as recorded in the GLEIF golden copy.",
             "name": "legal_name",
             "type": "string",
-            "x-finetype-confidence": 0.9864,
+            "x-finetype-confidence": 0.7798,
             "x-finetype-label": "representation.text.entity_name"
           },
           {
             "constraints": {
               "pattern": "^[A-Z]{2}$"
             },
+            "description": "ISO 3166-1 country code of the entity's legal address.",
             "name": "country",
             "type": "string",
-            "x-finetype-confidence": 0.9998,
+            "x-finetype-confidence": 0.8,
             "x-finetype-label": "geography.location.country_code"
           },
           {
@@ -61,6 +57,7 @@
               "maxLength": 100,
               "minLength": 1
             },
+            "description": "City of the entity's legal address.",
             "name": "city",
             "type": "string",
             "x-finetype-confidence": 1.0,
@@ -70,18 +67,26 @@
             "constraints": {
               "pattern": "^[A-Z]{2}$"
             },
+            "description": "ISO 3166 code of the legal jurisdiction under which the entity is constituted.",
             "name": "jurisdiction",
             "type": "string",
-            "x-finetype-confidence": 0.9685,
+            "x-finetype-confidence": 0.9985,
             "x-finetype-label": "geography.location.country_code"
           },
           {
+            "constraints": {
+              "maxLength": 4,
+              "minLength": 4,
+              "pattern": "^[A-Z0-9]{4}$"
+            },
+            "description": "ELF (Entity Legal Form) code classifying the entity's legal form.",
             "name": "legal_form",
             "type": "string",
-            "x-finetype-confidence": 0.454,
-            "x-finetype-label": "unknown"
+            "x-finetype-confidence": 0.4361,
+            "x-finetype-label": "representation.identifier.alphanumeric_id"
           },
           {
+            "description": "Whether the entity is operational (ACTIVE) or not, per the GLEIF register.",
             "name": "entity_status",
             "type": "boolean",
             "x-finetype-confidence": 1.0,
@@ -93,7 +98,7 @@
                 "INACTIVE"
               ],
               "open": true,
-              "rows": 99732
+              "rows": 3368431
             },
             "x-finetype-label": "representation.boolean.terms"
           },
@@ -103,9 +108,10 @@
               "minLength": 1,
               "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$"
             },
+            "description": "LEI registration lifecycle status (e.g. ISSUED, LAPSED, RETIRED).",
             "name": "registration_status",
             "type": "string",
-            "x-finetype-confidence": 0.5403,
+            "x-finetype-confidence": 0.9875,
             "x-finetype-enum-domain": {
               "cohesion": 0.7139999866485596,
               "distinct": 7,
@@ -119,7 +125,7 @@
                 "RETIRED"
               ],
               "open": true,
-              "rows": 100000
+              "rows": 3377398
             },
             "x-finetype-label": "representation.text.word"
           },
@@ -129,6 +135,7 @@
               "minLength": 10,
               "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
             },
+            "description": "Date the LEI was first registered (calendar date sliced from the golden-copy timestamp).",
             "format": "%Y-%m-%d",
             "name": "initial_registration",
             "type": "date",
@@ -141,14 +148,33 @@
               "minLength": 10,
               "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
             },
+            "description": "Date the LEI registration is next due for renewal.",
             "format": "%Y-%m-%d",
             "name": "next_renewal",
             "type": "date",
             "x-finetype-confidence": 1.0,
             "x-finetype-label": "datetime.date.iso"
+          },
+          {
+            "description": "Lowercased, accent-stripped concatenation of legal name + city + country — a derived free-text search field, not a source attribute.",
+            "name": "corpus",
+            "type": "string",
+            "x-finetype-confidence": 0.9989,
+            "x-finetype-label": "unknown"
           }
+        ],
+        "primaryKey": [
+          "lei"
         ]
       }
     }
-  ]
+  ],
+  "sources": [
+    {
+      "path": "https://www.gleif.org/",
+      "title": "GLEIF golden copy"
+    }
+  ],
+  "title": "GLEIF — Legal Entity Identifiers",
+  "x-finetype-version": "0.6.56"
 }
