@@ -1,0 +1,77 @@
+# Reads every published descriptor back against the Parquet it describes.
+#
+# `self-test` runs first and proves the check can fail: it builds scratch datasets
+# with deliberate descriptor/bytes disagreements and asserts both the exit status
+# and the message. `descriptors-match-their-data` then runs the same check against
+# the live published files, and is only meaningful because the job above it passed.
+name: descriptors
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # The descriptors are static; the files they describe are republished out of band,
+  # so a passing merge does not stay true on its own.
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: descriptors-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DUCKDB_VERSION: "1.5.5"
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  self-test:
+    name: the check can fail
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: install duckdb
+        run: python -m pip install --disable-pip-version-check "duckdb==${DUCKDB_VERSION}"
+      - name: scratch fixtures, exit status and message
+        run: python scripts/test_check_descriptors.py
+
+  descriptors-match-their-data:
+    name: descriptors match their data
+    needs: self-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: install duckdb
+        run: python -m pip install --disable-pip-version-check "duckdb==${DUCKDB_VERSION}"
+      - name: every datapackage.json against its published Parquet
+        shell: bash
+        run: |
+          set +e
+          python scripts/check_descriptors.py --json descriptor-check.json > check.log 2>&1
+          status=$?
+          set -e
+          cat check.log
+          {
+            echo '### Descriptor vs data'
+            echo
+            echo '```'
+            cat check.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $status
+      - name: upload the findings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: descriptor-check
+          path: descriptor-check.json
+          if-no-files-found: ignore
