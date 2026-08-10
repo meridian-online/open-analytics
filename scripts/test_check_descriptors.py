@@ -462,7 +462,8 @@ class DescriptorCheckSelfTest(unittest.TestCase):
 
         1. a crosswalk key stored VARCHAR and declared `integer`,
         2. whose foreign key points at a company id declared `string`,
-        3. and a subdivision-bearing column measured against a country-code pattern.
+        3. and a column holding ISO-3166-2 subdivisions measured against a
+           country-code pattern.
         """
         write_package(
             self.datasets,
