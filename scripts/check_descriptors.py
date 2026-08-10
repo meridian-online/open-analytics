@@ -132,15 +132,32 @@ def resolve_path(descriptor_path: Path, raw: str) -> tuple[str, bool]:
     return str((descriptor_path.parent / raw).resolve()), False
 
 
+USER_AGENT = "meridian-open-analytics descriptor-check (+https://github.com/meridian-online/open-analytics)"
+
+
 def remote_size(url: str) -> int | None:
-    """Content-Length for a URL, or None when the server does not report one."""
-    request = urllib.request.Request(url, method="HEAD")
+    """Published size of a URL, or None when the server will not report one.
+
+    Asks for a single byte and reads the total out of `Content-Range`, which costs
+    one byte rather than the file. Some edges refuse `HEAD`, so that is the fallback
+    rather than the first move.
+    """
+    request = urllib.request.Request(url, headers={"Range": "bytes=0-0", "User-Agent": USER_AGENT})
     try:
         with urllib.request.urlopen(request, timeout=60) as response:
+            content_range = response.headers.get("Content-Range")
             length = response.headers.get("Content-Length")
+            status = response.status
     except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError) as exc:
-        raise CheckError(f"HEAD {url} failed: {exc}") from exc
-    return int(length) if length is not None and length.isdigit() else None
+        raise CheckError(f"GET {url} failed: {exc}") from exc
+
+    if status == 206 and content_range:
+        total = content_range.rsplit("/", 1)[-1].strip()
+        if total.isdigit():
+            return int(total)
+    if status == 200 and length is not None and length.isdigit():
+        return int(length)  # the edge ignored the range and reported the whole file
+    return None
 
 
 def load_descriptor(path: Path) -> dict[str, Any]:
