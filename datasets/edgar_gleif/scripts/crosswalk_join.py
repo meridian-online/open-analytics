@@ -57,11 +57,9 @@ EXIT_ERROR = 2
 
 # Comparisons this script performs. `text` renders both sides with DuckDB's VARCHAR
 # cast before comparing; `exact` compares the stored values and leaves the engine to
-# reconcile the two sides, which it does by casting the text one. The two agree
-# wherever every compared value has a numeric reading, and part company where one
-# does not — there `exact` cannot run at all. A declaration naming anything else is
-# EXIT_ERROR, never a pass: an unimplemented comparison must not read as a satisfied
-# one.
+# reconcile the two sides, which it does by casting the text one. A declaration
+# naming anything else is EXIT_ERROR, never a pass: an unimplemented comparison must
+# not read as a satisfied one.
 SUPPORTED_COMPARISONS = {"text", "exact"}
 SUPPORTED_WHERE_KEYS = {"field", "equals"}
 REQUIRED_COVERAGE_KEYS = {"rows", "matched"}
