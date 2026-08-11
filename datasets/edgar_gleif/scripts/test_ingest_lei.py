@@ -274,6 +274,13 @@ class IngestLeiSelfTest(unittest.TestCase):
         self.fixture.resolved.append(("1000004", LEI_TRANSCRIBED, "exact_name", "confirmed", 0.97))
         self.assertRunFails(LEI_TRANSCRIBED)
 
+    def test_a_missing_identifier_stops_the_run(self) -> None:
+        """An unknown remainder is not a passing one — `NULL <> 1` would ship the row."""
+        self.fixture.resolved.append(("1000004", None, "exact_name", "confirmed", 0.97))
+        with self.assertRaises(Exception) as caught:
+            self.fixture.run()
+        self.assertIn("fails ISO 7064 MOD 97-10", str(caught.exception))
+
     def test_the_gate_counts_what_it_refuses(self) -> None:
         """A refusal that does not say how much is wrong cannot be acted on."""
         self.fixture.ra_sec.append(("1000004", LEI_INVENTED, "FUND"))
