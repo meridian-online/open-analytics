@@ -24,7 +24,11 @@
       "description": "The 20-character ISO 17442 Legal Entity Identifier — the entity's globally unique key in the GLEIF register."
     },
     "legal_name": {
-      "description": "The entity's official legal name, as recorded in the GLEIF golden copy."
+      "description": "The entity's official legal name, as recorded in the GLEIF golden copy. The bounds are the register's own: LEI-CDF v3.1 types this element Tokenized500Type, which permits 1 to 500 characters. Names at both ends are genuine — single-character names are registered in several jurisdictions, and names past 200 characters are typically a registry's full form, such as the Italian convention of carrying the permitted trading abbreviations inside the registered name.",
+      "constraints": {
+        "minLength": 1,
+        "maxLength": 500
+      }
     },
     "country": {
       "description": "ISO 3166-1 country code of the entity's legal address."
@@ -44,7 +48,15 @@
       }
     },
     "entity_status": {
-      "description": "Whether the entity is operational (ACTIVE) or not, per the GLEIF register."
+      "description": "The register's entity status, as text: ACTIVE (legally registered and operating as of the last report), INACTIVE (no longer legally registered or operating), or the four-character string NULL, which the register uses to mean the status is not applicable. These three are LEI-CDF v3.1's EntityStatusEnum. It is not a boolean: NULL is a reported value, not a missing one, and the column holds no SQL nulls.",
+      "type": "string",
+      "constraints": {
+        "enum": [
+          "ACTIVE",
+          "INACTIVE",
+          "NULL"
+        ]
+      }
     },
     "registration_status": {
       "description": "LEI registration lifecycle status (e.g. ISSUED, LAPSED, RETIRED)."

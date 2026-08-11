@@ -33,10 +33,10 @@
           },
           {
             "constraints": {
-              "maxLength": 200,
-              "minLength": 2
+              "maxLength": 500,
+              "minLength": 1
             },
-            "description": "The entity's official legal name, as recorded in the GLEIF golden copy.",
+            "description": "The entity's official legal name, as recorded in the GLEIF golden copy. The bounds are the register's own: LEI-CDF v3.1 types this element Tokenized500Type, which permits 1 to 500 characters. Names at both ends are genuine — single-character names are registered in several jurisdictions, and names past 200 characters are typically a registry's full form, such as the Italian convention of carrying the permitted trading abbreviations inside the registered name.",
             "name": "legal_name",
             "type": "string",
             "x-finetype-confidence": 0.7798,
@@ -86,9 +86,16 @@
             "x-finetype-label": "representation.identifier.alphanumeric_id"
           },
           {
-            "description": "Whether the entity is operational (ACTIVE) or not, per the GLEIF register.",
+            "constraints": {
+              "enum": [
+                "ACTIVE",
+                "INACTIVE",
+                "NULL"
+              ]
+            },
+            "description": "The register's entity status, as text: ACTIVE (legally registered and operating as of the last report), INACTIVE (no longer legally registered or operating), or the four-character string NULL, which the register uses to mean the status is not applicable. These three are LEI-CDF v3.1's EntityStatusEnum. It is not a boolean: NULL is a reported value, not a missing one, and the column holds no SQL nulls.",
             "name": "entity_status",
-            "type": "boolean",
+            "type": "string",
             "x-finetype-confidence": 1.0,
             "x-finetype-enum-domain": {
               "cohesion": 1.0,
