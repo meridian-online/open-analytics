@@ -7,7 +7,8 @@ orthogonal facets:
 | File | Facet | Answers |
 |---|---|---|
 | `arcform.yaml` (+ `models/`, `descriptor.overrides.json`) | **Protocol** — how it's made | run `arc run` → produces the Dataset **and** its descriptor |
-| `datapackage.json` | **Descriptor** — what it is | schema, finetype labels, foreignKeys/evidence — **emitted** by the `describe` step, no longer hand-authored |
+| `datapackage.json` | **Descriptor** — what it is | schema, finetype labels, `x-joins`/evidence — **emitted** by the `describe` step, no longer hand-authored |
+| `scripts/crosswalk_join.py` (+ `test_crosswalk_join.py`) | **Proof** — that the join runs | executes every declared `x-joins` against the published objects and checks the coverage each one claims |
 | `../registry.json` (this dataset's entry) | **Address** — how it's found | stable `uid`, `crosswalk.edgar_gleif`, manifest pointer |
 
 ## The Protocol
@@ -59,14 +60,41 @@ are **no opaque `command:`/shell steps**. The step DAG:
     one typed Data Resource and nothing above the field level: no package identity
     (`title` / `description` / `homepage` / `licenses` / `sources`), no published
     resource `path`, no per-field prose `description`, and no relational metadata
-    (`primaryKey`, `foreignKeys`, and their `x-evidence` / `x-confidence` /
-    `x-status`). None of that is derivable from column values, so it lives in the
-    sidecar. finetype's semantic labels are also only as good as the installed
-    finetype — a wrong label is corrected by adding the field to the sidecar's
-    `fields` map (an override may set any field key, including `x-finetype-label`).
+    (`primaryKey`, `x-joins`, and their evidence and coverage). None of that is
+    derivable from column values, so it lives in the sidecar. finetype's semantic
+    labels are also only as good as the installed finetype — a wrong label, type or
+    constraint is corrected by adding the field to the sidecar's `fields` map (an
+    override may set any field key, including `type`, `constraints` and
+    `x-finetype-label`, and wins over what finetype emitted).
   - The step **hard-fails** if a curated `primaryKey` / `foreignKey` names a column
     absent from the built Parquet — the descriptor-drift guard. Keep the sidecar in
     step with `models/package.sql`'s output columns.
+
+## The joins
+
+This package declares no `schema.foreignKeys`. A Data Package foreign key asserts
+that **every** value on the left exists on the right, and neither relationship this
+crosswalk carries satisfies that against the published bytes: `edgar` is a
+ticker/exchange listing rather than the CIK universe, so most SEC-side keys have no
+row there and it holds CIKs the crosswalk does not; and the GLEIF snapshot this
+descriptor names was taken at a different time, so a small tail of LEIs here are not
+in it. Declaring either as a foreign key would advertise a guarantee the data does
+not keep.
+
+What is true is stated instead, at the package root under **`x-joins`**: the
+columns, the referenced package, the row subset each join applies to, whether the
+comparison needs a rendering, and the measured `coverage`. `edgar_gleif.key` is text
+and `edgar.cik` is an integer — the two SEC identifier schemes share one column, so
+no arithmetic type describes it — and the declaration says so by naming the
+rendering (`compareAs: text`) rather than leaving a consumer to guess.
+
+`coverage` is measured against the exact objects in `resources[].path` and moves
+when they are republished, exactly as `bytes` and `hash` do.
+`scripts/crosswalk_join.py` runs the declarations and fails when the data disagrees;
+it takes every column, path, filter and rendering out of the descriptors, because a
+join that can only be run by a program which already knows the answer was never
+described. `scripts/test_crosswalk_join.py` proves that runner can fail, offline,
+against scratch packages.
 
 ## Scale
 

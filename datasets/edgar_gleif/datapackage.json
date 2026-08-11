@@ -280,7 +280,7 @@
       },
       {
         "cardinality": "partial — nearly every left row matches, but not all. The two packages are point-in-time snapshots taken at different times, so a handful of LEIs on this side are not in the GLEIF file this descriptor names.",
-        "compareAs": "text",
+        "compareAs": "exact",
         "coverage": {
           "matched": 206980,
           "rows": 207099
