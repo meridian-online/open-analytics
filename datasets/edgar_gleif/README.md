@@ -6,7 +6,7 @@ orthogonal facets:
 
 | File | Facet | Answers |
 |---|---|---|
-| `arcform.yaml` (+ `models/`, `descriptor.overrides.json`) | **Protocol** — how it's made | run `arc run` → produces the Dataset **and** its descriptor |
+| `arcform.yaml` (+ `models/`, `descriptor.overrides.json`, `scripts/test_ingest_lei.py`) | **Protocol** — how it's made | run `arc run` → produces the Dataset **and** its descriptor; the test runs the models against scratch sources and pins what they refuse |
 | `datapackage.json` | **Descriptor** — what it is | schema, finetype labels, `x-joins`/evidence — **emitted** by the `describe` step, no longer hand-authored |
 | `scripts/crosswalk_join.py` (+ `test_crosswalk_join.py`) | **Proof** — that the join runs | executes every declared `x-joins` against the published objects and checks the coverage each one claims |
 | `../registry.json` (this dataset's entry) | **Address** — how it's found | stable `uid`, `crosswalk.edgar_gleif`, manifest pointer |
@@ -23,19 +23,57 @@ are **no opaque `command:`/shell steps**. The step DAG:
 2. **fetch** the deterministic backbone (no guessing) — **official sources only
    (SEC + GLEIF)**: GLEIF SEC registrations (RA000665 → `CIK/series ↔ LEI` +
    `entity.category`) and **SEC Form N-CEN** (the annual fund filing → registrant
-   `CIK ↔ LEI` and series `SERIES_ID ↔ LEI`, ~100% LEI fill). No crowd-sourced data
+   `CIK ↔ LEI` and series `SERIES_ID ↔ LEI`). No crowd-sourced data
    enters the published dataset; Wikidata is an out-of-band validation cross-check only.
+   The N-CEN LEI column is **never null and that is not the same as always filled**:
+   it is filer-typed free text, and a filer with no LEI to report writes a row of
+   zeroes rather than leaving it empty. See *The identifier* below.
 3. **load / normalise** — type the tables, normalise CIK representation, derive the
-   `key_type` (cik | series | class) from the SEC identifier scheme.
+   `key_type` (cik | series | class) from the SEC identifier scheme, and drop any
+   N-CEN LEI the check-digit arithmetic rejects.
 4. **resolve** — probabilistic name match for the operating-company tail, via the
    `splink_resolve` operator (frozen Fellegi-Sunter model, precision-first).
 5. **tier** — combine `authoritative` ∪ `confirmed` ∪ `candidate`; a deterministic
    edge always wins over a name match for the same key.
 6. **package** — enrich from the sources, stamp `as_of`, materialise the terminal edge
-   table; the `parquet_export` operator writes it to `build/edgar_gleif.parquet` (a
+   table, and **gate it on the identifier** (see *The identifier*); the
+   `parquet_export` operator writes it to `build/edgar_gleif.parquet` (a
    first-class produced asset, not an unparseable `COPY` graph-island). A **total**
    `order_by` (`company_name` is not unique — 6,906 ties) makes the bytes reproducible.
 7. **describe** — emit `datapackage.json` from the built Parquet (see Boundaries).
+
+## The identifier
+
+An edge asserts that an SEC filer **is** a given legal entity. An LEI that names no
+entity cannot carry that assertion, and no `tier` value repairs one that does not — so
+the Protocol refuses it rather than publishing it under a softer label.
+
+An LEI is admitted when **either** test passes:
+
+- **ISO 7064 MOD 97-10.** The last two of the twenty characters are check digits over
+  the other eighteen. `models/load.sql` declares `lei_mod97`, which expands each
+  character to its base-36 value and folds left, so no fixed-width integer overflows;
+  the identifier is well formed when the remainder is 1.
+- **GLEIF publishes it.** The register holds entries whose check digits do not satisfy
+  the standard, and an entity GLEIF publishes is a real one whatever the arithmetic
+  says of its digits. Rejecting those would drop resolvable edges.
+
+The shape cannot do this job. `00000000000000000000` satisfies ISO 17442's
+eighteen-alphanumeric-plus-two-digit pattern, which is what `datapackage.json` and
+`schema.finetype.json` declare and all either can declare — a `pattern` does not
+evaluate a checksum. That is why the test is arithmetic and why it runs in the
+Protocol rather than in a constraint.
+
+Where each half applies:
+
+| Source | Treatment | Why |
+|---|---|---|
+| N-CEN (`sec-ncen`) | **filtered** in `models/load.sql` | filer-typed free text; placeholders and transcriptions are expected of it |
+| RA000665 (`sec-registration`), resolver (`exact_name`, `jaro_winkler`) | **gated** in `models/package.sql` — the Run fails | the LEI is the register's own key; a value failing both tests means something upstream is broken, and a broken Run must not publish |
+
+`scripts/test_ingest_lei.py` proves both can fail, offline: it runs the shipped models
+against scratch sources, and one case deletes the filter from `models/load.sql` and
+asserts the gate behind it reddens.
 
 ## Boundaries (deliberate)
 
