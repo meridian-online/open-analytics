@@ -69,6 +69,10 @@ are **no opaque `command:`/shell steps**. The step DAG:
   - The step **hard-fails** if a curated `primaryKey` / `foreignKey` names a column
     absent from the built Parquet — the descriptor-drift guard. Keep the sidecar in
     step with `models/package.sql`'s output columns.
+  - **That guard reads `primaryKey` and `foreignKeys`, and nothing else.** `x-joins`
+    is a non-structural key, so the overlay copies it through unread: a column name
+    that has gone stale there does not stop the describe step, and surfaces later as
+    an exit 2 from `scripts/crosswalk_join.py` when the join is next run.
 
 ## The joins
 
@@ -76,10 +80,9 @@ This package declares no `schema.foreignKeys`. A Data Package foreign key assert
 that **every** value on the left exists on the right, and neither relationship this
 crosswalk carries satisfies that against the published bytes: `edgar` is a
 ticker/exchange listing rather than the CIK universe, so most SEC-side keys have no
-row there and it holds CIKs the crosswalk does not; and the GLEIF snapshot this
-descriptor names was taken at a different time, so a small tail of LEIs here are not
-in it. Declaring either as a foreign key would advertise a guarantee the data does
-not keep.
+row there and it holds CIKs the crosswalk does not; and a small tail of rows here
+carry an LEI that is not in the GLEIF object this descriptor names. Declaring either
+as a foreign key would advertise a guarantee the data does not keep.
 
 What is true is stated instead, at the package root under **`x-joins`**: the
 columns, the referenced package, the row subset each join applies to, whether the

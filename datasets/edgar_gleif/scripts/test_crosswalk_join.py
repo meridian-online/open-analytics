@@ -10,8 +10,8 @@ below pins the number it expects.
 
 The two shapes worth reddening are a coverage figure that has drifted from the data
 and a declaration the runner does not implement. Both are covered here, along with
-the join that spans an integer column and a text one — which is the case the real
-crosswalk needs and the case a naive equality would get wrong.
+both branches of `compareAs` over a column holding two schemes at once — a case the
+fixtures reach deliberately, because the shipped declarations do not.
 
 Not covered, named rather than implied: the multi-field arity mismatch, the
 ambiguous-resource branch, and the missing-`x-joins` branch each behave correctly in
@@ -215,13 +215,21 @@ class CrosswalkJoinSelfTest(unittest.TestCase):
         )
 
     def test_exact_comparison_cannot_span_a_polymorphic_column(self) -> None:
-        """The pair above and this one are why `compareAs` is load-bearing.
+        """The pair above and this one are where `compareAs` decides the outcome.
 
         Same rows, same columns, same coverage — only the declared comparison
         differs. `exact` leaves the engine to reconcile a text column with an
         integer one, which it does by casting the text, and the prefixed value has
         no integer to cast to. The join does not return a wrong answer; it does not
-        run at all. That is the whole reason the shipped declaration says `text`.
+        run at all.
+
+        That separation only appears when a value with no numeric reading reaches
+        the comparison. It does NOT appear in the shipped edgar declaration, which
+        filters to `key_type = 'cik'` first: flipping that one to `exact` returns
+        the same two figures, so `compareAs` is exercised on both branches here
+        without being load-bearing as currently declared. It becomes load-bearing
+        the moment the filter is dropped or a second scheme reaches the comparison,
+        which is why the keyword is declared rather than inferred.
         """
         self.lay_left(where=None, compareAs="exact", coverage={"rows": 4, "matched": 2})
         self.assertOutcome(

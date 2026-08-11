@@ -27,7 +27,7 @@
       "description": "Scheme of the SEC identifier held in `key`, and the discriminator that says how to read that column. This snapshot carries two: cik (an EDGAR Central Index Key, rendered as decimal digits) and series (an SEC fund identifier, a letter prefix followed by digits). A third scheme, class (fund share class), is producible by the pipeline but is absent from this snapshot."
     },
     "key": {
-      "description": "The SEC-side identifier this edge is keyed on, read according to `key_type`: for cik rows an EDGAR Central Index Key in decimal digits with no leading zeros; for series rows an SEC fund identifier — an uppercase letter prefix followed by digits (S…, C…, CEF…). Text, not a number: the two schemes share one column, so the pattern above is their union and no arithmetic type describes it. To join it to `edgar.cik`, render that integer column as text — see `x-joins`.",
+      "description": "The SEC-side identifier this edge is keyed on, read according to `key_type`: for cik rows an EDGAR Central Index Key in decimal digits with no leading zeros; for series rows an SEC fund identifier — an uppercase letter prefix followed by digits (S…, CEF…). Text, not a number: the two schemes share one column, so the pattern above is their union and no arithmetic type describes it. To join it to `edgar.cik`, render that integer column as text — see `x-joins`.",
       "type": "string",
       "constraints": {
         "minLength": 4,
@@ -79,7 +79,7 @@
           "rows": 184436
         },
         "description": "SEC-side identity: a cik-typed edge to the EDGAR company-ticker table. `edgar` is a ticker/exchange listing, not the CIK universe, so it covers a small part of the registrants this crosswalk keys on; the direction of containment runs neither way. Join by rendering `edgar.cik` (an integer) as text and comparing it to `key` (text) — the rendering is exact, because no published CIK carries a leading zero.",
-        "evidence": "For key_type='cik' rows, `key` is the EDGAR Central Index Key as reported to SEC EDGAR. Where both sides hold the same registrant the values agree exactly; the shortfall is coverage, not disagreement — `edgar` lists only registrants with a ticker on a US venue.",
+        "evidence": "For key_type='cik' rows, `key` is the EDGAR Central Index Key as reported to SEC EDGAR. Where both sides hold the same registrant the values agree exactly; the shortfall is coverage, not disagreement — `edgar` is built from the SEC's company-tickers file, so its reach follows that file rather than the registrant population.",
         "fields": [
           "key"
         ],
@@ -97,13 +97,13 @@
         }
       },
       {
-        "cardinality": "partial — nearly every left row matches, but not all. The two packages are point-in-time snapshots taken at different times, so a handful of LEIs on this side are not in the GLEIF file this descriptor names.",
+        "cardinality": "partial — most left rows match; the remainder carry an LEI that is not in the GLEIF object this descriptor names. `coverage` below is the measured count and is the part checked against the data.",
         "compareAs": "exact",
         "coverage": {
           "matched": 206980,
           "rows": 207099
         },
-        "description": "GLEIF-side identity: every edge carries the LEI it resolved to. Join `lei` to `gleif.lei` directly — both sides are text and no rendering is involved.",
+        "description": "GLEIF-side identity: the LEI each edge resolved to. Join `lei` to `gleif.lei` directly — both sides are text and no rendering is involved.",
         "evidence": {
           "blocking": [
             "shared 6-character name prefix",
