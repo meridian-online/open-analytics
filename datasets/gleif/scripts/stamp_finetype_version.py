@@ -4,8 +4,10 @@
 `datapackage_describe` emits the inferred schema but not the identity of the
 binary that inferred it, so a descriptor produced by a superseded finetype is
 indistinguishable from a current one by reading it. This step resolves the
-`finetype` on PATH, asserts it is the binary the caller expects, and writes its
-version into the descriptor as the package-level `x-finetype-version`.
+`finetype` on PATH and writes its version into the descriptor as the
+package-level `x-finetype-version`. It asserts the binary is the one the caller
+expects only when `--expect` is passed; the pipeline invokes it without one, so
+as the pipeline runs it stamps whatever PATH resolves to.
 
 The stamp is derived at generation time rather than hand-maintained: a checked-in
 literal records what someone believed when they typed it, which is the thing that
