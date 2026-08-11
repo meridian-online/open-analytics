@@ -36,7 +36,7 @@
               "maxLength": 500,
               "minLength": 1
             },
-            "description": "The entity's official legal name, as recorded in the GLEIF golden copy. The bounds are the register's own: LEI-CDF v3.1 types this element Tokenized500Type, which permits 1 to 500 characters. Names at both ends are genuine — single-character names are registered in several jurisdictions, and names past 200 characters are typically a registry's full form, such as the Italian convention of carrying the permitted trading abbreviations inside the registered name.",
+            "description": "The entity's official legal name, as recorded in the GLEIF golden copy. The bounds are the register's own: LEI-CDF v3.1 types this element NameType, a complexType whose simpleContent extends Tokenized500Type — the extension adds an optional xml:lang attribute and leaves the inherited value space, which restricts the text to between 1 and 500 characters. Names at both ends are genuine — single-character names are registered in several jurisdictions, and names past 200 characters are typically a registry's full form, such as the Italian convention of carrying the permitted trading abbreviations inside the registered name.",
             "name": "legal_name",
             "type": "string",
             "x-finetype-confidence": 0.7798,
@@ -91,9 +91,10 @@
                 "ACTIVE",
                 "INACTIVE",
                 "NULL"
-              ]
+              ],
+              "required": true
             },
-            "description": "The register's entity status, as text: ACTIVE (legally registered and operating as of the last report), INACTIVE (no longer legally registered or operating), or the four-character string NULL, which the register uses to mean the status is not applicable. These three are LEI-CDF v3.1's EntityStatusEnum. It is not a boolean: NULL is a reported value, not a missing one, and the column holds no SQL nulls.",
+            "description": "The register's entity status, as text: ACTIVE (legally registered and operating as of the last report), INACTIVE (no longer legally registered or operating), or the four-character string NULL, which the register uses to mean the status is not applicable. These three are LEI-CDF v3.1's EntityStatusEnum. It is not a boolean, and the string NULL is a reported value rather than a missing one — the field is declared required so that an actual SQL null reads as a violation instead of as a synonym for that value.",
             "name": "entity_status",
             "type": "string",
             "x-finetype-confidence": 1.0,
