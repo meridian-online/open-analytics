@@ -2,6 +2,31 @@
 -- Run by the `load` step (depends on all fetches). CIK representations differ across
 -- sources (EDGAR unpadded, GLEIF zero-padded) — normalise all to unpadded.
 
+-- ISO 7064 MOD 97-10 — the arithmetic ISO 17442 defines over an LEI's twenty
+-- characters, of which the last two are the check digits. Expand each character to its
+-- base-36 value and fold left, so nothing overflows a fixed-width integer: a digit
+-- contributes one decimal place, a letter (10…35) two. The identifier is well-formed
+-- when the remainder is 1. A character outside [0-9A-Z] yields NULL, which is not 1 —
+-- the macro is fail-closed on both a malformed value and a NULL one.
+--
+-- A `pattern` cannot do this job. `00000000000000000000` and `6GG1425B5X0SPG36P158`
+-- both satisfy ISO 17442's eighteen-alphanumeric-plus-two-digit shape, and only the
+-- arithmetic separates them from an identifier that was actually issued.
+--
+-- Declared here because this is the first model to read a self-reported LEI. The
+-- catalog entry lives in build/edgar_gleif.db, so models/package.sql — which the
+-- manifest runs against the same database, after this one — uses it too.
+CREATE OR REPLACE MACRO lei_mod97(s) AS (
+  list_reduce(
+    list_prepend(0,
+      [CASE WHEN c BETWEEN '0' AND '9' THEN ascii(c) - 48
+            WHEN c BETWEEN 'A' AND 'Z' THEN ascii(c) - 55
+            END
+       FOR c IN regexp_split_to_array(upper(trim(s)), '')]),
+    (acc, v) -> (acc * (CASE WHEN v >= 10 THEN 100 ELSE 10 END) + v) % 97
+  )
+);
+
 -- The SEC entity universe (the resolution left side + name/ticker enrichment source):
 -- ~1.05M named filers incl. former names, tickers where present. cik is already
 -- unpadded VARCHAR from the build. Multiple rows per CIK (former names) are collapsed
@@ -41,11 +66,26 @@ CREATE OR REPLACE TABLE gleif_ra_sec AS
 -- SEC Form N-CEN (the annual fund filing itself — most direct authority). Glob over
 -- the fetched quarters; union_by_name is robust to column-order drift across releases.
 -- REGISTRANT.tsv: registrant CIK ↔ LEI. FUND_REPORTED_INFO.tsv: series SERIES_ID ↔ LEI.
+--
+-- The LEI on an N-CEN is filer-reported free text, not a validated key: the column
+-- carries all-zero placeholders written where a null belongs, and single-character
+-- transcriptions of a real identifier (letter O for zero, letter I for one). Neither
+-- is an identity, and both pass the ISO 17442 shape, so admit a value only when the
+-- MOD 97-10 arithmetic accepts it or GLEIF itself publishes it. The second arm is not
+-- slack: `gleif` holds LEIs whose check digits are wrong at the register — an
+-- entity GLEIF publishes is a real one whatever our arithmetic says of its digits, and
+-- rejecting it would drop a resolvable edge. The membership test is written out with
+-- both sides qualified; as a macro parameter `s` it binds to the subquery's own `lei`
+-- column and the EXISTS is then true of every row.
 CREATE OR REPLACE TABLE ncen_registrant AS
-  SELECT DISTINCT CAST(CIK AS BIGINT)::VARCHAR AS key, upper(trim(LEI)) AS lei
-  FROM read_csv('build/ncen/*/REGISTRANT.tsv', delim='\t', header=true, all_varchar=true, union_by_name=true)
-  WHERE LEI IS NOT NULL AND LEI <> '' AND CIK IS NOT NULL;
+  SELECT DISTINCT CAST(n.CIK AS BIGINT)::VARCHAR AS key, upper(trim(n.LEI)) AS lei
+  FROM read_csv('build/ncen/*/REGISTRANT.tsv', delim='\t', header=true, all_varchar=true, union_by_name=true) n
+  WHERE n.LEI IS NOT NULL AND n.LEI <> '' AND n.CIK IS NOT NULL
+    AND (lei_mod97(n.LEI) = 1
+         OR EXISTS (SELECT 1 FROM gleif g WHERE g.lei = upper(trim(n.LEI))));
 CREATE OR REPLACE TABLE ncen_series AS
-  SELECT DISTINCT trim(SERIES_ID) AS key, upper(trim(LEI)) AS lei
-  FROM read_csv('build/ncen/*/FUND_REPORTED_INFO.tsv', delim='\t', header=true, all_varchar=true, union_by_name=true)
-  WHERE LEI IS NOT NULL AND LEI <> '' AND SERIES_ID IS NOT NULL AND SERIES_ID <> '';
+  SELECT DISTINCT trim(n.SERIES_ID) AS key, upper(trim(n.LEI)) AS lei
+  FROM read_csv('build/ncen/*/FUND_REPORTED_INFO.tsv', delim='\t', header=true, all_varchar=true, union_by_name=true) n
+  WHERE n.LEI IS NOT NULL AND n.LEI <> '' AND n.SERIES_ID IS NOT NULL AND n.SERIES_ID <> ''
+    AND (lei_mod97(n.LEI) = 1
+         OR EXISTS (SELECT 1 FROM gleif g WHERE g.lei = upper(trim(n.LEI))));

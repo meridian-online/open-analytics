@@ -46,3 +46,29 @@ CREATE OR REPLACE TABLE edgar_gleif_out AS
            min(company_name)                                AS company_name
     FROM edgar GROUP BY cik
   ) e ON x.key_type = 'cik' AND e.cik = x.key;
+
+-- GATE the terminal table on the identifier, and stop the Run rather than export an
+-- edge whose LEI names nothing. An edge is an assertion that a filer IS a given legal
+-- entity, so an identifier that fails ISO 7064 MOD 97-10 and that GLEIF does not
+-- publish is not a weak edge — it is not an edge, and no `tier` value makes it one.
+--
+-- models/load.sql filters the one source known to report placeholders (N-CEN, whose
+-- LEI field is filer-reported free text). This covers the routes it does not: the
+-- RA000665 register and the resolver, where a value failing both tests means something
+-- upstream is broken and the honest response is to fail. `lei_mod97` is the macro
+-- models/load.sql declares in this database.
+--
+-- `IS DISTINCT FROM` rather than `<>`: a NULL remainder is a malformed identifier, and
+-- `NULL <> 1` would let it through as unknown.
+SELECT CASE WHEN v.edges > 0 THEN error(
+         'edgar_gleif: ' || v.edges || ' edge(s) carry an LEI that fails ISO 7064 MOD 97-10 '
+         || 'and is not published by GLEIF — ' || v.distinct_leis || ' distinct value(s), '
+         || 'e.g. ' || v.examples) END
+FROM (
+  SELECT count(*) AS edges,
+         count(DISTINCT o.lei) AS distinct_leis,
+         array_to_string(list_slice(list_sort(list(DISTINCT o.lei)), 1, 5), ', ') AS examples
+  FROM edgar_gleif_out o
+  WHERE lei_mod97(o.lei) IS DISTINCT FROM 1
+    AND NOT EXISTS (SELECT 1 FROM gleif g WHERE g.lei = o.lei)
+) v;
