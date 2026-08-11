@@ -25,9 +25,9 @@
             "constraints": {
               "pattern": "^[0-9]+$"
             },
-            "description": "SEC EDGAR Central Index Key — the registrant's identifier in EDGAR, as an unpadded numeric string.",
+            "description": "SEC EDGAR Central Index Key — the registrant's identifier in EDGAR, stored as an integer. Unpadded: no leading zeros are stored and none are implied, so the decimal rendering of this column is the CIK. Join it to `edgar_gleif.key` by rendering it as text — see that package's `x-joins`.",
             "name": "cik",
-            "type": "string",
+            "type": "integer",
             "x-finetype-confidence": 0.85,
             "x-finetype-label": "representation.identifier.numeric_code"
           },

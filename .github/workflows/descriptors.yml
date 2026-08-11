@@ -5,6 +5,14 @@
 # and the message. `descriptors-match-their-data` then runs the same check against
 # the live published files, and is only meaningful because the job above it passed.
 #
+# The join pair below it does the same for the relationships BETWEEN packages.
+# `schema.foreignKeys` can only say a reference is total, so a partial one is
+# declared under `x-joins` instead — and a relationship no one executes is a
+# relationship no one can trust. `the join runner can fail` builds scratch packages
+# with deliberately wrong coverage figures and asserts the exit status and message;
+# `declared joins run` then runs the real declarations against the published
+# objects. Same order and same reason as the pair above.
+#
 # `publish-seam` covers the other direction — that a publish declares what it
 # uploaded — against a scratch HTTP object store, so it is offline and runs on every
 # pull request. `endpoints-serve-what-is-declared` re-hashes every published object
@@ -81,6 +89,47 @@ jobs:
           name: descriptor-check
           path: descriptor-check.json
           if-no-files-found: ignore
+
+  join-self-test:
+    name: the join runner can fail
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: install duckdb
+        run: python -m pip install --disable-pip-version-check "duckdb==${DUCKDB_VERSION}"
+      - name: scratch packages, exit status and message
+        run: python datasets/edgar_gleif/scripts/test_crosswalk_join.py
+
+  joins-run-against-their-data:
+    name: declared joins run against the published bytes
+    needs: join-self-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: install duckdb
+        run: python -m pip install --disable-pip-version-check "duckdb==${DUCKDB_VERSION}"
+      - name: every x-joins declaration against the objects it references
+        shell: bash
+        run: |
+          set +e
+          python datasets/edgar_gleif/scripts/crosswalk_join.py > joins.log 2>&1
+          status=$?
+          set -e
+          cat joins.log
+          {
+            echo '### Declared joins vs data'
+            echo
+            echo '```'
+            cat joins.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $status
 
   publish-seam:
     name: a publish declares what it uploaded
