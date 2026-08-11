@@ -43,6 +43,28 @@ dataset's descriptor, since a Frictionless `reference.resource` resolves only
 within a package). See
 [`datasets/edgar_gleif`](datasets/edgar_gleif/datapackage.json).
 
+## Checks
+
+`scripts/check_descriptors.py` reads every `datasets/*/datapackage.json` back
+against the file at its `resources[].path` and exits non-zero on any
+disagreement — a declared field the Parquet does not have, a Parquet column the
+descriptor does not declare, a Frictionless `type` the physical type cannot be
+read as, a value outside `constraints.pattern` / `minLength` / `maxLength` /
+`enum` / `required`, a wrong `bytes`, or a `foreignKey` whose two ends are
+declared with incompatible types. Foreign keys resolve across every package in
+this repository, so the cross-package references described above are checked
+rather than skipped. A constraint keyword the script does not evaluate is an
+error, not a pass.
+
+```sh
+pip install duckdb
+python scripts/check_descriptors.py            # 0 conformant · 1 disagreement · 2 could not check
+python scripts/test_check_descriptors.py       # the self-test: the check on deliberately broken fixtures
+```
+
+Both run on every push and pull request, and weekly, from
+[`.github/workflows/descriptors.yml`](.github/workflows/descriptors.yml).
+
 ## Request a dataset
 
 The catalog grows by request. **[Open a dataset request](../../issues/new?template=dataset-request.yml)**
