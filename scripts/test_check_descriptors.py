@@ -7,11 +7,12 @@ the exit status AND the message. Status alone cannot tell a refusal apart from a
 crash, which is why the checker distinguishes 1 (disagreement) from 2 (could not
 check) and why every case below pins the number it expects.
 
-Each rule the checker implements has exactly one case that reddens when that rule
-is deleted from `check_descriptors.py`. Deleting the `pattern` branch of
-`constraint_probes` turns `test_pattern_violation_names_the_field` green-to-red;
-deleting the coercibility comparison turns the two `test_type_*` cases; and so on.
-A rule with no such case would be a rule nobody could notice going missing.
+A rule that no case reddens is a rule nobody could notice going missing, so the
+cases below exist to be reddened by deleting the rule they cover. That coverage is
+not complete, and the gaps are named rather than implied: deleting any of the
+foreign-key resource-ambiguity, arity-mismatch or unknown-local-field branches, or
+the no-schema-fields branch, leaves this suite green. Each of those four behaves
+correctly in the shipped checker — the gap is here, not there.
 
 No case touches the network: every fixture resource is a relative path next to its
 descriptor, so the self-test runs offline and cannot be flaky for a reason that has
