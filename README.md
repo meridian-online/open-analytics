@@ -56,14 +56,26 @@ this repository, so the cross-package references described above are checked
 rather than skipped. A constraint keyword the script does not evaluate is an
 error, not a pass.
 
+`scripts/publish_dataset.py` reads in the other direction — from the endpoint
+back into the descriptor. `verify` re-reads every published object in full and
+refuses when a descriptor and its endpoint disagree on either `bytes` or `hash`.
+`restamp` writes what the endpoint currently serves into the descriptor. Its
+`publish` subcommand exists to make uploading and declaring one act rather than
+two, but nothing calls it yet — see *What's coming here*.
+
 ```sh
 pip install duckdb
 python scripts/check_descriptors.py            # 0 conformant · 1 disagreement · 2 could not check
 python scripts/test_check_descriptors.py       # the self-test: the check on deliberately broken fixtures
+python scripts/test_publish_dataset.py         # the self-test: publish against a scratch object store
+python scripts/publish_dataset.py verify       # every declared bytes + hash against the object served
 ```
 
-Both run on every push and pull request, and weekly, from
+The first three run on every push and pull request, and weekly, from
 [`.github/workflows/descriptors.yml`](.github/workflows/descriptors.yml).
+`verify` re-hashes every file, so it runs on merge, weekly and on demand rather
+than per pull request — `bytes` is covered per pull request by a one-byte range
+read, and `hash` cannot be.
 
 ## Request a dataset
 
@@ -78,8 +90,14 @@ corrections are published in place.
 
 - Per-dataset build recipes: the pipeline that turns each official source
   release into the published Parquet, so every byte is reproducible.
-- Descriptors generated as part of the publish pipeline (today they are
-  produced with finetype and checked in by hand).
+- Descriptors generated as part of the publish pipeline. Today the schema half
+  is produced with finetype and checked in by hand, and `bytes` and `hash` are
+  written by a hand-run `publish_dataset.py restamp` against the endpoint.
+- **The publish pipeline calling `publish_dataset.py publish`.** The seam that
+  makes uploading an object and declaring its size one act is written and
+  tested, but the out-of-repo pipeline that actually uploads does not call it.
+  Until it does, a republish can still move an object without its descriptor —
+  which is how `edgar` came to advertise a size the endpoint did not serve.
 
 ## License
 

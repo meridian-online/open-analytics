@@ -4,6 +4,12 @@
 # with deliberate descriptor/bytes disagreements and asserts both the exit status
 # and the message. `descriptors-match-their-data` then runs the same check against
 # the live published files, and is only meaningful because the job above it passed.
+#
+# `publish-seam` covers the other direction — that a publish declares what it
+# uploaded — against a scratch HTTP object store, so it is offline and runs on every
+# pull request. `endpoints-serve-what-is-declared` re-hashes every published object
+# in full and so does NOT: it costs a download of every dataset, which is defensible
+# once a merge lands and weekly thereafter, and not on each push to a branch.
 name: descriptors
 
 on:
@@ -75,3 +81,30 @@ jobs:
           name: descriptor-check
           path: descriptor-check.json
           if-no-files-found: ignore
+
+  publish-seam:
+    name: a publish declares what it uploaded
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: scratch object store, exit status and message
+        run: python scripts/test_publish_dataset.py
+
+  endpoints-serve-what-is-declared:
+    name: endpoints serve the declared bytes and hash
+    # Not on pull_request: this downloads every published object in full to re-hash
+    # it. `bytes` is already covered per-PR by a one-byte range read in the job above;
+    # `hash` cannot be, so it is checked here — on merge, weekly, and on demand.
+    if: github.event_name != 'pull_request'
+    needs: publish-seam
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: every declared bytes and hash against the object served
+        run: python scripts/publish_dataset.py verify
