@@ -13,9 +13,9 @@
   "name": "edgar",
   "resources": [
     {
-      "bytes": 278865,
+      "bytes": 273460,
       "format": "parquet",
-      "hash": "sha256:7268dce550c684114472ecd59bfdc1fa1615fe30f16dcab19634d2796b803d0a",
+      "hash": "sha256:e329d0a62a8ef852176c4b3af41ebc0f6d5cfba974d2d14e376584f8aece2c99",
       "mediatype": "application/vnd.apache.parquet",
       "name": "edgar",
       "path": "https://openlake.meridian.online/edgar.parquet",
