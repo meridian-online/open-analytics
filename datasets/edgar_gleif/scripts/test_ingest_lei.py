@@ -55,6 +55,7 @@ LEI_RA = "254900XU4138OHZ4BG72"  # an entity carried by the RA000665 register
 LEI_PLACEHOLDER = "00000000000000000000"  # a null written where a null belongs
 LEI_TRANSCRIBED = "2549OOXU4138OHZ4BG72"  # LEI_RA with letter O typed for zero
 LEI_INVENTED = "6GG1425B5X0SPG36P158"  # a value matching no issued identifier
+LEI_MALFORMED = "52990-T8BM49AURSDO55"  # a character the LEI alphabet does not contain
 
 # Wrong check digits AND a real GLEIF record: the register publishes identifiers whose
 # digits do not satisfy the standard, and an entity GLEIF publishes is a real entity.
@@ -274,12 +275,22 @@ class IngestLeiSelfTest(unittest.TestCase):
         self.fixture.resolved.append(("1000004", LEI_TRANSCRIBED, "exact_name", "confirmed", 0.97))
         self.assertRunFails(LEI_TRANSCRIBED)
 
-    def test_a_missing_identifier_stops_the_run(self) -> None:
-        """An unknown remainder is not a passing one — `NULL <> 1` would ship the row."""
-        self.fixture.resolved.append(("1000004", None, "exact_name", "confirmed", 0.97))
-        with self.assertRaises(Exception) as caught:
-            self.fixture.run()
-        self.assertIn("fails ISO 7064 MOD 97-10", str(caught.exception))
+    def test_an_unreadable_identifier_stops_the_run(self) -> None:
+        """An unknown remainder is not a passing one.
+
+        A character outside [0-9A-Z] makes `lei_mod97` NULL, and `NULL <> 1` is NULL,
+        which a WHERE clause drops — the row would ship. That is what `IS DISTINCT
+        FROM` in the gate is for. (A NULL identifier folds to 0 and either operator
+        catches it, so a NULL alone does not exercise this.)
+        """
+        for lei in (LEI_MALFORMED, None):
+            with self.subTest(lei=lei):
+                fixture = Fixture()
+                self.addCleanup(fixture.destroy)
+                fixture.resolved.append(("1000004", lei, "exact_name", "confirmed", 0.97))
+                with self.assertRaises(Exception) as caught:
+                    fixture.run()
+                self.assertIn("fails ISO 7064 MOD 97-10", str(caught.exception))
 
     def test_the_gate_counts_what_it_refuses(self) -> None:
         """A refusal that does not say how much is wrong cannot be acted on."""
