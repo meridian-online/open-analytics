@@ -27,7 +27,7 @@
               "minLength": 1,
               "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$"
             },
-            "description": "Scheme of the SEC identifier held in `key`: cik (operating company / registrant), series (fund series) or class (fund share class).",
+            "description": "Scheme of the SEC identifier held in `key`, and the discriminator that says how to read that column. This snapshot carries two: cik (an EDGAR Central Index Key, rendered as decimal digits) and series (an SEC fund identifier, a letter prefix followed by digits). A third scheme, class (fund share class), is producible by the pipeline but is absent from this snapshot.",
             "name": "key_type",
             "type": "string",
             "x-finetype-confidence": 0.6,
@@ -45,11 +45,13 @@
           },
           {
             "constraints": {
-              "pattern": "^-?[0-9]+$"
+              "maxLength": 10,
+              "minLength": 4,
+              "pattern": "^([1-9][0-9]{0,9}|[A-Z]{1,3}[0-9]{7,9})$"
             },
-            "description": "The SEC-side identifier this edge is keyed on — an EDGAR CIK for operating companies / registrants, or an SEC series/class id for funds, per `key_type`.",
+            "description": "The SEC-side identifier this edge is keyed on, read according to `key_type`: for cik rows an EDGAR Central Index Key in decimal digits with no leading zeros; for series rows an SEC fund identifier — an uppercase letter prefix followed by digits (S…, C…, CEF…). Text, not a number: the two schemes share one column, so the pattern above is their union and no arithmetic type describes it. To join it to `edgar.cik`, render that integer column as text — see `x-joins`.",
             "name": "key",
-            "type": "integer",
+            "type": "string",
             "x-finetype-confidence": 0.566,
             "x-finetype-label": "representation.numeric.integer_number"
           },
@@ -74,8 +76,9 @@
           },
           {
             "constraints": {
-              "pattern": "^[0-9]{4}[A-Z0-9]{14}[0-9]{2}$"
+              "pattern": "^[A-Z0-9]{4}[A-Z0-9]{14}[0-9]{2}$"
             },
+            "description": "GLEIF Legal Entity Identifier (ISO 17442): a four-character alphanumeric LOU prefix, fourteen alphanumeric entity characters, then two check digits.",
             "name": "lei",
             "type": "string",
             "x-finetype-confidence": 1.0,
@@ -117,8 +120,9 @@
           },
           {
             "constraints": {
-              "pattern": "^[A-Z]{2}$"
+              "pattern": "^[A-Z]{2}(-[A-Z0-9]{1,3})?$"
             },
+            "description": "Jurisdiction the entity is constituted under, as GLEIF records it: an ISO 3166-1 alpha-2 country code, or an ISO 3166-2 subdivision code (country, hyphen, subdivision) where GLEIF holds one — US-DE, AE-SH.",
             "name": "jurisdiction",
             "type": "string",
             "x-finetype-confidence": 0.9997,
@@ -227,53 +231,6 @@
             "x-finetype-label": "unknown"
           }
         ],
-        "foreignKeys": [
-          {
-            "fields": [
-              "key"
-            ],
-            "reference": {
-              "fields": [
-                "cik"
-              ],
-              "resource": "edgar"
-            },
-            "x-confidence": 1.0,
-            "x-evidence": "For key_type='cik' rows, `key` is the EDGAR Central Index Key exactly as reported by SEC EDGAR — the crosswalk is keyed on EDGAR's own CIK, so this edge is exact by construction. (series/class rows key on an SEC fund identifier and do not reference EDGAR.)",
-            "x-key-type": "cik",
-            "x-package": "https://github.com/meridian-online/open-analytics/blob/main/datasets/edgar/datapackage.json",
-            "x-status": "confirmed"
-          },
-          {
-            "fields": [
-              "lei"
-            ],
-            "reference": {
-              "fields": [
-                "lei"
-              ],
-              "resource": "gleif"
-            },
-            "x-confidence": "per-row (see the confidence column)",
-            "x-evidence": {
-              "blocking": [
-                "shared 6-character name prefix",
-                "shared first name token"
-              ],
-              "comparison": "normalized company name (exact, then Jaro-Winkler tiers)",
-              "gleif_status_matched": [
-                "ISSUED",
-                "LAPSED",
-                "RETIRED"
-              ],
-              "method": "Fellegi-Sunter probabilistic record linkage (Splink), frozen model, for the operating-company tail; official SEC/GLEIF registration for authoritative edges",
-              "precision": "exact normalized-name matches auto-confirmed (~95% precision, spot-checked); name-only fuzzy matches surfaced as candidate, not confirmed",
-              "tie_break": "ISSUED > LAPSED > RETIRED, then US jurisdiction"
-            },
-            "x-package": "https://github.com/meridian-online/open-analytics/blob/main/datasets/gleif/datapackage.json",
-            "x-status": "per-row (see the tier column)"
-          }
-        ],
         "primaryKey": [
           "key_type",
           "key",
@@ -292,5 +249,73 @@
       "title": "GLEIF golden copy (CC0)"
     }
   ],
-  "title": "EDGAR ↔ GLEIF — company-to-LEI crosswalk"
+  "title": "EDGAR ↔ GLEIF — company-to-LEI crosswalk",
+  "x-joins": {
+    "$comment": "How to join this crosswalk to the packages it references, and how far each join reaches. These are NOT `schema.foreignKeys`: a Data Package foreign key asserts that every value on the left exists on the right, and neither of these joins satisfies that against the published bytes — see each `cardinality` and `coverage`. Declaring them as foreign keys would advertise a guarantee the data does not keep, so the guarantee is dropped and the reachable part is stated instead. `coverage` is measured against the exact objects this descriptor names in `resources[].path`, and moves when they are republished, exactly as `bytes` and `hash` do.",
+    "joins": [
+      {
+        "cardinality": "partial — most left rows have no match, and the referenced side also holds keys this crosswalk does not carry. Neither side contains the other.",
+        "compareAs": "text",
+        "coverage": {
+          "matched": 6334,
+          "rows": 184436
+        },
+        "description": "SEC-side identity: a cik-typed edge to the EDGAR company-ticker table. `edgar` is a ticker/exchange listing, not the CIK universe, so it covers a small part of the registrants this crosswalk keys on; the direction of containment runs neither way. Join by rendering `edgar.cik` (an integer) as text and comparing it to `key` (text) — the rendering is exact, because no published CIK carries a leading zero.",
+        "evidence": "For key_type='cik' rows, `key` is the EDGAR Central Index Key as reported to SEC EDGAR. Where both sides hold the same registrant the values agree exactly; the shortfall is coverage, not disagreement — `edgar` lists only registrants with a ticker on a US venue.",
+        "fields": [
+          "key"
+        ],
+        "name": "edgar",
+        "package": "https://github.com/meridian-online/open-analytics/blob/main/datasets/edgar/datapackage.json",
+        "reference": {
+          "fields": [
+            "cik"
+          ],
+          "resource": "edgar"
+        },
+        "where": {
+          "equals": "cik",
+          "field": "key_type"
+        }
+      },
+      {
+        "cardinality": "partial — nearly every left row matches, but not all. The two packages are point-in-time snapshots taken at different times, so a handful of LEIs on this side are not in the GLEIF file this descriptor names.",
+        "compareAs": "text",
+        "coverage": {
+          "matched": 206980,
+          "rows": 207099
+        },
+        "description": "GLEIF-side identity: every edge carries the LEI it resolved to. Join `lei` to `gleif.lei` directly — both sides are text and no rendering is involved.",
+        "evidence": {
+          "blocking": [
+            "shared 6-character name prefix",
+            "shared first name token"
+          ],
+          "comparison": "normalized company name (exact, then Jaro-Winkler tiers)",
+          "confidence": "per-row (see the confidence column)",
+          "gleif_status_matched": [
+            "ISSUED",
+            "LAPSED",
+            "RETIRED"
+          ],
+          "method": "Fellegi-Sunter probabilistic record linkage (Splink), frozen model, for the operating-company tail; official SEC/GLEIF registration for authoritative edges",
+          "precision": "exact normalized-name matches auto-confirmed (~95% precision, spot-checked); name-only fuzzy matches surfaced as candidate, not confirmed",
+          "status": "per-row (see the tier column)",
+          "tie_break": "ISSUED > LAPSED > RETIRED, then US jurisdiction"
+        },
+        "fields": [
+          "lei"
+        ],
+        "name": "gleif",
+        "package": "https://github.com/meridian-online/open-analytics/blob/main/datasets/gleif/datapackage.json",
+        "reference": {
+          "fields": [
+            "lei"
+          ],
+          "resource": "gleif"
+        }
+      }
+    ],
+    "verifiedBy": "datasets/edgar_gleif/scripts/crosswalk_join.py — runs each join above against the published objects and fails if a declared `coverage` is wrong."
+  }
 }
