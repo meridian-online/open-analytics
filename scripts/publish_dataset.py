@@ -14,9 +14,10 @@ the object back **from the URL the descriptor itself declares**, and writes
 another, because it never takes the URL from the caller.
 
 NOT YET WIRED. The pipeline that actually uploads these objects lives outside
-this repository and does not call `publish`; the values in the checked-in
-descriptors were written by `restamp`. Until that pipeline calls this, an object
-can still move without its descriptor.
+this repository and does not call `publish`. Of the checked-in descriptors, only
+`edgar`'s `bytes` and `hash` were written by `restamp`; the rest were emitted
+when their descriptors were last regenerated. Until that pipeline calls this, an
+object can still move without its descriptor.
 
   publish   upload a local file, then declare what the endpoint serves back
   restamp   declare what the endpoint already serves, for an object published
@@ -41,7 +42,7 @@ Exit codes are distinct on purpose, because a status alone cannot tell a refusal
 apart from a crash:
 
   0  the descriptor declares what the endpoint serves
-  1  a disagreement, named on stdout with both figures
+  1  a disagreement
   2  the operation could not be completed — unreachable endpoint, failed
      uploader, malformed descriptor. Never a verdict about the data.
 """
