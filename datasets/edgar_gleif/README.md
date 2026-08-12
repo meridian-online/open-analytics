@@ -82,10 +82,11 @@ asserts the gate behind it reddens.
 
 ## What is not in it
 
-**A filer key whose reported LEI could not be resolved is excluded from this crosswalk.**
-An edge asserts that two identifiers name the same thing. An identifier that names
-nothing cannot carry that assertion at any confidence, so labelling it with a weaker
-`tier` does not make it publishable — the assertion is the problem, not its strength.
+**An LEI that resolves to nothing is refused, and a filer key left with no resolvable
+identifier is absent from this crosswalk.** An edge asserts that two identifiers name
+the same thing. An identifier that names nothing cannot carry that assertion at any
+confidence, so labelling it with a weaker `tier` does not make it publishable — the
+assertion is the problem, not its strength.
 
 **Read an absent filer as *"no identity edge we are willing to publish"*, not as *"no
 such filer"*.** The company exists and its filing exists; what is missing is a
@@ -99,12 +100,38 @@ the unresolvable value was the sole LEI reported for it: where the same key also
 a registration-sourced or resolver-sourced edge, that edge stays and the key is still
 here.
 
-**This file quotes no count.** The figure moves with each Run, and a number written here
-would be stale the first time the dataset is rebuilt with nothing to say so. To recover
-the excluded set for a Run, join the LEI columns of the N-CEN quarters `arcform.yaml`
-pins against `key` in this dataset: the filers with no row are those for which no usable
-LEI was reported. The rule takes effect at the Run that applies it rather than
-retroactively, so a snapshot published earlier can still carry rows it now removes.
+**The size of the excluded set is not quoted here.** It moves with each Run, and a
+number written into this file would be stale at the first rebuild with nothing to redden
+when it went wrong. Derive it instead. Join on the **SEC identifier** — `REGISTRANT.CIK`
+and `FUND_REPORTED_INFO.SERIES_ID`, which are what `key` holds — not on the N-CEN LEI
+column, which shares no domain with `key` and matches nothing:
+
+```sql
+-- N-CEN filers this crosswalk carries no row for.
+-- Fetch the quarters arcform.yaml pins; run from the directory holding them.
+WITH ncen AS (
+  SELECT 'cik' AS key_type, CAST(CIK AS BIGINT)::VARCHAR AS key
+  FROM read_csv('ncen/*/REGISTRANT.tsv', delim='\t', header=true, all_varchar=true, union_by_name=true)
+  WHERE CIK IS NOT NULL
+  UNION
+  SELECT 'series', trim(SERIES_ID)
+  FROM read_csv('ncen/*/FUND_REPORTED_INFO.tsv', delim='\t', header=true, all_varchar=true, union_by_name=true)
+  WHERE SERIES_ID IS NOT NULL AND trim(SERIES_ID) <> ''
+)
+SELECT n.key_type, n.key
+FROM ncen n
+WHERE NOT EXISTS (
+  SELECT 1 FROM read_parquet('https://openlake.meridian.online/edgar_gleif.parquet') x
+  WHERE x.key_type = n.key_type AND x.key = n.key
+);
+```
+
+**Read the result in one direction.** A filer it returns reported no usable LEI. The
+converse does not follow, for the reason the bound above gives: a filer that reported an
+unresolvable value can still be here, carried by an edge from another source. The rule
+takes effect at the Run that applies it rather than retroactively, so a snapshot
+published earlier can still carry rows it now removes — run this against one of those
+and expect few rows or none, because the values it removes are still in there.
 
 ## Boundaries (deliberate)
 
