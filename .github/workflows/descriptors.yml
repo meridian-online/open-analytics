@@ -5,6 +5,13 @@
 # and the message. `descriptors-match-their-data` then runs the same check against
 # the live published files, and is only meaningful because the job above it passed.
 #
+# `ingest-self-test` sits one step earlier in the chain — not on a published object but
+# on what may enter one. It runs the crosswalk's own SQL models against scratch sources
+# and asserts that an identifier failing ISO 7064 MOD 97-10, which GLEIF does not
+# publish, stops the run instead of shipping as an identity edge. It is a self-test in
+# the same sense as the job above: one case deletes the filter from the shipped model
+# and asserts the gate behind it reddens.
+#
 # The join pair below it does the same for the relationships BETWEEN packages.
 # `schema.foreignKeys` can only say a reference is total, so a partial one is
 # declared under `x-joins` instead — and a relationship no one executes is a
@@ -89,6 +96,19 @@ jobs:
           name: descriptor-check
           path: descriptor-check.json
           if-no-files-found: ignore
+
+  ingest-self-test:
+    name: the ingest refuses an identifier that names nothing
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: install duckdb
+        run: python -m pip install --disable-pip-version-check "duckdb==${DUCKDB_VERSION}"
+      - name: the shipped models, against scratch sources
+        run: python datasets/edgar_gleif/scripts/test_ingest_lei.py
 
   join-self-test:
     name: the join runner can fail

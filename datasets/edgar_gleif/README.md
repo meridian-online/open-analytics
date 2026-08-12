@@ -6,7 +6,7 @@ orthogonal facets:
 
 | File | Facet | Answers |
 |---|---|---|
-| `arcform.yaml` (+ `models/`, `descriptor.overrides.json`) | **Protocol** — how it's made | run `arc run` → produces the Dataset **and** its descriptor |
+| `arcform.yaml` (+ `models/`, `descriptor.overrides.json`, `scripts/test_ingest_lei.py`) | **Protocol** — how it's made | run `arc run` → produces the Dataset **and** its descriptor; the test runs the models against scratch sources and pins what they refuse |
 | `datapackage.json` | **Descriptor** — what it is | schema, finetype labels, `x-joins`/evidence — **emitted** by the `describe` step, no longer hand-authored |
 | `scripts/crosswalk_join.py` (+ `test_crosswalk_join.py`) | **Proof** — that the join runs | executes every declared `x-joins` against the published objects and checks the coverage each one claims |
 | `../registry.json` (this dataset's entry) | **Address** — how it's found | stable `uid`, `crosswalk.edgar_gleif`, manifest pointer |
@@ -23,19 +23,115 @@ are **no opaque `command:`/shell steps**. The step DAG:
 2. **fetch** the deterministic backbone (no guessing) — **official sources only
    (SEC + GLEIF)**: GLEIF SEC registrations (RA000665 → `CIK/series ↔ LEI` +
    `entity.category`) and **SEC Form N-CEN** (the annual fund filing → registrant
-   `CIK ↔ LEI` and series `SERIES_ID ↔ LEI`, ~100% LEI fill). No crowd-sourced data
+   `CIK ↔ LEI` and series `SERIES_ID ↔ LEI`). No crowd-sourced data
    enters the published dataset; Wikidata is an out-of-band validation cross-check only.
+   The N-CEN LEI column is filer-typed free text, so **how full it is says nothing
+   about how much of it is usable**: a filer with no LEI to report may leave the field
+   empty, and may instead write a row of zeroes, which counts as filled. See *The
+   identifier* below.
 3. **load / normalise** — type the tables, normalise CIK representation, derive the
-   `key_type` (cik | series | class) from the SEC identifier scheme.
+   `key_type` (cik | series | class) from the SEC identifier scheme, and drop an N-CEN
+   LEI when the check-digit arithmetic rejects it **and** GLEIF does not publish it.
+   Both arms, not the arithmetic alone — see *The identifier*.
 4. **resolve** — probabilistic name match for the operating-company tail, via the
    `splink_resolve` operator (frozen Fellegi-Sunter model, precision-first).
 5. **tier** — combine `authoritative` ∪ `confirmed` ∪ `candidate`; a deterministic
    edge always wins over a name match for the same key.
 6. **package** — enrich from the sources, stamp `as_of`, materialise the terminal edge
-   table; the `parquet_export` operator writes it to `build/edgar_gleif.parquet` (a
+   table, and **gate it on the identifier** (see *The identifier*); the
+   `parquet_export` operator writes it to `build/edgar_gleif.parquet` (a
    first-class produced asset, not an unparseable `COPY` graph-island). A **total**
    `order_by` (`company_name` is not unique — 6,906 ties) makes the bytes reproducible.
 7. **describe** — emit `datapackage.json` from the built Parquet (see Boundaries).
+
+## The identifier
+
+An edge asserts that an SEC filer **is** a given legal entity. An LEI that names no
+entity cannot carry that assertion, and no `tier` value repairs one that does not — so
+the Protocol refuses it rather than publishing it under a softer label.
+
+An LEI is admitted when **either** test passes:
+
+- **ISO 7064 MOD 97-10.** The last two of the twenty characters are check digits over
+  the other eighteen. `models/load.sql` declares `lei_mod97`, which expands each
+  character to its base-36 value and folds left, so no fixed-width integer overflows;
+  the identifier is well formed when the remainder is 1.
+- **GLEIF publishes it.** The register holds entries whose check digits do not satisfy
+  the standard, and an entity GLEIF publishes is a real one whatever the arithmetic
+  says of its digits. This arm is a forward guard rather than a path anything travels
+  today: measured against the published snapshot it changes no row. It is here so that
+  the first filing to report such a register entry is not dropped for carrying the
+  digits the register gave it.
+
+The shape cannot do this job. `00000000000000000000` satisfies ISO 17442's
+eighteen-alphanumeric-plus-two-digit pattern, which is what `datapackage.json` and
+`schema.finetype.json` declare — a `pattern` does not evaluate a checksum. That is why
+the test is arithmetic, and why it runs in the Protocol, where a rejected value can be
+kept out of the bytes rather than reported after they are published.
+
+Where each half applies:
+
+| Source | Treatment | Why |
+|---|---|---|
+| N-CEN (`sec-ncen`) | **filtered** in `models/load.sql` | filer-typed free text; placeholders and transcriptions are expected of it |
+| RA000665 (`sec-registration`), resolver (`exact_name`, `jaro_winkler`) | **gated** in `models/package.sql` — the Run fails | the LEI is the register's own key; a value failing both tests means something upstream is broken, and a broken Run must not publish |
+
+`scripts/test_ingest_lei.py` proves both can fail, offline: it runs the shipped models
+against scratch sources, and one case deletes the filter from `models/load.sql` and
+asserts the gate behind it reddens.
+
+## What is not in it
+
+**An LEI that resolves to nothing is refused, and a filer key left with no resolvable
+identifier is absent from this crosswalk.** An edge asserts that two identifiers name
+the same thing. An identifier that names nothing cannot carry that assertion at any
+confidence, so labelling it with a weaker `tier` does not make it publishable — the
+assertion is the problem, not its strength.
+
+**Read an absent filer as *"no identity edge we are willing to publish"*, not as *"no
+such filer"*.** The company exists and its filing exists; what is missing is a
+counterparty identifier we could stand behind. Causes include a placeholder — a row of
+zeroes — written where a null belongs, a single-character transcription of a real LEI,
+and a value matching no issued identifier at all.
+
+Two things bound what this removes. The rule fires when a value fails **both** admission
+tests above, so it cannot reach a filer whose LEI resolves. And a key disappears where
+the unresolvable value was the sole LEI reported for it: where the same key also carries
+a registration-sourced or resolver-sourced edge, that edge stays and the key is still
+here.
+
+**The size of the excluded set is not quoted here.** It moves with each Run, and a
+number written into this file would be stale at the first rebuild with nothing to redden
+when it went wrong. Derive it instead. Join on the **SEC identifier** — `REGISTRANT.CIK`
+and `FUND_REPORTED_INFO.SERIES_ID`, which are what `key` holds — not on the N-CEN LEI
+column, which shares no domain with `key` and matches nothing:
+
+```sql
+-- N-CEN filers this crosswalk carries no row for.
+-- Fetch the quarters arcform.yaml pins; run from the directory holding them.
+WITH ncen AS (
+  SELECT 'cik' AS key_type, CAST(CIK AS BIGINT)::VARCHAR AS key
+  FROM read_csv('ncen/*/REGISTRANT.tsv', delim='\t', header=true, all_varchar=true, union_by_name=true)
+  WHERE CIK IS NOT NULL
+  UNION
+  SELECT 'series', trim(SERIES_ID)
+  FROM read_csv('ncen/*/FUND_REPORTED_INFO.tsv', delim='\t', header=true, all_varchar=true, union_by_name=true)
+  WHERE SERIES_ID IS NOT NULL AND trim(SERIES_ID) <> ''
+)
+SELECT n.key_type, n.key
+FROM ncen n
+WHERE NOT EXISTS (
+  SELECT 1 FROM read_parquet('https://openlake.meridian.online/edgar_gleif.parquet') x
+  WHERE x.key_type = n.key_type AND x.key = n.key
+);
+```
+
+**Read the result in one direction.** A filer it returns reported no usable LEI. The
+converse does not follow, for the reason the bound above gives: a filer that reported an
+unresolvable value can still be here, carried by an edge from another source. The rule
+takes effect at the Run that applies it rather than retroactively, so a snapshot
+published earlier can still carry rows it now removes — run this against one of those
+and expect few rows or none, because the values it removes are still in there.
 
 ## Boundaries (deliberate)
 
