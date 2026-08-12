@@ -58,7 +58,10 @@ An LEI is admitted when **either** test passes:
   the identifier is well formed when the remainder is 1.
 - **GLEIF publishes it.** The register holds entries whose check digits do not satisfy
   the standard, and an entity GLEIF publishes is a real one whatever the arithmetic
-  says of its digits. Rejecting those would drop resolvable edges.
+  says of its digits. This arm is a forward guard rather than a path anything travels
+  today: measured against the published snapshot it changes no row. It is here so that
+  the first filing to report such a register entry is not dropped for carrying the
+  digits the register gave it.
 
 The shape cannot do this job. `00000000000000000000` satisfies ISO 17442's
 eighteen-alphanumeric-plus-two-digit pattern, which is what `datapackage.json` and

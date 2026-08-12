@@ -80,12 +80,14 @@ CREATE OR REPLACE TABLE gleif_ra_sec AS
 -- carries all-zero placeholders written where a null belongs, and single-character
 -- transcriptions of a real identifier (letter O for zero, letter I for one). Neither
 -- is an identity, and both pass the ISO 17442 shape, so admit a value only when the
--- MOD 97-10 arithmetic accepts it or GLEIF itself publishes it. The second arm is not
--- slack: `gleif` holds LEIs whose check digits are wrong at the register — an
--- entity GLEIF publishes is a real one whatever our arithmetic says of its digits, and
--- rejecting it would drop a resolvable edge. The membership test is written out with
--- both sides qualified; as a macro parameter `s` it binds to the subquery's own `lei`
--- column and the EXISTS is then true of every row.
+-- MOD 97-10 arithmetic accepts it or GLEIF itself publishes it. The second arm is a
+-- forward guard, not slack: `gleif` holds LEIs whose check digits are wrong at the
+-- register, and an entity GLEIF publishes is a real one whatever our arithmetic says of
+-- its digits. Measured against the published snapshot that arm changes no row; it is
+-- here so the first filing to report such an entry keeps it.
+--
+-- The membership test is written out with both sides qualified; as a macro parameter
+-- `s` binds to the subquery's own `lei` column and the EXISTS is then true of every row.
 CREATE OR REPLACE TABLE ncen_registrant AS
   SELECT DISTINCT CAST(n.CIK AS BIGINT)::VARCHAR AS key, upper(trim(n.LEI)) AS lei
   FROM read_csv('build/ncen/*/REGISTRANT.tsv', delim='\t', header=true, all_varchar=true, union_by_name=true) n

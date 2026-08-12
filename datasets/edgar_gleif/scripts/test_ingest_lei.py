@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 """Self-test for the identifier gate in the crosswalk ingest — proves it can fail.
 
-Every case here runs the SQL models THIS REPO SHIPS, read off disk, in the order
-`arcform.yaml` declares them, against scratch fixtures standing in for the fetch and
-export operators. Nothing about the check is re-implemented in the test: if a model
-file stops filtering, or the gate is deleted from `models/package.sql`, these cases
-go red, and they cannot go green against a copy of the logic that agrees with itself.
+Cases here run the SQL models THIS REPO SHIPS, read off disk, against scratch fixtures
+standing in for the fetch and export operators. Most run all four models in the order
+`arcform.yaml` declares them; `test_the_arithmetic_agrees_with_an_independent_one` and
+`test_a_malformed_value_is_not_accepted_as_valid` execute only the macro at the head of
+`models/load.sql`, because the arithmetic needs no pipeline around it to be wrong.
+Either way the bytes are the shipped ones and nothing about the check is re-implemented
+here: if a model file stops filtering, or the gate is deleted from
+`models/package.sql`, these cases go red, and they cannot go green against a copy of
+the logic that agrees with itself.
 
 Two mechanisms are under test, and they are not the same mechanism:
 
