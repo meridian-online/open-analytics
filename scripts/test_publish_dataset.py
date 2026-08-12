@@ -346,13 +346,17 @@ class PublishSeamSelfTest(unittest.TestCase):
 
     # -------------------------------------------------------------- running
 
-    def run_seam(self, *argv: str) -> subprocess.CompletedProcess[str]:
+    def run_seam_at(self, datasets_dir: Path, *argv: str) -> subprocess.CompletedProcess[str]:
+        """The seam against an arbitrary descriptor tree — the pipeline points it at a copy."""
         return subprocess.run(
-            [sys.executable, str(PUBLISHER), "--datasets-dir", str(self.datasets), *argv],
+            [sys.executable, str(PUBLISHER), "--datasets-dir", str(datasets_dir), *argv],
             capture_output=True,
             text=True,
             check=False,
         )
+
+    def run_seam(self, *argv: str) -> subprocess.CompletedProcess[str]:
+        return self.run_seam_at(self.datasets, *argv)
 
     def publish(self, artefact: Path, *extra: str, slug: str = "widgets", upload: tuple[str, ...] = ()):
         return self.run_seam(
@@ -691,6 +695,216 @@ class PublishSeamSelfTest(unittest.TestCase):
             "REFUSED",
             "never got to 'describe'",
         )
+
+    # ------------------------------- the shape the publishing pipeline calls in
+    #
+    # Every case above puts the descriptor, the Protocol and the artefact in one
+    # directory. The pipeline uses neither: it hands `--datasets-dir` a scratch
+    # COPY of the descriptor tree, so a stamp cannot reach the checked-out file,
+    # and `--file` a WORK COPY of the artefact staged outside the Protocol. The
+    # guard was green against all of the above while refusing every real publish.
+
+    def relocate(self, descriptor: Path, slug: str = "widgets") -> Path:
+        """The descriptor as the pipeline presents it: a byte copy, no Protocol beside it."""
+        elsewhere = self.root / "scratch-descriptors" / slug
+        elsewhere.mkdir(parents=True, exist_ok=True)
+        copy = elsewhere / descriptor.name
+        copy.write_bytes(descriptor.read_bytes())
+        return copy
+
+    def work_copy(self, artefact: Path) -> Path:
+        """The artefact as the pipeline presents it: staged outside the Protocol."""
+        staged = self.root / "work" / artefact.name
+        staged.parent.mkdir(parents=True, exist_ok=True)
+        staged.write_bytes(artefact.read_bytes())
+        return staged
+
+    def publish_as_pipeline(self, artefact: Path, descriptor: Path, *, slug: str = "widgets"):
+        """Both copies at once, and --protocol-dir NOT passed: nothing is told where to look."""
+        copy = self.relocate(descriptor, slug)
+        return subprocess.run(
+            [
+                sys.executable, str(PUBLISHER),
+                "--datasets-dir", str(copy.parent.parent),
+                "publish", "--dataset", slug,
+                "--file", str(self.work_copy(artefact)),
+                "--uploader", self.uploader(),
+                "--readback-attempts", "1", "--readback-delay", "0",
+                "--protocol-dir", str(self.datasets / slug),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    def test_a_work_copy_of_the_artefact_is_matched_by_its_bytes(self) -> None:
+        """The bytes are the Run's; only the path is not. Refusing them was simply wrong.
+
+        This is the second of the two faults that stopped the pipeline: `--file` never
+        names a path any Run recorded, so a path match refused byte-identical bytes with
+        "built or replaced outside a Run".
+        """
+        descriptor = self.write_dataset()
+        artefact = self.publishable(b"PAR1" + b"staged elsewhere" * 30)
+        result = self.publish_as_pipeline(artefact, descriptor)
+        self.assertOutcome(result, EXIT_OK)
+        self.assertIsNotNone(self.store.get("widgets.parquet"), "the object never reached the endpoint")
+
+    def test_a_relocated_descriptor_still_finds_the_run_that_refuses_it(self) -> None:
+        """The guard has to survive both copies at once, or it only ever guarded the tests.
+
+        Without the relocation the run records were looked for beside a temp copy, found
+        nothing, and refused with "no Run record under" — a refusal about the plumbing,
+        which is indistinguishable from this one by exit code alone. So this asserts the
+        REASON: the Run that never reached describe.
+        """
+        descriptor = self.write_dataset()
+        artefact = self.publishable(
+            b"PAR1" + b"rebuilt rows" * 40,
+            describe_status=NEVER_REACHED,
+            outcome="partial",
+        )
+        result = self.publish_as_pipeline(artefact, descriptor)
+        self.assertOutcome(result, EXIT_DISAGREEMENT, "REFUSED", "never got to 'describe'")
+        self.assertNotIn("no Run record under", result.stdout + result.stderr)
+        self.assertIsNone(self.store.get("widgets.parquet"), "the artefact was uploaded anyway")
+
+    def seam_in_this_fixture(self) -> Path:
+        """The seam copied into the fixture, so `datasets/` HERE is the repository it reads.
+
+        The fallback that ties a relocated copy back to its Protocol resolves
+        `datasets/<slug>/` from the script's own location. Pointing that at the fixture
+        is the only way to drive it without a hook in shipped code that exists for tests.
+        """
+        copied = self.root / "scripts" / PUBLISHER.name
+        copied.parent.mkdir(parents=True, exist_ok=True)
+        copied.write_bytes(PUBLISHER.read_bytes())
+        return copied
+
+    def test_a_relocated_copy_is_tied_to_its_protocol_without_being_told(self) -> None:
+        """Byte-identity alone, with no --protocol-dir: the case the pipeline actually runs.
+
+        The case above passes --protocol-dir, so it cannot tell whether the inference
+        works. Nothing here says where the Protocol is.
+        """
+        descriptor = self.write_dataset()
+        artefact = self.publishable(b"PAR1" + b"untold" * 30, describe_status=NEVER_REACHED, outcome="partial")
+        copy = self.relocate(descriptor)
+        result = subprocess.run(
+            [
+                sys.executable, str(self.seam_in_this_fixture()),
+                "--datasets-dir", str(copy.parent.parent),
+                "publish", "--dataset", "widgets", "--file", str(self.work_copy(artefact)),
+                "--uploader", self.uploader(), "--readback-attempts", "1", "--readback-delay", "0",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertOutcome(result, EXIT_DISAGREEMENT, "REFUSED", "never got to 'describe'")
+        self.assertIsNone(self.store.get("widgets.parquet"), "the artefact was uploaded anyway")
+
+    def test_a_copy_that_is_not_byte_identical_is_not_tied_to_that_protocol(self) -> None:
+        """One byte apart from the committed descriptor and the inference must let go.
+
+        Without this the previous case passes on a fallback that matched by SLUG, which
+        would make this repository's Protocol govern any tree using the same word.
+        """
+        descriptor = self.write_dataset()
+        artefact = self.publishable(b"PAR1" + b"unrelated" * 30, describe_status=NEVER_REACHED, outcome="partial")
+        copy = self.relocate(descriptor)
+        copy.write_bytes(copy.read_bytes().replace(b'"created"', b'"createD"'))
+        result = subprocess.run(
+            [
+                sys.executable, str(self.seam_in_this_fixture()),
+                "--datasets-dir", str(copy.parent.parent),
+                "publish", "--dataset", "widgets", "--file", str(self.work_copy(artefact)),
+                "--uploader", self.uploader(), "--readback-attempts", "1", "--readback-delay", "0",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertOutcome(result, EXIT_OK, "no Protocol for widgets")
+
+    def test_a_descriptor_tree_that_is_not_this_repositorys_is_not_governed_by_it(self) -> None:
+        """A different package under the same slug, and no Protocol: nothing to require.
+
+        The offline harness for the publishing pipeline is exactly this — it builds a
+        scratch `edgar` from scratch bytes. Tying a copy to a Protocol by SLUG would make
+        this repository's edgar Protocol govern a package that is not its edgar.
+        """
+        descriptor = self.write_dataset(protocol=False, arcform_state=False)
+        artefact = self.artefact(b"PAR1" + b"someone else's edgar" * 20)
+        copy = self.relocate(descriptor)
+        result = self.run_seam_at(
+            copy.parent.parent,
+            "publish", "--dataset", "widgets", "--file", str(self.work_copy(artefact)),
+            "--uploader", self.uploader(), "--readback-attempts", "1", "--readback-delay", "0",
+        )
+        self.assertOutcome(result, EXIT_OK, "no Protocol for widgets")
+        self.assertIsNotNone(self.store.get("widgets.parquet"))
+
+    def test_a_protocol_arcform_never_ran_here_requires_no_run(self) -> None:
+        """The datasets whose Parquet the pipeline builds itself, not from a Protocol's output."""
+        descriptor = self.write_dataset(arcform_state=False)
+        artefact = self.artefact(b"PAR1" + b"built by the pipeline" * 20)
+        self.assertOutcome(self.publish(artefact), EXIT_OK, "has no arcform state")
+        self.assertDeclaresWhatIsServed(descriptor)
+
+    def test_deleting_the_run_records_does_not_delete_the_check(self) -> None:
+        """The dodge the previous line opens if the check keys on the records themselves.
+
+        `build/.arcform` is arcform's state directory; the records inside it are removable.
+        Keying on the records would turn `rm -r runs/` into a publish licence.
+        """
+        descriptor = self.write_dataset()
+        before = descriptor.read_text(encoding="utf-8")
+        artefact = self.publishable(b"PAR1" + b"then unrecorded" * 20)
+        for record in (self.datasets / "widgets" / "build" / ".arcform" / "runs").iterdir():
+            record.unlink()
+        result = self.publish(artefact)
+        self.assertOutcome(result, EXIT_DISAGREEMENT, "REFUSED", "no Run record under")
+        self.assertNothingReachedTheEndpoint(descriptor, before)
+
+    def test_an_asset_the_run_only_read_does_not_license_a_publish(self) -> None:
+        """Matching by digest has to keep asking WHO WROTE these bytes.
+
+        The graph lists an unreached step's outputs like any other, so an asset whose
+        producing step failed still carries the digest. Without the producer check, a
+        digest match would license bytes no step ever wrote.
+        """
+        descriptor = self.write_dataset()
+        before = descriptor.read_text(encoding="utf-8")
+        artefact = self.publishable(b"PAR1" + b"listed but not written" * 20, export_status=FAILED, outcome="partial")
+        result = self.publish(artefact)
+        self.assertOutcome(result, EXIT_DISAGREEMENT, "REFUSED", "produced the bytes at", "outside a Run")
+        self.assertNothingReachedTheEndpoint(descriptor, before)
+
+    def test_provenance_will_not_answer_where_it_cannot_look(self) -> None:
+        """Asked on its own it is a question, and an unanswerable one is not a pass.
+
+        `publish` proceeds where no Protocol governs the descriptor. If `provenance` did
+        the same, a pipeline calling it before its own upload would read exit 0 as "a Run
+        produced this" when the answer is "nobody looked".
+        """
+        descriptor = self.write_dataset(protocol=False, arcform_state=False)
+        artefact = self.artefact(b"PAR1" + b"ungoverned" * 20)
+        copy = self.relocate(descriptor)
+        result = self.run_seam_at(
+            copy.parent.parent, "provenance", "--dataset", "widgets", "--file", str(artefact)
+        )
+        self.assertOutcome(result, EXIT_ERROR, "could not complete", "no Protocol governs")
+
+    def test_a_protocol_dir_that_holds_no_protocol_is_an_error(self) -> None:
+        """A caller that says where to look and is wrong is told, not quietly ignored."""
+        self.write_dataset()
+        artefact = self.publishable(b"PAR1" + b"misdirected" * 20)
+        result = self.run_seam(
+            "provenance", "--dataset", "widgets", "--file", str(artefact),
+            "--protocol-dir", str(self.root),
+        )
+        self.assertOutcome(result, EXIT_ERROR, "could not complete", "holds no arcform.yaml")
 
     # --------------------------------------- a move behind the descriptor's back
 
