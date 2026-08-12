@@ -21,10 +21,12 @@
 # objects. Same order and same reason as the pair above.
 #
 # `publish-seam` covers the other direction — that a publish declares what it
-# uploaded — against a scratch HTTP object store, so it is offline and runs on every
-# pull request. `endpoints-serve-what-is-declared` re-hashes every published object
-# in full and so does NOT: it costs a download of every dataset, which is defensible
-# once a merge lands and weekly thereafter, and not on each push to a branch.
+# uploaded, and that it uploads nothing a finished Run did not produce alongside the
+# descriptor on disk — against a scratch HTTP object store and scratch B4 Run records,
+# so it is offline and runs on every pull request. `endpoints-serve-what-is-declared`
+# re-hashes every published object in full and so does NOT: it costs a download of
+# every dataset, which is defensible once a merge lands and weekly thereafter, and not
+# on each push to a branch.
 name: descriptors
 
 on:
