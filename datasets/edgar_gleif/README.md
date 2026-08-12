@@ -25,12 +25,14 @@ are **no opaque `command:`/shell steps**. The step DAG:
    `entity.category`) and **SEC Form N-CEN** (the annual fund filing → registrant
    `CIK ↔ LEI` and series `SERIES_ID ↔ LEI`). No crowd-sourced data
    enters the published dataset; Wikidata is an out-of-band validation cross-check only.
-   The N-CEN LEI column is **never null and that is not the same as always filled**:
-   it is filer-typed free text, and a filer with no LEI to report writes a row of
-   zeroes rather than leaving it empty. See *The identifier* below.
+   The N-CEN LEI column is filer-typed free text, so **how full it is says nothing
+   about how much of it is usable**: a filer with no LEI to report may leave the field
+   empty, and may instead write a row of zeroes, which counts as filled. See *The
+   identifier* below.
 3. **load / normalise** — type the tables, normalise CIK representation, derive the
-   `key_type` (cik | series | class) from the SEC identifier scheme, and drop any
-   N-CEN LEI the check-digit arithmetic rejects.
+   `key_type` (cik | series | class) from the SEC identifier scheme, and drop an N-CEN
+   LEI when the check-digit arithmetic rejects it **and** GLEIF does not publish it.
+   Both arms, not the arithmetic alone — see *The identifier*.
 4. **resolve** — probabilistic name match for the operating-company tail, via the
    `splink_resolve` operator (frozen Fellegi-Sunter model, precision-first).
 5. **tier** — combine `authoritative` ∪ `confirmed` ∪ `candidate`; a deterministic
@@ -60,9 +62,9 @@ An LEI is admitted when **either** test passes:
 
 The shape cannot do this job. `00000000000000000000` satisfies ISO 17442's
 eighteen-alphanumeric-plus-two-digit pattern, which is what `datapackage.json` and
-`schema.finetype.json` declare and all either can declare — a `pattern` does not
-evaluate a checksum. That is why the test is arithmetic and why it runs in the
-Protocol rather than in a constraint.
+`schema.finetype.json` declare — a `pattern` does not evaluate a checksum. That is why
+the test is arithmetic, and why it runs in the Protocol, where a rejected value can be
+kept out of the bytes rather than reported after they are published.
 
 Where each half applies:
 
