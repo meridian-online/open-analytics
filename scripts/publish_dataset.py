@@ -25,8 +25,20 @@ the describe, and left the descriptor still describing the published 207,099.
 So `publish` will not upload bytes it cannot trace. Before the uploader runs it
 reads the B4 Run records `arc run` leaves under the Protocol's
 `build/.arcform/runs/`, and requires one Run to have produced BOTH the bytes at
-`--file` and the descriptor on disk, and to have finished. `provenance` is that
-same check on its own, for a publish pipeline that does its own uploading.
+`--file` and the descriptor being published, and to have finished. `provenance`
+is that same check on its own, for a publish pipeline that does its own uploading.
+
+Neither of those two paths is where the caller says they are, and assuming they
+were made every publish in the pipeline exit 1 for a day. The pipeline hands
+`--file` a WORK COPY of the artefact — it stages the Protocol's terminal Parquet
+in a scratch directory and uploads from there — so a Run's asset is matched by
+CONTENT DIGEST, never by path. And it hands `--datasets-dir` a scratch copy of
+the descriptor tree, deliberately, so a stamp written here cannot reach the file
+checked into this repository. `descriptor_path.parent` is therefore a temp
+directory with no Protocol in it, and the Run records have to be found through
+`resolve_protocol_dir` instead. See that function for how a relocated descriptor
+is tied back to the Protocol it came from, and for the case where there is no
+Protocol to consult.
 
 The Run's asset graph alone cannot answer this. It lists `datapackage.json` with
 `produced_by: describe` and a content hash whether or not `describe` ran — in the
@@ -36,12 +48,10 @@ graph is a plan of what each step owns rather than a log of what happened. Only
 with a null `skip_reason` (a step that was skipped because its output was already
 current carries a reason). That distinction is the whole guard.
 
-NOT YET WIRED. The pipeline that actually uploads these objects lives outside
-this repository and does not call `publish`. Of the checked-in descriptors, only
-`edgar`'s `bytes` and `hash` were written by `restamp`; the rest were emitted
-when their descriptors were last regenerated. Until that pipeline calls this — or
-calls `provenance` before its own upload — an object can still move without its
-descriptor.
+The publishing pipeline that moves these objects lives outside this repository
+and calls `publish` for every dataset a descriptor here describes. Of the
+checked-in descriptors, only `edgar`'s `bytes` and `hash` were written by
+`restamp`; the rest were emitted when their descriptors were last regenerated.
 
   publish     upload a local file, then declare what the endpoint serves back
   provenance  refuse bytes and a descriptor that no one finished Run produced
@@ -108,6 +118,18 @@ READBACK_DELAY = 2.0
 # announcing any other version stops the publish rather than being guessed at.
 RUNS_SUBPATH = ("build", ".arcform", "runs")
 RUN_CONTRACT_VERSION = "b4/1"
+
+# arcform's own state directory, and the thing that says `arc run` runs this
+# Protocol HERE. Deliberately the parent of RUNS_SUBPATH rather than the records
+# themselves: keying the check on the records would let deleting them delete the
+# check, and an empty runs directory has to reach the refusal below.
+ARCFORM_STATE_SUBPATH = ("build", ".arcform")
+
+# What makes a directory a Protocol directory rather than somewhere a descriptor
+# happens to sit, and where this repository keeps its own: `datasets/<slug>/`,
+# resolved from this file so it holds however the caller set --datasets-dir.
+PROTOCOL_MARKER = "arcform.yaml"
+REPO_DATASETS = Path(__file__).resolve().parent.parent / "datasets"
 
 
 class PublishError(Exception):
@@ -249,6 +271,51 @@ def stamp(resource: dict[str, Any], measured: Measurement) -> None:
     resource["hash"] = measured.digest
 
 
+def resolve_protocol_dir(slug: str, descriptor_path: Path, explicit: Path | None = None) -> Path | None:
+    """The Protocol directory whose Runs govern this descriptor, or None.
+
+    Three cases, in this order.
+
+    `--protocol-dir` was given: use it, and fail loudly if it is not a Protocol.
+    Nothing guesses when the caller has said.
+
+    The descriptor sits in its own Protocol — `arcform.yaml` beside it. That is
+    the checked-out tree, and the case `arc` and a human both see.
+
+    The descriptor is a RELOCATED COPY of one of this repository's. The publishing
+    pipeline copies `datasets/<slug>/datapackage.json` into a scratch tree before
+    handing it over, so that a stamp written here cannot reach the checked-out
+    file; the copy has no Protocol beside it and never will. A copy is tied back
+    to its Protocol by being byte-identical to the descriptor committed at
+    `datasets/<slug>/` — the same equality the pipeline itself checks afterwards,
+    and the reason a stamp that changes nothing is a no-op. Bytes rather than
+    slug, because a different tree may legitimately use the same slug for a
+    different package; that is what the offline harness for the pipeline does,
+    and its fabricated `edgar` is not this repository's `edgar`.
+
+    None means no Protocol governs these bytes. `publish` then has no Run to
+    require; `provenance` treats it as a question it cannot answer.
+    """
+    if explicit is not None:
+        if not (explicit / PROTOCOL_MARKER).is_file():
+            raise PublishError(f"--protocol-dir {explicit} holds no {PROTOCOL_MARKER}")
+        return explicit
+
+    here = descriptor_path.parent
+    if (here / PROTOCOL_MARKER).is_file():
+        return here
+
+    committed = REPO_DATASETS / slug / descriptor_path.name
+    if not committed.is_file() or not (REPO_DATASETS / slug / PROTOCOL_MARKER).is_file():
+        return None
+    try:
+        if committed.read_bytes() != descriptor_path.read_bytes():
+            return None
+    except OSError as exc:
+        raise PublishError(f"cannot read {committed}: {exc}") from exc
+    return REPO_DATASETS / slug
+
+
 def descriptor_for(datasets_dir: Path, slug: str) -> Path:
     path = datasets_dir / slug / "datapackage.json"
     if not path.is_file():
@@ -276,11 +343,37 @@ class Run:
         Asset paths are relative to the Protocol directory, and some are globs
         that resolve to nothing on disk; both are handled by comparing resolved
         paths rather than strings.
+
+        Used for the DESCRIPTOR, whose place in the Protocol is fixed. The
+        artefact is matched by `produced_asset` instead — see there.
         """
         for asset in self.assets:
             if asset.get("kind") != "file" or not asset.get("path"):
                 continue
             if (protocol_dir / str(asset["path"])).resolve() == target:
+                return asset
+        return None
+
+    def produced_asset(self, digest: str) -> dict[str, Any] | None:
+        """The recorded file asset this Run PRODUCED holding exactly these bytes.
+
+        By content, not by path: the publishing pipeline stages the Protocol's
+        terminal Parquet into a scratch working directory and uploads the copy,
+        so the path it passes is one no Run has ever seen. Matching on it refused
+        byte-identical bytes with "built or replaced outside a Run", which was not
+        true of them. A digest is also the stronger claim — a path says where a
+        file was, the digest says what it holds.
+
+        `produced_by` must name a step this Run got to. Without that, an asset a
+        Run only READ would license a publish (a glob input carries `produced_by:
+        null`, and an unreached step's outputs are still listed by the graph),
+        and the whole point is that some step wrote these bytes.
+        """
+        for asset in self.assets:
+            if asset.get("kind") != "file" or recorded_digest(asset) != digest:
+                continue
+            producer = asset.get("produced_by")
+            if producer and step_reached(self.steps.get(str(producer))):
                 return asset
         return None
 
@@ -382,7 +475,9 @@ def unpublishable_reason(run: Run, protocol_dir: Path, descriptor_path: Path, de
     what went wrong.
     """
     name = descriptor_path.name
-    asset = run.file_asset(protocol_dir, descriptor_path.resolve())
+    # Looked up at its place IN THE PROTOCOL, not at `descriptor_path`, which may be
+    # a relocated copy in a directory no Run has ever written to.
+    asset = run.file_asset(protocol_dir, (protocol_dir / name).resolve())
     if asset is None:
         return f"records no {name}, so nothing in it ties those bytes to a descriptor"
 
@@ -411,9 +506,10 @@ def unpublishable_reason(run: Run, protocol_dir: Path, descriptor_path: Path, de
     return None
 
 
-def require_run_provenance(descriptor_path: Path, artefact: Path, measured: Measurement) -> Run:
+def require_run_provenance(
+    protocol_dir: Path, descriptor_path: Path, artefact: Path, measured: Measurement
+) -> Run:
     """The finished Run that produced both `artefact` and the descriptor, or a Refusal."""
-    protocol_dir = descriptor_path.parent
     runs_dir = protocol_dir.joinpath(*RUNS_SUBPATH)
     runs = load_runs(runs_dir)
     if not runs:
@@ -422,16 +518,11 @@ def require_run_provenance(descriptor_path: Path, artefact: Path, measured: Meas
             f"a descriptor is only true of the bytes the same Run described"
         )
 
-    target = artefact.resolve()
-    claimants: list[Run] = []
-    for run in runs:
-        asset = run.file_asset(protocol_dir, target)
-        if asset is not None and recorded_digest(asset) == measured.digest:
-            claimants.append(run)
+    claimants = [run for run in runs if run.produced_asset(measured.digest) is not None]
     if not claimants:
         raise Refusal(
             f"no Run under {runs_dir} produced the bytes at {artefact} ({measured.describe()}); "
-            f"{len(runs)} record(s) there describe other bytes. Those bytes were built or replaced "
+            f"{len(runs)} record(s) there produced other bytes. Those bytes were built or replaced "
             f"outside a Run"
         )
 
@@ -499,8 +590,21 @@ def command_publish(args: argparse.Namespace) -> int:
         raise PublishError(f"{local_file} is empty; refusing to publish it")
     print(f"publish: {local_file} is {local.describe()}")
 
-    run = require_run_provenance(descriptor_path, local_file, local)
-    print(f"publish: Run {run.run_id} produced both {local_file} and {descriptor_path}")
+    protocol_dir = resolve_protocol_dir(args.dataset, descriptor_path, args.protocol_dir)
+    if protocol_dir is None:
+        # No Protocol governs this descriptor, so there is no Run to require and
+        # nothing is being waved through: the failure this guard exists for is a
+        # Run that stopped before `describe`, which needs a Run to have happened.
+        print(f"publish: no Protocol for {args.dataset}; no Run record governs these bytes")
+    elif not protocol_dir.joinpath(*ARCFORM_STATE_SUBPATH).is_dir():
+        # A Protocol `arc run` has never run here, so no Run can be required of it.
+        # The datasets whose Parquet the publishing pipeline builds itself, rather
+        # than reading a Protocol's terminal output, are in this case. An EMPTY runs
+        # directory is NOT — that reaches the refusal below.
+        print(f"publish: {protocol_dir} has no arcform state; no Run governs these bytes")
+    else:
+        run = require_run_provenance(protocol_dir, descriptor_path, local_file, local)
+        print(f"publish: Run {run.run_id} produced both {local_file} and {descriptor_path}")
 
     run_uploader(args.uploader, local_file, url)
 
@@ -523,7 +627,17 @@ def command_provenance(args: argparse.Namespace) -> int:
     if not local_file.is_file():
         raise PublishError(f"nothing to check at {local_file}")
     measured = measure_file(local_file)
-    run = require_run_provenance(descriptor_path, local_file, measured)
+    # Asked for on its own, this is a question rather than a precondition, so an
+    # unanswerable one is an error and never a pass. `publish` proceeds where no
+    # Protocol governs the descriptor; here the caller asked which Run produced
+    # these bytes, and "there is no Protocol to ask" is not an answer.
+    protocol_dir = resolve_protocol_dir(args.dataset, descriptor_path, args.protocol_dir)
+    if protocol_dir is None:
+        raise PublishError(
+            f"no Protocol governs {descriptor_path}: no {PROTOCOL_MARKER} beside it, and it is not a "
+            f"copy of {REPO_DATASETS / args.dataset / descriptor_path.name}. Pass --protocol-dir"
+        )
+    run = require_run_provenance(protocol_dir, descriptor_path, local_file, measured)
     print(
         f"provenance: Run {run.run_id} produced {local_file} ({measured.describe()}) "
         f"and {descriptor_path}, and finished {run.outcome}"
@@ -597,6 +711,14 @@ def build_parser() -> argparse.ArgumentParser:
     def add_common(sub: argparse.ArgumentParser) -> None:
         sub.add_argument("--resource", metavar="NAME", help="name the resource when the package declares several")
 
+    def add_protocol(sub: argparse.ArgumentParser) -> None:
+        sub.add_argument(
+            "--protocol-dir",
+            type=Path,
+            metavar="DIR",
+            help="the Protocol whose Runs govern this descriptor; inferred when not given",
+        )
+
     publish = subparsers.add_parser("publish", help="upload a file, then declare what the endpoint serves back")
     publish.add_argument("--dataset", required=True, metavar="SLUG")
     publish.add_argument("--file", required=True, metavar="PATH", help="the built artefact to upload")
@@ -609,6 +731,7 @@ def build_parser() -> argparse.ArgumentParser:
     publish.add_argument("--readback-attempts", type=int, default=READBACK_ATTEMPTS)
     publish.add_argument("--readback-delay", type=float, default=READBACK_DELAY)
     add_common(publish)
+    add_protocol(publish)
     publish.set_defaults(handler=command_publish)
 
     provenance = subparsers.add_parser(
@@ -616,6 +739,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     provenance.add_argument("--dataset", required=True, metavar="SLUG")
     provenance.add_argument("--file", required=True, metavar="PATH", help="the built artefact about to be published")
+    add_protocol(provenance)
     provenance.set_defaults(handler=command_provenance, resource=None)
 
     restamp = subparsers.add_parser(

@@ -188,9 +188,22 @@ class PublishSeamSelfTest(unittest.TestCase):
         declared_bytes: int | None = 1,
         declared_hash: str | None = "sha256:" + "0" * 64,
         url: str | None = None,
+        protocol: bool = True,
+        arcform_state: bool = True,
     ) -> Path:
+        """A dataset directory shaped like this repository's: a Protocol, run by arcform.
+
+        `protocol` writes the `arcform.yaml` that makes it a Protocol directory at all.
+        `arcform_state` creates the `build/.arcform/runs/` arcform keeps its Run records
+        in — EMPTY, and separately from writing any record, so that "this Protocol is run
+        by arcform" and "here is a Run" are two different facts a case can move on its own.
+        """
         package_dir = self.datasets / slug
         package_dir.mkdir(parents=True)
+        if protocol:
+            (package_dir / "arcform.yaml").write_text("version: 1\nsteps: []\n", encoding="utf-8")
+        if arcform_state:
+            (package_dir / "build" / ".arcform" / "runs").mkdir(parents=True)
         resource: dict[str, Any] = {
             "name": slug,
             "format": "parquet",
@@ -238,6 +251,7 @@ class PublishSeamSelfTest(unittest.TestCase):
         export_status: dict[str, Any] | None = None,
         describe_status: dict[str, Any] | None = None,
         describe_producer: str = "describe",
+        late_status: dict[str, Any] | None = None,
         artefact_hash: str | None = None,
         descriptor_hash: str | None = None,
         record_descriptor: bool = True,
@@ -290,6 +304,11 @@ class PublishSeamSelfTest(unittest.TestCase):
             {"name": "export", "kind": "op", "status": dict(export_status or RAN)},
             {"name": describe_producer, "kind": "op", "status": dict(describe_status or RAN)},
         ]
+        if late_status is not None:
+            # A step that produces neither the artefact nor the descriptor, so a case
+            # can fail the Run without failing either producer. The real 2026-08-12
+            # record has one: `validate`, sitting between export and describe.
+            steps.append({"name": "validate", "kind": "op", "status": dict(late_status)})
         path.write_text(
             json.dumps(
                 {
@@ -594,16 +613,16 @@ class PublishSeamSelfTest(unittest.TestCase):
         self.assertNothingReachedTheEndpoint(descriptor, before)
 
     def test_publish_refuses_a_run_that_did_not_finish(self) -> None:
-        """describe ran, and a later step still failed — the Protocol did not hold."""
+        """export and describe both ran, and another step still failed — the Protocol did not hold."""
         descriptor = self.write_dataset()
         before = descriptor.read_text(encoding="utf-8")
         artefact = self.publishable(
             b"PAR1" + b"described then failed" * 10,
             outcome="partial",
-            export_status=FAILED,
+            late_status=FAILED,
         )
         result = self.publish(artefact)
-        self.assertOutcome(result, EXIT_DISAGREEMENT, "REFUSED", "finished 'partial'", "export failed")
+        self.assertOutcome(result, EXIT_DISAGREEMENT, "REFUSED", "finished 'partial'", "validate failed")
         self.assertNothingReachedTheEndpoint(descriptor, before)
 
     def test_publish_refuses_a_run_that_records_no_descriptor(self) -> None:
