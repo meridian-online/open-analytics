@@ -31,13 +31,13 @@
       }
     },
     "country": {
-      "description": "ISO 3166-1 country code of the entity's legal address."
+      "description": "Country of the entity's legal address, as the GLEIF register records it. The register types this element as a two-letter country code (LEI-CDF v3.1's CountryCodeType), and the pattern here is that shape. It checks shape, not assignment: the schema itself notes that a well-formed pair of upper-case letters need not be a valid ISO 3166 entry, and values outside the ISO-assigned list do occur in this column, so treat membership of an ISO reference list as something to verify rather than assume."
     },
     "city": {
       "description": "City of the entity's legal address."
     },
     "jurisdiction": {
-      "description": "Jurisdiction the entity is constituted under, as the GLEIF register records it: an ISO 3166-1 alpha-2 country code, or, where the register holds one, an ISO 3166-2 subdivision code — the country code, a hyphen, then the one to three alphanumeric characters ISO 3166-2 allows for a subdivision.",
+      "description": "Jurisdiction the entity is constituted under, as the GLEIF register records it. The register types this element as a country code or a country-plus-subdivision code — LEI-CDF v3.1's JurisdictionCodeType, a union of its CountryCodeType and RegionCodeType — and the pattern here is the union of those two shapes. It checks shape, not assignment: the schema itself notes that a well-formed value need not be a valid ISO 3166 entry, and values outside the ISO-assigned lists do occur in this column, so treat membership of an ISO reference list as something to verify rather than assume.",
       "constraints": {
         "pattern": "^[A-Z]{2}(-[A-Z0-9]{1,3})?$"
       }
