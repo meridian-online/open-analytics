@@ -16,13 +16,22 @@
 -- Declared here because this is the first model to read a self-reported LEI. The
 -- catalog entry lives in build/edgar_gleif.db, so models/package.sql — which the
 -- manifest runs against the same database, after this one — uses it too.
+--
+-- `list_transform(…, c -> …)`, not DuckDB's `[… FOR c IN …]` comprehension. The
+-- comprehension is valid DuckDB and the engine's SQL parser rejects it, which does not
+-- fail the run: a model it cannot parse becomes an OPAQUE step, contributing no assets
+-- to the graph. This model declares no `produces:`, so its whole output would vanish
+-- from the lineage, models/tier.sql would stop depending on it, and an incremental run
+-- would skip tier as clean while load rebuilt beneath it — the stale-Parquet hazard
+-- arcform.yaml names in its own comments. Keep this expression parseable.
 CREATE OR REPLACE MACRO lei_mod97(s) AS (
   list_reduce(
     list_prepend(0,
-      [CASE WHEN c BETWEEN '0' AND '9' THEN ascii(c) - 48
-            WHEN c BETWEEN 'A' AND 'Z' THEN ascii(c) - 55
-            END
-       FOR c IN regexp_split_to_array(upper(trim(s)), '')]),
+      list_transform(
+        regexp_split_to_array(upper(trim(s)), ''),
+        c -> CASE WHEN c BETWEEN '0' AND '9' THEN ascii(c) - 48
+                  WHEN c BETWEEN 'A' AND 'Z' THEN ascii(c) - 55
+             END)),
     (acc, v) -> (acc * (CASE WHEN v >= 10 THEN 100 ELSE 10 END) + v) % 97
   )
 );
