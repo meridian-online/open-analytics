@@ -33,10 +33,10 @@
           },
           {
             "constraints": {
-              "maxLength": 200,
-              "minLength": 2
+              "maxLength": 500,
+              "minLength": 1
             },
-            "description": "The entity's official legal name, as recorded in the GLEIF golden copy.",
+            "description": "The entity's official legal name, as recorded in the GLEIF golden copy. The bounds are the register's own: LEI-CDF v3.1 types this element NameType, a complexType whose simpleContent extends Tokenized500Type — the extension adds an optional xml:lang attribute and leaves the inherited value space, which restricts the text to between 1 and 500 characters. Names at both ends are genuine — single-character names are registered in several jurisdictions, and names past 200 characters are typically a registry's full form, such as the Italian convention of carrying the permitted trading abbreviations inside the registered name.",
             "name": "legal_name",
             "type": "string",
             "x-finetype-confidence": 0.7798,
@@ -46,7 +46,7 @@
             "constraints": {
               "pattern": "^[A-Z]{2}$"
             },
-            "description": "ISO 3166-1 country code of the entity's legal address.",
+            "description": "Country of the entity's legal address, as the GLEIF register records it. The register types this element as a two-letter country code (LEI-CDF v3.1's CountryCodeType), and the pattern here is that shape. It checks shape, not assignment: the schema itself notes that a well-formed pair of upper-case letters need not be a valid ISO 3166 entry, and values outside the ISO-assigned list do occur in this column, so treat membership of an ISO reference list as something to verify rather than assume.",
             "name": "country",
             "type": "string",
             "x-finetype-confidence": 0.8,
@@ -65,9 +65,9 @@
           },
           {
             "constraints": {
-              "pattern": "^[A-Z]{2}$"
+              "pattern": "^[A-Z]{2}(-[A-Z0-9]{1,3})?$"
             },
-            "description": "ISO 3166 code of the legal jurisdiction under which the entity is constituted.",
+            "description": "Jurisdiction the entity is constituted under, as the GLEIF register records it. The register types this element as a country code or a country-plus-subdivision code — LEI-CDF v3.1's JurisdictionCodeType, a union of its CountryCodeType and RegionCodeType — and the pattern here is the union of those two shapes. It checks shape, not assignment: the schema itself notes that a well-formed value need not be a valid ISO 3166 entry, and values outside the ISO-assigned lists do occur in this column, so treat membership of an ISO reference list as something to verify rather than assume.",
             "name": "jurisdiction",
             "type": "string",
             "x-finetype-confidence": 0.9985,
@@ -86,9 +86,17 @@
             "x-finetype-label": "representation.identifier.alphanumeric_id"
           },
           {
-            "description": "Whether the entity is operational (ACTIVE) or not, per the GLEIF register.",
+            "constraints": {
+              "enum": [
+                "ACTIVE",
+                "INACTIVE",
+                "NULL"
+              ],
+              "required": true
+            },
+            "description": "The register's entity status, as text: ACTIVE (legally registered and operating as of the last report), INACTIVE (no longer legally registered or operating), or the four-character string NULL, which the register uses to mean the status is not applicable. These three are LEI-CDF v3.1's EntityStatusEnum. It is not a boolean, and the string NULL is a reported value rather than a missing one — the field is declared required so that an actual SQL null reads as a violation instead of as a synonym for that value.",
             "name": "entity_status",
-            "type": "boolean",
+            "type": "string",
             "x-finetype-confidence": 1.0,
             "x-finetype-enum-domain": {
               "cohesion": 1.0,
