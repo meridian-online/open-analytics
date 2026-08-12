@@ -80,6 +80,32 @@ Where each half applies:
 against scratch sources, and one case deletes the filter from `models/load.sql` and
 asserts the gate behind it reddens.
 
+## What is not in it
+
+**A filer key whose reported LEI could not be resolved is excluded from this crosswalk.**
+An edge asserts that two identifiers name the same thing. An identifier that names
+nothing cannot carry that assertion at any confidence, so labelling it with a weaker
+`tier` does not make it publishable — the assertion is the problem, not its strength.
+
+**Read an absent filer as *"no identity edge we are willing to publish"*, not as *"no
+such filer"*.** The company exists and its filing exists; what is missing is a
+counterparty identifier we could stand behind. Causes include a placeholder — a row of
+zeroes — written where a null belongs, a single-character transcription of a real LEI,
+and a value matching no issued identifier at all.
+
+Two things bound what this removes. The rule fires when a value fails **both** admission
+tests above, so it cannot reach a filer whose LEI resolves. And a key disappears where
+the unresolvable value was the sole LEI reported for it: where the same key also carries
+a registration-sourced or resolver-sourced edge, that edge stays and the key is still
+here.
+
+**This file quotes no count.** The figure moves with each Run, and a number written here
+would be stale the first time the dataset is rebuilt with nothing to say so. To recover
+the excluded set for a Run, join the LEI columns of the N-CEN quarters `arcform.yaml`
+pins against `key` in this dataset: the filers with no row are those for which no usable
+LEI was reported. The rule takes effect at the Run that applies it rather than
+retroactively, so a snapshot published earlier can still carry rows it now removes.
+
 ## Boundaries (deliberate)
 
 - The arcform **engine** and the **operator catalog** live in the `arcform` repo; this
