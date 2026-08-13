@@ -20,32 +20,12 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
+import time
 import re
 import subprocess
 import sys
-
-
-def content_fingerprint(descriptor: dict) -> str:
-    """Hash the descriptor with its own stamp removed.
-
-    The stamp must not feed the hash, or every stamp changes the fingerprint and
-    the guard below can never fire.
-    """
-    body = {k: v for k, v in descriptor.items() if k != "x-finetype-version"}
-    return hashlib.sha256(
-        json.dumps(body, sort_keys=True, ensure_ascii=False).encode("utf-8")
-    ).hexdigest()
-
-
-def read_state(path: str) -> dict:
-    try:
-        with open(path, encoding="utf-8") as fh:
-            return json.load(fh)
-    except (OSError, ValueError):
-        return {}
 
 
 def finetype_version(binary: str) -> str:
@@ -72,15 +52,17 @@ def main() -> None:
         "use it to pin a run to a known release rather than to whatever PATH holds",
     )
     ap.add_argument(
-        "--state",
-        help="where the content fingerprint is remembered between runs "
-        "(default: <descriptor dir>/build/.finetype-stamp.json)",
+        "--max-age-sec",
+        type=int,
+        default=900,
+        help="how recently the descriptor must have been written for this step to "
+        "believe `describe` produced it (default: 900)",
     )
     ap.add_argument(
-        "--allow-restamp",
+        "--allow-stale",
         action="store_true",
-        help="stamp even when the descriptor's content has not changed since it was "
-        "stamped with a different version — only when you know the content is current",
+        help="stamp even when the descriptor is older than the freshness window — "
+        "only when you know the content is current",
     )
     args = ap.parse_args()
 
@@ -97,53 +79,36 @@ def main() -> None:
 
     # ── The guard, and the reason this step is not a one-liner ──────────────────
     # `describe` skips as hash_clean whenever its op_config is unchanged — which is
-    # every run where only the finetype BINARY moved, since no data file is hashed
-    # on arcform's staleness path. Stamping unconditionally in that run writes the
-    # NEW version onto content the OLD binary produced, and the one field whose
-    # entire purpose is to say which engine ran would be the field that lies.
+    # every run where only the finetype BINARY moved, because arcform hashes the
+    # operator ref and its `with:` block and nothing else. Stamping in that run
+    # writes the NEW version onto content the OLD binary produced, and the one field
+    # whose entire purpose is to say which engine ran becomes the field that lies.
     #
-    # So: fingerprint the descriptor with its own stamp excluded, and remember it.
-    # If the fingerprint is unchanged since the last stamp while the resolved
-    # version has moved, `describe` did not re-run and the new version is not this
-    # content's. Refuse, and say which.
+    # The question this step actually needs answered is "did describe just write
+    # this file?", and the file's own mtime answers it directly. describe runs
+    # immediately before this step, so a descriptor it produced is seconds old; one
+    # it skipped is as old as the last real Run. No fingerprint, no state file, and
+    # no flag for the caller to assert something they may not know.
     #
-    # THIS IS A GUARD, NOT A PROOF. It cannot see a describe that re-ran and
-    # produced byte-identical output, and a wiped build/ resets it to first-run
-    # behaviour. The guarantee belongs in `datapackage_describe` itself, which
-    # knows what it ran; until it stamps its own output this step is the best
-    # available approximation and should be read as one.
-    state_path = args.state or os.path.join(
-        os.path.dirname(os.path.abspath(args.descriptor)), "build", ".finetype-stamp.json"
-    )
-    fingerprint = content_fingerprint(descriptor)
-    previous = read_state(state_path)
-    recorded = descriptor.get("x-finetype-version")
-
-    if (
-        not args.allow_restamp
-        and previous.get("fingerprint") == fingerprint
-        and recorded is not None
-        and recorded != version
-    ):
+    # THIS IS A GUARD, NOT A PROOF — a `touch` defeats it, and a clock skewed
+    # backwards trips it. The guarantee belongs in `datapackage_describe`, which
+    # knows what it ran; until it stamps its own output this is the honest
+    # approximation and the comment says so rather than implying more.
+    age = time.time() - os.path.getmtime(args.descriptor)
+    if not args.allow_stale and age > args.max_age_sec:
         sys.exit(
-            f"stamp: REFUSED. {args.descriptor} still carries the content stamped as "
-            f"{recorded}, but the finetype on PATH is {version}. The descriptor has not "
-            "been regenerated, so stamping it would attribute this content to an engine "
-            "that did not produce it.\n"
-            "  Re-run the pipeline so `describe` actually re-runs (it skips as "
-            "hash_clean when only the binary moved), or pass --allow-restamp if you "
-            "know the content is current."
+            f"stamp: REFUSED. {args.descriptor} was last written {int(age)}s ago, past "
+            f"the {args.max_age_sec}s freshness window, so `describe` did not produce it "
+            "in this Run — it skipped as hash_clean and the content is from an earlier "
+            f"engine.\n  Stamping it {version} would attribute that content to a binary "
+            "that did not generate it.\n  Re-run with `arc run --force` so describe "
+            "genuinely re-runs, or pass --allow-stale if you know the content is current."
         )
 
     descriptor["x-finetype-version"] = version
 
     with open(args.descriptor, "w", encoding="utf-8") as fh:
         json.dump(descriptor, fh, indent=2, sort_keys=True, ensure_ascii=False)
-        fh.write("\n")
-
-    os.makedirs(os.path.dirname(state_path), exist_ok=True)
-    with open(state_path, "w", encoding="utf-8") as fh:
-        json.dump({"fingerprint": fingerprint, "version": version}, fh, indent=2)
         fh.write("\n")
 
     print(f"stamp: {args.descriptor} x-finetype-version={version}", file=sys.stderr)
