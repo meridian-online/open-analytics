@@ -222,6 +222,29 @@ steps:
       overrides: descriptor.overrides.json
       out: datapackage.json
 
+  # ── Derive: measure x-joins coverage from THIS build, not a checked-in literal ──
+  # descriptor.overrides.json declares WHAT each join is (columns, filter,
+  # comparison) but carries no `coverage` — a hand-typed row count decays as soon
+  # as an upstream source grows, which is exactly what happened here (four weeks
+  # stale on 2026-08-13: the descriptor still said 207,099 rows over a build
+  # already holding 208,246). crosswalk_join.py --write measures `rows`/`matched`
+  # for each declared join and writes the result into datapackage.json.
+  #
+  # `--local` is load-bearing, not cosmetic: right after `describe`, the resource
+  # this descriptor names for ITSELF still declares the URL the PREVIOUS publish
+  # produced — this build has not been uploaded yet — so without an override the
+  # measurement would silently score the join against last publish's bytes. The
+  # three `--local` paths below are this Protocol's own build outputs: the just-
+  # exported edgar_gleif Parquet and the edgar/gleif Parquet fetch_edgar and
+  # fetch_gleif already pulled, so this step reads nothing over the network.
+  #
+  # Run with no `--write`/`--local`, the same script is the CHECK: it re-measures
+  # against the published objects instead and fails if the committed `coverage`
+  # disagrees (job `joins-run-against-their-data` in
+  # .github/workflows/descriptors.yml, which runs on every push/PR and weekly).
+  - name: derive_join_coverage
+    command: "python3 scripts/crosswalk_join.py --write --package edgar_gleif --datasets-dir ../../datasets --local edgar_gleif=build/edgar_gleif.parquet --local edgar=build/edgar.parquet --local gleif=build/gleif.parquet"
+
   # ── Stamp: record WHICH finetype produced the descriptor above ─────────────────
   # datapackage_describe emits the inferred schema and not the identity of the binary
   # that inferred it, so a descriptor from a superseded finetype reads identically to

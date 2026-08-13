@@ -34,11 +34,25 @@ the exact objects named in `resources[].path`, so they move when those objects a
 republished — the same property `bytes` and `hash` already have, and the reason the
 workflow runs this on a schedule rather than only on merge.
 
+Two modes, one measurement:
+
+  CHECK (default): `coverage` must already be present. Each join is measured
+  against the objects `resources[].path` names — which for a published package is
+  the live URL — and a disagreement is reported. This is what CI runs.
+
+  WRITE (`--write`): `coverage` is optional on input and is unconditionally
+  overwritten with what gets measured; the descriptor is rewritten in place. Pass
+  `--local NAME=PATH` (repeatable) to read resource NAME from a local file instead
+  of its declared `path` — a build has not published yet, so the declared `path`
+  for its own not-yet-uploaded resource still names the OLD object. This is what
+  the arcform pipeline runs, right after `describe`, so the coverage a descriptor
+  ships with is measured from that build rather than typed by hand.
+
 Exit codes, distinct because a status alone cannot tell a refusal from a crash:
 
-  0  every declared join ran and its declared coverage was exact
-  1  a join ran and the data disagreed with what the descriptor claims
-  2  the check could not run — a declaration this script does not implement, a
+  0  every declared join ran — and, in CHECK mode, its declared coverage was exact
+  1  CHECK mode only: a join ran and the data disagreed with what the descriptor claims
+  2  the run could not complete — a declaration this script does not implement, a
      reference that does not resolve, or bytes it could not read
 """
 
@@ -97,6 +111,22 @@ def load_descriptor(path: Path) -> dict[str, Any]:
         raise JoinError(f"{path}: cannot read descriptor: {exc}") from exc
 
 
+def save_descriptor(path: Path, document: dict[str, Any]) -> None:
+    """Rewrite a descriptor after WRITE mode measured fresh coverage into it.
+
+    2-space indent, sorted keys, unescaped non-ASCII, trailing newline — the same
+    convention stamp_finetype_version.py uses at the same pipeline stage (right
+    after `describe`, before the descriptor is stamped or published). Sorted keys
+    matter here specifically: `coverage` is a NEW key on a join that previously had
+    none, and an unsorted dump would append it after `where` instead of restoring
+    the alphabetical order every other key in this file already keeps.
+    """
+    body = json.dumps(document, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(body, encoding="utf-8")
+    tmp.replace(path)
+
+
 def index_resources(paths: list[Path]) -> dict[str, list[tuple[Path, dict[str, Any]]]]:
     """resource name -> [(descriptor path, resource), ...] across every package."""
     index: dict[str, list[tuple[Path, dict[str, Any]]]] = {}
@@ -129,7 +159,9 @@ def own_resource(descriptor: dict[str, Any], columns: list[str], label: str) -> 
     return matches[0]
 
 
-def validate(join: dict[str, Any], label: str) -> tuple[list[str], list[str], str, dict[str, Any] | None, dict[str, int]]:
+def validate(
+    join: dict[str, Any], label: str, *, require_coverage: bool = True
+) -> tuple[list[str], list[str], str, dict[str, Any] | None, dict[str, int] | None]:
     local = join.get("fields") or []
     if isinstance(local, str):
         local = [local]
@@ -161,6 +193,10 @@ def validate(join: dict[str, Any], label: str) -> tuple[list[str], list[str], st
             )
 
     coverage = join.get("coverage")
+    if not require_coverage:
+        # WRITE mode: whatever is here (present, absent, or stale) is about to be
+        # overwritten with a measurement, so it is never validated as a claim.
+        return local, target, compare, where, coverage if isinstance(coverage, dict) else None
     if not isinstance(coverage, dict) or set(coverage) != REQUIRED_COVERAGE_KEYS:
         raise JoinError(
             f"join {label!r}: `coverage` must declare exactly {sorted(REQUIRED_COVERAGE_KEYS)}; "
@@ -182,9 +218,35 @@ def rendered(column: str, compare: str, qualifier: str = "") -> str:
     return f"CAST({ident} AS VARCHAR)" if compare == "text" else ident
 
 
-def run_join(con, descriptor_path: Path, descriptor: dict[str, Any], join: dict[str, Any], index, sample: int):
+def resource_source(
+    local_overrides: dict[str, str], name: str | None, descriptor_path: Path, resource: dict[str, Any]
+) -> str:
+    """Where to read a resource's bytes from: a `--local` override, or its declared `path`.
+
+    A resource's own `path` is where it lives once published. In WRITE mode the
+    left-hand resource is usually the package currently being built — its `path`
+    still names the object a previous publish produced, not this build's — so a
+    caller that knows better passes `--local` to redirect it.
+    """
+    if name and name in local_overrides:
+        return local_overrides[name]
+    return resolve_path(descriptor_path, resource.get("path") or "")
+
+
+def run_join(
+    con,
+    descriptor_path: Path,
+    descriptor: dict[str, Any],
+    join: dict[str, Any],
+    index,
+    sample: int,
+    *,
+    write: bool = False,
+    local_overrides: dict[str, str] | None = None,
+) -> list[str]:
+    local_overrides = local_overrides or {}
     label = str(join.get("name") or (join.get("reference") or {}).get("resource") or "<unnamed>")
-    local, target, compare, where, coverage = validate(join, label)
+    local, target, compare, where, coverage = validate(join, label, require_coverage=not write)
 
     left_resource = own_resource(descriptor, local + ([where["field"]] if where else []), label)
     left_declared = declared_fields(left_resource)
@@ -206,8 +268,8 @@ def run_join(con, descriptor_path: Path, descriptor: dict[str, Any], join: dict[
                 f"join {label!r}: references {target_name}.{column}, which that package does not declare"
             )
 
-    left_path = resolve_path(descriptor_path, left_resource.get("path") or "")
-    right_path = resolve_path(target_descriptor_path, right_resource.get("path") or "")
+    left_path = resource_source(local_overrides, left_resource.get("name"), descriptor_path, left_resource)
+    right_path = resource_source(local_overrides, target_name, target_descriptor_path, right_resource)
     for path in (left_path, right_path):
         if is_remote(path):
             con.execute("INSTALL httpfs")
@@ -253,7 +315,8 @@ def run_join(con, descriptor_path: Path, descriptor: dict[str, Any], join: dict[
         print(f"    where {where['field']} = {where['equals']!r}; compared as {compare}")
     else:
         print(f"    every row; compared as {compare}")
-    print(f"    declared  rows {coverage['rows']:,}  matched {coverage['matched']:,}")
+    if not write and coverage is not None:
+        print(f"    declared  rows {coverage['rows']:,}  matched {coverage['matched']:,}")
     print(f"    measured  rows {rows:,}  matched {matched:,}")
 
     if sample and matched:
@@ -264,6 +327,15 @@ def run_join(con, descriptor_path: Path, descriptor: dict[str, Any], join: dict[
         rendering = ", ".join(str(value[0]) if len(value) == 1 else str(value) for value in example)
         print(f"    joined rows, e.g.: {rendering}")
 
+    if write:
+        # The measurement IS the new declaration — there is nothing to compare it
+        # to. Mutate the join in place; `descriptor` (and this dict inside it) is
+        # what the caller re-serialises once every join in it has been measured.
+        join["coverage"] = {"rows": rows, "matched": matched}
+        print(f"    coverage written: rows {rows:,}  matched {matched:,}")
+        return []
+
+    assert coverage is not None  # require_coverage=True guarantees this in CHECK mode
     problems: list[str] = []
     if rows != coverage["rows"]:
         problems.append(
@@ -288,6 +360,19 @@ def main(argv: list[str] | None = None) -> int:
         help="only run the joins declared by this dataset (repeatable); default is every dataset that declares any",
     )
     parser.add_argument("--sample", default=3, type=int, help="joined values to print per join (0 to suppress)")
+    parser.add_argument(
+        "--write",
+        action="store_true",
+        help="measure coverage from the data and write it into each descriptor's x-joins, "
+        "instead of checking a declared value against the data",
+    )
+    parser.add_argument(
+        "--local",
+        action="append",
+        metavar="NAME=PATH",
+        help="read resource NAME from local file PATH instead of its declared `path` (repeatable); "
+        "for --write against a build that has not published yet",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -295,6 +380,14 @@ def main(argv: list[str] | None = None) -> int:
     except ImportError:
         print("crosswalk join: the duckdb Python package is required", file=sys.stderr)
         return EXIT_ERROR
+
+    local_overrides: dict[str, str] = {}
+    for item in args.local or []:
+        name, sep, raw_path = item.partition("=")
+        if not sep or not name or not raw_path:
+            print(f"crosswalk join: --local expects NAME=PATH, got {item!r}", file=sys.stderr)
+            return EXIT_ERROR
+        local_overrides[name] = str(Path(raw_path).resolve())
 
     descriptor_paths = sorted(args.datasets_dir.glob("*/datapackage.json"))
     if not descriptor_paths:
@@ -317,6 +410,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         index = index_resources(descriptor_paths)
+        written: list[Path] = []
         for descriptor_path in selected:
             descriptor = load_descriptor(descriptor_path)
             declaration = descriptor.get("x-joins")
@@ -327,8 +421,22 @@ def main(argv: list[str] | None = None) -> int:
                 raise JoinError(f"{descriptor_path}: `x-joins` declares no joins")
             print(f"{descriptor_path}")
             for join in joins:
-                problems.extend(run_join(con, descriptor_path, descriptor, join, index, args.sample))
+                problems.extend(
+                    run_join(
+                        con,
+                        descriptor_path,
+                        descriptor,
+                        join,
+                        index,
+                        args.sample,
+                        write=args.write,
+                        local_overrides=local_overrides,
+                    )
+                )
                 ran += 1
+            if args.write:
+                save_descriptor(descriptor_path, descriptor)
+                written.append(descriptor_path)
     except JoinError as exc:
         print(f"crosswalk join: {exc}", file=sys.stderr)
         return EXIT_ERROR
@@ -337,6 +445,12 @@ def main(argv: list[str] | None = None) -> int:
         packages = ", ".join(path.parent.name for path in selected)
         print(f"crosswalk join: no dataset declares `x-joins` ({packages})", file=sys.stderr)
         return EXIT_ERROR
+
+    if args.write:
+        print(f"\ncrosswalk join: wrote measured coverage for {ran} declared join(s) into {len(written)} descriptor(s)")
+        for path in written:
+            print(f"  wrote {path}")
+        return EXIT_OK
 
     if problems:
         print(f"\ncrosswalk join: {len(problems)} declared join fact(s) the data does not bear out\n")

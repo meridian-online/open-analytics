@@ -69,15 +69,11 @@
     "lei"
   ],
   "x-joins": {
-    "$comment": "How to join this crosswalk to the packages it references, and how far each join reaches. These are NOT `schema.foreignKeys`: a Data Package foreign key asserts that every value on the left exists on the right, and neither of these joins satisfies that against the published bytes — see each `cardinality` and `coverage`. Declaring them as foreign keys would advertise a guarantee the data does not keep, so the guarantee is dropped and the reachable part is stated instead. `coverage` is measured against the exact objects this descriptor names in `resources[].path`, and moves when they are republished, exactly as `bytes` and `hash` do.",
+    "$comment": "How to join this crosswalk to the packages it references, and how far each join reaches. These are NOT `schema.foreignKeys`: a Data Package foreign key asserts that every value on the left exists on the right, and neither of these joins satisfies that against the published bytes — see each `cardinality` and (in the built descriptor) `coverage`. Declaring them as foreign keys would advertise a guarantee the data does not keep, so the guarantee is dropped and the reachable part is stated instead. `coverage` does NOT live in this file: a hand-typed row count decays as soon as an upstream source grows, which is exactly what happened here (four weeks stale on 2026-08-13). `crosswalk_join.py --write` measures it from the build and writes it into the generated `datapackage.json` instead.",
     "joins": [
       {
         "cardinality": "partial — most left rows have no match, and the referenced side also holds keys this crosswalk does not carry. Neither side contains the other.",
         "compareAs": "text",
-        "coverage": {
-          "matched": 6334,
-          "rows": 184436
-        },
         "description": "SEC-side identity: a cik-typed edge to the EDGAR company-ticker table. `edgar` is a ticker/exchange listing, not the CIK universe, so it covers a small part of the registrants this crosswalk keys on; the direction of containment runs neither way. Join by rendering `edgar.cik` (an integer) as text and comparing it to `key` (text) — the rendering is exact, because no published CIK carries a leading zero.",
         "evidence": "For key_type='cik' rows, `key` is the EDGAR Central Index Key as reported to SEC EDGAR. Where both sides hold the same registrant the values agree exactly; the shortfall is coverage, not disagreement — `edgar` is built from the SEC's company-tickers file, so its reach follows that file rather than the registrant population.",
         "fields": [
@@ -97,12 +93,8 @@
         }
       },
       {
-        "cardinality": "partial — most left rows match; the remainder carry an LEI that is not in the GLEIF object this descriptor names. `coverage` below is the measured count and is the part checked against the data.",
+        "cardinality": "partial — most left rows match; the remainder carry an LEI that is not in the GLEIF object this descriptor names. `coverage` is written into the built descriptor, not into this file — see `verifiedBy` below.",
         "compareAs": "exact",
-        "coverage": {
-          "matched": 206980,
-          "rows": 207099
-        },
         "description": "GLEIF-side identity: the LEI each edge resolved to. Join `lei` to `gleif.lei` directly — both sides are text and no rendering is involved.",
         "evidence": {
           "blocking": [
@@ -134,6 +126,6 @@
         }
       }
     ],
-    "verifiedBy": "datasets/edgar_gleif/scripts/crosswalk_join.py — runs each join above against the published objects and fails if a declared `coverage` is wrong."
+    "verifiedBy": "datasets/edgar_gleif/scripts/crosswalk_join.py — the same script both writes and checks `coverage`. Run with `--write`, right after `describe`, it measures each join above against this build's own Parquet and writes `coverage` into datapackage.json (arcform.yaml step `derive_join_coverage`). Run with no flags, it re-measures against the published objects instead and fails if the committed `coverage` disagrees."
   }
 }
