@@ -13,6 +13,12 @@ and a declaration the runner does not implement. Both are covered here, along wi
 both branches of `compareAs` over a column holding two schemes at once — a case the
 fixtures reach deliberately, because the shipped declarations do not.
 
+`--write` mode is covered separately, below the CHECK-mode cases: it is the same
+runner measuring the same joins, but writing what it measures into the descriptor
+instead of comparing it to one. The case worth reddening there is a written figure
+that does not match a fresh, independent measurement of the fixture — see
+`test_write_computes_and_persists_coverage_when_absent`.
+
 Not covered, named rather than implied: the multi-field arity mismatch, the
 ambiguous-resource branch, and the missing-`x-joins` branch each behave correctly in
 the shipped runner but no case here reddens when they are deleted.
@@ -107,15 +113,16 @@ LEFT_FIELDS = [
 RIGHT_FIELDS = [{"name": "id", "type": "integer"}]
 
 
-def join_declaration(**overrides: Any) -> dict[str, Any]:
+def join_declaration(*, include_coverage: bool = True, **overrides: Any) -> dict[str, Any]:
     declaration: dict[str, Any] = {
         "name": "right",
         "fields": ["key"],
         "reference": {"resource": "right", "fields": ["id"]},
         "compareAs": "text",
         "where": {"field": "key_type", "equals": "num"},
-        "coverage": {"rows": 3, "matched": 2},
     }
+    if include_coverage:
+        declaration["coverage"] = {"rows": 3, "matched": 2}
     declaration.update(overrides)
     return declaration
 
@@ -128,13 +135,13 @@ class CrosswalkJoinSelfTest(unittest.TestCase):
         self.datasets.mkdir(parents=True)
         write_package(self.datasets, "right", select_sql=RIGHT_SQL, fields=RIGHT_FIELDS)
 
-    def lay_left(self, **overrides: Any) -> None:
+    def lay_left(self, *, include_coverage: bool = True, **overrides: Any) -> None:
         write_package(
             self.datasets,
             "left",
             select_sql=LEFT_SQL,
             fields=LEFT_FIELDS,
-            joins=[join_declaration(**overrides)],
+            joins=[join_declaration(include_coverage=include_coverage, **overrides)],
         )
 
     def assertOutcome(  # noqa: N802 - unittest naming
@@ -302,6 +309,71 @@ class CrosswalkJoinSelfTest(unittest.TestCase):
         """Silence is not a pass: a run that asserted nothing must not exit 0."""
         write_package(self.datasets, "left", select_sql=LEFT_SQL, fields=LEFT_FIELDS)
         self.assertOutcome(run_join(self.datasets), EXIT_ERROR, "no dataset declares `x-joins`")
+
+    # -------------------------------------------------------------- write mode
+
+    def read_left_coverage(self) -> dict[str, Any]:
+        descriptor = json.loads((self.datasets / "left" / "datapackage.json").read_text(encoding="utf-8"))
+        return descriptor["x-joins"]["joins"][0]["coverage"]
+
+    def test_write_computes_and_persists_coverage_when_absent(self) -> None:
+        """No `coverage` at all — the shape overrides.json now ships — is legal input.
+
+        The runner still has to measure the fixture correctly: rows=3, matched=2 is
+        the same figure `test_true_declaration_runs_and_passes` pins for CHECK mode,
+        computed independently here by reading the written file back. A --write that
+        wrote the wrong numbers would pass every CHECK-mode case above (nothing
+        there exercises --write) and only this assertion would catch it.
+        """
+        self.lay_left(include_coverage=False)
+        self.assertOutcome(
+            run_join(self.datasets, "--write"),
+            EXIT_OK,
+            "coverage written: rows 3  matched 2",
+            "wrote measured coverage for 1 declared join(s) into 1 descriptor(s)",
+        )
+        self.assertEqual(self.read_left_coverage(), {"rows": 3, "matched": 2})
+
+    def test_write_overwrites_a_stale_declared_value(self) -> None:
+        """--write does not validate what was there; it replaces it, right or wrong."""
+        self.lay_left(coverage={"rows": 999, "matched": 999})
+        self.assertOutcome(run_join(self.datasets, "--write"), EXIT_OK, "coverage written: rows 3  matched 2")
+        self.assertEqual(self.read_left_coverage(), {"rows": 3, "matched": 2})
+
+    def test_write_still_refuses_an_unimplemented_declaration(self) -> None:
+        """Coverage becomes optional in --write; the rest of the declaration is not."""
+        self.lay_left(include_coverage=False, compareAs="fuzzy")
+        self.assertOutcome(
+            run_join(self.datasets, "--write"),
+            EXIT_ERROR,
+            "compareAs 'fuzzy' is not a comparison this script performs",
+        )
+
+    def test_write_reads_a_local_override_instead_of_the_declared_path(self) -> None:
+        """The point of `--local`: a package's own `path` still names the OLD object.
+
+        `right`'s declared `path` is the package built in setUp (2 of 3 rows match).
+        `--local right=<alt>` points the SAME declaration at a second copy with a
+        fourth id (777 -> 778, so the miss becomes a hit) — the written coverage
+        must reflect the override, not the declared path, or `--local` does nothing.
+        """
+        self.lay_left(include_coverage=False)
+        alt = self.datasets / "right_alt.parquet"
+        write_parquet(alt, "SELECT * FROM (VALUES (101), (102), (999)) t(id)")
+        self.assertOutcome(
+            run_join(self.datasets, "--write", "--local", f"right={alt}"),
+            EXIT_OK,
+            "coverage written: rows 3  matched 3",
+        )
+        self.assertEqual(self.read_left_coverage(), {"rows": 3, "matched": 3})
+
+    def test_malformed_local_override_refuses(self) -> None:
+        self.lay_left(include_coverage=False)
+        self.assertOutcome(
+            run_join(self.datasets, "--write", "--local", "right-no-equals-sign"),
+            EXIT_ERROR,
+            "--local expects NAME=PATH",
+        )
 
 
 if __name__ == "__main__":
