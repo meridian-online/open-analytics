@@ -1,6 +1,6 @@
 {
   "$schema": "https://datapackage.org/profiles/2.0/datapackage.json",
-  "created": "2026-07-29T07:26:58Z",
+  "created": "2026-08-13T04:19:46Z",
   "description": "The 2022 North American Industry Classification System — the standard taxonomy for classifying business establishments by industry, from broad sectors down to specific national industries.",
   "homepage": "https://meridian.online/datasets/naics",
   "licenses": [
@@ -15,7 +15,7 @@
     {
       "bytes": 345758,
       "format": "parquet",
-      "hash": "sha256:206f4f3c35748d273187f2928f74a8fdc1a3f2a351f1f4f53190b5b48d0e5c13",
+      "hash": "sha256:59da5978087ac7ee053b43a3191347c947cebc4e4b975d6cb89b55006be3a7d2",
       "mediatype": "application/vnd.apache.parquet",
       "name": "naics",
       "path": "https://openlake.meridian.online/naics.parquet",
@@ -33,14 +33,14 @@
           },
           {
             "constraints": {
-              "maxLength": 200,
-              "minLength": 2
+              "maxLength": 65536,
+              "minLength": 1
             },
             "description": "Official Census title for the code, with the trilateral-comparable superscript 'T' marker stripped.",
             "name": "title",
             "type": "string",
             "x-finetype-confidence": 0.6779,
-            "x-finetype-label": "representation.text.entity_name"
+            "x-finetype-label": "representation.text.plain_text"
           },
           {
             "constraints": {
