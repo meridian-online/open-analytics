@@ -82,7 +82,7 @@ steps:
   # rather than checked in as a literal, because a literal records what someone believed
   # when they typed it — which is the claim that cannot be trusted here.
   - name: stamp_version
-    command: "python3 scripts/stamp_finetype_version.py --descriptor datapackage.json"
+    command: "python3 ../../scripts/stamp_finetype_version.py --descriptor datapackage.json"
 
   # ── Validate: GATE the built Parquet against the self-derived finetype contract ──
   # DEFERRED — NO validate step yet, on purpose. The finetype_validate@1 gate needs a
