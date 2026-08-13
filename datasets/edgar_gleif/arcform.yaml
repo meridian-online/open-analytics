@@ -2,8 +2,12 @@
 # `crosswalk.edgar_gleif` Dataset is made. `arc run` executes this manifest; one Run
 # → one Dataset version (the freshness lever). See ./README.md (the Protocol primitive).
 #
-# ALL-CONFIG. Every step is a first-class `sql:` model or a typed `op:` operator (the
-# arcform catalog) — there are NO opaque `command:`/`sh -c` steps. The retired
+# MOSTLY-CONFIG. Nearly every step is a first-class `sql:` model or a typed `op:`
+# operator (the arcform catalog). Two are not, and they are named here because this
+# comment previously claimed there were none, which stopped being true the moment the
+# first one landed: `derive_join_coverage` and `stamp_version` are `command:` steps.
+# Both are candidates for promotion to operators; until then, a reader counting on
+# "no opaque steps" would be wrong. The retired
 # scripts/*.sh + scripts/describe.py did fetch/unzip/paginate/describe as bash; those
 # are now the http_fetch / archive_extract / gleif_ra_fetch / datapackage_describe /
 # parquet_export operators. This manifest REFERENCES them by name@version; their code
@@ -242,8 +246,21 @@ steps:
   # against the published objects instead and fails if the committed `coverage`
   # disagrees (job `joins-run-against-their-data` in
   # .github/workflows/descriptors.yml, which runs on every push/PR and weekly).
+  # INTERPRETER: `uv run --with duckdb==1.5.5`, not bare `python3`. This step needs
+  # the duckdb Python package; the only other `command:` step here
+  # (stamp_finetype_version.py) is stdlib-only, so bare `python3` had always been
+  # enough and this was the first step to need anything installed. It was verified
+  # in a venv and in CI — which pip-installs duckdb per job — and both hid that
+  # `arc run` invokes whatever `python3` is on PATH. On a machine whose `python3`
+  # has no duckdb it failed three retries with "the duckdb Python package is
+  # required", mid-republish, at step 21 of 23.
+  #
+  # The version is pinned to DUCKDB_VERSION in .github/workflows/descriptors.yml —
+  # keep the two in step, or this step measures with a different engine than the
+  # check that verifies it. uv resolves the interpreter and the package itself, so
+  # this needs no venv to exist and no global install.
   - name: derive_join_coverage
-    command: "python3 scripts/crosswalk_join.py --write --package edgar_gleif --datasets-dir ../../datasets --local edgar_gleif=build/edgar_gleif.parquet --local edgar=build/edgar.parquet --local gleif=build/gleif.parquet"
+    command: "uv run --python 3.12 --with duckdb==1.5.5 python scripts/crosswalk_join.py --write --package edgar_gleif --datasets-dir ../../datasets --local edgar_gleif=build/edgar_gleif.parquet --local edgar=build/edgar.parquet --local gleif=build/gleif.parquet"
 
   # ── Stamp: record WHICH finetype produced the descriptor above ─────────────────
   # datapackage_describe emits the inferred schema and not the identity of the binary
