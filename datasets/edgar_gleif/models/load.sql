@@ -2,6 +2,16 @@
 -- Run by the `load` step (depends on all fetches). CIK representations differ across
 -- sources (EDGAR unpadded, GLEIF zero-padded) — normalise all to unpadded.
 
+-- DuckDB deprecated the single-arrow lambda (`c -> …`) and removes it in its next
+-- release. Both replacements it offers — `lambda c: …` and the `[… FOR c IN …]`
+-- comprehension — are rejected by the engine's SQL parser, which degrades this whole
+-- model to an OPAQUE step: no assets, no lineage, and tier reported clean while load
+-- rebuilds beneath it. Measured against the engine's vendored parser, both forms and
+-- both arities. So hold the arrow explicitly until the parser accepts the new syntax.
+-- This statement is what keeps the expression below legal; the comment at the macro
+-- says why the expression is shaped the way it is.
+SET lambda_syntax='ENABLE_SINGLE_ARROW';
+
 -- ISO 7064 MOD 97-10 — the arithmetic ISO 17442 defines over an LEI's twenty
 -- characters, of which the last two are the check digits. Expand each character to its
 -- base-36 value and fold left, so nothing overflows a fixed-width integer: a digit
@@ -23,7 +33,8 @@
 -- to the graph. This model declares no `produces:`, so its whole output would vanish
 -- from the lineage, models/tier.sql would stop depending on it, and an incremental run
 -- would skip tier as clean while load rebuilt beneath it — the stale-Parquet hazard
--- arcform.yaml names in its own comments. Keep this expression parseable.
+-- arcform.yaml names in its own comments. Keep this expression parseable — and keep the
+-- `SET lambda_syntax` at the top of this file, which is what keeps the arrow legal.
 CREATE OR REPLACE MACRO lei_mod97(s) AS (
   list_reduce(
     list_prepend(0,
