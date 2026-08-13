@@ -22,14 +22,13 @@ nothing about the file says which. On 2026-08-12 that happened for real — a Ru
 rebuilt `edgar_gleif` to 206,993 rows, failed at the step between the export and
 the describe, and left the descriptor still describing the published 207,099.
 
-So `publish` will not upload bytes it cannot trace. Before the uploader runs it
-reads the B4 Run records `arc run` leaves under the Protocol's
-`build/.arcform/runs/`, and requires one Run to have produced BOTH the bytes at
-`--file` and the descriptor being published, and to have finished. `provenance`
-is that same check on its own, for a publish pipeline that does its own uploading.
+Before the uploader runs it reads the B4 Run records `arc run` leaves under the
+Protocol's `build/.arcform/runs/`, and requires one Run to have produced BOTH the
+bytes at `--file` and the descriptor being published, and to have finished.
+`provenance` is that same check on its own, for a publish pipeline that does its
+own uploading.
 
-Neither of those two paths is where the caller says they are, and assuming they
-were made every publish in the pipeline exit 1 for a day. The pipeline hands
+Neither of those two paths is where the caller says they are. The pipeline hands
 `--file` a WORK COPY of the artefact — it stages the Protocol's terminal Parquet
 in a scratch directory and uploads from there — so a Run's asset is matched by
 CONTENT DIGEST, never by path. And it hands `--datasets-dir` a scratch copy of

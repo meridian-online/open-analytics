@@ -21,7 +21,13 @@ a copy of its logic. Two of them are load-bearing against a guard that merely
 distrusts every skip: `test_a_clean_skip_of_describe_still_publishes` and
 `test_an_older_finished_run_licenses_bytes_a_later_one_only_reproduced` both go
 red on a guard that refuses whenever `describe` did not execute, which would
-make every re-run of an unchanged Protocol unpublishable.
+make every re-run of an unchanged Protocol unpublishable. Every fixture above is
+this module's own model of the b4/1 shape, which cannot catch the model itself
+drifting from what `arc run` writes; `test_publish_refuses_against_arcforms_real_run_record`
+and `test_publish_accepts_arcforms_real_run_record_once_describe_completes` run against
+a trimmed copy of the actual 2026-08-12 record instead (`scripts/testdata/`), so a change
+to arcform's real encoding reddens something here even though `build/` is gitignored and
+none of this repository's own Run records are committed.
 
 No case reaches the network. The store is bound to 127.0.0.1 on an ephemeral
 port, so the suite is offline and cannot be flaky for a reason that has nothing
@@ -50,6 +56,11 @@ from pathlib import Path
 from typing import Any
 
 PUBLISHER = Path(__file__).with_name("publish_dataset.py")
+
+# A trimmed copy of arcform's own b4/1 Run record for open-analytics's edgar_gleif
+# Protocol — see the file's own "_fixture" header for what was trimmed, what was
+# reconstructed, and why. Read by real_run_fixture() below.
+REAL_RUN_FIXTURE = Path(__file__).parent / "testdata" / "edgar_gleif-20260812-033802-202e6358.run.json"
 
 sys.path.insert(0, str(Path(__file__).parent))
 from publish_dataset import CHUNK  # noqa: E402 - the size of one read, so a case can span several
@@ -329,6 +340,36 @@ class PublishSeamSelfTest(unittest.TestCase):
         )
         return path
 
+    def real_run_fixture(self, artefact: Path, descriptor: Path, *, describe_reached: bool) -> str:
+        """A trimmed copy of arcform's actual b4/1 record, patched for this artefact/descriptor.
+
+        Loads REAL_RUN_FIXTURE — the real edgar_gleif Run record from the 2026-08-12
+        incident — and patches only what a fixture legitimately must: the two
+        `content_hash` placeholders (there is no reason to ship the real 10MB Parquet as
+        a test fixture, and the guard matches by content, not by path, so any bytes do).
+
+        `describe_reached=True` additionally applies the one edit the PR that added this
+        guard proved by hand, against the real bytes, flips the verdict: describe's status
+        and the run outcome, from the real REFUSED shape to the real exit-0 one. Every
+        other field — the b4/1 contract version, the skipped-with-null-skip_reason
+        encoding, the full real step and asset shape — is untouched, so a change to how
+        arcform writes any of them reddens this fixture along with the real Run it copies.
+        """
+        document = json.loads(REAL_RUN_FIXTURE.read_text(encoding="utf-8"))
+        for asset in document["assets"]:
+            if asset["path"] == "build/edgar_gleif.parquet":
+                asset["content_hash"] = sha256_hex(artefact.read_bytes())
+                asset["bytes"] = artefact.stat().st_size
+            elif asset["path"] == "datapackage.json":
+                asset["content_hash"] = sha256_hex(descriptor.read_bytes())
+                asset["bytes"] = descriptor.stat().st_size
+        if describe_reached:
+            document["run"]["outcome"] = "success"
+            for step in document["steps"]:
+                if step["name"] == "describe":
+                    step["status"] = dict(RAN)
+        return json.dumps(document, indent=2) + "\n"
+
     def publishable(self, body: bytes, *, slug: str = "widgets", name: str = "widgets.parquet", **record: Any) -> Path:
         """An artefact AND the Run record that says a finished Run produced it.
 
@@ -554,9 +595,11 @@ class PublishSeamSelfTest(unittest.TestCase):
 
     # ------------------------------- the descriptor came out of the same Run
 
-    def assertNothingReachedTheEndpoint(self, descriptor: Path, before: str) -> None:  # noqa: N802
+    def assertNothingReachedTheEndpoint(  # noqa: N802
+        self, descriptor: Path, before: str, name: str = "widgets.parquet"
+    ) -> None:
         """A refusal before the upload: the object never moved and nothing was declared."""
-        self.assertIsNone(self.store.get("widgets.parquet"), "the artefact was uploaded anyway")
+        self.assertIsNone(self.store.get(name), "the artefact was uploaded anyway")
         self.assertEqual(descriptor.read_text(encoding="utf-8"), before, "the descriptor was rewritten anyway")
 
     def test_publish_refuses_when_the_run_never_reached_describe(self) -> None:
@@ -576,6 +619,49 @@ class PublishSeamSelfTest(unittest.TestCase):
         result = self.publish(artefact)
         self.assertOutcome(result, EXIT_DISAGREEMENT, "REFUSED", "never got to 'describe'", "never reached")
         self.assertNothingReachedTheEndpoint(descriptor, before)
+
+    def test_publish_refuses_against_arcforms_real_run_record(self) -> None:
+        """The case above again, but the record is arcform's own bytes, not this module's idea of them.
+
+        Every other case in this suite builds its Run record from write_run_record()'s own
+        model of the b4/1 shape, which agrees with itself by construction — it cannot catch
+        this module drifting from what `arc run` actually writes. REAL_RUN_FIXTURE is a
+        trimmed copy of the real record from the 2026-08-12 incident (see its own header),
+        exercised here exactly as `provenance` was exercised against the real files in PR
+        #17's body: REFUSED, for the same reason.
+        """
+        descriptor = self.write_dataset(slug="edgar_gleif")
+        before = descriptor.read_text(encoding="utf-8")
+        artefact = self.artefact(
+            b"PAR1" + b"a small stand-in for the real 10MB Parquet" * 5,
+            name="edgar_gleif.parquet",
+            slug="edgar_gleif",
+        )
+        raw = self.real_run_fixture(artefact, descriptor, describe_reached=False)
+        self.write_run_record(artefact, slug="edgar_gleif", run_id="20260812-033802-202e6358", raw=raw)
+        result = self.publish(artefact, slug="edgar_gleif")
+        self.assertOutcome(result, EXIT_DISAGREEMENT, "REFUSED", "never got to 'describe'", "never reached")
+        self.assertNothingReachedTheEndpoint(descriptor, before, name="edgar_gleif.parquet")
+
+    def test_publish_accepts_arcforms_real_run_record_once_describe_completes(self) -> None:
+        """The same real record, with only describe's status and the run outcome completed.
+
+        This is the discrimination the module docstring claims: not "refuse every skip",
+        but "refuse a skip that means never reached". The two records here differ in
+        exactly the two fields PR #17's body flipped by hand against the real bytes to get
+        the real exit 0 — see real_run_fixture().
+        """
+        descriptor = self.write_dataset(slug="edgar_gleif")
+        artefact = self.artefact(
+            b"PAR1" + b"a small stand-in for the real 10MB Parquet" * 5,
+            name="edgar_gleif.parquet",
+            slug="edgar_gleif",
+        )
+        raw = self.real_run_fixture(artefact, descriptor, describe_reached=True)
+        self.write_run_record(artefact, slug="edgar_gleif", run_id="20260812-033802-202e6358", raw=raw)
+        result = self.publish(artefact, slug="edgar_gleif")
+        self.assertOutcome(result, EXIT_OK)
+        self.assertDeclaresWhatIsServed(descriptor, name="edgar_gleif.parquet")
 
     def test_a_clean_skip_of_describe_still_publishes(self) -> None:
         """A re-run of an unchanged Protocol skips describe WITH a reason, and is fine.
