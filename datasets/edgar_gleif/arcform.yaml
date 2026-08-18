@@ -219,12 +219,22 @@ steps:
   # and lost nothing to the identical fault the same afternoon. Describing what was
   # built does not depend on the gate's verdict; publishing does, and publishing is
   # downstream of both.
+  # A `tool:` precondition gates this on the finetype identity that last produced the
+  # descriptor, recorded in build/.arcform/tools.json rather than in the descriptor
+  # itself. Same reported version as last time this step ran = skip (precondition_tool);
+  # any difference = run; no finetype resolvable on PATH = halt, naming the step and
+  # what the lookup found — never a silent skip. Replaces the `command:` interim this
+  # card's design used before arcform gained the declarative kind (arcform#50, 5bb81ec).
   - name: describe
     op: datapackage_describe@1
     with:
       parquet: build/edgar_gleif.parquet
       overrides: descriptor.overrides.json
       out: datapackage.json
+    preconditions:
+      - tool:
+          name: finetype
+          version: "$ARC_TOOL --version"
 
   # ── Derive: measure x-joins coverage from THIS build, not a checked-in literal ──
   # descriptor.overrides.json declares WHAT each join is (columns, filter,
