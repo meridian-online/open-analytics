@@ -25,8 +25,9 @@ Each Protocol's last step stamps the descriptor into the Parquet it just built,
 but every object on the endpoint was published before that step existed, so the
 query below returns nothing today. It returns the descriptor for a dataset
 rebuilt and republished from now on — verified for all four by stamping the
-bytes the endpoint currently serves, which is the only check available while no
-workflow here runs `arc`. `check_descriptors.py` prints how many of the
+bytes the endpoint currently serves. The stamp's own behaviour is covered on
+every pull request; what nothing here covers is the manifest layer, because no
+workflow runs `arc`. `check_descriptors.py` prints how many of the
 published resources carry their own description on every run, so this paragraph
 stops being true visibly rather than silently.
 

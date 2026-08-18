@@ -248,10 +248,20 @@ def read_self_description(con, target: str) -> str | None:
 class Layout:
     """How a Parquet file was written: rows per row group, and the page codec.
 
-    Both are read off the file about to be rewritten, never assumed. DuckDB's COPY
-    defaults are 122,880 rows and no codec of its own choosing, and a rewrite that
-    took those defaults would re-group and re-compress every page of any file
-    written with anything else — which is not a footer change, and is refused.
+    Both are read off the file about to be rewritten rather than named here, with
+    one exception the code states where it happens: a file with no column chunks
+    has no codec to read, so the rewrite falls back to zstd. A rewrite that took
+    DuckDB's COPY defaults instead — 122,880 rows, and SNAPPY when no COMPRESSION
+    is given — would re-group and re-compress every page of any file written with
+    anything else, which is not a footer change and is refused.
+
+    `max()` over the row groups is right for a file DuckDB wrote, and only for
+    one. DuckDB rounds a declared size UP to a multiple of its 2048-row vector
+    size, so the size it writes is already a fixed point and feeding it back is
+    idempotent. A Parquet from elsewhere with a non-uniform layout has no single
+    ROW_GROUP_SIZE that reproduces it, so this refuses with the data-pages
+    message rather than stamping it. That is the safe direction and it will still
+    look like a bug to whoever meets it.
     """
 
     row_group_size: int | None
@@ -293,7 +303,7 @@ def stamp_parquet(con, source: Path, destination: Path, text: str) -> None:
     literal = text.replace("'", "''")
     key = DESCRIPTOR_KEY.replace("'", "''")
     layout = source_layout(con, source)
-    options = [f"FORMAT parquet", f"COMPRESSION {layout.compression}"]
+    options = ["FORMAT parquet", f"COMPRESSION {layout.compression}"]
     if layout.row_group_size:
         options.append(f"ROW_GROUP_SIZE {layout.row_group_size}")
     options.append(f"KV_METADATA {{'{key}': '{literal}'}}")

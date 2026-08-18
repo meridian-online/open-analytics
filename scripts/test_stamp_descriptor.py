@@ -146,7 +146,7 @@ def build_dataset(
     root.mkdir(parents=True, exist_ok=True)
     parquet = root / "widgets.parquet"
     con = duckdb.connect()
-    options = [f"FORMAT parquet", f"COMPRESSION {compression}"]
+    options = ["FORMAT parquet", f"COMPRESSION {compression}"]
     if row_group_size is not None:
         options.append(f"ROW_GROUP_SIZE {row_group_size}")
     # `md5(i)` rather than a counter: a compressible column makes a small file, and a
@@ -304,9 +304,12 @@ class StampDescriptorSelfTest(unittest.TestCase):
     def test_stamping_carries_the_codec_the_file_was_written_with(self) -> None:
         """The same latent shape one field over. Every export declares zstd today, so
         this does not bite yet; it is here so that stops being load-bearing."""
-        descriptor, parquet = build_dataset(self.root, rows=20_000, compression="snappy")
+        # gzip on purpose: neither the codec this used to hardcode (zstd) nor the one
+        # DuckDB writes when COMPRESSION is omitted (snappy), so this test reddens on
+        # its own rather than leaning on the seven others that also break.
+        descriptor, parquet = build_dataset(self.root, rows=20_000, compression="gzip")
         _, codecs = parquet_layout(parquet)
-        self.assertEqual(codecs, {"SNAPPY"}, "the fixture is not testing a non-default codec")
+        self.assertEqual(codecs, {"GZIP"}, "the fixture fell back to a codec this test cannot distinguish")
         before = data_section(parquet)
 
         self.assertOutcome(
@@ -314,7 +317,7 @@ class StampDescriptorSelfTest(unittest.TestCase):
         )
 
         self.assertEqual(data_section(parquet), before, "the stamp re-compressed the data pages")
-        self.assertEqual(parquet_layout(parquet)[1], {"SNAPPY"}, "the stamp changed the codec")
+        self.assertEqual(parquet_layout(parquet)[1], {"GZIP"}, "the stamp changed the codec")
 
     def test_a_stamp_that_moved_the_data_is_refused(self) -> None:
         """The guard above is only worth having if it fires. This is it firing."""
