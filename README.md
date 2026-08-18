@@ -23,10 +23,12 @@ SELECT * FROM read_parquet('https://openlake.meridian.online/naics.parquet');
 **Not live yet — the mechanism is in place and no published object carries it.**
 Each Protocol's last step stamps the descriptor into the Parquet it just built,
 but every object on the endpoint was published before that step existed, so the
-query below returns nothing today. It returns the descriptor for any dataset
-rebuilt and republished from now on. `check_descriptors.py` prints how many of
-the published resources carry their own description on every run, so this
-paragraph stops being true visibly rather than silently.
+query below returns nothing today. It returns the descriptor for a dataset
+rebuilt and republished from now on — verified for all four by stamping the
+bytes the endpoint currently serves, which is the only check available while no
+workflow here runs `arc`. `check_descriptors.py` prints how many of the
+published resources carry their own description on every run, so this paragraph
+stops being true visibly rather than silently.
 
 A stamped dataset carries its description **inside the file**, in the Parquet
 footer, so a URL is the only thing you need to know about it — no second file, no

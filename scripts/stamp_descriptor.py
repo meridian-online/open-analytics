@@ -18,10 +18,18 @@ Two properties are load-bearing and are asserted rather than assumed.
 
 **The data pages do not move.** A stamp rewrites the file through DuckDB, so the
 worry is that it re-encodes the rows and the `order_by` clauses that make an
-export byte-reproducible stop meaning anything. They do not: everything before
-the footer is compared byte for byte between the input and the stamped output,
-and a stamp that moved a single data byte is refused with the original left in
-place.
+export byte-reproducible stop meaning anything. Everything before the footer is
+compared byte for byte between the input and the stamped output, and a stamp that
+moved a single data byte is refused with the original left in place.
+
+The pages CAN move, which is why that comparison is a guard and not a formality.
+The rewrite has to reproduce the layout the file was written with, and the layout
+is not in this script — it is in whatever wrote the file. `edgar_gleif` exports at
+`row_group_size: 50000`, which DuckDB rounds to 51,200; a rewrite at DuckDB's
+default 122,880 re-groups every page and the guard refuses the whole run. So the
+layout is READ OFF THE SOURCE FILE — row-group size and codec both — rather than
+named here. Anything this script hardcodes about the shape of a file it did not
+write is a latent version of that failure.
 
 **The embedded copy carries no `bytes` and no `hash`.** A file cannot state its
 own size or its own digest, because stating them changes them — write the size in
@@ -55,6 +63,7 @@ import json
 import os
 import sys
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -235,14 +244,60 @@ def read_self_description(con, target: str) -> str | None:
     return rows[0][0]
 
 
+@dataclass(frozen=True)
+class Layout:
+    """How a Parquet file was written: rows per row group, and the page codec.
+
+    Both are read off the file about to be rewritten, never assumed. DuckDB's COPY
+    defaults are 122,880 rows and no codec of its own choosing, and a rewrite that
+    took those defaults would re-group and re-compress every page of any file
+    written with anything else — which is not a footer change, and is refused.
+    """
+
+    row_group_size: int | None
+    compression: str
+
+
+def source_layout(con, source: Path) -> Layout:
+    """Read the row-group size and codec out of `source`'s own footer.
+
+    `max(row_group_num_rows)` rather than the first row group's: the last one is a
+    remainder, and DuckDB rounds a declared size up to a multiple of its vector
+    size (a declared 50,000 is written as 51,200), so the widest group is the size
+    that was actually in force.
+    """
+    try:
+        row = con.execute(
+            "SELECT max(row_group_num_rows), list(DISTINCT compression) FROM parquet_metadata(?)",
+            [str(source)],
+        ).fetchone()
+    except Exception as exc:
+        raise StampError(f"cannot read the layout of {source}: {exc}") from exc
+
+    row_group_size, codecs = (row or (None, None))
+    codecs = sorted(codecs or [])
+    if len(codecs) > 1:
+        raise StampError(
+            f"{source} mixes {len(codecs)} Parquet codecs ({', '.join(codecs)}). One COPY writes "
+            "one codec, so this file was not written by one, and rewriting it would re-compress "
+            "pages this step must leave alone."
+        )
+    # An empty file has no column chunks and so no observable codec. It also has no
+    # data pages to move, so the choice cannot change the bytes being protected.
+    compression = codecs[0].lower() if codecs else "zstd"
+    return Layout(int(row_group_size) if row_group_size else None, compression)
+
+
 def stamp_parquet(con, source: Path, destination: Path, text: str) -> None:
     """Write `source` to `destination` with `text` in the footer, data untouched."""
     literal = text.replace("'", "''")
     key = DESCRIPTOR_KEY.replace("'", "''")
-    sql = (
-        f"COPY (SELECT * FROM read_parquet(?)) TO '{destination}' "
-        f"(FORMAT parquet, COMPRESSION zstd, KV_METADATA {{'{key}': '{literal}'}})"
-    )
+    layout = source_layout(con, source)
+    options = [f"FORMAT parquet", f"COMPRESSION {layout.compression}"]
+    if layout.row_group_size:
+        options.append(f"ROW_GROUP_SIZE {layout.row_group_size}")
+    options.append(f"KV_METADATA {{'{key}': '{literal}'}}")
+    sql = f"COPY (SELECT * FROM read_parquet(?)) TO '{destination}' ({', '.join(options)})"
     try:
         con.execute(sql, [str(source)])
     except Exception as exc:

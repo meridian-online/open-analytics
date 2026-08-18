@@ -8,7 +8,10 @@ one is a claim a reader has no way to check by looking at the code:
      self-referential keys removed, and nothing else;
   2. stamping moves the footer and NOT the data — the `order_by` clauses in every
      Protocol exist to make an export byte-reproducible, and a stamp that re-encoded
-     the rows would quietly retire that guarantee;
+     the rows would quietly retire that guarantee. The two cases that matter here are
+     the ones where the file was NOT written with DuckDB's defaults: `edgar_gleif`
+     exports at `row_group_size: 50000`, and a rewrite at the default 122,880 regroups
+     every page;
   3. the descriptor's `bytes` and `hash` are re-measured off the stamped file, since
      the figures `describe` took off the unstamped build are wrong the moment the
      stamp lands;
@@ -128,18 +131,29 @@ class ObjectServer(TCPServer):
 # ─────────────────────────────────────────────────────────────────── fixtures
 
 
-def build_dataset(root: Path, *, rows: int = 4) -> tuple[Path, Path]:
-    """A scratch dataset: a real Parquet and the descriptor that describes it."""
+def build_dataset(
+    root: Path, *, rows: int = 4, row_group_size: int | None = None, compression: str = "zstd"
+) -> tuple[Path, Path]:
+    """A scratch dataset: a real Parquet and the descriptor that describes it.
+
+    `row_group_size` and `compression` exist because the Protocols do not all take
+    DuckDB's defaults — `edgar_gleif` exports at `row_group_size: 50000` — and a
+    fixture that only ever took the defaults could not tell a stamp that carries a
+    file's layout from one that imposes its own.
+    """
     import duckdb
 
     root.mkdir(parents=True, exist_ok=True)
     parquet = root / "widgets.parquet"
     con = duckdb.connect()
+    options = [f"FORMAT parquet", f"COMPRESSION {compression}"]
+    if row_group_size is not None:
+        options.append(f"ROW_GROUP_SIZE {row_group_size}")
     # `md5(i)` rather than a counter: a compressible column makes a small file, and a
     # small file cannot show a range read apart from a download.
     con.execute(
         f"COPY (SELECT printf('%08d', i) AS code, md5(i::VARCHAR) AS label FROM range({rows}) t(i) "
-        f"ORDER BY code) TO '{parquet}' (FORMAT parquet, COMPRESSION zstd)"
+        f"ORDER BY code) TO '{parquet}' ({', '.join(options)})"
     )
     con.close()
     document = {
@@ -168,6 +182,25 @@ def build_dataset(root: Path, *, rows: int = 4) -> tuple[Path, Path]:
     descriptor = root / "datapackage.json"
     descriptor.write_text(json.dumps(document, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     return descriptor, parquet
+
+
+# DuckDB's own default, and the number a rewrite silently imposes on a file written
+# with anything else. Named here so a case can assert its fixture is not sitting on it.
+DUCKDB_DEFAULT_ROW_GROUP_SIZE = 122_880
+
+
+def parquet_layout(path: Path) -> tuple[list[int], set[str]]:
+    """(rows per row group, in file order; the codecs in use) read off the footer."""
+    import duckdb
+
+    con = duckdb.connect()
+    rows = con.execute(
+        "SELECT DISTINCT row_group_id, row_group_num_rows, compression "
+        "FROM parquet_metadata(?) ORDER BY row_group_id",
+        [str(path)],
+    ).fetchall()
+    con.close()
+    return [num_rows for _, num_rows, _ in rows], {codec for _, _, codec in rows}
 
 
 def data_section(path: Path) -> bytes:
@@ -241,6 +274,47 @@ class StampDescriptorSelfTest(unittest.TestCase):
         )
         self.assertEqual(before, after, "the stamp moved a data byte")
         self.assertGreater(len(before), 100_000, "the fixture is too small to be evidence")
+
+    def test_stamping_carries_the_row_group_size_the_file_was_written_with(self) -> None:
+        """The case this suite did not have, and `edgar_gleif` does.
+
+        Its Protocol exports at `row_group_size: 50000`, which DuckDB writes as 51,200.
+        A rewrite that took DuckDB's default 122,880 re-groups every page, the guard
+        below refuses it, and `arc run` ends in a failed step — on the one dataset the
+        whole crosswalk story rests on. Nothing in CI runs `arc`, so the workflow would
+        have stayed green over a dead step.
+        """
+        descriptor, parquet = build_dataset(self.root, rows=160_000, row_group_size=50_000)
+        sizes, codecs = parquet_layout(parquet)
+        self.assertNotEqual(
+            sizes[0],
+            DUCKDB_DEFAULT_ROW_GROUP_SIZE,
+            "the fixture took DuckDB's default row-group size, so it exercises nothing",
+        )
+        self.assertGreater(len(sizes), 1, "one row group cannot show a re-grouping")
+        before = data_section(parquet)
+
+        self.assertOutcome(
+            run_cli("stamp", "--descriptor", str(descriptor), "--parquet", str(parquet)), EXIT_OK
+        )
+
+        self.assertEqual(data_section(parquet), before, "the stamp re-grouped the data pages")
+        self.assertEqual(parquet_layout(parquet), (sizes, codecs), "the stamped file has a new layout")
+
+    def test_stamping_carries_the_codec_the_file_was_written_with(self) -> None:
+        """The same latent shape one field over. Every export declares zstd today, so
+        this does not bite yet; it is here so that stops being load-bearing."""
+        descriptor, parquet = build_dataset(self.root, rows=20_000, compression="snappy")
+        _, codecs = parquet_layout(parquet)
+        self.assertEqual(codecs, {"SNAPPY"}, "the fixture is not testing a non-default codec")
+        before = data_section(parquet)
+
+        self.assertOutcome(
+            run_cli("stamp", "--descriptor", str(descriptor), "--parquet", str(parquet)), EXIT_OK
+        )
+
+        self.assertEqual(data_section(parquet), before, "the stamp re-compressed the data pages")
+        self.assertEqual(parquet_layout(parquet)[1], {"SNAPPY"}, "the stamp changed the codec")
 
     def test_a_stamp_that_moved_the_data_is_refused(self) -> None:
         """The guard above is only worth having if it fires. This is it firing."""

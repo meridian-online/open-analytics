@@ -327,6 +327,14 @@ steps:
   # Everything before the footer is compared byte for byte, so the order_by above still
   # decides the data bytes and a stamp that moved one is refused with the original left
   # in place. Re-running the step is a no-op to the byte.
+  #
+  # THIS IS THE ONLY MANIFEST THAT DECLARES A row_group_size, and it is the reason the
+  # stamp reads a file's layout off the file instead of taking DuckDB's defaults. The
+  # export above writes 51,200-row groups (DuckDB's rounding of the declared 50,000); a
+  # rewrite at the default 122,880 re-groups every page, the byte comparison refuses it,
+  # and this step — the last one — fails the whole run. It did, before the stamp carried
+  # the layout across. Nothing in .github/workflows/ runs `arc`, so CI stayed green over
+  # it; verified instead against the published edgar_gleif.parquet itself.
   - name: stamp_descriptor
     command: "python3 ../../scripts/stamp_descriptor.py stamp --descriptor datapackage.json --parquet build/edgar_gleif.parquet"
 
