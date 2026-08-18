@@ -128,12 +128,19 @@ def main() -> int:
             return EXIT_ERROR
 
         with ObjectServer(parquet.read_bytes()) as server:
+            # Broad on purpose. Anything at all raised while asking the object is the
+            # failure this script exists to catch, and a traceback would bury the one
+            # line that says which host the read went looking for.
             try:
                 con = sd.connect()
                 carried = sd.read_self_description(con, server.url)
-            except sd.StampError as exc:
-                print(f"blocked-host demonstration: {exc}", file=sys.stderr)
-                return EXIT_ERROR
+            except Exception as exc:  # noqa: BLE001
+                print(
+                    f"blocked-host demonstration: FAILED — asking {server.url} raised "
+                    f"{type(exc).__name__}: {exc}",
+                    file=sys.stderr,
+                )
+                return EXIT_DISAGREEMENT
             requests = list(server.requests)
 
     if carried is None:
