@@ -20,6 +20,17 @@
 # `declared joins run` then runs the real declarations against the published
 # objects. Same order and same reason as the pair above.
 #
+# `stamp-self-test` and `description-needs-no-repository` cover the surface a consumer
+# actually reads. A published Parquet carries its own descriptor in its footer, so
+# someone holding an object URL can ask the file what it is instead of finding a second
+# file in a repository they have no reason to know about. The first proves the stamp
+# lands, survives, leaves every data byte where it was, and is refused when it does not.
+# The second is the claim that cannot be checked by reading code: it blackholes
+# `github.com` and `raw.githubusercontent.com` in `/etc/hosts`, watches the old path
+# (fetching `datapackage.json` out of the repository) stop working, and asserts the
+# object still answers. The script refuses to run — exit 2 — while a repository host is
+# still reachable, so a demonstration that quietly ran unblocked cannot pass.
+#
 # `publish-seam` covers the other direction — that a publish declares what it
 # uploaded, and that it uploads nothing a finished Run did not produce alongside the
 # descriptor on disk — against a scratch HTTP object store and scratch B4 Run records,
@@ -64,9 +75,46 @@ jobs:
       - name: scratch fixtures, exit status and message
         run: python scripts/test_check_descriptors.py
 
+  stamp-self-test:
+    name: an object can carry its own description
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: install duckdb
+        run: python -m pip install --disable-pip-version-check "duckdb==${DUCKDB_VERSION}"
+      - name: the stamp lands, the data does not move, the read asks for one URL
+        run: python scripts/test_stamp_descriptor.py
+
+  description-needs-no-repository:
+    name: the description comes back with the repository blocked
+    needs: stamp-self-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: install duckdb
+        run: python -m pip install --disable-pip-version-check "duckdb==${DUCKDB_VERSION}"
+      # Fetched BEFORE the blackhole and cached, so the demonstration below needs no
+      # host but the loopback object server. An extension downloaded mid-test would be
+      # a read outside the object URL, which is the thing being disproved.
+      - name: cache the httpfs extension while the network is whole
+        run: python -c "import duckdb; c = duckdb.connect(); c.execute('INSTALL httpfs'); c.execute('LOAD httpfs')"
+      # After checkout, necessarily: the checkout itself comes from the host being
+      # blocked. Everything the job still needs is already on disk.
+      - name: put the repository out of reach
+        run: |
+          echo "0.0.0.0 github.com raw.githubusercontent.com" | sudo tee -a /etc/hosts
+      - name: the old path dies and the object still answers
+        run: python scripts/test_self_description_needs_no_repository.py
+
   descriptors-match-their-data:
     name: descriptors match their data
-    needs: self-test
+    needs: [self-test, stamp-self-test]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

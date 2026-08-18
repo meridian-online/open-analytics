@@ -13,7 +13,10 @@ one is a claim a reader has no way to check by looking at the code:
      the figures `describe` took off the unstamped build are wrong the moment the
      stamp lands;
   4. reading the description costs one ranged request to the object's own URL and
-     touches nothing else — no sibling file, no repository, no registry.
+     touches nothing else — no sibling file, no repository, no registry;
+
+and one more that only matters because every Protocol runs the step on every run:
+stamping an already-stamped object changes neither the object nor the descriptor.
 
 Each case asserts a measurement rather than an intention. The last one runs against
 a real HTTP server that records every request it receives, so "touches nothing else"
@@ -256,6 +259,20 @@ class StampDescriptorSelfTest(unittest.TestCase):
         self.assertEqual(code, EXIT_ERROR)
         self.assertEqual(parquet.read_bytes(), original, "a refused stamp must leave the file alone")
         self.assertIs(sd.stamp_parquet, honest)
+
+    def test_stamping_twice_changes_nothing(self) -> None:
+        """Every Protocol runs this step on every run; a churning stamp would move
+        `bytes` and `hash` on runs where no datum did."""
+        descriptor, parquet = build_dataset(self.root)
+        self.assertOutcome(
+            run_cli("stamp", "--descriptor", str(descriptor), "--parquet", str(parquet)), EXIT_OK
+        )
+        once, once_descriptor = parquet.read_bytes(), descriptor.read_text(encoding="utf-8")
+        self.assertOutcome(
+            run_cli("stamp", "--descriptor", str(descriptor), "--parquet", str(parquet)), EXIT_OK
+        )
+        self.assertEqual(parquet.read_bytes(), once, "a second stamp moved the object")
+        self.assertEqual(descriptor.read_text(encoding="utf-8"), once_descriptor)
 
     # ────────────────────────────────────── 3. the declared size is re-measured
 
