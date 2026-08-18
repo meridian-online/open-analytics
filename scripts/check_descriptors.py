@@ -16,10 +16,20 @@ What it asserts, per resource:
                      evaluated over every row in one pass.
   4. bytes         — the declared `resources[].bytes` matches the size the server
                      (or the filesystem) reports.
+  5. self-description
+                   — when the Parquet carries its own descriptor in its footer (see
+                     `stamp_descriptor.py`), that copy is read back out of the file and
+                     held to the same rules: it must agree with this repository's copy
+                     apart from the two keys a file cannot state about itself, and its
+                     field set and types must agree with the columns actually present.
+                     An object that carries none is not a violation unless
+                     `--require-self-description` is passed — nothing publishes a
+                     stamped object yet, and a check that demanded one would refuse
+                     every file currently served.
 
 And per package:
 
-  5. foreignKeys   — each declared foreign key resolves to a real resource+field,
+  6. foreignKeys   — each declared foreign key resolves to a real resource+field,
                      in this package or a sibling one, of compatible declared type.
 
 Exit codes are distinct on purpose, because a status alone cannot tell a refusal
@@ -32,6 +42,13 @@ apart from a crash:
 
 Reading a remote resource needs DuckDB's httpfs extension, which is installed on
 demand; a local path needs no network at all.
+
+Why rule 5 exists at all: once an object carries its own description, that copy is
+what a consumer reads — they hold a URL, not this repository. A check that kept
+reading only the file in `datasets/` would go on passing while the surface people
+actually see drifted away from it, which is the same failure that let 14
+descriptor/data disagreements ship unnoticed. So the two copies are compared to each
+other as well as to the bytes.
 """
 
 from __future__ import annotations
@@ -46,6 +63,8 @@ import urllib.request
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Iterable
+
+from stamp_descriptor import DESCRIPTOR_KEY, SELF_REFERENTIAL, embedded_form, read_self_description
 
 EXIT_OK = 0
 EXIT_VIOLATIONS = 1
@@ -297,7 +316,14 @@ def check_constraints(
     return violations
 
 
-def check_resource(con, descriptor_path: Path, package: str, resource: dict[str, Any]) -> list[Violation]:
+def check_resource(
+    con,
+    descriptor_path: Path,
+    package: str,
+    document: dict[str, Any],
+    resource: dict[str, Any],
+    require_self_description: bool,
+) -> tuple[list[Violation], bool]:
     name = resource.get("name") or resource.get("path") or "<unnamed>"
     raw_path = resource.get("path")
     if not raw_path:
@@ -392,7 +418,230 @@ def check_resource(con, descriptor_path: Path, package: str, resource: dict[str,
                     f"descriptor declares {declared_bytes:,} bytes; the published file is {actual:,}",
                 )
             )
-    return violations
+
+    self_violations, self_described = check_self_description(
+        con, path, package, name, document, physical, require_self_description
+    )
+    violations.extend(self_violations)
+    return violations, self_described
+
+
+# How many structural differences between the two copies of a descriptor are worth
+# printing before the list stops being a diagnosis and starts being a diff. The count
+# is reported either way, so nothing is hidden by the cut-off.
+MAX_REPORTED_DIFFERENCES = 12
+
+
+def json_differences(expected: Any, actual: Any, pointer: str = "") -> list[str]:
+    """Every place two JSON documents disagree, as `<pointer>: expected … got …`.
+
+    Structural rather than textual on purpose: the two copies are written by
+    different code paths, so indentation and key order are not disagreements and
+    a value is.
+    """
+    at = pointer or "/"
+    if type(expected) is not type(actual) and not (
+        isinstance(expected, (int, float))
+        and isinstance(actual, (int, float))
+        and not isinstance(expected, bool)
+        and not isinstance(actual, bool)
+    ):
+        return [f"{at}: this repository has {type(expected).__name__}, the object has {type(actual).__name__}"]
+    if isinstance(expected, dict):
+        differences: list[str] = []
+        for key in sorted(set(expected) | set(actual)):
+            if key not in actual:
+                differences.append(f"{at.rstrip('/')}/{key}: absent from the object's own description")
+            elif key not in expected:
+                differences.append(f"{at.rstrip('/')}/{key}: present in the object but not in this repository")
+            else:
+                differences.extend(json_differences(expected[key], actual[key], f"{pointer}/{key}"))
+        return differences
+    if isinstance(expected, list):
+        if len(expected) != len(actual):
+            return [f"{at}: this repository has {len(expected)} item(s), the object has {len(actual)}"]
+        differences = []
+        for index, (left, right) in enumerate(zip(expected, actual)):
+            differences.extend(json_differences(left, right, f"{pointer}/{index}"))
+        return differences
+    if expected != actual:
+        return [f"{at}: this repository has {expected!r}, the object has {actual!r}"]
+    return []
+
+
+def check_self_description(
+    con,
+    path: str,
+    package: str,
+    resource_name: str,
+    document: dict[str, Any],
+    physical: dict[str, str],
+    require: bool,
+) -> tuple[list[Violation], bool]:
+    """Read the descriptor the object carries and hold it to the same rules.
+
+    Returns the violations and whether the object carried a description at all, so
+    the run can report how much of the published surface answers for itself.
+
+    The row scan is NOT repeated here. When the embedded copy and this repository's
+    copy agree — which the first rule below enforces — a constraint scan of one is a
+    constraint scan of the other, over the same file. When they disagree, the
+    disagreement is already reported and a second scan would add nothing.
+    """
+    violations: list[Violation] = []
+    try:
+        carried = read_self_description(con, path)
+    except Exception as exc:  # noqa: BLE001 - any failure here means "cannot check"
+        raise CheckError(f"{package}: cannot read the footer of {path}: {exc}") from exc
+
+    if carried is None:
+        if require:
+            violations.append(
+                Violation(
+                    package,
+                    resource_name,
+                    "",
+                    "self-description",
+                    f"carries no {DESCRIPTOR_KEY} in its Parquet footer, so a consumer holding only "
+                    "its URL cannot ask it what it is",
+                )
+            )
+        return violations, False
+
+    try:
+        embedded = json.loads(carried)
+    except json.JSONDecodeError as exc:
+        violations.append(
+            Violation(
+                package,
+                resource_name,
+                "",
+                "self-description",
+                f"carries a {DESCRIPTOR_KEY} in its footer that is not JSON: {exc}",
+            )
+        )
+        return violations, True
+
+    if not isinstance(embedded, dict):
+        violations.append(
+            Violation(
+                package,
+                resource_name,
+                "",
+                "self-description",
+                f"carries a {DESCRIPTOR_KEY} that is a {type(embedded).__name__}, not a JSON object",
+            )
+        )
+        return violations, True
+
+    for embedded_resource in embedded.get("resources") or []:
+        if not isinstance(embedded_resource, dict):
+            continue
+        stated = [key for key in SELF_REFERENTIAL if key in embedded_resource]
+        for key in stated:
+            violations.append(
+                Violation(
+                    package,
+                    resource_name,
+                    "",
+                    "self-description",
+                    f"states its own {key!r} inside itself; a file cannot, because writing the "
+                    f"value changes the value. {key!r} belongs in this repository's copy, which is "
+                    "measured against the finished object",
+                )
+            )
+
+    try:
+        expected = embedded_form(document)
+    except Exception as exc:  # noqa: BLE001 - a malformed repository copy is not checkable
+        raise CheckError(f"{package}: cannot derive the embedded form: {exc}") from exc
+
+    differences = json_differences(expected, embedded)
+    for difference in differences[:MAX_REPORTED_DIFFERENCES]:
+        violations.append(
+            Violation(
+                package,
+                resource_name,
+                "",
+                "self-description",
+                f"the description the object carries differs from this repository's at {difference}",
+            )
+        )
+    if len(differences) > MAX_REPORTED_DIFFERENCES:
+        violations.append(
+            Violation(
+                package,
+                resource_name,
+                "",
+                "self-description",
+                f"{len(differences)} difference(s) in total between the two copies; "
+                f"the first {MAX_REPORTED_DIFFERENCES} are named above",
+            )
+        )
+
+    # The object's own description against the object's own columns. This is the half
+    # that does not go through this repository at all — it is what a consumer who never
+    # finds `datasets/` is reading, checked against the bytes they are reading it from.
+    for embedded_resource in embedded.get("resources") or []:
+        if not isinstance(embedded_resource, dict):
+            continue
+        fields = (embedded_resource.get("schema") or {}).get("fields") or []
+        declared = [field.get("name") for field in fields if isinstance(field, dict)]
+        for missing in [column for column in declared if column not in physical]:
+            violations.append(
+                Violation(
+                    package,
+                    resource_name,
+                    missing,
+                    "self-description.schema.fields",
+                    "the object's own description declares this field, and the object has no such column",
+                )
+            )
+        for extra in [column for column in physical if column not in declared]:
+            violations.append(
+                Violation(
+                    package,
+                    resource_name,
+                    extra,
+                    "self-description.schema.fields",
+                    f"the object has this column as {physical[extra]}, and its own description "
+                    "does not declare it",
+                )
+            )
+        for field in fields:
+            if not isinstance(field, dict):
+                continue
+            column = field.get("name")
+            if column not in physical:
+                continue
+            declared_type = field.get("type", "any")
+            if declared_type == "any":
+                continue
+            allowed = COERCIBLE.get(declared_type)
+            if allowed is None:
+                violations.append(
+                    Violation(
+                        package,
+                        resource_name,
+                        column,
+                        "self-description.type",
+                        f"the object's own description declares unknown type {declared_type!r}",
+                    )
+                )
+                continue
+            if physical[column] not in allowed:
+                violations.append(
+                    Violation(
+                        package,
+                        resource_name,
+                        column,
+                        "self-description.type",
+                        f"the object's own description declares {declared_type!r}, which is not "
+                        f"coercible from the Parquet physical type {physical[column]} "
+                        f"(coercible from: {', '.join(sorted(allowed))})",
+                    )
+                )
+    return violations, True
 
 
 def check_foreign_keys(packages: dict[str, dict[str, Any]]) -> list[Violation]:
@@ -524,6 +773,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--datasets-dir", default="datasets", type=Path)
     parser.add_argument("--only", action="append", metavar="SLUG", help="restrict to one dataset slug (repeatable)")
     parser.add_argument("--json", metavar="FILE", type=Path, help="also write the findings as JSON")
+    parser.add_argument(
+        "--require-self-description",
+        action="store_true",
+        help="refuse a resource whose Parquet does not carry its own descriptor in its footer. "
+        "Off by default: the published objects predate stamping, and a check that demanded one "
+        "would report every one of them as a disagreement about data that is in fact correct.",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -541,6 +797,8 @@ def main(argv: list[str] | None = None) -> int:
     con = duckdb.connect()
     packages: dict[str, dict[str, Any]] = {}
     violations: list[Violation] = []
+    self_described: list[str] = []
+    resource_count = 0
 
     for descriptor_path in descriptor_paths:
         package = str(descriptor_path)
@@ -551,7 +809,13 @@ def main(argv: list[str] | None = None) -> int:
             if not resources:
                 raise CheckError(f"{package}: declares no resources")
             for resource in resources:
-                violations.extend(check_resource(con, descriptor_path, package, resource))
+                resource_count += 1
+                found, carried = check_resource(
+                    con, descriptor_path, package, descriptor, resource, args.require_self_description
+                )
+                violations.extend(found)
+                if carried:
+                    self_described.append(f"{descriptor_path.parent.name}::{resource.get('name')}")
         except CheckError as exc:
             print(f"descriptor check: {exc}", file=sys.stderr)
             return EXIT_ERROR
@@ -565,12 +829,28 @@ def main(argv: list[str] | None = None) -> int:
     checked = ", ".join(path.parent.name for path in descriptor_paths)
     if args.json:
         args.json.write_text(
-            json.dumps({"checked": checked, "violations": [asdict(v) for v in violations]}, indent=2) + "\n",
+            json.dumps(
+                {
+                    "checked": checked,
+                    "self_described": self_described,
+                    "resources": resource_count,
+                    "violations": [asdict(v) for v in violations],
+                },
+                indent=2,
+            )
+            + "\n",
             encoding="utf-8",
         )
 
+    carried = (
+        f"{len(self_described)} of {resource_count} resource(s) carry their own description"
+        + (f" ({', '.join(self_described)})" if self_described else "")
+    )
     if not violations:
-        print(f"descriptor check: {len(descriptor_paths)} descriptor(s) agree with their data ({checked})")
+        print(
+            f"descriptor check: {len(descriptor_paths)} descriptor(s) agree with their data ({checked}); "
+            f"{carried}"
+        )
         return EXIT_OK
 
     print(f"descriptor check: {len(violations)} disagreement(s) between descriptor and data\n")
@@ -578,7 +858,7 @@ def main(argv: list[str] | None = None) -> int:
         print(violation.line())
     print(
         f"\ndescriptor check: FAILED — {len(violations)} disagreement(s) across "
-        f"{len(descriptor_paths)} descriptor(s) ({checked})"
+        f"{len(descriptor_paths)} descriptor(s) ({checked}); {carried}"
     )
     return EXIT_VIOLATIONS
 
