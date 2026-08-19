@@ -14,14 +14,19 @@ What it asserts, per resource:
                      physical type (table in COERCIBLE below).
   3. constraints   — `pattern`, `minLength`, `maxLength`, `enum` and `required`,
                      evaluated over every row in one pass.
-  4. bytes         — the declared `resources[].bytes` matches the size the server
+  4. primaryKey    — every column named in `schema.primaryKey` exists, holds no NULL,
+                     and identifies at most one row. This is the declaration a
+                     consumer joins on, so a key the data does not honour hands them
+                     duplicated rows or silently dropped ones.
+  5. bytes         — the declared `resources[].bytes` matches the size the server
                      (or the filesystem) reports.
-  5. self-description
+  6. self-description
                    — when the Parquet carries its own descriptor in its footer (see
                      `stamp_descriptor.py`), that copy is read back out of the file and
                      held to the same rules: it must agree with this repository's copy
                      apart from the two keys a file cannot state about itself, and its
-                     field set and types must agree with the columns actually present.
+                     field set, types and primary key must agree with the columns and
+                     rows actually present.
                      An object that carries none is not a violation unless
                      `--require-self-description` is passed — nothing publishes a
                      stamped object yet, and a check that demanded one would refuse
@@ -29,7 +34,7 @@ What it asserts, per resource:
 
 And per package:
 
-  6. foreignKeys   — each declared foreign key resolves to a real resource+field,
+  7. foreignKeys   — each declared foreign key resolves to a real resource+field,
                      in this package or a sibling one, of compatible declared type.
 
 Exit codes are distinct on purpose, because a status alone cannot tell a refusal
@@ -316,6 +321,195 @@ def check_constraints(
     return violations
 
 
+class KeyDeclarationError(Exception):
+    """`schema.primaryKey` is a shape this check does not evaluate."""
+
+
+def primary_key_columns(schema: dict[str, Any]) -> list[str] | None:
+    """The columns named by `schema.primaryKey`, or None when the schema declares none.
+
+    Frictionless allows a single field name or an array of them, and both forms are
+    read here. Any other shape raises: an unevaluated key must not read as a
+    satisfied one.
+    """
+    if "primaryKey" not in schema:
+        return None
+    declared = schema["primaryKey"]
+    if isinstance(declared, str):
+        declared = [declared]
+    if not isinstance(declared, list) or not declared:
+        raise KeyDeclarationError(
+            f"declares primaryKey {schema['primaryKey']!r}, which is neither a field name nor a "
+            "non-empty array of field names"
+        )
+    for name in declared:
+        if not isinstance(name, str):
+            raise KeyDeclarationError(
+                f"declares primaryKey {schema['primaryKey']!r}, in which {name!r} is not a field name"
+            )
+    return declared
+
+
+@dataclass(frozen=True)
+class KeyScan:
+    """What one pass over a candidate key found among the rows.
+
+    `duplicate_*` counts rows whose key is complete and shared with another row;
+    `null_*` counts rows whose key is incomplete. The two sets are disjoint on
+    purpose, so a file missing half its keys does not also report those rows as
+    repeats of each other and bury the second finding under the first.
+    """
+
+    rows: int
+    null_rows: int
+    null_example: str | None
+    duplicate_values: int
+    duplicate_rows: int
+    duplicate_example: str | None
+    widest_duplicate: int | None
+
+
+def key_scan(con, path: str, columns: list[str]) -> KeyScan:
+    """Group the resource by the declared key and count what breaks it.
+
+    The GROUP BY is the load-bearing part. `count(*)` on its own is answered out of
+    the Parquet row-group metadata without reading a single value, so a check built
+    on one would pass whatever the column held; a key is a claim about the values,
+    and this reads them.
+    """
+    quoted = [quote_ident(column) for column in columns]
+    incomplete = " OR ".join(f"{column} IS NULL" for column in quoted)
+    # A SQL literal holding one apostrophe, so an example value comes back quoted and
+    # a NULL comes back bare — 'AB' and NULL are different findings and must not print
+    # the same way.
+    tick = "''''"
+    rendered = [
+        f"CASE WHEN {column} IS NULL THEN 'NULL' ELSE {tick} || CAST({column} AS VARCHAR) || {tick} END"
+        for column in quoted
+    ]
+    key_text = rendered[0] if len(rendered) == 1 else "'(' || " + " || ', ' || ".join(rendered) + " || ')'"
+    grouped = (
+        f"SELECT {', '.join(quoted)}, count(*) AS n FROM read_parquet(?) GROUP BY {', '.join(quoted)}"
+    )
+    sql = f"""
+        SELECT
+            coalesce(sum(n), 0),
+            coalesce(sum(n) FILTER (WHERE incomplete), 0),
+            any_value(key_text) FILTER (WHERE incomplete),
+            coalesce(count(*) FILTER (WHERE repeated), 0),
+            coalesce(sum(n) FILTER (WHERE repeated), 0),
+            any_value(key_text) FILTER (WHERE repeated),
+            max(n) FILTER (WHERE repeated)
+        FROM (
+            SELECT n,
+                   ({incomplete}) AS incomplete,
+                   NOT ({incomplete}) AND n > 1 AS repeated,
+                   {key_text} AS key_text
+            FROM ({grouped}) g
+        ) x
+    """  # noqa: S608 - identifiers are quoted, the path is bound
+    try:
+        row = con.execute(sql, [path]).fetchone()
+    except Exception as exc:  # duckdb raises a family of errors; all mean "cannot scan"
+        raise CheckError(
+            f"primary-key scan of {path} over ({', '.join(columns)}) failed: {exc}"
+        ) from exc
+    return KeyScan(
+        rows=int(row[0]),
+        null_rows=int(row[1]),
+        null_example=row[2],
+        duplicate_values=int(row[3]),
+        duplicate_rows=int(row[4]),
+        duplicate_example=row[5],
+        widest_duplicate=int(row[6]) if row[6] is not None else None,
+    )
+
+
+def check_primary_key(
+    con,
+    path: str,
+    package: str,
+    resource_name: str,
+    schema: dict[str, Any],
+    physical: dict[str, str],
+    scans: dict[tuple[str, ...], KeyScan],
+    *,
+    embedded: bool,
+) -> list[Violation]:
+    """`schema.primaryKey` against the columns it names and the rows it claims to identify.
+
+    `embedded` says which copy of the descriptor is speaking — this repository's, or
+    the one the object carries in its footer — and it changes one thing beyond the
+    wording: a key shape this check cannot read is EXIT_ERROR from the repository's
+    copy and a violation from the object's. That is the split the rest of this file
+    already makes, and for the same reason: an unknown declared type in `datasets/`
+    stops the run, while the same thing in a footer is a statement the object made
+    about itself and is reported as one.
+
+    `scans` memoises by column tuple within a resource, so the two copies declaring
+    the same key cost one pass over the bytes rather than two.
+    """
+    prefix = "self-description." if embedded else ""
+    speaker = "the description the object carries" if embedded else "the descriptor"
+    try:
+        columns = primary_key_columns(schema)
+    except KeyDeclarationError as exc:
+        if not embedded:
+            raise CheckError(f"{package}: resource {resource_name!r} {exc}") from exc
+        return [Violation(package, resource_name, "", f"{prefix}schema.primaryKey", f"{speaker} {exc}")]
+    if columns is None:
+        return []
+
+    label = ", ".join(columns)
+    missing = [column for column in columns if column not in physical]
+    if missing:
+        # Not scanned: a key over a column that is not there cannot be counted, and
+        # its absence is already the finding.
+        return [
+            Violation(
+                package,
+                resource_name,
+                column,
+                f"{prefix}schema.primaryKey",
+                f"{speaker} names this column in the primary key ({label}), and the Parquet "
+                "has no such column",
+            )
+            for column in missing
+        ]
+
+    signature = tuple(columns)
+    scan = scans.get(signature)
+    if scan is None:
+        scan = key_scan(con, path, columns)
+        scans[signature] = scan
+
+    violations: list[Violation] = []
+    if scan.null_rows:
+        detail = (
+            f"{speaker} declares ({label}) the primary key, and {scan.null_rows:,} of "
+            f"{scan.rows:,} row(s) hold a NULL in it, which no key value may"
+        )
+        if scan.null_example:
+            detail += f"; e.g. {scan.null_example}"
+        violations.append(
+            Violation(package, resource_name, label, f"{prefix}schema.primaryKey.null", detail)
+        )
+    if scan.duplicate_rows:
+        detail = (
+            f"{speaker} declares ({label}) the primary key, and {scan.duplicate_rows:,} of "
+            f"{scan.rows:,} row(s) share a key value with another row, across "
+            f"{scan.duplicate_values:,} repeated value(s)"
+        )
+        if scan.widest_duplicate:
+            detail += f", the commonest on {scan.widest_duplicate:,} row(s)"
+        if scan.duplicate_example:
+            detail += f"; e.g. {scan.duplicate_example}"
+        violations.append(
+            Violation(package, resource_name, label, f"{prefix}schema.primaryKey.duplicate", detail)
+        )
+    return violations
+
+
 def check_resource(
     con,
     descriptor_path: Path,
@@ -403,6 +597,13 @@ def check_resource(
     scannable = [field for field in fields if field["name"] in physical and field["name"] not in unusable]
     violations.extend(check_constraints(con, path, package, name, scannable, physical))
 
+    # One cache per resource: the repository's copy and the object's own copy usually
+    # declare the same key, and that is one pass over the bytes, not two.
+    key_scans: dict[tuple[str, ...], KeyScan] = {}
+    violations.extend(
+        check_primary_key(con, path, package, name, schema, physical, key_scans, embedded=False)
+    )
+
     declared_bytes = resource.get("bytes")
     if declared_bytes is not None:
         actual = remote_size(path) if is_remote else Path(path).stat().st_size
@@ -420,7 +621,7 @@ def check_resource(
             )
 
     self_violations, self_described = check_self_description(
-        con, path, package, name, document, physical, require_self_description
+        con, path, package, name, document, physical, key_scans, require_self_description
     )
     violations.extend(self_violations)
     return violations, self_described
@@ -476,6 +677,7 @@ def check_self_description(
     resource_name: str,
     document: dict[str, Any],
     physical: dict[str, str],
+    key_scans: dict[tuple[str, ...], KeyScan],
     require: bool,
 ) -> tuple[list[Violation], bool]:
     """Read the descriptor the object carries and hold it to the same rules.
@@ -483,10 +685,15 @@ def check_self_description(
     Returns the violations and whether the object carried a description at all, so
     the run can report how much of the published surface answers for itself.
 
-    The row scan is NOT repeated here. When the embedded copy and this repository's
-    copy agree — which the first rule below enforces — a constraint scan of one is a
-    constraint scan of the other, over the same file. When they disagree, the
-    disagreement is already reported and a second scan would add nothing.
+    The CONSTRAINT scan is not repeated here. When the embedded copy and this
+    repository's copy agree — which the first rule below enforces — a constraint scan
+    of one is a constraint scan of the other, over the same file. When they disagree,
+    the disagreement is already reported and a second scan would add nothing.
+
+    The primary key IS re-read, because it is not a per-value rule: a key is a claim
+    about the whole column, the object states it in its own footer, and the reader
+    holding only the object URL is acting on that copy. It costs nothing when the two
+    copies agree — `key_scans` is the pass already made for this resource.
     """
     violations: list[Violation] = []
     try:
@@ -641,6 +848,18 @@ def check_self_description(
                         f"(coercible from: {', '.join(sorted(allowed))})",
                     )
                 )
+        violations.extend(
+            check_primary_key(
+                con,
+                path,
+                package,
+                resource_name,
+                embedded_resource.get("schema") or {},
+                physical,
+                key_scans,
+                embedded=True,
+            )
+        )
     return violations, True
 
 

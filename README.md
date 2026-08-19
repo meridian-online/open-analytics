@@ -92,7 +92,8 @@ against the file at its `resources[].path`, **and reads the description the file
 itself carries back against both**, and exits non-zero on any disagreement — a declared field the Parquet does not have, a Parquet column the
 descriptor does not declare, a Frictionless `type` the physical type cannot be
 read as, a value outside `constraints.pattern` / `minLength` / `maxLength` /
-`enum` / `required`, a wrong `bytes`, or a `foreignKey` whose two ends are
+`enum` / `required`, a `primaryKey` naming a column that is not there or holding a
+NULL or a repeated value, a wrong `bytes`, or a `foreignKey` whose two ends are
 declared with incompatible types. Foreign keys resolve across every package in
 this repository, so the cross-package references described above are checked
 rather than skipped. A constraint keyword the script does not evaluate is an
@@ -100,10 +101,10 @@ error, not a pass.
 
 The self-described half is checked by the same rules: a footer descriptor that
 disagrees with this repository's copy, declares a field the file does not have,
-declares a type its column contradicts, or states the file's own `bytes`, is a
-disagreement. An object carrying no description is not — nothing published
-carries one yet, and a check that demanded one would report every correct object
-as wrong. `--require-self-description` turns that into a refusal for the publish
+declares a type its column contradicts, declares a primary key its rows do not
+honour, or states the file's own `bytes`, is a disagreement. An object carrying
+no description is not — nothing published carries one yet, and a check that
+demanded one would report every correct object as wrong. `--require-self-description` turns that into a refusal for the publish
 path, once a stamped object is what gets published.
 
 `scripts/publish_dataset.py` reads in the other direction — from the endpoint
