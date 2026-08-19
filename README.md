@@ -101,10 +101,10 @@ error, not a pass.
 
 The self-described half is checked by the same rules: a footer descriptor that
 disagrees with this repository's copy, declares a field the file does not have,
-declares a type its column contradicts, or states the file's own `bytes`, is a
-disagreement. An object carrying no description is not — nothing published
-carries one yet, and a check that demanded one would report every correct object
-as wrong. `--require-self-description` turns that into a refusal for the publish
+declares a type its column contradicts, declares a primary key its rows do not
+honour, or states the file's own `bytes`, is a disagreement. An object carrying
+no description is not — nothing published carries one yet, and a check that
+demanded one would report every correct object as wrong. `--require-self-description` turns that into a refusal for the publish
 path, once a stamped object is what gets published.
 
 `scripts/publish_dataset.py` reads in the other direction — from the endpoint
