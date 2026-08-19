@@ -92,7 +92,8 @@ against the file at its `resources[].path`, **and reads the description the file
 itself carries back against both**, and exits non-zero on any disagreement — a declared field the Parquet does not have, a Parquet column the
 descriptor does not declare, a Frictionless `type` the physical type cannot be
 read as, a value outside `constraints.pattern` / `minLength` / `maxLength` /
-`enum` / `required`, a wrong `bytes`, or a `foreignKey` whose two ends are
+`enum` / `required`, a `primaryKey` naming a column that is not there or holding a
+NULL or a repeated value, a wrong `bytes`, or a `foreignKey` whose two ends are
 declared with incompatible types. Foreign keys resolve across every package in
 this repository, so the cross-package references described above are checked
 rather than skipped. A constraint keyword the script does not evaluate is an

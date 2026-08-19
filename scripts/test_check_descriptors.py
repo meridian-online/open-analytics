@@ -10,9 +10,16 @@ check) and why every case below pins the number it expects.
 A rule that no case reddens is a rule nobody could notice going missing, so the
 cases below exist to be reddened by deleting the rule they cover. That coverage is
 not complete, and the gaps are named rather than implied: deleting any of the
-foreign-key resource-ambiguity, arity-mismatch or unknown-local-field branches, or
-the no-schema-fields branch, leaves this suite green. Each of those four behaves
-correctly in the shipped checker — the gap is here, not there.
+foreign-key resource-ambiguity, arity-mismatch or unknown-local-field branches, the
+no-schema-fields branch, or the branch that turns a failed primary-key scan into
+`could not check`, leaves this suite green. Each of those five behaves correctly in
+the shipped checker — the gap is here, not there.
+
+The primary-key group carries a rule that shipped blind: `primaryKey` appeared in
+every published descriptor and in none of this checker, so a key over a column the
+Parquet did not have passed. Those cases assert the counts, not just the exit
+status, because a key is a claim about values and a count is the only part of the
+message that could not have been written without reading them.
 
 The last group covers the self-described form: a Parquet that carries its own
 descriptor in its footer, which is what a consumer holding only an object URL
@@ -63,6 +70,7 @@ def write_package(
     *,
     select_sql: str,
     fields: list[dict[str, Any]],
+    primary_key: Any = None,
     foreign_keys: list[dict[str, Any]] | None = None,
     declared_bytes: int | None = None,
     resource_path: str | None = None,
@@ -74,6 +82,8 @@ def write_package(
     write_parquet(parquet, select_sql)
 
     schema: dict[str, Any] = {"fields": fields}
+    if primary_key is not None:
+        schema["primaryKey"] = primary_key
     if foreign_keys is not None:
         schema["foreignKeys"] = foreign_keys
     resource: dict[str, Any] = {
@@ -481,6 +491,235 @@ class DescriptorCheckSelfTest(unittest.TestCase):
     def test_empty_datasets_tree_is_an_error_not_a_pass(self) -> None:
         self.assertOutcome(run_check(self.datasets), EXIT_ERROR, "no datasets/*/datapackage.json")
 
+    # ----------------------------------------------------- the primary key
+
+    def test_primary_key_over_a_column_the_parquet_does_not_have_fails(self) -> None:
+        """The first fixture that passed green before this rule existed."""
+        write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT * FROM (VALUES ('AB'), ('CD')) t(code)",
+            fields=[{"name": "code", "type": "string"}],
+            primary_key=["no_such_column"],
+        )
+        self.assertOutcome(
+            run_check(self.datasets),
+            EXIT_VIOLATIONS,
+            "widgets.no_such_column",
+            "schema.primaryKey:",
+            "names this column in the primary key (no_such_column), and the Parquet has no such column",
+        )
+
+    def test_primary_key_holding_duplicates_fails_and_counts_the_rows(self) -> None:
+        write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT * FROM (VALUES ('AB'), ('AB'), ('CD')) t(code)",
+            fields=[{"name": "code", "type": "string"}],
+            primary_key=["code"],
+        )
+        self.assertOutcome(
+            run_check(self.datasets),
+            EXIT_VIOLATIONS,
+            "widgets.code",
+            "schema.primaryKey.duplicate",
+            "2 of 3 row(s) share a key value with another row, across 1 repeated value(s)",
+            "the commonest on 2 row(s)",
+            "e.g. 'AB'",
+        )
+
+    def test_primary_key_holding_a_null_fails_and_says_so_separately(self) -> None:
+        write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT * FROM (VALUES ('AB'), ('CD'), (NULL)) t(code)",
+            fields=[{"name": "code", "type": "string"}],
+            primary_key=["code"],
+        )
+        result = run_check(self.datasets)
+        self.assertOutcome(
+            result,
+            EXIT_VIOLATIONS,
+            "widgets.code",
+            "schema.primaryKey.null",
+            "1 of 3 row(s) hold a NULL in it, which no key value may",
+        )
+        self.assertNotIn("primaryKey.duplicate", result.stdout + result.stderr)
+
+    def test_repeated_nulls_are_nulls_and_not_also_duplicates(self) -> None:
+        """Two NULLs group together in SQL. Reporting them as a repeated key value
+        would bury the finding that matters under a second one that is an artefact."""
+        write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT * FROM (VALUES ('AB'), (NULL), (NULL)) t(code)",
+            fields=[{"name": "code", "type": "string"}],
+            primary_key=["code"],
+        )
+        result = run_check(self.datasets)
+        self.assertOutcome(
+            result,
+            EXIT_VIOLATIONS,
+            "schema.primaryKey.null",
+            "2 of 3 row(s) hold a NULL",
+        )
+        self.assertNotIn("primaryKey.duplicate", result.stdout + result.stderr)
+
+    def test_a_key_that_is_both_duplicated_and_null_reports_both_disjointly(self) -> None:
+        write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT * FROM (VALUES ('AB'), ('AB'), ('CD'), (NULL)) t(code)",
+            fields=[{"name": "code", "type": "string"}],
+            primary_key=["code"],
+        )
+        self.assertOutcome(
+            run_check(self.datasets),
+            EXIT_VIOLATIONS,
+            "schema.primaryKey.null",
+            "1 of 4 row(s) hold a NULL",
+            "schema.primaryKey.duplicate",
+            "2 of 4 row(s) share a key value",
+        )
+
+    def test_composite_key_is_evaluated_as_a_tuple_not_column_by_column(self) -> None:
+        """Every column repeats; no PAIR does. A per-column check reddens here, and
+        would be wrong to."""
+        write_package(
+            self.datasets,
+            "widgets",
+            select_sql=(
+                "SELECT * FROM (VALUES ('AB', 'x'), ('AB', 'y'), ('CD', 'x')) t(code, tag)"
+            ),
+            fields=[{"name": "code", "type": "string"}, {"name": "tag", "type": "string"}],
+            primary_key=["code", "tag"],
+        )
+        self.assertOutcome(run_check(self.datasets), EXIT_OK, "agree with their data")
+
+    def test_composite_key_repeated_as_a_whole_fails(self) -> None:
+        write_package(
+            self.datasets,
+            "widgets",
+            select_sql=(
+                "SELECT * FROM (VALUES ('AB', 'x'), ('AB', 'x'), ('CD', 'y')) t(code, tag)"
+            ),
+            fields=[{"name": "code", "type": "string"}, {"name": "tag", "type": "string"}],
+            primary_key=["code", "tag"],
+        )
+        self.assertOutcome(
+            run_check(self.datasets),
+            EXIT_VIOLATIONS,
+            "widgets.code, tag",
+            "schema.primaryKey.duplicate",
+            "2 of 3 row(s) share a key value",
+            "e.g. ('AB', 'x')",
+        )
+
+    def test_composite_key_with_one_null_part_is_an_incomplete_key(self) -> None:
+        write_package(
+            self.datasets,
+            "widgets",
+            select_sql=(
+                "SELECT * FROM (VALUES ('AB', 'x'), ('CD', NULL)) t(code, tag)"
+            ),
+            fields=[{"name": "code", "type": "string"}, {"name": "tag", "type": "string"}],
+            primary_key=["code", "tag"],
+        )
+        self.assertOutcome(
+            run_check(self.datasets),
+            EXIT_VIOLATIONS,
+            "schema.primaryKey.null",
+            "1 of 2 row(s) hold a NULL",
+            "e.g. ('CD', NULL)",
+        )
+
+    def test_primary_key_the_data_honours_passes(self) -> None:
+        write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT * FROM (VALUES ('AB'), ('CD')) t(code)",
+            fields=[{"name": "code", "type": "string"}],
+            primary_key=["code"],
+        )
+        self.assertOutcome(run_check(self.datasets), EXIT_OK, "agree with their data")
+
+    def test_primary_key_written_as_a_bare_field_name_is_read_not_skipped(self) -> None:
+        """Frictionless allows `"primaryKey": "code"`. Reading only the array form
+        would let the string form through unchecked."""
+        write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT * FROM (VALUES ('AB'), ('AB')) t(code)",
+            fields=[{"name": "code", "type": "string"}],
+            primary_key="code",
+        )
+        self.assertOutcome(
+            run_check(self.datasets),
+            EXIT_VIOLATIONS,
+            "schema.primaryKey.duplicate",
+            "2 of 2 row(s) share a key value",
+        )
+
+    def test_primary_key_of_an_unreadable_shape_is_an_error_not_a_pass(self) -> None:
+        write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT * FROM (VALUES ('AB'), ('AB')) t(code)",
+            fields=[{"name": "code", "type": "string"}],
+            primary_key=7,
+        )
+        self.assertOutcome(
+            run_check(self.datasets),
+            EXIT_ERROR,
+            "declares primaryKey 7",
+            "neither a field name nor a non-empty array of field names",
+        )
+
+    def test_empty_primary_key_is_an_error_not_a_pass(self) -> None:
+        write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT * FROM (VALUES ('AB'), ('AB')) t(code)",
+            fields=[{"name": "code", "type": "string"}],
+            primary_key=[],
+        )
+        self.assertOutcome(
+            run_check(self.datasets),
+            EXIT_ERROR,
+            "declares primaryKey []",
+            "neither a field name nor a non-empty array of field names",
+        )
+
+    def test_primary_key_naming_something_that_is_not_a_field_is_an_error(self) -> None:
+        write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT * FROM (VALUES ('AB'), ('AB')) t(code)",
+            fields=[{"name": "code", "type": "string"}],
+            primary_key=["code", 7],
+        )
+        self.assertOutcome(
+            run_check(self.datasets),
+            EXIT_ERROR,
+            "in which 7 is not a field name",
+        )
+
+    def test_primary_key_report_carries_the_rule_and_the_columns(self) -> None:
+        write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT * FROM (VALUES ('AB'), ('AB'), (NULL)) t(code)",
+            fields=[{"name": "code", "type": "string"}],
+            primary_key=["code"],
+        )
+        report = Path(self._tmp.name) / "report.json"
+        self.assertOutcome(run_check(self.datasets, "--json", str(report)), EXIT_VIOLATIONS)
+        document = json.loads(report.read_text(encoding="utf-8"))
+        self.assertEqual(
+            sorted((v["field"], v["rule"]) for v in document["violations"]),
+            [("code", "schema.primaryKey.duplicate"), ("code", "schema.primaryKey.null")],
+        )
+
     # ----------------------------------------------- the self-described form
 
     def test_object_carrying_its_own_true_description_passes(self) -> None:
@@ -611,6 +850,95 @@ class DescriptorCheckSelfTest(unittest.TestCase):
             "self-description",
             "that is not JSON",
         )
+
+    def test_object_declaring_a_key_over_a_column_it_does_not_have_fails(self) -> None:
+        """The copy in the footer is what a consumer holding only a URL reads, so it
+        is held to the primary-key rule in its own right and names itself as the
+        speaker."""
+        descriptor = write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT * FROM (VALUES ('AB'), ('CD')) t(code)",
+            fields=[{"name": "code", "type": "string"}],
+            primary_key=["no_such_column"],
+        )
+        stamp_package(descriptor)
+        self.assertOutcome(
+            run_check(self.datasets),
+            EXIT_VIOLATIONS,
+            "self-description.schema.primaryKey:",
+            "the description the object carries names this column in the primary key",
+            "the Parquet has no such column",
+        )
+
+    def test_object_declaring_a_key_its_own_rows_break_fails(self) -> None:
+        descriptor = write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT * FROM (VALUES ('AB'), ('AB'), (NULL)) t(code)",
+            fields=[{"name": "code", "type": "string"}],
+            primary_key=["code"],
+        )
+        stamp_package(descriptor)
+        self.assertOutcome(
+            run_check(self.datasets),
+            EXIT_VIOLATIONS,
+            "self-description.schema.primaryKey.duplicate",
+            "self-description.schema.primaryKey.null",
+            "the description the object carries declares (code) the primary key",
+        )
+
+    def test_object_carrying_a_key_shape_that_cannot_be_read_is_a_violation_not_a_crash(
+        self,
+    ) -> None:
+        """Unreadable in `datasets/` stops the run; unreadable in a footer is a
+        statement the object made about itself, and is reported as one."""
+        descriptor = write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT * FROM (VALUES ('AB')) t(code)",
+            fields=[{"name": "code", "type": "string"}],
+        )
+        document = json.loads(descriptor.read_text(encoding="utf-8"))
+        document["resources"][0]["schema"]["primaryKey"] = {"field": "code"}
+        stamp_package(descriptor, text=json.dumps(document, indent=2) + "\n")
+        self.assertOutcome(
+            run_check(self.datasets),
+            EXIT_VIOLATIONS,
+            "self-description.schema.primaryKey:",
+            "neither a field name nor a non-empty array of field names",
+        )
+
+    def test_object_carrying_a_key_the_repository_copy_does_not_declare_fails(self) -> None:
+        """The one a repository-only check cannot see: the file in `datasets/` claims
+        no key at all, and the object asserts one its own rows break."""
+        descriptor = write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT * FROM (VALUES ('AB'), ('AB')) t(code)",
+            fields=[{"name": "code", "type": "string"}],
+        )
+        document = json.loads(descriptor.read_text(encoding="utf-8"))
+        document["resources"][0]["schema"]["primaryKey"] = ["code"]
+        stamp_package(descriptor, text=json.dumps(document, indent=2) + "\n")
+        result = run_check(self.datasets)
+        self.assertOutcome(
+            result,
+            EXIT_VIOLATIONS,
+            "self-description.schema.primaryKey.duplicate",
+            "2 of 2 row(s) share a key value",
+        )
+
+    def test_object_and_repository_declaring_the_same_honest_key_passes(self) -> None:
+        descriptor = write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT * FROM (VALUES ('AB'), ('CD')) t(code)",
+            fields=[{"name": "code", "type": "string"}],
+            primary_key=["code"],
+        )
+        stamp_package(descriptor)
+        self.assertOutcome(run_check(self.datasets), EXIT_OK, "agree with their data")
 
     def test_object_without_a_self_description_is_not_a_violation_by_default(self) -> None:
         """Nothing published carries one yet; demanding one would refuse correct data."""
