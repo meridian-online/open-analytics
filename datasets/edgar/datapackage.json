@@ -1,6 +1,6 @@
 {
   "$schema": "https://datapackage.org/profiles/2.0/datapackage.json",
-  "created": "2026-07-29T07:26:58Z",
+  "created": "2026-08-20T20:34:04Z",
   "description": "Every company with securities registered with the U.S. Securities and Exchange Commission — its Central Index Key (CIK), ticker symbol, exchange and legal name, from the SEC's EDGAR system.",
   "homepage": "https://meridian.online/datasets/edgar",
   "licenses": [
@@ -13,9 +13,9 @@
   "name": "edgar",
   "resources": [
     {
-      "bytes": 273460,
+      "bytes": 281911,
       "format": "parquet",
-      "hash": "sha256:e329d0a62a8ef852176c4b3af41ebc0f6d5cfba974d2d14e376584f8aece2c99",
+      "hash": "sha256:daa63724a44f02bf57dee1449a480983e91a311a1f83bde49c9f5ef62308f13b",
       "mediatype": "application/vnd.apache.parquet",
       "name": "edgar",
       "path": "https://openlake.meridian.online/edgar.parquet",
@@ -33,24 +33,28 @@
           },
           {
             "constraints": {
-              "maxLength": 65536,
-              "minLength": 1
+              "maxLength": 200,
+              "minLength": 2
             },
             "description": "Legal name of the registrant as carried in the SEC company-tickers file.",
             "name": "company_name",
             "type": "string",
-            "x-finetype-confidence": 0.9531,
-            "x-finetype-label": "representation.text.plain_text"
+            "x-finetype-confidence": 0.9633,
+            "x-finetype-label": "representation.text.entity_name"
           },
           {
             "constraints": {
-              "pattern": "^[A-Z]{1,7}([./-][A-Z]{1,4})?$"
+              "pattern": "^[A-Z]{1,7}([./-][A-Z]{1,4})?$|^[A-Z]{4}\\.$"
             },
             "description": "Exchange ticker symbol for the registrant's security.",
             "name": "ticker",
             "type": "string",
             "x-finetype-confidence": 0.9,
-            "x-finetype-label": "finance.securities.ticker"
+            "x-finetype-label": "finance.securities.ticker",
+            "x-finetype-pattern-fit": {
+              "canonical": "^[A-Z]{1,7}([./-][A-Z]{1,4})?$",
+              "outcome": "widened"
+            }
           },
           {
             "constraints": {
@@ -72,7 +76,7 @@
                 "OTC"
               ],
               "open": true,
-              "rows": 10233
+              "rows": 10198
             },
             "x-finetype-label": "representation.text.word"
           },
@@ -84,7 +88,7 @@
             "description": "Lowercased, accent-stripped concatenation of name + ticker + exchange — a derived free-text search field, not a source attribute.",
             "name": "corpus",
             "type": "string",
-            "x-finetype-confidence": 0.9741,
+            "x-finetype-confidence": 0.4743,
             "x-finetype-label": "representation.text.plain_text"
           }
         ],
@@ -101,5 +105,6 @@
       "title": "SEC EDGAR"
     }
   ],
-  "title": "SEC EDGAR — Company Tickers"
+  "title": "SEC EDGAR — Company Tickers",
+  "x-finetype-version": "0.6.57"
 }
