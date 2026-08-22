@@ -64,10 +64,13 @@ copies to each other.
 
 | Dataset | Rows | License | Source | Descriptor |
 |---|---|---|---|---|
-| GLEIF — Legal Entity Identifiers | 3.36M | CC0-1.0 | [GLEIF](https://www.gleif.org/) | [datapackage.json](datasets/gleif/datapackage.json) |
-| SEC EDGAR — Company Tickers | 10,415 | Public domain | [SEC](https://www.sec.gov/) | [datapackage.json](datasets/edgar/datapackage.json) |
+| GLEIF — Legal Entity Identifiers | 3.38M | CC0-1.0 | [GLEIF](https://www.gleif.org/) | [datapackage.json](datasets/gleif/datapackage.json) |
+| SEC EDGAR — Company Tickers | 10,414 | Public domain | [SEC](https://www.sec.gov/) | [datapackage.json](datasets/edgar/datapackage.json) |
 | NAICS — Industry Classification (2022) | 2,125 | Public domain | [U.S. Census Bureau](https://www.census.gov/naics/) | [datapackage.json](datasets/naics/datapackage.json) |
-| EDGAR ↔ GLEIF — company-to-LEI crosswalk | 6,570 | CC0-1.0 | SEC + GLEIF | [datapackage.json](datasets/edgar_gleif/datapackage.json) |
+| EDGAR ↔ GLEIF — company-to-LEI crosswalk | 207,099 | CC0-1.0 | SEC + GLEIF | [datapackage.json](datasets/edgar_gleif/datapackage.json) |
+
+The **Rows** figures are counted from the published objects themselves on every
+run of the checks below, not maintained by hand.
 
 Each dataset carries a [Data Package](https://datapackage.org/) descriptor
 (`datasets/<name>/datapackage.json`) with the canonical download URL, byte
@@ -93,8 +96,9 @@ itself carries back against both**, and exits non-zero on any disagreement — a
 descriptor does not declare, a Frictionless `type` the physical type cannot be
 read as, a value outside `constraints.pattern` / `minLength` / `maxLength` /
 `enum` / `required`, a `primaryKey` naming a column that is not there or holding a
-NULL or a repeated value, a wrong `bytes`, or a `foreignKey` whose two ends are
-declared with incompatible types. Foreign keys resolve across every package in
+NULL or a repeated value, a wrong `bytes`, a `foreignKey` whose two ends are
+declared with incompatible types, or a row count in the catalogue above that
+disagrees with the object that row links to. Foreign keys resolve across every package in
 this repository, so the cross-package references described above are checked
 rather than skipped. A constraint keyword the script does not evaluate is an
 error, not a pass.
@@ -106,6 +110,28 @@ honour, or states the file's own `bytes`, is a disagreement. An object carrying
 no description is not — nothing published carries one yet, and a check that
 demanded one would report every correct object as wrong. `--require-self-description` turns that into a refusal for the publish
 path, once a stamped object is what gets published.
+
+The same run reads the catalogue table above back against the bytes. Each row's
+**Rows** figure is held to `count(*)` over the Parquet that row's descriptor
+names — counted from the object, never from a field of the descriptor, so a
+descriptor that is itself wrong about its data cannot make the catalogue agree
+with it. DuckDB answers that count out of the Parquet's row-group metadata, so it
+is a range read of the footer rather than a download.
+
+**A figure is checked at the precision it is written to.** Written in full —
+`2,125` — it must match every digit. Written with a `K`, `M` or `B` suffix it is a
+rounded form, and must equal the count rounded half-up to the number of decimal
+places the figure itself carries: against 3,377,398 rows, `3.38M`, `3.4M` and `3M`
+all pass, and `3.36M` does not. Rounding is a presentation choice the rule keeps;
+being merely the right order of magnitude is not one. A figure the rule cannot
+read counts as a disagreement rather than a skip, so does a published dataset the
+table leaves out, and a README with no `Rows` column — or no README at all — exits
+2 rather than passing quietly. A row is divided on the pipes that delimit cells and
+not on the ones a cell escapes, and a row whose cells do not line up with its header
+is refused rather than measured: reading such a row takes its figure out of a
+neighbouring cell, which agrees with a number no reader of the rendered table is
+shown. `--write-catalogue` corrects each figure from the
+measured count, in the form that cell was already written in.
 
 `scripts/publish_dataset.py` reads in the other direction — from the endpoint
 back into the descriptor. `verify` re-reads every published object in full and
@@ -126,6 +152,7 @@ consumer's half.
 ```sh
 pip install duckdb
 python scripts/check_descriptors.py            # 0 conformant · 1 disagreement · 2 could not check
+python scripts/check_descriptors.py --write-catalogue   # rewrite the Rows column from the counted rows
 python scripts/test_check_descriptors.py       # the self-test: the check on deliberately broken fixtures
 python scripts/test_stamp_descriptor.py        # the self-test: the stamp lands, the data does not move
 python scripts/test_publish_dataset.py         # the self-test: publish against a scratch object store
