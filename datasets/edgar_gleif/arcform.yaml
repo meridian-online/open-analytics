@@ -3,10 +3,10 @@
 # → one Dataset version (the freshness lever). See ./README.md (the Protocol primitive).
 #
 # MOSTLY-CONFIG. Nearly every step is a first-class `sql:` model or a typed `op:`
-# operator (the arcform catalog). Three are not, and they are named here because this
+# operator (the arcform catalog). Two are not, and they are named here because this
 # comment previously claimed there were none, which stopped being true the moment the
-# first one landed: `derive_join_coverage`, `stamp_version` and `stamp_descriptor` are
-# `command:` steps. All three are candidates for promotion to operators; until then, a
+# first one landed: `derive_join_coverage` and `stamp_descriptor` are `command:`
+# steps. Both are candidates for promotion to operators; until then, a
 # reader counting on "no opaque steps" would be wrong. The retired
 # scripts/*.sh + scripts/describe.py did fetch/unzip/paginate/describe as bash; those
 # are now the http_fetch / archive_extract / gleif_ra_fetch / datapackage_describe /
@@ -225,6 +225,15 @@ steps:
   # any difference = run; no finetype resolvable on PATH = halt, naming the step and
   # what the lookup found — never a silent skip. Replaces the `command:` interim this
   # card's design used before arcform gained the declarative kind (arcform#50, 5bb81ec).
+  #
+  # The operator also writes the package-level `x-finetype-version`, and it is the
+  # only thing in this manifest that writes it. The value is the same resolved
+  # version string the operator's own floor check parsed — one lookup, threaded
+  # through — so the field names the binary that typed the columns beneath it and
+  # cannot name a different one. It moves when and only when this step runs, which
+  # the `tool:` precondition above makes true of a finetype change: a binary that
+  # moved fails the precondition and re-runs the step, and a run that leaves the
+  # step alone leaves the schema and the version stamped over it alone together.
   - name: describe
     op: datapackage_describe@1
     with:
@@ -257,9 +266,9 @@ steps:
   # disagrees (job `joins-run-against-their-data` in
   # .github/workflows/descriptors.yml, which runs on every push/PR and weekly).
   # INTERPRETER: `uv run --with duckdb==1.5.5`, not bare `python3`. This step needs
-  # the duckdb Python package; the only other `command:` step here
-  # (stamp_finetype_version.py) is stdlib-only, so bare `python3` had always been
-  # enough and this was the first step to need anything installed. It was verified
+  # the duckdb Python package. The other `command:` step here, `stamp_descriptor`,
+  # imports duckdb too and still runs under bare `python3` — the same exposure, not
+  # yet closed. It was verified
   # in a venv and in CI — which pip-installs duckdb per job — and both hid that
   # `arc run` invokes whatever `python3` is on PATH. On a machine whose `python3`
   # has no duckdb it failed three retries with "the duckdb Python package is
@@ -271,21 +280,6 @@ steps:
   # this needs no venv to exist and no global install.
   - name: derive_join_coverage
     command: "uv run --python 3.12 --with duckdb==1.5.5 python scripts/crosswalk_join.py --write --package edgar_gleif --datasets-dir ../../datasets --local edgar_gleif=build/edgar_gleif.parquet --local edgar=build/edgar.parquet --local gleif=build/gleif.parquet"
-
-  # ── Stamp: record WHICH finetype produced the descriptor above ─────────────────
-  # datapackage_describe emits the inferred schema and not the identity of the binary
-  # that inferred it, so a descriptor from a superseded finetype reads identically to
-  # a current one. gleif went stale by sixteen releases without anything noticing.
-  # The version is derived from the binary at run time, never a checked-in literal.
-  #
-  # The script REFUSES rather than stamping when the descriptor's content has not
-  # changed since it was last stamped with a different version — the case where
-  # describe skipped as hash_clean and the stamp would otherwise attribute old
-  # content to a new engine. That is a guard, not a proof: it cannot see a describe
-  # that re-ran and produced byte-identical output. The guarantee belongs in
-  # datapackage_describe, which knows what it ran.
-  - name: stamp_version
-    command: "python3 ../../scripts/stamp_finetype_version.py --descriptor datapackage.json"
 
   # ── Validate: GATE the built Parquet against the self-derived finetype contract ─
   # finetype_validate makes finetype LOAD-BEARING, not just post-hoc descriptive:
