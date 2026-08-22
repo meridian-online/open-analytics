@@ -1383,6 +1383,30 @@ class DescriptorCheckSelfTest(unittest.TestCase):
         )
         self.assertOutcome(run_check(self.datasets), EXIT_OK, "1 catalogue row count(s) measured")
 
+    def test_a_row_that_cannot_be_framed_is_not_read_as_a_row(self) -> None:
+        """A row missing its closing delimiter is refused, not guessed at.
+
+        The format makes that delimiter optional and this check does not, because a
+        row it cannot frame is a row whose columns it cannot trust. Refusing costs a
+        catalogue.missing on the package the row was for, which is loud; reading it
+        anyway would put the wrong cell in the Rows slot, which is not.
+        """
+        write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT i AS n FROM range(3) t(i)",
+            fields=[{"name": "n", "type": "integer"}],
+            catalogue=False,
+        )
+        self.readme().write_text(
+            "# scratch\n\n| Dataset | Rows | License | Descriptor |\n|---|---|---|---|\n"
+            "| widgets | 3 | CC0-1.0 | [datapackage.json](datasets/widgets/datapackage.json)\n",
+            encoding="utf-8",
+        )
+        self.assertOutcome(
+            run_check(self.datasets), EXIT_VIOLATIONS, "catalogue.missing", "widgets"
+        )
+
     def test_a_catalogue_figure_over_a_multi_resource_package_is_an_error(self) -> None:
         """One figure cannot name two resources, so the check refuses instead of guessing."""
         descriptor = write_package(

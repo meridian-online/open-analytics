@@ -126,7 +126,11 @@ all pass, and `3.36M` does not. Rounding is a presentation choice the rule keeps
 being merely the right order of magnitude is not one. A figure the rule cannot
 read counts as a disagreement rather than a skip, so does a published dataset the
 table leaves out, and a README with no `Rows` column — or no README at all — exits
-2 rather than passing quietly. `--write-catalogue` corrects each figure from the
+2 rather than passing quietly. A row is divided on the pipes that delimit cells and
+not on the ones a cell escapes, and a row whose cells do not line up with its header
+is refused rather than measured: reading such a row takes its figure out of a
+neighbouring cell, which agrees with a number no reader of the rendered table is
+shown. `--write-catalogue` corrects each figure from the
 measured count, in the form that cell was already written in.
 
 `scripts/publish_dataset.py` reads in the other direction — from the endpoint
