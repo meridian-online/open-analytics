@@ -21,6 +21,15 @@ Parquet did not have passed. Those cases assert the counts, not just the exit
 status, because a key is a claim about values and a count is the only part of the
 message that could not have been written without reading them.
 
+The catalogue group covers the table on the front page — the first quantitative
+claim a stranger meets about these datasets, and the one nothing had ever read. It
+is not enough there to redden on a wrong figure: the check reads text, and text can
+be edited, so those cases also assert that blanking the cell, deleting the row and
+renaming the column each redden rather than pass. What that group does not cover is
+a catalogue cell containing an escaped pipe, which the table splitter would divide
+in the wrong place; no cell in this repository has one and the splitter is the whole
+of the gap.
+
 The last group covers the self-described form: a Parquet that carries its own
 descriptor in its footer, which is what a consumer holding only an object URL
 actually reads. Those cases matter for a reason the others do not share — once the
@@ -1308,6 +1317,19 @@ class DescriptorCheckSelfTest(unittest.TestCase):
             "catalogue.rows",
             "the published object holds 3 rows",
         )
+
+    def test_a_catalogue_figure_over_a_multi_resource_package_is_an_error(self) -> None:
+        """One figure cannot name two resources, so the check refuses instead of guessing."""
+        descriptor = write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT i AS n FROM range(3) t(i)",
+            fields=[{"name": "n", "type": "integer"}],
+        )
+        document = json.loads(descriptor.read_text(encoding="utf-8"))
+        document["resources"].append(dict(document["resources"][0], name="widgets-again"))
+        descriptor.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+        self.assertOutcome(run_check(self.datasets), EXIT_ERROR, "declares 2 resource(s)")
 
     def test_write_catalogue_corrects_the_figure_from_the_measurement(self) -> None:
         write_package(
