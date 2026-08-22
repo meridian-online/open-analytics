@@ -1055,12 +1055,58 @@ class CatalogueRow:
     descriptor: str  # the datapackage.json path the row links to, as written
 
 
+def split_on_unescaped_pipes(text: str) -> list[str]:
+    r"""Split on the `|` characters that delimit cells, leaving escaped ones in place.
+
+    A cell may carry a literal pipe by escaping it, so `|` and `\|` are different
+    characters to this format and a split that cannot tell them apart is not a lax
+    reading of it but a wrong one. The backslash is consumed together with whatever
+    follows it, which is what keeps `\\|` — a literal backslash and then a real
+    delimiter — from being read as an escaped pipe.
+    """
+    cells: list[str] = []
+    current: list[str] = []
+    index = 0
+    while index < len(text):
+        character = text[index]
+        if character == "\\" and index + 1 < len(text):
+            current.append(character)
+            current.append(text[index + 1])
+            index += 2
+            continue
+        if character == "|":
+            cells.append("".join(current))
+            current = []
+            index += 1
+            continue
+        current.append(character)
+        index += 1
+    cells.append("".join(current))
+    return cells
+
+
 def table_cells(line: str) -> list[str]:
-    """The raw cells of a pipe-table row, or [] when the line is not one."""
+    r"""The raw cells of a pipe-table row, or [] when the line is not one.
+
+    **Keep this split escape-aware.** Dividing on every `|` fails in the direction
+    that passes: a row with one column dropped and a `\|` inside another cell splits
+    into exactly the number of cells the header wants, and the figure that lands in
+    the Rows slot is read out of a neighbouring cell. The check then agrees with a
+    number no reader of the rendered table is ever shown, which is worse than not
+    checking at all. A row whose cell count disagrees with its header is refused by
+    `parse_catalogue` rather than measured, so a malformed row cannot pass either way.
+
+    A row must open and close with a delimiter, which is stricter than the format
+    requires — a closing `|` is optional there. Refusing a row this cannot frame is
+    the safe direction, and every row of the catalogue carries both.
+    """
     stripped = line.strip()
-    if not stripped.startswith("|") or not stripped.endswith("|") or len(stripped) < 2:
+    if not stripped.startswith("|") or len(stripped) < 2:
         return []
-    return stripped[1:-1].split("|")
+    cells = split_on_unescaped_pipes(stripped)
+    if len(cells) < 2 or cells[0] != "" or cells[-1] != "":
+        return []
+    return cells[1:-1]
 
 
 def parse_catalogue(readme_path: Path, text: str) -> list[CatalogueRow]:

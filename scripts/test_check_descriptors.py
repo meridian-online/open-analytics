@@ -25,10 +25,15 @@ The catalogue group covers the table on the front page — the first quantitativ
 claim a stranger meets about these datasets, and the one nothing had ever read. It
 is not enough there to redden on a wrong figure: the check reads text, and text can
 be edited, so those cases also assert that blanking the cell, deleting the row and
-renaming the column each redden rather than pass. What that group does not cover is
-a catalogue cell containing an escaped pipe, which the table splitter would divide
-in the wrong place; no cell in this repository has one and the splitter is the whole
-of the gap.
+renaming the column each redden rather than pass.
+
+Three of them are about how a table row is divided into cells, which is the part of
+that group that failed. A row carrying `\|` inside one cell and one column fewer than
+its header splits, under a divider that treats every `|` as a delimiter, into exactly
+the number of cells the header wants — and the figure that lands in the Rows slot is
+read out of the neighbouring cell. The checker agreed with a number no reader of the
+rendered table is shown. The case is built here rather than described, so the split
+staying escape-aware is pinned by a test rather than by a comment.
 
 The last group covers the self-described form: a Parquet that carries its own
 descriptor in its footer, which is what a consumer holding only an object URL
@@ -1317,6 +1322,66 @@ class DescriptorCheckSelfTest(unittest.TestCase):
             "catalogue.rows",
             "the published object holds 3 rows",
         )
+
+    def test_an_escaped_pipe_cannot_smuggle_a_figure_into_the_rows_column(self) -> None:
+        """The bypass: drop a column, escape a pipe, and a naive split still counts four.
+
+        `\\|` is a literal pipe in a cell, not a delimiter. A splitter that divides on
+        every `|` reads this row as four cells and finds `3` in the Rows slot, which
+        agrees with the object — so the check goes green. Rendered by anything that
+        honours the escape it is three cells, and the figure a reader sees against a
+        three-row object is 6,570. Agreement on a number nobody is shown is worse than
+        a skip, so the row is refused rather than measured.
+        """
+        write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT i AS n FROM range(3) t(i)",
+            fields=[{"name": "n", "type": "integer"}],
+            catalogue=False,
+        )
+        self.readme().write_text(
+            "# scratch\n\n| Dataset | Rows | License | Descriptor |\n|---|---|---|---|\n"
+            "| widgets \\| 3 | 6,570 | [datapackage.json](datasets/widgets/datapackage.json) |\n",
+            encoding="utf-8",
+        )
+        self.assertOutcome(run_check(self.datasets), EXIT_ERROR, "3 cell(s) against a header of 4")
+
+    def test_an_escaped_pipe_inside_a_cell_does_not_shift_the_columns(self) -> None:
+        """The other direction: an honest cell carrying a pipe still lands in its own column."""
+        write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT i AS n FROM range(3) t(i)",
+            fields=[{"name": "n", "type": "integer"}],
+            catalogue=False,
+        )
+        self.readme().write_text(
+            "# scratch\n\n| Dataset | Rows | License | Descriptor |\n|---|---|---|---|\n"
+            "| widgets \\| gadgets | 3 | CC0-1.0 | [datapackage.json](datasets/widgets/datapackage.json) |\n",
+            encoding="utf-8",
+        )
+        self.assertOutcome(run_check(self.datasets), EXIT_OK, "1 catalogue row count(s) measured")
+
+    def test_an_escaped_backslash_leaves_the_pipe_after_it_delimiting(self) -> None:
+        r"""`\\|` is a literal backslash and then a real delimiter, not an escaped pipe.
+
+        The rule has to consume the escape pair rather than react to every backslash,
+        or the second backslash here swallows the pipe and the row loses a column.
+        """
+        write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT i AS n FROM range(3) t(i)",
+            fields=[{"name": "n", "type": "integer"}],
+            catalogue=False,
+        )
+        self.readme().write_text(
+            "# scratch\n\n| Dataset | Rows | License | Descriptor |\n|---|---|---|---|\n"
+            "| widgets \\\\| 3 | CC0-1.0 | [datapackage.json](datasets/widgets/datapackage.json) |\n",
+            encoding="utf-8",
+        )
+        self.assertOutcome(run_check(self.datasets), EXIT_OK, "1 catalogue row count(s) measured")
 
     def test_a_catalogue_figure_over_a_multi_resource_package_is_an_error(self) -> None:
         """One figure cannot name two resources, so the check refuses instead of guessing."""
