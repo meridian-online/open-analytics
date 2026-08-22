@@ -55,13 +55,35 @@ EXIT_VIOLATIONS = 1
 EXIT_ERROR = 2
 
 
-def write_parquet(target: Path, select_sql: str) -> None:
+def write_parquet(target: Path, select_sql: str) -> int:
+    """Write the fixture and return how many rows landed in it."""
     import duckdb
 
     target.parent.mkdir(parents=True, exist_ok=True)
     con = duckdb.connect()
     con.execute(f"COPY ({select_sql}) TO '{target}' (FORMAT parquet)")
+    rows = con.execute("SELECT count(*) FROM read_parquet(?)", [str(target)]).fetchone()[0]
     con.close()
+    return int(rows)
+
+
+def write_catalogue_row(root: Path, slug: str, stated: str) -> None:
+    """Add one row to the scratch README's catalogue, starting the table if needed.
+
+    The checker locates the table by its `Rows` column and ties each row to a package
+    through the descriptor it links to, so this fixture only has to carry those two
+    things — the other columns exist to keep it a plausible table rather than a
+    minimal one the real README could not be.
+    """
+    readme = root.parent / "README.md"
+    if not readme.exists():
+        readme.write_text(
+            "# scratch catalogue\n\n## Datasets\n\n"
+            "| Dataset | Rows | License | Descriptor |\n|---|---|---|---|\n",
+            encoding="utf-8",
+        )
+    with readme.open("a", encoding="utf-8") as handle:
+        handle.write(f"| {slug} | {stated} | CC0-1.0 | [datapackage.json]({root.name}/{slug}/datapackage.json) |\n")
 
 
 def write_package(
@@ -75,11 +97,19 @@ def write_package(
     declared_bytes: int | None = None,
     resource_path: str | None = None,
     resource_name: str | None = None,
+    catalogue: str | bool = True,
 ) -> Path:
-    """Lay down datasets/<slug>/{<slug>.parquet, datapackage.json} and return the descriptor."""
+    """Lay down datasets/<slug>/{<slug>.parquet, datapackage.json} and return the descriptor.
+
+    `catalogue` decides what the scratch README says about this package: True states
+    the count the fixture actually holds, a string states that figure verbatim, and
+    False leaves the package out of the catalogue altogether. It defaults to True so
+    every case in this file carries a catalogue that agrees with its data, and only
+    the cases about the catalogue have to think about it.
+    """
     package_dir = root / slug
     parquet = package_dir / f"{slug}.parquet"
-    write_parquet(parquet, select_sql)
+    rows = write_parquet(parquet, select_sql)
 
     schema: dict[str, Any] = {"fields": fields}
     if primary_key is not None:
@@ -100,6 +130,8 @@ def write_package(
         json.dumps({"name": slug, "title": slug, "resources": [resource]}, indent=2) + "\n",
         encoding="utf-8",
     )
+    if catalogue is not False:
+        write_catalogue_row(root, slug, f"{rows:,}" if catalogue is True else catalogue)
     return descriptor
 
 
@@ -1041,6 +1073,284 @@ class DescriptorCheckSelfTest(unittest.TestCase):
         self.assertEqual(
             [(v["field"], v["rule"]) for v in document["violations"]], [("code", "constraints.pattern")]
         )
+
+    # ----------------------------------------------------------- the catalogue
+    #
+    # The table on the front page is the first quantitative claim a stranger meets
+    # about these datasets, and it sits beside links to the bytes. Three of its four
+    # row counts had drifted, the worst by a factor of 31, because nothing read it.
+    # These cases redden when the reading stops.
+
+    def readme(self) -> Path:
+        return self.datasets.parent / "README.md"
+
+    def test_catalogue_figure_matching_the_object_passes(self) -> None:
+        write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT i AS n FROM range(3) t(i)",
+            fields=[{"name": "n", "type": "integer"}],
+            catalogue="3",
+        )
+        self.assertOutcome(run_check(self.datasets), EXIT_OK, "1 catalogue row count(s) measured")
+
+    def test_catalogue_figure_understating_the_object_fails(self) -> None:
+        write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT i AS n FROM range(1234) t(i)",
+            fields=[{"name": "n", "type": "integer"}],
+            catalogue="40",
+        )
+        self.assertOutcome(
+            run_check(self.datasets),
+            EXIT_VIOLATIONS,
+            "catalogue.rows",
+            "states 40",
+            "the published object holds 1,234 rows",
+        )
+
+    def test_catalogue_figure_off_by_one_fails(self) -> None:
+        """The EDGAR case: 10,415 stated against 10,414 published.
+
+        A figure written in full claims every digit it carries, so a tolerance wide
+        enough to swallow one row would swallow this and it is a real disagreement.
+        """
+        write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT i AS n FROM range(1234) t(i)",
+            fields=[{"name": "n", "type": "integer"}],
+            catalogue="1,235",
+        )
+        self.assertOutcome(
+            run_check(self.datasets),
+            EXIT_VIOLATIONS,
+            "catalogue.rows",
+            "states 1,235",
+            "the published object holds 1,234 rows",
+        )
+
+    def test_rounded_figure_right_at_its_own_precision_passes(self) -> None:
+        write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT i AS n FROM range(1234) t(i)",
+            fields=[{"name": "n", "type": "integer"}],
+            catalogue="1.2K",
+        )
+        self.assertOutcome(run_check(self.datasets), EXIT_OK, "agree with their data")
+
+    def test_rounded_figure_wrong_at_its_own_precision_fails(self) -> None:
+        """The GLEIF case: 3.36M stated against a count that rounds to 3.38M.
+
+        Off by 0.6%, and still a disagreement — the figure is wrong at the precision
+        its own author chose to write it to.
+        """
+        write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT i AS n FROM range(1234) t(i)",
+            fields=[{"name": "n", "type": "integer"}],
+            catalogue="1.3K",
+        )
+        self.assertOutcome(
+            run_check(self.datasets),
+            EXIT_VIOLATIONS,
+            "catalogue.rows",
+            "states 1.3K",
+            "which is 1.2K at the precision 1.3K is written to",
+        )
+
+    def test_rounded_figure_right_at_a_coarser_precision_passes(self) -> None:
+        """1K for 1,234 rows is a presentation choice, and the rule does not ban it."""
+        write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT i AS n FROM range(1234) t(i)",
+            fields=[{"name": "n", "type": "integer"}],
+            catalogue="1K",
+        )
+        self.assertOutcome(run_check(self.datasets), EXIT_OK, "agree with their data")
+
+    def test_rounded_figure_wrong_at_a_coarser_precision_fails(self) -> None:
+        """2K for 1,234 rows is the same order of magnitude and still refused.
+
+        This is the half of the rule that a bare order-of-magnitude tolerance would
+        lose: 2K and 1K differ by one character and only one of them is what this
+        count rounds to.
+        """
+        write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT i AS n FROM range(1234) t(i)",
+            fields=[{"name": "n", "type": "integer"}],
+            catalogue="2K",
+        )
+        self.assertOutcome(run_check(self.datasets), EXIT_VIOLATIONS, "catalogue.rows", "states 2K")
+
+    def test_a_figure_rounded_half_up_at_the_boundary_passes(self) -> None:
+        write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT i AS n FROM range(1250) t(i)",
+            fields=[{"name": "n", "type": "integer"}],
+            catalogue="1.3K",
+        )
+        self.assertOutcome(run_check(self.datasets), EXIT_OK, "agree with their data")
+
+    def test_a_figure_rounded_down_at_the_boundary_fails(self) -> None:
+        write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT i AS n FROM range(1250) t(i)",
+            fields=[{"name": "n", "type": "integer"}],
+            catalogue="1.2K",
+        )
+        self.assertOutcome(
+            run_check(self.datasets), EXIT_VIOLATIONS, "catalogue.rows", "which is 1.3K"
+        )
+
+    def test_a_figure_the_rule_cannot_read_is_a_disagreement_not_a_skip(self) -> None:
+        """Blanking a cell must not be a way to stop it being checked."""
+        write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT i AS n FROM range(3) t(i)",
+            fields=[{"name": "n", "type": "integer"}],
+            catalogue="—",
+        )
+        self.assertOutcome(
+            run_check(self.datasets),
+            EXIT_VIOLATIONS,
+            "catalogue.rows",
+            "not a row count this check can read",
+            "the published object holds 3 rows",
+        )
+
+    def test_published_dataset_absent_from_the_catalogue_fails(self) -> None:
+        """Nor must deleting the row: the check is driven by the packages, not the text."""
+        write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT i AS n FROM range(3) t(i)",
+            fields=[{"name": "n", "type": "integer"}],
+        )
+        write_package(
+            self.datasets,
+            "gadgets",
+            select_sql="SELECT i AS n FROM range(4) t(i)",
+            fields=[{"name": "n", "type": "integer"}],
+            catalogue=False,
+        )
+        self.assertOutcome(
+            run_check(self.datasets),
+            EXIT_VIOLATIONS,
+            "catalogue.missing",
+            "gadgets",
+            "no catalogue row in README.md links to it",
+        )
+
+    def test_catalogue_row_naming_a_descriptor_that_is_not_there_is_an_error(self) -> None:
+        write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT i AS n FROM range(3) t(i)",
+            fields=[{"name": "n", "type": "integer"}],
+        )
+        write_catalogue_row(self.datasets, "ghosts", "7")
+        self.assertOutcome(run_check(self.datasets), EXIT_ERROR, "ghosts/datapackage.json")
+
+    def test_a_missing_catalogue_is_an_error_not_a_pass(self) -> None:
+        write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT i AS n FROM range(3) t(i)",
+            fields=[{"name": "n", "type": "integer"}],
+        )
+        self.readme().unlink()
+        self.assertOutcome(run_check(self.datasets), EXIT_ERROR, "cannot read the catalogue")
+
+    def test_a_catalogue_without_a_rows_column_is_an_error_not_a_pass(self) -> None:
+        """Renaming the column stops the check, so it must stop the run too."""
+        write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT i AS n FROM range(3) t(i)",
+            fields=[{"name": "n", "type": "integer"}],
+        )
+        self.readme().write_text(
+            "# scratch\n\n| Dataset | Size | Descriptor |\n|---|---|---|\n"
+            "| widgets | 3 | [datapackage.json](datasets/widgets/datapackage.json) |\n",
+            encoding="utf-8",
+        )
+        self.assertOutcome(run_check(self.datasets), EXIT_ERROR, "no table with a 'rows' column")
+
+    def test_the_count_comes_from_the_object_not_from_the_descriptor(self) -> None:
+        """A descriptor stating its own row count cannot make the catalogue agree.
+
+        The descriptor here says 9 rows, the catalogue says 9, and the object holds 3.
+        A check that took the count from the descriptor would call this conformant.
+        """
+        descriptor = write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT i AS n FROM range(3) t(i)",
+            fields=[{"name": "n", "type": "integer"}],
+            catalogue="9",
+        )
+        document = json.loads(descriptor.read_text(encoding="utf-8"))
+        document["resources"][0]["rowCount"] = 9
+        descriptor.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+        self.assertOutcome(
+            run_check(self.datasets),
+            EXIT_VIOLATIONS,
+            "catalogue.rows",
+            "the published object holds 3 rows",
+        )
+
+    def test_write_catalogue_corrects_the_figure_from_the_measurement(self) -> None:
+        write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT i AS n FROM range(1234) t(i)",
+            fields=[{"name": "n", "type": "integer"}],
+            catalogue="4,000",
+        )
+        self.assertOutcome(run_check(self.datasets, "--write-catalogue"), EXIT_OK, "4,000 -> 1,234")
+        self.assertIn(
+            "| widgets | 1,234 | CC0-1.0 | [datapackage.json](datasets/widgets/datapackage.json) |",
+            self.readme().read_text(encoding="utf-8"),
+        )
+        self.assertOutcome(run_check(self.datasets), EXIT_OK, "agree with their data")
+
+    def test_write_catalogue_keeps_the_form_the_figure_was_written_in(self) -> None:
+        write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT i AS n FROM range(1234) t(i)",
+            fields=[{"name": "n", "type": "integer"}],
+            catalogue="9.9K",
+        )
+        self.assertOutcome(run_check(self.datasets, "--write-catalogue"), EXIT_OK, "9.9K -> 1.2K")
+        self.assertIn("| 1.2K |", self.readme().read_text(encoding="utf-8"))
+
+    def test_only_narrows_the_catalogue_to_the_datasets_it_names(self) -> None:
+        write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT i AS n FROM range(3) t(i)",
+            fields=[{"name": "n", "type": "integer"}],
+        )
+        write_package(
+            self.datasets,
+            "gadgets",
+            select_sql="SELECT i AS n FROM range(4) t(i)",
+            fields=[{"name": "n", "type": "integer"}],
+            catalogue="99",
+        )
+        self.assertOutcome(run_check(self.datasets, "--only", "widgets"), EXIT_OK, "1 catalogue row")
+        self.assertOutcome(run_check(self.datasets), EXIT_VIOLATIONS, "catalogue.rows", "states 99")
 
 
 if __name__ == "__main__":
