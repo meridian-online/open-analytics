@@ -37,6 +37,17 @@ And per package:
   7. foreignKeys   — each declared foreign key resolves to a real resource+field,
                      in this package or a sibling one, of compatible declared type.
 
+And once, over the catalogue in README.md:
+
+  8. catalogue     — every row of the table that states a row count is held to the
+                     number of rows in the object it links to, counted from that
+                     object. A figure written in full must match exactly; a figure
+                     written to a stated precision (`3.36M`) must be what the count
+                     rounds to at that precision. A published dataset the catalogue
+                     omits is a disagreement too, so a row cannot be deleted to make
+                     the check pass. `--write-catalogue` corrects the figures from the
+                     measurement rather than by hand. See `render_count` for the rule.
+
 Exit codes are distinct on purpose, because a status alone cannot tell a refusal
 apart from a crash:
 
@@ -66,6 +77,7 @@ import sys
 import urllib.error
 import urllib.request
 from dataclasses import asdict, dataclass
+from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -974,6 +986,267 @@ def check_foreign_keys(packages: dict[str, dict[str, Any]]) -> list[Violation]:
     return violations
 
 
+# ------------------------------------------------------------------- catalogue
+#
+# The table in README.md is the first quantitative claim a stranger meets about
+# these datasets, and it sits directly beside links to the bytes. Nothing read it
+# back against those bytes, so three of its four row counts had drifted — the
+# crosswalk row said 6,570 against 207,099 published rows. The rules below read the
+# table, count the rows in the object each row links to, and hold one to the other.
+
+# The header cell that identifies the catalogue table. The table is found by its
+# columns rather than by the heading above it, so renaming the section does not
+# quietly stop the check.
+CATALOGUE_ROWS_COLUMN = "rows"
+
+# The link that identifies which dataset a catalogue row is about. A row is tied to
+# a package by the descriptor it links to, not by its prose label, so retitling a
+# dataset does not detach it from the bytes it is measured against.
+CATALOGUE_DESCRIPTOR_LINK = re.compile(r"\[[^\]]*\]\(([^)]*datapackage\.json)\)")
+
+# A count written in full, with or without thousands separators: 2,125 · 207099.
+EXACT_FIGURE = re.compile(r"^(?:\d{1,3}(?:,\d{3})+|\d+)$")
+
+# A count written to a stated precision: 3.36M · 1.2K · 4B.
+ROUNDED_FIGURE = re.compile(r"^\d+(?:\.(\d+))?([KMB])$")
+
+SUFFIX_SCALE = {"K": 1_000, "M": 1_000_000, "B": 1_000_000_000}
+
+TABLE_DELIMITER_CELL = re.compile(r":?-+:?")
+
+
+def render_count(count: int, like: str) -> str | None:
+    """`count` written in the same form and to the same precision as the figure `like`.
+
+    This is the whole rounding rule, and it is deliberately one function so there is
+    one place to read it: **a stated figure is read at the precision it is written
+    to.** A figure written in full must equal the count exactly — 10,415 is a claim
+    about every one of its digits, and the object holds 10,414. A figure written with
+    a magnitude suffix is a rounded form, and must equal the count rounded half-up to
+    the number of decimal places the figure itself carries: for 3,377,398 rows, `3.38M`
+    is right, `3.4M` and `3M` are right at their own coarser precisions, and `3.36M`
+    is wrong — not because it is rounded, but because it is not what that count rounds
+    to at two decimal places.
+
+    So rounding is not banned, and neither is any figure of the right magnitude
+    accepted: the tolerance is exactly the precision the author chose to write.
+
+    Returns None for a figure this rule cannot read, which is a disagreement rather
+    than a skip — see `check_catalogue`.
+    """
+    if EXACT_FIGURE.match(like):
+        return f"{count:,}" if "," in like else str(count)
+    rounded = ROUNDED_FIGURE.match(like)
+    if rounded:
+        decimals, suffix = rounded.groups()
+        places = len(decimals or "")
+        scaled = (Decimal(count) / Decimal(SUFFIX_SCALE[suffix])).quantize(
+            Decimal(1).scaleb(-places), rounding=ROUND_HALF_UP
+        )
+        return f"{scaled:.{places}f}{suffix}"
+    return None
+
+
+@dataclass(frozen=True)
+class CatalogueRow:
+    index: int  # 0-based index into the README's lines, for rewriting and for the message
+    stated: str  # the Rows cell exactly as written
+    rows_cell: int  # which cell of the row that was
+    descriptor: str  # the datapackage.json path the row links to, as written
+
+
+def table_cells(line: str) -> list[str]:
+    """The raw cells of a pipe-table row, or [] when the line is not one."""
+    stripped = line.strip()
+    if not stripped.startswith("|") or not stripped.endswith("|") or len(stripped) < 2:
+        return []
+    return stripped[1:-1].split("|")
+
+
+def parse_catalogue(readme_path: Path, text: str) -> list[CatalogueRow]:
+    """Every body row of every table in `text` that has a `Rows` column.
+
+    Raises rather than returning nothing when there is no such table: a catalogue the
+    check cannot find is a check that has stopped running, and that must not read as
+    a pass.
+    """
+    lines = text.split("\n")
+    rows: list[CatalogueRow] = []
+    tables = 0
+
+    for index, line in enumerate(lines):
+        header = table_cells(line)
+        if not header or index + 1 >= len(lines):
+            continue
+        delimiter = table_cells(lines[index + 1])
+        if len(delimiter) != len(header):
+            continue
+        if not all(TABLE_DELIMITER_CELL.fullmatch(cell.strip()) for cell in delimiter):
+            continue
+        names = [cell.strip().lower() for cell in header]
+        if CATALOGUE_ROWS_COLUMN not in names:
+            continue
+
+        tables += 1
+        rows_cell = names.index(CATALOGUE_ROWS_COLUMN)
+        for body in range(index + 2, len(lines)):
+            cells = table_cells(lines[body])
+            if not cells:
+                break
+            if len(cells) != len(header):
+                raise CheckError(
+                    f"{readme_path}: line {body + 1} of the catalogue has {len(cells)} cell(s) "
+                    f"against a header of {len(header)}"
+                )
+            link = next(
+                (match.group(1) for match in map(CATALOGUE_DESCRIPTOR_LINK.search, cells) if match),
+                None,
+            )
+            if link is None:
+                raise CheckError(
+                    f"{readme_path}: line {body + 1} of the catalogue links to no datapackage.json, "
+                    "so there is nothing to measure its row count against"
+                )
+            rows.append(CatalogueRow(body, cells[rows_cell].strip(), rows_cell, link))
+
+    if not tables:
+        raise CheckError(
+            f"{readme_path}: no table with a {CATALOGUE_ROWS_COLUMN!r} column — the catalogue is "
+            "either missing or no longer states row counts, and either way nothing here was checked"
+        )
+    return rows
+
+
+def object_row_count(con, path: str) -> int:
+    """How many rows the published object holds.
+
+    Asked of the object, never of a descriptor: a descriptor that is itself wrong
+    about its data would otherwise let the catalogue agree with it and still be wrong
+    about the bytes. DuckDB answers this from the Parquet's row-group metadata, so it
+    is a range read of the footer rather than a download.
+    """
+    try:
+        row = con.execute("SELECT count(*) FROM read_parquet(?)", [path]).fetchone()
+    except Exception as exc:  # duckdb raises a family of errors; all mean "cannot read"
+        raise CheckError(f"cannot count the rows at {path}: {exc}") from exc
+    return int(row[0])
+
+
+def check_catalogue(
+    con,
+    readme_path: Path,
+    descriptor_paths: list[Path],
+    packages: dict[str, dict[str, Any]],
+    only: set[str] | None,
+    write: bool,
+) -> tuple[list[Violation], int]:
+    """Hold every catalogue row count to the object that row links to.
+
+    With `write`, the measurement rewrites the figure instead of reporting it — the
+    correction is produced by counting, which is the only way it stays true. A figure
+    the rule cannot read is not one it can rewrite, and a published dataset the
+    catalogue omits cannot be invented, so both of those stay disagreements either way.
+    """
+    try:
+        text = readme_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise CheckError(f"cannot read the catalogue at {readme_path}: {exc}") from exc
+
+    rows = parse_catalogue(readme_path, text)
+    by_path = {Path(key).resolve(): document for key, document in packages.items()}
+
+    violations: list[Violation] = []
+    lines = text.split("\n")
+    rewritten = 0
+    listed: set[Path] = set()
+    checked = 0
+
+    for row in rows:
+        descriptor_path = (readme_path.parent / row.descriptor).resolve()
+        if only is not None and descriptor_path.parent.name not in only:
+            continue
+        document = by_path.get(descriptor_path)
+        if document is None:
+            raise CheckError(
+                f"{readme_path}: line {row.index + 1} of the catalogue links to {row.descriptor}, "
+                "which is not a descriptor this run loaded"
+            )
+        listed.add(descriptor_path)
+
+        resources = document.get("resources") or []
+        if len(resources) != 1:
+            raise CheckError(
+                f"{readme_path}: line {row.index + 1} states one row count, but {row.descriptor} "
+                f"declares {len(resources)} resource(s), so there is no one count it names"
+            )
+        raw_path = resources[0].get("path")
+        if not raw_path:
+            raise CheckError(f"{row.descriptor}: resource declares no path")
+        path, is_remote = resolve_path(descriptor_path, raw_path)
+        if is_remote:
+            con.execute("INSTALL httpfs")
+            con.execute("LOAD httpfs")
+        elif not Path(path).exists():
+            raise CheckError(f"{row.descriptor}: resource points at {path}, which does not exist")
+
+        count = object_row_count(con, path)
+        checked += 1
+        rendered = render_count(count, row.stated)
+
+        if rendered is None:
+            violations.append(
+                Violation(
+                    str(readme_path),
+                    row.descriptor,
+                    "",
+                    "catalogue.rows",
+                    f"line {row.index + 1} states {row.stated!r}, which is not a row count this "
+                    f"check can read; the published object holds {count:,} rows",
+                )
+            )
+        elif rendered != row.stated:
+            if write:
+                cells = table_cells(lines[row.index])
+                cells[row.rows_cell] = cells[row.rows_cell].replace(row.stated, rendered, 1)
+                lines[row.index] = "|" + "|".join(cells) + "|"
+                rewritten += 1
+                print(
+                    f"catalogue: {readme_path.name} line {row.index + 1} — {row.stated} -> {rendered} "
+                    f"({count:,} rows in {raw_path})"
+                )
+            else:
+                detail = (
+                    f"line {row.index + 1} states {row.stated}; "
+                    f"the published object holds {count:,} rows"
+                )
+                if rendered not in (str(count), f"{count:,}"):
+                    detail += f", which is {rendered} at the precision {row.stated} is written to"
+                violations.append(
+                    Violation(str(readme_path), row.descriptor, "", "catalogue.rows", detail)
+                )
+
+    if only is None:
+        for descriptor_path in descriptor_paths:
+            if descriptor_path.resolve() not in listed:
+                violations.append(
+                    Violation(
+                        str(readme_path),
+                        str(descriptor_path),
+                        "",
+                        "catalogue.missing",
+                        f"{descriptor_path} is published, and no catalogue row in "
+                        f"{readme_path.name} links to it, so nothing states its size",
+                    )
+                )
+
+    if write and rewritten:
+        readme_path.write_text("\n".join(lines), encoding="utf-8")
+    if write:
+        print(f"catalogue: {rewritten} of {checked} row(s) rewritten from the measurement")
+
+    return violations, checked
+
+
 def discover(datasets_dir: Path, only: Iterable[str] | None) -> list[Path]:
     paths = sorted(datasets_dir.glob("*/datapackage.json"))
     if only:
@@ -992,6 +1265,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--datasets-dir", default="datasets", type=Path)
     parser.add_argument("--only", action="append", metavar="SLUG", help="restrict to one dataset slug (repeatable)")
     parser.add_argument("--json", metavar="FILE", type=Path, help="also write the findings as JSON")
+    parser.add_argument(
+        "--readme",
+        metavar="FILE",
+        type=Path,
+        help="the catalogue to check (default: README.md beside --datasets-dir)",
+    )
+    parser.add_argument(
+        "--write-catalogue",
+        action="store_true",
+        help="rewrite each catalogue row count from the measured count, in the form the cell is "
+        "already written in, instead of reporting the disagreement. The correction is produced by "
+        "counting the published rows, which is what keeps it true.",
+    )
     parser.add_argument(
         "--require-self-description",
         action="store_true",
@@ -1045,6 +1331,21 @@ def main(argv: list[str] | None = None) -> int:
         print(f"descriptor check: {exc}", file=sys.stderr)
         return EXIT_ERROR
 
+    readme_path = args.readme if args.readme is not None else args.datasets_dir.parent / "README.md"
+    try:
+        catalogue_violations, catalogue_rows = check_catalogue(
+            con,
+            readme_path,
+            descriptor_paths,
+            packages,
+            set(args.only) if args.only else None,
+            args.write_catalogue,
+        )
+        violations.extend(catalogue_violations)
+    except CheckError as exc:
+        print(f"descriptor check: {exc}", file=sys.stderr)
+        return EXIT_ERROR
+
     checked = ", ".join(path.parent.name for path in descriptor_paths)
     if args.json:
         args.json.write_text(
@@ -1064,6 +1365,7 @@ def main(argv: list[str] | None = None) -> int:
     carried = (
         f"{len(self_described)} of {resource_count} resource(s) carry their own description"
         + (f" ({', '.join(self_described)})" if self_described else "")
+        + f"; {catalogue_rows} catalogue row count(s) measured against the objects they link to"
     )
     if not violations:
         print(
