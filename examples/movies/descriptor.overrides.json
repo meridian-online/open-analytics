@@ -1,36 +1,68 @@
 {
   "name": "movies",
-  "title": "Movies — box office, ratings and genre (vega-datasets)",
-  "description": "3,201 films with production budget, US and worldwide gross, DVD sales, running time, distributor, director, genre and two critic scores. Demo data: referenced from vega-datasets by pinned URL and built locally. Meridian does not host or publish this dataset.",
+  "title": "Movies \u2014 box office, ratings and genre (vega-datasets)",
+  "description": "3,201 films with production budget, US and worldwide gross, DVD sales, running time, distributor, director, genre and two critic scores. LICENCE: vega-datasets declares a per-resource licence for 58 of its 73 resources and movies is one of the 15 it does not, so no licence is asserted here either. The BSD-3-Clause on that repository covers its code and infrastructure, not the contents of the datasets it redistributes, and its own datapackage.json says so. Demo data: referenced by pinned URL and built locally. Meridian does not host, publish or redistribute this dataset.",
   "licenses": [
     {
-      "name": "BSD-3-Clause",
-      "title": "BSD 3-Clause License (vega-datasets)",
-      "path": "https://github.com/vega/vega-datasets/blob/main/LICENSE"
+      "name": "notspecified",
+      "title": "No licence declared at source for this resource",
+      "path": "https://github.com/vega/vega-datasets/blob/main/datapackage.json"
     }
   ],
   "sources": [
     {
-      "title": "vega-datasets 3.2.1 — movies.json",
+      "title": "vega-datasets 3.2.1 \u2014 movies.json",
       "path": "https://github.com/vega/vega-datasets"
     }
   ],
   "fields": {
-    "title": {"description": "Film title, taken out of the source's JSON-typed column. One of the 3,201 values is null in the source."},
-    "release_date": {"description": "US release date, parsed from the source's 'Jun 12 1998' strings. All 3,201 parsed at the time this Protocol was written."},
-    "mpaa_rating": {"description": "MPAA certificate, as the source spells it."},
-    "major_genre": {"description": "Single genre label assigned by the source."},
-    "creative_type": {"description": "Source's commercial categorisation, e.g. Contemporary Fiction, Super Hero."},
-    "source_material": {"description": "What the film was adapted from, if anything — the source's 'Source' column, renamed so it does not collide with the descriptor's own 'sources'."},
-    "distributor": {"description": "Theatrical distributor."},
-    "director": {"description": "Director, where the source records one."},
-    "running_time_min": {"description": "Running time in minutes."},
-    "production_budget": {"description": "Production budget in nominal US dollars, not inflation-adjusted."},
-    "us_gross": {"description": "US theatrical gross in nominal US dollars."},
-    "worldwide_gross": {"description": "Worldwide theatrical gross in nominal US dollars."},
-    "us_dvd_sales": {"description": "US DVD sales in nominal US dollars; absent for most rows."},
-    "imdb_rating": {"description": "IMDB user rating out of 10, as captured by the source at collection time."},
-    "imdb_votes": {"description": "Number of IMDB votes behind that rating."},
-    "rotten_tomatoes_rating": {"description": "Rotten Tomatoes score out of 100, as captured by the source at collection time."}
+    "title": {
+      "description": "Film title. Nine of the 3,201 are bare JSON numbers rather than strings \u2014 1776, 2012, 300 and their kind \u2014 which is why the source column arrives JSON-typed; vega-datasets documents this as a deliberate data-quality feature of the dataset."
+    },
+    "release_date": {
+      "description": "US release date, parsed from the source's 'Jun 12 1998' strings. All 3,201 parsed at the time this Protocol was written."
+    },
+    "mpaa_rating": {
+      "description": "MPAA certificate, as the source spells it."
+    },
+    "major_genre": {
+      "description": "Single genre label assigned by the source."
+    },
+    "creative_type": {
+      "description": "Source's commercial categorisation, e.g. Contemporary Fiction, Super Hero."
+    },
+    "source_material": {
+      "description": "What the film was adapted from, if anything \u2014 the source's 'Source' column, renamed so it does not collide with the descriptor's own 'sources'."
+    },
+    "distributor": {
+      "description": "Theatrical distributor."
+    },
+    "director": {
+      "description": "Director, where the source records one."
+    },
+    "running_time_min": {
+      "description": "Running time in minutes."
+    },
+    "production_budget": {
+      "description": "Production budget in nominal US dollars, not inflation-adjusted."
+    },
+    "us_gross": {
+      "description": "US theatrical gross in nominal US dollars."
+    },
+    "worldwide_gross": {
+      "description": "Worldwide theatrical gross in nominal US dollars."
+    },
+    "us_dvd_sales": {
+      "description": "US DVD sales in nominal US dollars; absent for most rows."
+    },
+    "imdb_rating": {
+      "description": "IMDB user rating out of 10, as captured by the source at collection time."
+    },
+    "imdb_votes": {
+      "description": "Number of IMDB votes behind that rating."
+    },
+    "rotten_tomatoes_rating": {
+      "description": "Rotten Tomatoes score out of 100, as captured by the source at collection time."
+    }
   }
 }

@@ -1,6 +1,6 @@
 {
   "$schema": "https://datapackage.org/profiles/2.0/datapackage.json",
-  "created": "2026-08-23T08:25:46Z",
+  "created": "2026-08-23T10:31:11Z",
   "description": "16,640 California census-block-group districts with median income, housing age, room and occupancy averages, population, position and median house value. This is the source's train split; the full dataset has 20,640 districts. Demo data: referenced by pinned URL and revision and built locally. Meridian does not host or publish this dataset.",
   "licenses": [
     {

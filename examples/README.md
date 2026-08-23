@@ -14,7 +14,9 @@ Each subdirectory is an [arcform](https://github.com/meridian-online/arcform) Pr
 | `census-income` | `scikit-learn/adult-census-income` @ `fbeef6ec` | CC0-1.0 | 32,561 |
 | `california-housing` | `gvlassis/california_housing` @ `17110e60` | MIT | 16,640 |
 
-**Each licence was read at its source, not taken from a comment in another project.** Every `sha256:` in these manifests was computed from the fetched bytes here, and the two Hugging Face URLs address a 40-character commit revision rather than a default branch, so the revision is pinned as well as the content.
+**Each licence was read at its source, and for `movies` that turned out to mean no licence at all.** vega-datasets declares a per-resource licence for **58 of its 73 resources**, and `movies` is one of the 15 it does not — so the silence is a choice rather than an omission, and nothing is asserted here either. The BSD-3-Clause on that repository covers its code and infrastructure, and its own `datapackage.json` says so. An earlier version of this file labelled `movies` BSD-3-Clause and cited a `LICENSE` URL that returns 404; that was the repository's code licence applied to data it only redistributes, which is exactly the mistake this paragraph now exists to prevent.
+
+Every `sha256:` in these manifests was computed from the fetched bytes here, and the two Hugging Face URLs address a 40-character commit revision rather than a default branch, so the revision is pinned as well as the content.
 
 `census-income` describes individuals recorded by the 1994 US Census. It is used here as a *shape of data*, and its columns use that instrument's categories rather than ones anybody would choose today.
 
@@ -29,6 +31,8 @@ You need `arc` on `PATH` and a DuckDB the manifest's `engine_version` accepts. E
 ## Two things worth knowing before you rely on a run
 
 **The exports are byte-reproducible, and `ORDER BY ALL` is why.** Two cold runs of all three Protocols produced identical SHA-256 digests — `5ab2c92b…`, `3021b408…` and `43b5fbc7…`. That ordering is deliberately *not* claimed to be a total order: 24 of `census-income`'s 32,561 rows are exact duplicates of another row, so ties exist. A tie between two rows that are equal in every column cannot change the output bytes, because the rows themselves are identical — which is the weaker condition that actually holds, and it holds without inventing a surrogate key.
+
+**A `sha256:` pin is provenance here, not an integrity gate.** On a genuine transfer it fails closed — corrupt a pin against an empty cache and the run stops, naming both hashes. But arcform's shared fetch cache is keyed by **URL**, and on a cache hit the pin is not consulted: with the cache warm, a manifest declaring `sha256: 0000…0` builds to exit 0 and reuses the cached bytes. Reproduced on `california-housing`. So the pin protects the first fetch on a cold machine and nothing after it, and changing a pin to name different bytes will not fetch them on a machine that already has the old ones.
 
 **`arc run` decides freshness from its recorded state, not from the disk.** Delete a Protocol's exported Parquet and run it again, and it reports `0/4 steps succeeded, 4 skipped (fresh)` while the file stays absent — observed here with `arc 0.1.0` on all three. To rebuild, remove the whole `build/` directory rather than the output file. Anyone measuring reproducibility by deleting an artefact and re-running will otherwise measure nothing at all, which is how this was found.
 

@@ -1,10 +1,15 @@
 -- Movies, from the vega-datasets distribution, into a shape a dashboard can read.
 --
 -- Three source quirks, each handled here rather than left for a reader to hit:
---   • `Title` arrives as DuckDB's JSON type, not VARCHAR, because one of the 3,201
---     values is null and read_json_auto widens the column. `->>'$'` takes the scalar
---     out. This matters beyond tidiness: the descriptor step types COLUMNS, and a
---     JSON column is not a thing it has a useful opinion about.
+--   • `Title` arrives as DuckDB's JSON type, not VARCHAR, because the column is
+--     type-HETEROGENEOUS: nine of the 3,201 titles are bare JSON numbers rather than
+--     strings — 1776, 2012, 300 and their kind — so read_json_auto widens the column
+--     to JSON. `->>'$'` takes the scalar out. vega-datasets documents this in its own
+--     datapackage.json as a deliberate teaching feature of the dataset, alongside the
+--     non-ISO date format below. (An earlier version of this comment blamed the single
+--     null title. That is wrong: a column of strings and nulls stays VARCHAR.)
+--     This matters beyond tidiness: the descriptor step types COLUMNS, and a JSON
+--     column is not a thing it has a useful opinion about.
 --   • `Release Date` is 'Jun 12 1998' — a real date wearing a string. All 3,201 parse
 --     with '%b %d %Y', checked before this was written, so try_strptime never silently
 --     drops one here. It stays `try_` so that a future vega-datasets version which

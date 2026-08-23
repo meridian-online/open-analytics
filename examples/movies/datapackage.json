@@ -1,12 +1,12 @@
 {
   "$schema": "https://datapackage.org/profiles/2.0/datapackage.json",
-  "created": "2026-08-23T08:25:45Z",
-  "description": "3,201 films with production budget, US and worldwide gross, DVD sales, running time, distributor, director, genre and two critic scores. Demo data: referenced from vega-datasets by pinned URL and built locally. Meridian does not host or publish this dataset.",
+  "created": "2026-08-23T10:31:46Z",
+  "description": "3,201 films with production budget, US and worldwide gross, DVD sales, running time, distributor, director, genre and two critic scores. LICENCE: vega-datasets declares a per-resource licence for 58 of its 73 resources and movies is one of the 15 it does not, so no licence is asserted here either. The BSD-3-Clause on that repository covers its code and infrastructure, not the contents of the datasets it redistributes, and its own datapackage.json says so. Demo data: referenced by pinned URL and built locally. Meridian does not host, publish or redistribute this dataset.",
   "licenses": [
     {
-      "name": "BSD-3-Clause",
-      "path": "https://github.com/vega/vega-datasets/blob/main/LICENSE",
-      "title": "BSD 3-Clause License (vega-datasets)"
+      "name": "notspecified",
+      "path": "https://github.com/vega/vega-datasets/blob/main/datapackage.json",
+      "title": "No licence declared at source for this resource"
     }
   ],
   "name": "movies",
@@ -25,7 +25,7 @@
               "maxLength": 65536,
               "minLength": 1
             },
-            "description": "Film title, taken out of the source's JSON-typed column. One of the 3,201 values is null in the source.",
+            "description": "Film title. Nine of the 3,201 are bare JSON numbers rather than strings — 1776, 2012, 300 and their kind — which is why the source column arrives JSON-typed; vega-datasets documents this as a deliberate data-quality feature of the dataset.",
             "name": "title",
             "type": "string",
             "x-finetype-confidence": 0.5194,

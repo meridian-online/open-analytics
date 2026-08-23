@@ -6,10 +6,16 @@
 # manifest under `datasets/` terminates in an object Meridian serves, and a manifest
 # under `examples/` terminates on the disk of whoever ran it. See ../README.md.
 #
-# WHY THE URL IS PINNED BY HASH. `http_fetch`'s `sha256:` makes the fetch fail closed:
-# pinned bytes come from the shared cache without asking the origin, and a transfer
-# that does not match is refused rather than built on. The hash below was computed
-# from the bytes, not copied from another project's source comment.
+# WHY THE URL IS PINNED BY HASH, AND WHAT THE PIN DOES NOT DO. On a real transfer
+# `http_fetch`'s `sha256:` fails closed: bytes that do not match are refused rather
+# than built on, checked here by corrupting a pin against an empty cache and watching
+# the run stop. **On a shared-cache HIT it is not consulted at all.** The cache is
+# keyed by URL, so once this URL has been fetched on a machine, a manifest declaring
+# `sha256: 0000…0` builds to exit 0 and reuses the cached bytes — reproduced here.
+# The pin therefore protects the FIRST fetch on a cold machine and is decorative
+# afterwards. Treat it as provenance rather than as an integrity gate until arcform
+# consults it on the cache path. The hash below was computed from the bytes, not
+# copied from another project's source comment.
 #
 # Produces: build/movies.parquet + datapackage.json
 name: movies
