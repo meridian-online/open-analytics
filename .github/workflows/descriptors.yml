@@ -5,6 +5,19 @@
 # and the message. `descriptors-match-their-data` then runs the same check against
 # the live published files, and is only meaningful because the job above it passed.
 #
+# `engine-version-self-test` and `engine-version-matches-the-pin` cover a different
+# way a descriptor check can be wrong without the data being wrong at all: the engine
+# that WROTE a published object and the engine PINNED to judge it can be different
+# versions. A byte/hash comparison has no way to tell that apart from a real data
+# defect, and one shipped exactly that way — a version skew was reported as a
+# disagreement between descriptor and data, and the refusal it caused was resolved
+# by hand. The Parquet footer's own `created_by` field names the engine that wrote
+# it, so `engine-version-matches-the-pin` reads that back for every published
+# resource and holds it to `DUCKDB_VERSION` below, naming both versions when they
+# differ and saying plainly that the disagreement is about engines, not data.
+# `engine-version-self-test` proves it first, the same way the pair above does: on a
+# scratch footer it patches byte-for-byte to disagree, and on one it leaves alone.
+#
 # `ingest-self-test` sits one step earlier in the chain — not on a published object but
 # on what may enter one. It runs the crosswalk's own SQL models against scratch sources
 # and asserts that an identifier failing ISO 7064 MOD 97-10, which GLEIF does not
@@ -58,6 +71,15 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  # This is the READER's pin — the version every job below installs to run its own
+  # checks. It is deliberately not reconciled here against the pin the publish
+  # pipeline uses to WRITE these objects: that pipeline lives in a private repo this
+  # public one cannot read, so a shared literal is not available without crossing a
+  # boundary this repo does not cross. Instead of comparing two files in two repos,
+  # `engine-version-matches-the-pin` compares this pin against what each published
+  # object's own footer says wrote it — the difference, if any, is stated dynamically
+  # at check time rather than declared statically here, and is a version skew between
+  # writer and reader, not a claim about the two repos' literals agreeing.
   DUCKDB_VERSION: "1.5.5"
   PYTHON_VERSION: "3.12"
 
@@ -145,6 +167,54 @@ jobs:
         with:
           name: descriptor-check
           path: descriptor-check.json
+          if-no-files-found: ignore
+
+  engine-version-self-test:
+    name: the engine-version check can fail
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: install duckdb
+        run: python -m pip install --disable-pip-version-check "duckdb==${DUCKDB_VERSION}"
+      - name: scratch footers, exit status and message
+        run: python scripts/test_check_engine_version.py
+
+  engine-version-matches-the-pin:
+    name: every published footer names the engine this check is pinned to
+    needs: engine-version-self-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: install duckdb
+        run: python -m pip install --disable-pip-version-check "duckdb==${DUCKDB_VERSION}"
+      - name: every datapackage.json resource's footer against this pin
+        shell: bash
+        run: |
+          set +e
+          python scripts/check_engine_version.py --json engine-version-check.json > engine.log 2>&1
+          status=$?
+          set -e
+          cat engine.log
+          {
+            echo '### Writer engine vs reader pin'
+            echo
+            echo '```'
+            cat engine.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $status
+      - name: upload the findings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: engine-version-check
+          path: engine-version-check.json
           if-no-files-found: ignore
 
   ingest-self-test:
