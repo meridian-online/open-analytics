@@ -1,0 +1,58 @@
+# The `movies` demo Protocol — a reproducible recipe for a dashboard's worth of data.
+#
+# NOTHING HERE IS PUBLISHED. This Protocol references a third-party URL and builds a
+# local Parquet. Meridian hosts none of it, and no step in this file writes to
+# openlake. That is the whole difference between `examples/` and `datasets/`: a
+# manifest under `datasets/` terminates in an object Meridian serves, and a manifest
+# under `examples/` terminates on the disk of whoever ran it. See ../README.md.
+#
+# WHY THE URL IS PINNED BY HASH. `http_fetch`'s `sha256:` makes the fetch fail closed:
+# pinned bytes come from the shared cache without asking the origin, and a transfer
+# that does not match is refused rather than built on. The hash below was computed
+# from the bytes, not copied from another project's source comment.
+#
+# Produces: build/movies.parquet + datapackage.json
+name: movies
+engine: duckdb
+engine_version: ">=1.2"
+db: build/movies.db
+
+defaults:
+  retry:
+    max_attempts: 3
+    backoff_sec: 2.0
+
+steps:
+  - name: fetch_movies
+    op: http_fetch@1
+    with:
+      url: https://cdn.jsdelivr.net/npm/vega-datasets@3.2.1/data/movies.json
+      out: build/movies.json
+      sha256: e63c499759e3b07b49563e036f55290f87feb56def8703ec049ca305ab1523d3
+      headers:
+        User-Agent: "Meridian Protocol (open-analytics demo; research@meridian.online)"
+
+  - name: load
+    sql: models/load.sql
+    depends_on: [build/movies.json]
+    produces: [movies]
+
+  # ORDER BY ALL is what makes the bytes reproduce. It is not a TOTAL order — two rows
+  # equal in every column tie — but a tie between rows that are equal in every column
+  # cannot change the bytes, because the rows themselves are identical. A total order
+  # is sufficient for determinism, not necessary; this is the weaker condition that
+  # actually holds, and it holds without inventing a surrogate key.
+  - name: export_movies
+    op: parquet_export@1
+    with:
+      input: movies
+      dest: build/movies.parquet
+      compression: zstd
+      order_by: "ALL"
+
+  - name: describe
+    op: datapackage_describe@1
+    with:
+      parquet: build/movies.parquet
+      overrides: descriptor.overrides.json
+      out: datapackage.json

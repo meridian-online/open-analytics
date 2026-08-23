@@ -1,0 +1,29 @@
+{
+  "name": "california-housing",
+  "title": "California Housing — district-level census aggregates",
+  "description": "16,640 California census-block-group districts with median income, housing age, room and occupancy averages, population, position and median house value. This is the source's train split; the full dataset has 20,640 districts. Demo data: referenced by pinned URL and revision and built locally. Meridian does not host or publish this dataset.",
+  "licenses": [
+    {
+      "name": "MIT",
+      "title": "MIT License",
+      "path": "https://huggingface.co/datasets/gvlassis/california_housing"
+    }
+  ],
+  "sources": [
+    {
+      "title": "gvlassis/california_housing on Hugging Face, revision 17110e60",
+      "path": "https://huggingface.co/datasets/gvlassis/california_housing"
+    }
+  ],
+  "fields": {
+    "median_income": {"description": "Median household income for the district, in tens of thousands of 1990 US dollars."},
+    "house_age": {"description": "Median age of the district's houses, in years."},
+    "avg_rooms": {"description": "Mean rooms per household. A district average, so values above ten are small households in large houses rather than errors."},
+    "avg_bedrooms": {"description": "Mean bedrooms per household, on the same district-average basis."},
+    "population": {"description": "Number of people resident in the district."},
+    "avg_occupancy": {"description": "Mean household members per household."},
+    "latitude": {"description": "District centroid latitude. With longitude, this is a map that needs no embedding behind it."},
+    "longitude": {"description": "District centroid longitude."},
+    "median_house_value": {"description": "Median house value for the district, in hundreds of thousands of 1990 US dollars. Capped at 5.00001 in the source, which is a ceiling rather than a measurement."}
+  }
+}

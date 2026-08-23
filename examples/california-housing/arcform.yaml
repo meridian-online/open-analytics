@@ -1,0 +1,50 @@
+# The `california-housing` demo Protocol — 16,640 districts, as a recipe.
+#
+# NOTHING HERE IS PUBLISHED. This Protocol references a third-party URL and builds a
+# local Parquet. Meridian hosts none of it, and no step writes to openlake. See
+# ../README.md.
+#
+# WHY THIS ONE IS WORTH HAVING even though it is the smallest and plainest of the
+# three: latitude and longitude are two numeric columns, and two numeric columns are
+# a map. It is the example that shows a point map needs no embedding behind it.
+#
+# Produces: build/california_housing.parquet + datapackage.json
+name: california-housing
+engine: duckdb
+engine_version: ">=1.2"
+db: build/california_housing.db
+
+defaults:
+  retry:
+    max_attempts: 3
+    backoff_sec: 2.0
+
+steps:
+  - name: fetch_housing
+    op: http_fetch@1
+    with:
+      url: https://huggingface.co/datasets/gvlassis/california_housing/resolve/17110e600427385a20e8358b00adc9b032d185ff/data/train-00000-of-00001.parquet
+      out: build/california_housing.parquet.src
+      sha256: af9def52e328b6d6b661fe2ce6b2b2090094dfff9a4b2a7650adbe37cb29c3bd
+      headers:
+        User-Agent: "Meridian Protocol (open-analytics demo; research@meridian.online)"
+
+  - name: load
+    sql: models/load.sql
+    depends_on: [build/california_housing.parquet.src]
+    produces: [california_housing]
+
+  - name: export_california_housing
+    op: parquet_export@1
+    with:
+      input: california_housing
+      dest: build/california_housing.parquet
+      compression: zstd
+      order_by: "ALL"
+
+  - name: describe
+    op: datapackage_describe@1
+    with:
+      parquet: build/california_housing.parquet
+      overrides: descriptor.overrides.json
+      out: datapackage.json

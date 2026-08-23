@@ -1,0 +1,293 @@
+{
+  "$schema": "https://datapackage.org/profiles/2.0/datapackage.json",
+  "created": "2026-08-23T08:25:45Z",
+  "description": "3,201 films with production budget, US and worldwide gross, DVD sales, running time, distributor, director, genre and two critic scores. Demo data: referenced from vega-datasets by pinned URL and built locally. Meridian does not host or publish this dataset.",
+  "licenses": [
+    {
+      "name": "BSD-3-Clause",
+      "path": "https://github.com/vega/vega-datasets/blob/main/LICENSE",
+      "title": "BSD 3-Clause License (vega-datasets)"
+    }
+  ],
+  "name": "movies",
+  "resources": [
+    {
+      "bytes": 111525,
+      "format": "parquet",
+      "hash": "sha256:5ab2c92b19ca1facaf1918b08d767154684006a5d5eddebc4ec4197ace3d808f",
+      "mediatype": "application/vnd.apache.parquet",
+      "name": "movies",
+      "path": "movies.parquet",
+      "schema": {
+        "fields": [
+          {
+            "constraints": {
+              "maxLength": 65536,
+              "minLength": 1
+            },
+            "description": "Film title, taken out of the source's JSON-typed column. One of the 3,201 values is null in the source.",
+            "name": "title",
+            "type": "string",
+            "x-finetype-confidence": 0.5194,
+            "x-finetype-label": "representation.text.plain_text"
+          },
+          {
+            "constraints": {
+              "maxLength": 10,
+              "minLength": 10,
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "description": "US release date, parsed from the source's 'Jun 12 1998' strings. All 3,201 parsed at the time this Protocol was written.",
+            "format": "%Y-%m-%d",
+            "name": "release_date",
+            "type": "date",
+            "x-finetype-confidence": 1.0,
+            "x-finetype-label": "datetime.date.iso"
+          },
+          {
+            "constraints": {
+              "maxLength": 100,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$|^[A-Za-z]{3} [A-Za-z]{5}$"
+            },
+            "description": "MPAA certificate, as the source spells it.",
+            "name": "mpaa_rating",
+            "type": "string",
+            "x-finetype-confidence": 0.6255,
+            "x-finetype-enum-domain": {
+              "cohesion": 0.42899999022483826,
+              "distinct": 7,
+              "domain": [
+                "G",
+                "NC-17",
+                "Not Rated",
+                "Open",
+                "PG",
+                "PG-13",
+                "R"
+              ],
+              "open": true,
+              "rows": 2596
+            },
+            "x-finetype-label": "representation.text.word",
+            "x-finetype-pattern-fit": {
+              "canonical": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$",
+              "outcome": "widened"
+            }
+          },
+          {
+            "constraints": {
+              "maxLength": 200,
+              "minLength": 2
+            },
+            "description": "Single genre label assigned by the source.",
+            "name": "major_genre",
+            "type": "string",
+            "x-finetype-confidence": 0.8421,
+            "x-finetype-enum-domain": {
+              "cohesion": 0.6669999957084656,
+              "distinct": 12,
+              "domain": [
+                "Action",
+                "Adventure",
+                "Black Comedy",
+                "Comedy",
+                "Concert/Performance",
+                "Documentary",
+                "Drama",
+                "Horror",
+                "Musical",
+                "Romantic Comedy",
+                "Thriller/Suspense",
+                "Western"
+              ],
+              "open": true,
+              "rows": 2926
+            },
+            "x-finetype-label": "representation.text.entity_name"
+          },
+          {
+            "constraints": {
+              "pattern": "^[^\\s]+(\\s+[^\\s]+)*$"
+            },
+            "description": "Source's commercial categorisation, e.g. Contemporary Fiction, Super Hero.",
+            "name": "creative_type",
+            "type": "string",
+            "x-finetype-confidence": 0.86,
+            "x-finetype-enum-domain": {
+              "cohesion": 0.5559999942779541,
+              "distinct": 9,
+              "domain": [
+                "Contemporary Fiction",
+                "Dramatization",
+                "Factual",
+                "Fantasy",
+                "Historical Fiction",
+                "Kids Fiction",
+                "Multiple Creative Types",
+                "Science Fiction",
+                "Super Hero"
+              ],
+              "open": true,
+              "rows": 2755
+            },
+            "x-finetype-label": "container.array.whitespace_separated"
+          },
+          {
+            "constraints": {
+              "maxLength": 200,
+              "minLength": 2
+            },
+            "description": "What the film was adapted from, if anything — the source's 'Source' column, renamed so it does not collide with the descriptor's own 'sources'.",
+            "name": "source_material",
+            "type": "string",
+            "x-finetype-confidence": 0.9724,
+            "x-finetype-enum-domain": {
+              "cohesion": 0.16699999570846558,
+              "distinct": 18,
+              "domain": [
+                "Based on Book/Short Story",
+                "Based on Comic/Graphic Novel",
+                "Based on Factual Book/Article",
+                "Based on Game",
+                "Based on Magazine Article",
+                "Based on Musical/Opera",
+                "Based on Play",
+                "Based on Real Life Events",
+                "Based on Short Film",
+                "Based on TV",
+                "Based on Toy",
+                "Compilation",
+                "Disney Ride",
+                "Musical Group Movie",
+                "Original Screenplay",
+                "Remake",
+                "Spin-Off",
+                "Traditional/Legend/Fairytale"
+              ],
+              "open": true,
+              "rows": 2836
+            },
+            "x-finetype-label": "representation.text.entity_name"
+          },
+          {
+            "constraints": {
+              "maxLength": 200,
+              "minLength": 2
+            },
+            "description": "Theatrical distributor.",
+            "name": "distributor",
+            "type": "string",
+            "x-finetype-confidence": 0.9473,
+            "x-finetype-label": "representation.text.entity_name"
+          },
+          {
+            "constraints": {
+              "maxLength": 200,
+              "minLength": 2,
+              "pattern": "^[\\p{L}\\s'\\-.,]+$|^[A-Za-z]{4} \"\"[A-Za-z]{4} [A-Za-z]{4}\"\" [A-Za-z]{7}$"
+            },
+            "description": "Director, where the source records one.",
+            "name": "director",
+            "type": "string",
+            "x-finetype-confidence": 0.9969,
+            "x-finetype-label": "identity.person.full_name",
+            "x-finetype-pattern-fit": {
+              "canonical": "^[\\p{L}\\s'\\-.,]+$",
+              "outcome": "widened"
+            },
+            "x-finetype-pii": true
+          },
+          {
+            "constraints": {
+              "pattern": "^-?[0-9]+$"
+            },
+            "description": "Running time in minutes.",
+            "name": "running_time_min",
+            "type": "integer",
+            "x-finetype-confidence": 0.7591,
+            "x-finetype-label": "representation.numeric.integer_number"
+          },
+          {
+            "constraints": {
+              "pattern": "^-?[0-9]+$"
+            },
+            "description": "Production budget in nominal US dollars, not inflation-adjusted.",
+            "name": "production_budget",
+            "type": "integer",
+            "x-finetype-confidence": 0.6,
+            "x-finetype-label": "representation.numeric.integer_number"
+          },
+          {
+            "constraints": {
+              "pattern": "^-?[0-9]+$"
+            },
+            "description": "US theatrical gross in nominal US dollars.",
+            "name": "us_gross",
+            "type": "integer",
+            "x-finetype-confidence": 0.7,
+            "x-finetype-label": "representation.numeric.integer_number"
+          },
+          {
+            "constraints": {
+              "pattern": "^-?[0-9]+$"
+            },
+            "description": "Worldwide theatrical gross in nominal US dollars.",
+            "name": "worldwide_gross",
+            "type": "integer",
+            "x-finetype-confidence": 0.5758,
+            "x-finetype-label": "representation.numeric.integer_number"
+          },
+          {
+            "constraints": {
+              "pattern": "^-?[0-9]+$"
+            },
+            "description": "US DVD sales in nominal US dollars; absent for most rows.",
+            "name": "us_dvd_sales",
+            "type": "integer",
+            "x-finetype-confidence": 0.8614,
+            "x-finetype-label": "representation.numeric.integer_number"
+          },
+          {
+            "constraints": {
+              "pattern": "^-?[0-9]+(\\.[0-9]+)?([eE][+-]?[0-9]+)?$"
+            },
+            "description": "IMDB user rating out of 10, as captured by the source at collection time.",
+            "name": "imdb_rating",
+            "type": "number",
+            "x-finetype-confidence": 1.0,
+            "x-finetype-label": "representation.numeric.decimal_number"
+          },
+          {
+            "constraints": {
+              "pattern": "^-?[0-9]+$"
+            },
+            "description": "Number of IMDB votes behind that rating.",
+            "name": "imdb_votes",
+            "type": "integer",
+            "x-finetype-confidence": 0.502,
+            "x-finetype-label": "representation.numeric.integer_number"
+          },
+          {
+            "constraints": {
+              "pattern": "^-?[0-9]+$"
+            },
+            "description": "Rotten Tomatoes score out of 100, as captured by the source at collection time.",
+            "name": "rotten_tomatoes_rating",
+            "type": "integer",
+            "x-finetype-confidence": 0.9998,
+            "x-finetype-label": "representation.numeric.integer_number"
+          }
+        ]
+      }
+    }
+  ],
+  "sources": [
+    {
+      "path": "https://github.com/vega/vega-datasets",
+      "title": "vega-datasets 3.2.1 — movies.json"
+    }
+  ],
+  "title": "Movies — box office, ratings and genre (vega-datasets)",
+  "x-finetype-version": "0.6.57"
+}

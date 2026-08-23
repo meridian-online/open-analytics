@@ -1,0 +1,39 @@
+# Demo Protocols — third-party data, referenced by URL, published nowhere
+
+**Nothing in this directory is a Meridian dataset, and nothing here is a candidate to become one.**
+
+Each subdirectory is an [arcform](https://github.com/meridian-online/arcform) Protocol that fetches a third-party file from its canonical URL, transforms it in DuckDB, exports a Parquet to the machine that ran it, and emits a Frictionless [Data Package](https://datapackage.org/) descriptor for what it built. They exist so that the analysis surface has real data to be demonstrated against, with a reproducible recipe behind it instead of a binary somebody made by hand.
+
+**The distinction from `../datasets/` is the whole point of keeping them apart.** A Protocol under `datasets/` terminates in an object Meridian serves at `openlake.meridian.online`, and everything about the licensing of that act applies to it. A Protocol under `examples/` terminates on your disk. Meridian hosts none of this data, redistributes none of it, and adds no second URL for anything that already has one. Running one of these is the same act as running a shell script that curls a file — the licence question attaches to whoever runs it and what they do with the bytes, not to the recipe.
+
+## The three
+
+| Protocol | Source | Licence at source | Rows |
+|---|---|---|---|
+| `movies` | vega-datasets 3.2.1 | BSD-3-Clause | 3,201 |
+| `census-income` | `scikit-learn/adult-census-income` @ `fbeef6ec` | CC0-1.0 | 32,561 |
+| `california-housing` | `gvlassis/california_housing` @ `17110e60` | MIT | 16,640 |
+
+**Each licence was read at its source, not taken from a comment in another project.** Every `sha256:` in these manifests was computed from the fetched bytes here, and the two Hugging Face URLs address a 40-character commit revision rather than a default branch, so the revision is pinned as well as the content.
+
+`census-income` describes individuals recorded by the 1994 US Census. It is used here as a *shape of data*, and its columns use that instrument's categories rather than ones anybody would choose today.
+
+## Running one
+
+```sh
+cd examples/movies && arc run
+```
+
+You need `arc` on `PATH` and a DuckDB the manifest's `engine_version` accepts. Each run writes into that Protocol's `build/`, which is git-ignored.
+
+## Two things worth knowing before you rely on a run
+
+**The exports are byte-reproducible, and `ORDER BY ALL` is why.** Two cold runs of all three Protocols produced identical SHA-256 digests — `5ab2c92b…`, `3021b408…` and `43b5fbc7…`. That ordering is deliberately *not* claimed to be a total order: 24 of `census-income`'s 32,561 rows are exact duplicates of another row, so ties exist. A tie between two rows that are equal in every column cannot change the output bytes, because the rows themselves are identical — which is the weaker condition that actually holds, and it holds without inventing a surrogate key.
+
+**`arc run` decides freshness from its recorded state, not from the disk.** Delete a Protocol's exported Parquet and run it again, and it reports `0/4 steps succeeded, 4 skipped (fresh)` while the file stays absent — observed here with `arc 0.1.0` on all three. To rebuild, remove the whole `build/` directory rather than the output file. Anyone measuring reproducibility by deleting an artefact and re-running will otherwise measure nothing at all, which is how this was found.
+
+## What finetype makes of them
+
+The `describe` step types every column semantically, and these three are a fair sample of what that buys and what it still gets wrong. `california-housing`'s coordinates come back as `geography.coordinate.latitude` and `.longitude` rather than as two doubles, and `movies.release_date` as `datetime.date.iso` — which is the difference between a dashboard that can choose a map and a date axis, and one that draws nine histograms. `movies.director` types as `identity.person.full_name`.
+
+It is not uniformly right, and the miss is recorded here rather than quietly accepted: `census-income.final_weight` types as `identity.person.weight`. It is a Census *sampling* weight — how many people in the population the record stands for — and not a property of anybody's body.

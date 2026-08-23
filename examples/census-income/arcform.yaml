@@ -1,0 +1,55 @@
+# The `census-income` demo Protocol — the 1994 "Adult" extract, as a recipe.
+#
+# NOTHING HERE IS PUBLISHED. This Protocol references a third-party URL and builds a
+# local Parquet. Meridian hosts none of it, and no step writes to openlake. See
+# ../README.md for why `examples/` and `datasets/` are different things.
+#
+# The URL carries a 40-char commit sha, so the revision is pinned as well as the
+# bytes: the `resolve/<sha>/` form addresses one commit of the Hugging Face
+# repository rather than whatever its default branch says today.
+#
+# Produces: build/census_income.parquet + datapackage.json
+name: census-income
+engine: duckdb
+engine_version: ">=1.2"
+db: build/census_income.db
+
+defaults:
+  retry:
+    max_attempts: 3
+    backoff_sec: 2.0
+
+steps:
+  - name: fetch_adult
+    op: http_fetch@1
+    with:
+      url: https://huggingface.co/datasets/scikit-learn/adult-census-income/resolve/fbeef6ec0e6fd88a5028b94683144000a6b380d5/adult.csv
+      out: build/adult.csv
+      sha256: 250e154ed75714ae57a564926d66c6319cd6aac1bcd32774cc76841a88d74e53
+      headers:
+        User-Agent: "Meridian Protocol (open-analytics demo; research@meridian.online)"
+
+  - name: load
+    sql: models/load.sql
+    depends_on: [build/adult.csv]
+    produces: [census_income]
+
+  # ORDER BY ALL, and this table is the reason the comment in ../movies/arcform.yaml
+  # is worded the way it is: 24 of these 32,561 rows are exact duplicates of another
+  # row, counted rather than assumed. So the ordering is NOT total here. It is still
+  # deterministic in bytes, because the only rows it leaves unordered relative to each
+  # other are rows identical in every column.
+  - name: export_census_income
+    op: parquet_export@1
+    with:
+      input: census_income
+      dest: build/census_income.parquet
+      compression: zstd
+      order_by: "ALL"
+
+  - name: describe
+    op: datapackage_describe@1
+    with:
+      parquet: build/census_income.parquet
+      overrides: descriptor.overrides.json
+      out: datapackage.json
