@@ -1,0 +1,324 @@
+{
+  "$schema": "https://datapackage.org/profiles/2.0/datapackage.json",
+  "created": "2026-08-23T08:25:46Z",
+  "description": "32,561 person records from the 1994 US Census, the standard 'Adult' benchmark extract, with demographic and employment attributes and a binary income label. Demo data: referenced by pinned URL and revision and built locally. Meridian does not host or publish this dataset. It describes individuals recorded in 1994 and is used here as a shape of data, not as a source of fact about anyone.",
+  "licenses": [
+    {
+      "name": "CC0-1.0",
+      "path": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "title": "Creative Commons Zero v1.0 Universal"
+    }
+  ],
+  "name": "census-income",
+  "resources": [
+    {
+      "bytes": 199137,
+      "format": "parquet",
+      "hash": "sha256:3021b408432871d895d751e028a1dbfce917e2c52420e63e8c64ca972b6dc2e1",
+      "mediatype": "application/vnd.apache.parquet",
+      "name": "census_income",
+      "path": "census_income.parquet",
+      "schema": {
+        "fields": [
+          {
+            "constraints": {
+              "pattern": "^-?[0-9]+$"
+            },
+            "description": "Age in years.",
+            "name": "age",
+            "type": "integer",
+            "x-finetype-confidence": 1.0,
+            "x-finetype-label": "representation.numeric.integer_number"
+          },
+          {
+            "constraints": {
+              "maxLength": 100,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$"
+            },
+            "description": "Employment sector. The source's '?' placeholder is NULL here — 1,836 rows.",
+            "name": "workclass",
+            "type": "string",
+            "x-finetype-confidence": 0.8729,
+            "x-finetype-enum-domain": {
+              "cohesion": 0.625,
+              "distinct": 8,
+              "domain": [
+                "Federal-gov",
+                "Local-gov",
+                "Never-worked",
+                "Private",
+                "Self-emp-inc",
+                "Self-emp-not-inc",
+                "State-gov",
+                "Without-pay"
+              ],
+              "open": true,
+              "rows": 30725
+            },
+            "x-finetype-label": "representation.text.word"
+          },
+          {
+            "constraints": {
+              "pattern": "^[0-9]+(\\.[0-9]+)?\\s*(kg|lbs|lb|g|oz|stones)?$"
+            },
+            "description": "Census sampling weight ('fnlwgt'): how many people in the population this record is taken to represent. Not a property of the person.",
+            "name": "final_weight",
+            "type": "number",
+            "x-finetype-confidence": 0.8944,
+            "x-finetype-label": "identity.person.weight"
+          },
+          {
+            "constraints": {
+              "maxLength": 100,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$"
+            },
+            "description": "Highest education level reached, as a label.",
+            "name": "education",
+            "type": "string",
+            "x-finetype-confidence": 0.6,
+            "x-finetype-enum-domain": {
+              "cohesion": 0.25,
+              "distinct": 16,
+              "domain": [
+                "10th",
+                "11th",
+                "12th",
+                "1st-4th",
+                "5th-6th",
+                "7th-8th",
+                "9th",
+                "Assoc-acdm",
+                "Assoc-voc",
+                "Bachelors",
+                "Doctorate",
+                "HS-grad",
+                "Masters",
+                "Preschool",
+                "Prof-school",
+                "Some-college"
+              ],
+              "open": true,
+              "rows": 32561
+            },
+            "x-finetype-label": "representation.text.word"
+          },
+          {
+            "constraints": {
+              "pattern": "^-?[0-9]+$"
+            },
+            "description": "The same education level as an ordinal number, so it can be compared.",
+            "name": "education_num",
+            "type": "integer",
+            "x-finetype-confidence": 0.9906,
+            "x-finetype-label": "representation.numeric.integer_number"
+          },
+          {
+            "constraints": {
+              "maxLength": 65536,
+              "minLength": 1
+            },
+            "description": "Marital status as the 1994 Census coded it.",
+            "name": "marital_status",
+            "type": "string",
+            "x-finetype-confidence": 0.4163,
+            "x-finetype-enum-domain": {
+              "cohesion": 0.42899999022483826,
+              "distinct": 7,
+              "domain": [
+                "Divorced",
+                "Married-AF-spouse",
+                "Married-civ-spouse",
+                "Married-spouse-absent",
+                "Never-married",
+                "Separated",
+                "Widowed"
+              ],
+              "open": true,
+              "rows": 32561
+            },
+            "x-finetype-label": "representation.text.plain_text"
+          },
+          {
+            "constraints": {
+              "maxLength": 100,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$"
+            },
+            "description": "Occupation category. The source's '?' placeholder is NULL here — 1,843 rows.",
+            "name": "occupation",
+            "type": "string",
+            "x-finetype-confidence": 0.5,
+            "x-finetype-enum-domain": {
+              "cohesion": 0.7139999866485596,
+              "distinct": 14,
+              "domain": [
+                "Adm-clerical",
+                "Armed-Forces",
+                "Craft-repair",
+                "Exec-managerial",
+                "Farming-fishing",
+                "Handlers-cleaners",
+                "Machine-op-inspct",
+                "Other-service",
+                "Priv-house-serv",
+                "Prof-specialty",
+                "Protective-serv",
+                "Sales",
+                "Tech-support",
+                "Transport-moving"
+              ],
+              "open": true,
+              "rows": 30718
+            },
+            "x-finetype-label": "representation.text.word"
+          },
+          {
+            "constraints": {
+              "maxLength": 100,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$"
+            },
+            "description": "Role within the household, as the 1994 Census coded it.",
+            "name": "relationship",
+            "type": "string",
+            "x-finetype-confidence": 0.9985,
+            "x-finetype-enum-domain": {
+              "cohesion": 0.5,
+              "distinct": 6,
+              "domain": [
+                "Husband",
+                "Not-in-family",
+                "Other-relative",
+                "Own-child",
+                "Unmarried",
+                "Wife"
+              ],
+              "open": true,
+              "rows": 32561
+            },
+            "x-finetype-label": "representation.text.word"
+          },
+          {
+            "constraints": {
+              "maxLength": 100,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$"
+            },
+            "description": "Race as recorded by the 1994 US Census, using that instrument's categories.",
+            "name": "race",
+            "type": "string",
+            "x-finetype-confidence": 0.6,
+            "x-finetype-enum-domain": {
+              "cohesion": 0.6000000238418579,
+              "distinct": 5,
+              "domain": [
+                "Amer-Indian-Eskimo",
+                "Asian-Pac-Islander",
+                "Black",
+                "Other",
+                "White"
+              ],
+              "open": true,
+              "rows": 32561
+            },
+            "x-finetype-label": "representation.text.word"
+          },
+          {
+            "description": "Sex as recorded by the 1994 US Census, which offered two values.",
+            "name": "sex",
+            "type": "string",
+            "x-finetype-confidence": 1.0,
+            "x-finetype-enum-domain": {
+              "cohesion": 1.0,
+              "distinct": 2,
+              "domain": [
+                "Female",
+                "Male"
+              ],
+              "open": true,
+              "rows": 32561
+            },
+            "x-finetype-label": "identity.person.gender"
+          },
+          {
+            "constraints": {
+              "pattern": "^-?[0-9]+$"
+            },
+            "description": "Capital gains in nominal 1994 US dollars; zero for most rows.",
+            "name": "capital_gain",
+            "type": "integer",
+            "x-finetype-confidence": 0.9998,
+            "x-finetype-label": "representation.numeric.integer_number"
+          },
+          {
+            "constraints": {
+              "pattern": "^-?[0-9]+$"
+            },
+            "description": "Capital losses in nominal 1994 US dollars; zero for most rows.",
+            "name": "capital_loss",
+            "type": "integer",
+            "x-finetype-confidence": 0.9981,
+            "x-finetype-label": "representation.numeric.integer_number"
+          },
+          {
+            "constraints": {
+              "pattern": "^-?[0-9]+$"
+            },
+            "description": "Usual hours worked per week.",
+            "name": "hours_per_week",
+            "type": "integer",
+            "x-finetype-confidence": 0.9974,
+            "x-finetype-label": "representation.numeric.integer_number"
+          },
+          {
+            "constraints": {
+              "maxLength": 100,
+              "minLength": 2
+            },
+            "description": "Country of origin. The source's '?' placeholder is NULL here — 583 rows.",
+            "name": "native_country",
+            "type": "string",
+            "x-finetype-confidence": 1.0,
+            "x-finetype-label": "geography.location.country"
+          },
+          {
+            "constraints": {
+              "maxLength": 100,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$|^<=[A-Z0-9]{3}$|^>[A-Z0-9]{3}$"
+            },
+            "description": "The benchmark's label, kept as the source's own '<=50K' / '>50K' strings rather than folded to a boolean.",
+            "name": "income",
+            "type": "string",
+            "x-finetype-confidence": 0.9888,
+            "x-finetype-enum-domain": {
+              "cohesion": 0.5,
+              "distinct": 2,
+              "domain": [
+                "<=50K",
+                ">50K"
+              ],
+              "open": true,
+              "rows": 32561
+            },
+            "x-finetype-label": "representation.text.word",
+            "x-finetype-pattern-fit": {
+              "canonical": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$",
+              "outcome": "widened"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "sources": [
+    {
+      "path": "https://huggingface.co/datasets/scikit-learn/adult-census-income",
+      "title": "scikit-learn/adult-census-income on Hugging Face, revision fbeef6ec"
+    }
+  ],
+  "title": "Adult Census Income (1994 US Census extract)",
+  "x-finetype-version": "0.6.57"
+}

@@ -1,0 +1,35 @@
+{
+  "name": "census-income",
+  "title": "Adult Census Income (1994 US Census extract)",
+  "description": "32,561 person records from the 1994 US Census, the standard 'Adult' benchmark extract, with demographic and employment attributes and a binary income label. Demo data: referenced by pinned URL and revision and built locally. Meridian does not host or publish this dataset. It describes individuals recorded in 1994 and is used here as a shape of data, not as a source of fact about anyone.",
+  "licenses": [
+    {
+      "name": "CC0-1.0",
+      "title": "Creative Commons Zero v1.0 Universal",
+      "path": "https://creativecommons.org/publicdomain/zero/1.0/"
+    }
+  ],
+  "sources": [
+    {
+      "title": "scikit-learn/adult-census-income on Hugging Face, revision fbeef6ec",
+      "path": "https://huggingface.co/datasets/scikit-learn/adult-census-income"
+    }
+  ],
+  "fields": {
+    "age": {"description": "Age in years."},
+    "workclass": {"description": "Employment sector. The source's '?' placeholder is NULL here — 1,836 rows."},
+    "final_weight": {"description": "Census sampling weight ('fnlwgt'): how many people in the population this record is taken to represent. Not a property of the person."},
+    "education": {"description": "Highest education level reached, as a label."},
+    "education_num": {"description": "The same education level as an ordinal number, so it can be compared."},
+    "marital_status": {"description": "Marital status as the 1994 Census coded it."},
+    "occupation": {"description": "Occupation category. The source's '?' placeholder is NULL here — 1,843 rows."},
+    "relationship": {"description": "Role within the household, as the 1994 Census coded it."},
+    "race": {"description": "Race as recorded by the 1994 US Census, using that instrument's categories."},
+    "sex": {"description": "Sex as recorded by the 1994 US Census, which offered two values."},
+    "capital_gain": {"description": "Capital gains in nominal 1994 US dollars; zero for most rows."},
+    "capital_loss": {"description": "Capital losses in nominal 1994 US dollars; zero for most rows."},
+    "hours_per_week": {"description": "Usual hours worked per week."},
+    "native_country": {"description": "Country of origin. The source's '?' placeholder is NULL here — 583 rows."},
+    "income": {"description": "The benchmark's label, kept as the source's own '<=50K' / '>50K' strings rather than folded to a boolean."}
+  }
+}
