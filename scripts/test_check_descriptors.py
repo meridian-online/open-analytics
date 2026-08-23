@@ -285,6 +285,27 @@ class DescriptorCheckSelfTest(unittest.TestCase):
             run_check(self.datasets), EXIT_VIOLATIONS, "widgets.label", "constraints.required"
         )
 
+    def test_required_violation_states_an_arithmetically_consistent_count_and_total(self) -> None:
+        """`2 of 1 non-null value(s)` was the bug: the numerator counts nulls and a
+        `count(col)` denominator excludes exactly the rows being counted, so the two
+        numbers could not describe the same population. Two nulls among three rows
+        must be reported as `2 of 3`, never `2 of 1`."""
+        write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT * FROM (VALUES ('alpha'), (NULL), (NULL)) t(label)",
+            fields=[{"name": "label", "type": "string", "constraints": {"required": True}}],
+        )
+        result = run_check(self.datasets)
+        self.assertOutcome(
+            result,
+            EXIT_VIOLATIONS,
+            "widgets.label",
+            "constraints.required",
+            "2 of 3 row(s) missing though declared required",
+        )
+        self.assertNotIn("2 of 1", result.stdout + result.stderr)
+
     def test_unusable_pattern_is_reported_not_skipped(self) -> None:
         write_package(
             self.datasets,
@@ -297,6 +318,30 @@ class DescriptorCheckSelfTest(unittest.TestCase):
             EXIT_VIOLATIONS,
             "widgets.code",
             "is not a usable regular expression",
+        )
+
+    def test_unusable_pattern_does_not_swallow_the_field_s_other_constraints(self) -> None:
+        """A field whose `pattern` cannot compile must still have `maxLength` (and
+        every other declared constraint) evaluated over the same rows — the bad regex
+        is one disagreement, not licence to stop checking the field."""
+        write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT * FROM (VALUES ('ABCDE')) t(code)",
+            fields=[
+                {
+                    "name": "code",
+                    "type": "string",
+                    "constraints": {"pattern": "^[A-Z", "maxLength": 3},
+                }
+            ],
+        )
+        self.assertOutcome(
+            run_check(self.datasets),
+            EXIT_VIOLATIONS,
+            "widgets.code",
+            "is not a usable regular expression",
+            "longer than maxLength 3",
         )
 
     # -------------------------------------------------------------------- type
@@ -492,6 +537,66 @@ class DescriptorCheckSelfTest(unittest.TestCase):
             foreign_keys=[{"fields": ["key"], "reference": {"resource": "left", "fields": ["cik"]}}],
         )
         self.assertOutcome(run_check(self.datasets), EXIT_OK, "agree with their data")
+
+    def test_only_resolves_foreign_keys_against_every_package_not_just_the_selected_one(self) -> None:
+        """`--only right` must still see `left` to resolve `right`'s foreign key.
+
+        Loading just the selected package would make `left` invisible and the
+        checker would report `right`'s key as referencing a resource `which no
+        package declares` — a violation that does not exist, invented by the flag
+        rather than found by it.
+        """
+        write_package(
+            self.datasets,
+            "left",
+            select_sql="SELECT * FROM (VALUES ('320193')) t(cik)",
+            fields=[{"name": "cik", "type": "string"}],
+        )
+        write_package(
+            self.datasets,
+            "right",
+            select_sql="SELECT * FROM (VALUES ('320193')) t(key)",
+            fields=[{"name": "key", "type": "string"}],
+            foreign_keys=[{"fields": ["key"], "reference": {"resource": "left", "fields": ["cik"]}}],
+        )
+        result = run_check(self.datasets, "--only", "right")
+        self.assertOutcome(result, EXIT_OK, "agree with their data")
+        self.assertNotIn("which no package declares", result.stdout + result.stderr)
+
+    def test_only_reports_solely_the_selected_package_s_own_foreign_key_violations(self) -> None:
+        """The other half of the contract above: `--only right` resolves against the
+        whole tree, but must not go on to REPORT a sibling's own unrelated foreign-key
+        violation. `check_foreign_keys` takes the full package dict to resolve
+        references and a second, separate argument naming which packages to walk and
+        report on — reusing the full dict for both would leak `other`'s genuine,
+        unrelated violation into a `--only right` run, and nothing before this pinned
+        that the two must stay distinct.
+        """
+        write_package(
+            self.datasets,
+            "left",
+            select_sql="SELECT * FROM (VALUES ('320193')) t(cik)",
+            fields=[{"name": "cik", "type": "string"}],
+        )
+        write_package(
+            self.datasets,
+            "right",
+            select_sql="SELECT * FROM (VALUES ('320193')) t(key)",
+            fields=[{"name": "key", "type": "string"}],
+            foreign_keys=[{"fields": ["key"], "reference": {"resource": "left", "fields": ["cik"]}}],
+        )
+        write_package(
+            self.datasets,
+            "other",
+            select_sql="SELECT * FROM (VALUES ('x')) t(key)",
+            fields=[{"name": "key", "type": "string"}],
+            foreign_keys=[{"fields": ["key"], "reference": {"resource": "ghost", "fields": ["id"]}}],
+        )
+        result = run_check(self.datasets, "--only", "right")
+        self.assertOutcome(result, EXIT_OK, "agree with their data")
+        output = result.stdout + result.stderr
+        self.assertNotIn("ghost", output)
+        self.assertNotIn("which no package declares", output)
 
     # ------------------------------------------ could-not-check is not a pass
 

@@ -13,7 +13,10 @@ What it asserts, per resource:
   2. type          — the declared Frictionless `type` is coercible from the Parquet
                      physical type (table in COERCIBLE below).
   3. constraints   — `pattern`, `minLength`, `maxLength`, `enum` and `required`,
-                     evaluated over every row in one pass.
+                     evaluated over every row in one pass. A `pattern` that will not
+                     compile is reported as its own disagreement and excludes only
+                     itself from that pass — the field's other constraints are still
+                     evaluated over the same rows.
   4. primaryKey    — every column named in `schema.primaryKey` exists, holds no NULL,
                      and identifies at most one row. This is the declaration a
                      consumer joins on, so a key the data does not honour hands them
@@ -36,6 +39,9 @@ And per package:
 
   7. foreignKeys   — each declared foreign key resolves to a real resource+field,
                      in this package or a sibling one, of compatible declared type.
+                     Resolved against every package the tree contains, `--only` or
+                     not — `--only` narrows which packages' own keys are reported on,
+                     never which packages a reference can land on.
 
 And once, over the catalogue in README.md:
 
@@ -225,8 +231,16 @@ def check_pattern_compiles(con, pattern: str) -> str | None:
     return None
 
 
-def constraint_probes(field: dict[str, Any]) -> list[tuple[str, str, str, list[Any]]]:
-    """(rule, description, SQL boolean naming a violating row, params) for one field."""
+def constraint_probes(
+    field: dict[str, Any], *, skip_pattern: bool = False
+) -> list[tuple[str, str, str, list[Any]]]:
+    """(rule, description, SQL boolean naming a violating row, params) for one field.
+
+    `skip_pattern` leaves the `pattern` probe out even when the field declares one —
+    set when that pattern has already failed to compile and been reported as its own
+    disagreement, so the rest of the field's constraints are still evaluated rather
+    than a bad regex taking the whole field down with it.
+    """
     name = field["name"]
     col = quote_ident(name)
     text = f"CAST({col} AS VARCHAR)"
@@ -241,8 +255,8 @@ def constraint_probes(field: dict[str, Any]) -> list[tuple[str, str, str, list[A
 
     probes: list[tuple[str, str, str, list[Any]]] = []
     if constraints.get("required") is True:
-        probes.append(("constraints.required", "declared required", f"{col} IS NULL", []))
-    if "pattern" in constraints:
+        probes.append(("constraints.required", "missing though declared required", f"{col} IS NULL", []))
+    if "pattern" in constraints and not skip_pattern:
         pattern = constraints["pattern"]
         probes.append(
             (
@@ -290,9 +304,20 @@ def constraint_probes(field: dict[str, Any]) -> list[tuple[str, str, str, list[A
 
 
 def check_constraints(
-    con, path: str, package: str, resource_name: str, fields: list[dict[str, Any]], physical: dict[str, str]
+    con,
+    path: str,
+    package: str,
+    resource_name: str,
+    fields: list[dict[str, Any]],
+    physical: dict[str, str],
+    unusable_patterns: set[str] = frozenset(),
 ) -> list[Violation]:
-    """One pass over the resource, counting every constraint violation at once."""
+    """One pass over the resource, counting every constraint violation at once.
+
+    `unusable_patterns` names fields whose `pattern` failed to compile — already
+    reported as its own disagreement by the caller — so their `pattern` probe is left
+    out here while their other constraints are still evaluated over the same scan.
+    """
     selects: list[str] = []
     params: list[Any] = []
     meta: list[tuple[dict[str, Any], str, str]] = []
@@ -302,7 +327,9 @@ def check_constraints(
         if name not in physical:
             continue  # already reported as a missing field
         col = quote_ident(name)
-        for rule, description, predicate, probe_params in constraint_probes(field):
+        for rule, description, predicate, probe_params in constraint_probes(
+            field, skip_pattern=name in unusable_patterns
+        ):
             index = len(meta)
             selects.append(f"count(*) FILTER (WHERE {predicate}) AS v{index}")
             params.extend(probe_params)
@@ -314,6 +341,11 @@ def check_constraints(
     if not meta:
         return []
 
+    # One more column than any probe needs: the total row count, which is the correct
+    # denominator for `required` (a NULL is absent from `count(col)`, so that column
+    # can never be the total a null count is reported out of — see the module history
+    # for the `2 of 1` this replaced).
+    selects.append("count(*) AS total_rows")
     sql = f"SELECT {', '.join(selects)} FROM read_parquet(?)"  # noqa: S608 - identifiers are quoted, values bound
     params.append(path)
     try:
@@ -321,12 +353,19 @@ def check_constraints(
     except Exception as exc:
         raise CheckError(f"{package}: constraint scan of {resource_name} failed: {exc}") from exc
 
+    total_rows = row[-1]
     violations: list[Violation] = []
     for index, (field, rule, description) in enumerate(meta):
         count, example, non_null = row[index * 3], row[index * 3 + 1], row[index * 3 + 2]
         if not count:
             continue
-        detail = f"{count:,} of {non_null:,} non-null value(s) {description}"
+        if rule == "constraints.required":
+            # The violation IS the null count, so the total it is reported out of must
+            # be every row, not `count(col)` — which counts only the non-null ones and
+            # so excludes exactly the rows being counted.
+            detail = f"{count:,} of {total_rows:,} row(s) {description}"
+        else:
+            detail = f"{count:,} of {non_null:,} non-null value(s) {description}"
         if example is not None:
             detail += f"; e.g. {example!r}"
         violations.append(Violation(package, resource_name, field["name"], rule, detail))
@@ -606,8 +645,12 @@ def check_resource(
                 )
             )
 
-    scannable = [field for field in fields if field["name"] in physical and field["name"] not in unusable]
-    violations.extend(check_constraints(con, path, package, name, scannable, physical))
+    # A field named in `unusable` keeps its place here: its `pattern` was already
+    # reported above as its own disagreement, and `unusable_patterns` tells
+    # `check_constraints` to leave only that one probe out, not the field's other
+    # constraints along with it.
+    scannable = [field for field in fields if field["name"] in physical]
+    violations.extend(check_constraints(con, path, package, name, scannable, physical, unusable))
 
     # One cache per resource: the repository's copy and the object's own copy usually
     # declare the same key, and that is one pass over the bytes, not two.
@@ -875,8 +918,19 @@ def check_self_description(
     return violations, True
 
 
-def check_foreign_keys(packages: dict[str, dict[str, Any]]) -> list[Violation]:
-    """Declared foreign keys must resolve, in this package or a sibling, to a compatible type."""
+def check_foreign_keys(
+    packages: dict[str, dict[str, Any]], restrict_to: dict[str, dict[str, Any]] | None = None
+) -> list[Violation]:
+    """Declared foreign keys must resolve, in this package or a sibling, to a compatible type.
+
+    `packages` is every package this run has loaded a descriptor for — a reference
+    resolves against the whole tree regardless of `--only`, so a documented flag
+    cannot make a real sibling invisible and turn a resolvable reference into a
+    fabricated violation. `restrict_to`, when given, narrows which packages' *own*
+    declarations are walked and reported on; the packages a reference can land on are
+    `packages` either way. `None` means walk and report on all of `packages`, which is
+    the no-`--only` case.
+    """
     index: dict[str, list[tuple[str, dict[str, Any]]]] = {}
     for package_name, descriptor in packages.items():
         for resource in descriptor.get("resources") or []:
@@ -894,7 +948,8 @@ def check_foreign_keys(packages: dict[str, dict[str, Any]]) -> list[Violation]:
         return any({left, right} <= group for group in FK_COMPATIBLE_GROUPS)
 
     violations: list[Violation] = []
-    for package_name, descriptor in packages.items():
+    walked = packages if restrict_to is None else restrict_to
+    for package_name, descriptor in walked.items():
         for resource in descriptor.get("resources") or []:
             resource_name = resource.get("name", "")
             for key in (resource.get("schema") or {}).get("foreignKeys") or []:
@@ -1341,21 +1396,36 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         descriptor_paths = discover(args.datasets_dir, args.only)
+        # A foreign key resolves against the whole tree, `--only` or not (see
+        # `check_foreign_keys`), so the full set of descriptors is loaded even when
+        # `--only` narrows what gets scanned and reported below. Skip the second
+        # discovery when there is nothing to narrow.
+        all_descriptor_paths = descriptor_paths if not args.only else discover(args.datasets_dir, None)
     except CheckError as exc:
         print(f"descriptor check: {exc}", file=sys.stderr)
         return EXIT_ERROR
 
     con = duckdb.connect()
-    packages: dict[str, dict[str, Any]] = {}
+
+    all_packages: dict[str, dict[str, Any]] = {}
+    for descriptor_path in all_descriptor_paths:
+        try:
+            all_packages[str(descriptor_path)] = load_descriptor(descriptor_path)
+        except CheckError as exc:
+            print(f"descriptor check: {exc}", file=sys.stderr)
+            return EXIT_ERROR
+
+    packages: dict[str, dict[str, Any]] = (
+        all_packages if not args.only else {str(p): all_packages[str(p)] for p in descriptor_paths}
+    )
     violations: list[Violation] = []
     self_described: list[str] = []
     resource_count = 0
 
     for descriptor_path in descriptor_paths:
         package = str(descriptor_path)
+        descriptor = packages[package]
         try:
-            descriptor = load_descriptor(descriptor_path)
-            packages[package] = descriptor
             resources = descriptor.get("resources") or []
             if not resources:
                 raise CheckError(f"{package}: declares no resources")
@@ -1372,7 +1442,7 @@ def main(argv: list[str] | None = None) -> int:
             return EXIT_ERROR
 
     try:
-        violations.extend(check_foreign_keys(packages))
+        violations.extend(check_foreign_keys(all_packages, packages if args.only else None))
     except CheckError as exc:
         print(f"descriptor check: {exc}", file=sys.stderr)
         return EXIT_ERROR
