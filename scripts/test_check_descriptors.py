@@ -563,6 +563,41 @@ class DescriptorCheckSelfTest(unittest.TestCase):
         self.assertOutcome(result, EXIT_OK, "agree with their data")
         self.assertNotIn("which no package declares", result.stdout + result.stderr)
 
+    def test_only_reports_solely_the_selected_package_s_own_foreign_key_violations(self) -> None:
+        """The other half of the contract above: `--only right` resolves against the
+        whole tree, but must not go on to REPORT a sibling's own unrelated foreign-key
+        violation. `check_foreign_keys` takes the full package dict to resolve
+        references and a second, separate argument naming which packages to walk and
+        report on — reusing the full dict for both would leak `other`'s genuine,
+        unrelated violation into a `--only right` run, and nothing before this pinned
+        that the two must stay distinct.
+        """
+        write_package(
+            self.datasets,
+            "left",
+            select_sql="SELECT * FROM (VALUES ('320193')) t(cik)",
+            fields=[{"name": "cik", "type": "string"}],
+        )
+        write_package(
+            self.datasets,
+            "right",
+            select_sql="SELECT * FROM (VALUES ('320193')) t(key)",
+            fields=[{"name": "key", "type": "string"}],
+            foreign_keys=[{"fields": ["key"], "reference": {"resource": "left", "fields": ["cik"]}}],
+        )
+        write_package(
+            self.datasets,
+            "other",
+            select_sql="SELECT * FROM (VALUES ('x')) t(key)",
+            fields=[{"name": "key", "type": "string"}],
+            foreign_keys=[{"fields": ["key"], "reference": {"resource": "ghost", "fields": ["id"]}}],
+        )
+        result = run_check(self.datasets, "--only", "right")
+        self.assertOutcome(result, EXIT_OK, "agree with their data")
+        output = result.stdout + result.stderr
+        self.assertNotIn("ghost", output)
+        self.assertNotIn("which no package declares", output)
+
     # ------------------------------------------ could-not-check is not a pass
 
     def test_missing_resource_file_is_an_error_not_a_verdict(self) -> None:
