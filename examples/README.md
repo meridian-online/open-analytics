@@ -34,7 +34,7 @@ You need `arc` on `PATH` and a DuckDB the manifest's `engine_version` accepts. E
 
 **A `sha256:` pin is provenance here, not an integrity gate.** On a genuine transfer it fails closed — corrupt a pin against an empty cache and the run stops, naming both hashes. But arcform's shared fetch cache is keyed by **URL**, and on a cache hit the pin is not consulted: with the cache warm, a manifest declaring `sha256: 0000…0` builds to exit 0 and reuses the cached bytes. Reproduced on `california-housing`. So the pin protects the first fetch on a cold machine and nothing after it, and changing a pin to name different bytes will not fetch them on a machine that already has the old ones.
 
-**`arc run` decides freshness from its recorded state, not from the disk.** Delete a Protocol's exported Parquet and run it again, and it reports `0/4 steps succeeded, 4 skipped (fresh)` while the file stays absent — observed here with `arc 0.1.0` on all three. To rebuild, remove the whole `build/` directory rather than the output file. Anyone measuring reproducibility by deleting an artefact and re-running will otherwise measure nothing at all, which is how this was found.
+**Rebuild by removing `build/`, not by deleting the exported Parquet.** Both work on a current `arc`: deleting the Parquet alone re-runs the export and describe steps and puts it back. On an `arc` built before 2026-08-19 it did not — the run reported every step fresh and left the file absent — so if a rebuild appears to do nothing, check `arc` is current before concluding anything about the Protocol.
 
 ## What finetype makes of them
 
