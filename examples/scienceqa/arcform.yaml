@@ -1,0 +1,104 @@
+# The `scienceqa` demo Protocol — 4,241 multiple-choice science questions, as a recipe.
+#
+# NOTHING HERE IS PUBLISHED. This Protocol references a third-party URL and builds a
+# local Parquet. Meridian hosts none of it, and no step writes to openlake. See
+# ../README.md for why `examples/` and `datasets/` are different things.
+#
+# NON-COMMERCIAL RESTRICTION — READ THIS BEFORE THE OUTPUT GOES ANYWHERE.
+# The licensor (Pan Lu et al., "Learn to Explain: Multimodal Reasoning via Thought
+# Chains for Science Question Answering", NeurIPS 2022) publishes ScienceQA under
+# CC BY-NC-SA 4.0 — Attribution-NonCommercial-ShareAlike — stated on the project site
+# (scienceqa.github.io), the source repository (github.com/lupantech/ScienceQA) and
+# the mirror's own dataset-card body. That licence does NOT block this Protocol
+# existing or running: referencing a URL someone may lawfully fetch is not
+# redistribution, which is the whole basis on which every Protocol in this directory
+# stands. It DOES block one thing downstream — running this and looking at the
+# result are different acts, and only the second is restricted:
+#   the output of this Protocol — the Parquet, any chart or figure built from it, any
+#   number pulled out of it — MUST NOT appear anywhere Meridian sells, markets or
+#   prices: not the site, not launch material, not a pricing page. Non-commercial
+#   means Meridian's own commercial use of the OUTPUT, not the act of building it.
+#
+# THE MIRROR'S OWN METADATA TAG DISAGREES WITH ITS OWN CARD BODY, AND WITH THE
+# LICENSOR. huggingface.co/datasets/derek-thomas/ScienceQA declares `license:
+# cc-by-sa-4.0` (no NonCommercial) in its YAML frontmatter, and a third-party
+# gallery that read only that tag has recorded this dataset as plain CC BY-SA. The
+# same mirror's own card body, three headings down, says "Attribution-NonCommercial-
+# ShareAlike 4.0 International (CC BY-NC-SA 4.0)" under Licensing Information — and
+# the licensor's own site and repository agree with the body, not the tag. A
+# mirror's YAML tag is not the licensor; verify against the licensor's own words,
+# every time, and this dataset is the recorded instance of why.
+#
+# WHY THIS PROTOCOL NEEDS NOTHING NEW. It declares no precomputed projection or
+# embedding columns, so `http_fetch`, `parquet_export` and `datapackage_describe`
+# are the whole of it — the same three operators the other three demo Protocols
+# already exercise.
+#
+# WHICH SPLIT, AND WHY. The source publishes three files — train (12,726 rows),
+# validation (4,241) and test (4,241). This Protocol fetches only `test`: it is the
+# split the dataset's own leaderboard scores against, so it is the most standard
+# slice to point at, and it is tied for the smallest of the three, which keeps this
+# the cheapest of the four demo Protocols to fetch and rebuild.
+#
+# WHY THE `image` COLUMN IS NOT IN THE OUTPUT. The source embeds each question's
+# image as raw bytes in a STRUCT(bytes BLOB, path VARCHAR) column — present for
+# 2,017 of these 4,241 rows, absent (both fields NULL) for the rest. Carrying that
+# blob into the export would multiply this Protocol's output size for a column no
+# chart in the analysis surface renders. `load.sql` reduces it to a boolean
+# `has_image` instead, which is the fact a dashboard can use.
+#
+# WHY THE URL IS PINNED BY REVISION AND BY HASH. The URL addresses a 40-character
+# commit revision of the Hugging Face repository rather than its default branch, so
+# the revision is pinned as well as the bytes. On a real transfer `http_fetch`'s
+# `sha256:` fails closed — corrupt a pin against an empty cache and the run stops,
+# naming both hashes, checked here the same way ../movies/arcform.yaml documents.
+# On a shared-cache HIT it is not consulted at all: the cache is keyed by URL, so a
+# manifest declaring `sha256: 0000…0` against an already-warm cache builds to exit 0.
+# Treat the pin as provenance, not as an integrity gate that holds on every machine.
+#
+# Produces: build/scienceqa.parquet + datapackage.json
+name: scienceqa
+engine: duckdb
+engine_version: ">=1.2"
+db: build/scienceqa.db
+
+defaults:
+  retry:
+    max_attempts: 3
+    backoff_sec: 2.0
+
+steps:
+  - name: fetch_scienceqa
+    op: http_fetch@1
+    with:
+      url: https://huggingface.co/datasets/derek-thomas/ScienceQA/resolve/f18b0a70359ebfb41f658fd564208d0355b013f4/data/test-00000-of-00001-f0e719df791966ff.parquet
+      out: build/scienceqa.src.parquet
+      sha256: 235e92d1f30155266df76bc9f28fc6e4fcb6bec2c6a8c7d67f9086ea6b392a84
+      headers:
+        User-Agent: "Meridian Protocol (open-analytics demo; research@meridian.online)"
+
+  - name: load
+    sql: models/load.sql
+    depends_on: [build/scienceqa.src.parquet]
+    produces: [scienceqa]
+
+  # ORDER BY ALL is what makes the bytes reproduce, for the same reason
+  # ../movies/arcform.yaml and ../census-income/arcform.yaml give it: 64 of these
+  # 4,241 rows are exact duplicates of another row on every retained column, so the
+  # ordering is not a TOTAL order. It is still deterministic in bytes, because the
+  # only rows it leaves unordered relative to each other are rows identical in every
+  # column — a tie between identical rows cannot change the output.
+  - name: export_scienceqa
+    op: parquet_export@1
+    with:
+      input: scienceqa
+      dest: build/scienceqa.parquet
+      compression: zstd
+      order_by: "ALL"
+
+  - name: describe
+    op: datapackage_describe@1
+    with:
+      parquet: build/scienceqa.parquet
+      overrides: descriptor.overrides.json
+      out: datapackage.json

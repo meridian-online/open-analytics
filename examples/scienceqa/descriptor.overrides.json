@@ -1,0 +1,66 @@
+{
+  "name": "scienceqa",
+  "title": "ScienceQA — multiple-choice science questions with worked explanations",
+  "description": "4,241 multiple-choice science questions (the source's `test` split, out of 12,726 train + 4,241 validation + 4,241 test), spanning natural, social and language science across grades 1-12, each with its choices, the correct answer, a hint, the lecture text it is drawn from, and a worked solution. 2,017 of the 4,241 also ship with a figure in the source; this Protocol keeps only whether one was present (`has_image`), not the picture itself. NON-COMMERCIAL RESTRICTION: the licensor (Pan Lu et al., NeurIPS 2022) publishes ScienceQA under CC BY-NC-SA 4.0 (Attribution-NonCommercial-ShareAlike), stated on the project site, the source repository and the mirror's own dataset-card body — not its YAML licence tag, which reads plain CC BY-SA and disagrees with its own card. Referencing this dataset's URL and building it locally is not redistribution and is not restricted; using the OUTPUT commercially is. No chart, figure or number built from this Protocol's output may appear on the Meridian site, in launch material, or on a pricing page. Demo data: referenced by pinned URL and revision and built locally. Meridian does not host, publish or redistribute this dataset.",
+  "licenses": [
+    {
+      "name": "CC-BY-NC-SA-4.0",
+      "path": "https://creativecommons.org/licenses/by-nc-sa/4.0/",
+      "title": "Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International — NonCommercial: the licensor restricts commercial use of the output, not the act of building it. Verified against the licensor's project site and source repository, not the mirror's YAML tag, which reads plain CC BY-SA and disagrees with its own card body."
+    }
+  ],
+  "sources": [
+    {
+      "title": "derek-thomas/ScienceQA on Hugging Face, revision f18b0a70 (test split)",
+      "path": "https://huggingface.co/datasets/derek-thomas/ScienceQA"
+    },
+    {
+      "title": "ScienceQA — Lu et al., \"Learn to Explain: Multimodal Reasoning via Thought Chains for Science Question Answering\", NeurIPS 2022 (licensor)",
+      "path": "https://scienceqa.github.io"
+    }
+  ],
+  "fields": {
+    "question": {
+      "description": "The question text."
+    },
+    "answer_choices": {
+      "description": "The 2 to 5 answer options the source offers, joined with ' | ' — the source's `choices` array flattened to a single delimited string."
+    },
+    "answer_index": {
+      "description": "0-based index into the pipe-delimited answer_choices identifying the correct option, as the source records it. Meaningless on its own without answer_choices or answer_text."
+    },
+    "answer_text": {
+      "description": "The text of the correct choice, joined from the source's `choices[answer]` so a reader does not have to re-parse answer_choices to learn it."
+    },
+    "hint": {
+      "description": "A short context hint the source provides for the question, empty where none is given."
+    },
+    "task": {
+      "description": "The question format the source assigns, e.g. closed choice."
+    },
+    "grade": {
+      "description": "Grade level the question targets, e.g. grade5."
+    },
+    "subject": {
+      "description": "Top-level subject: natural science, social science or language science."
+    },
+    "topic": {
+      "description": "Subject subdivision, e.g. figurative-language."
+    },
+    "category": {
+      "description": "Finer-grained topic label than subject/topic, e.g. Literary devices."
+    },
+    "skill": {
+      "description": "The specific skill the question exercises, as the source names it."
+    },
+    "lecture": {
+      "description": "Background teaching text the question draws on, empty where the source gives none."
+    },
+    "solution": {
+      "description": "Worked explanation of the correct answer, empty where the source gives none."
+    },
+    "has_image": {
+      "description": "Whether the source shipped a figure with this question — true for 2,017 of these 4,241 rows. The image bytes themselves are not carried into this export; see arcform.yaml for why."
+    }
+  }
+}
