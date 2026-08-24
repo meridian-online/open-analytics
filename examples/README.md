@@ -6,17 +6,20 @@ Each subdirectory is an [arcform](https://github.com/meridian-online/arcform) Pr
 
 **The distinction from `../datasets/` is the whole point of keeping them apart.** A Protocol under `datasets/` terminates in an object Meridian serves at `openlake.meridian.online`, and everything about the licensing of that act applies to it. A Protocol under `examples/` terminates on your disk. Meridian hosts none of this data, redistributes none of it, and adds no second URL for anything that already has one. Running one of these is the same act as running a shell script that curls a file — the licence question attaches to whoever runs it and what they do with the bytes, not to the recipe.
 
-## The three
+## The four
 
 | Protocol | Source | Licence at source | Rows |
 |---|---|---|---|
 | `movies` | vega-datasets 3.2.1 | BSD-3-Clause | 3,201 |
 | `census-income` | `scikit-learn/adult-census-income` @ `fbeef6ec` | CC0-1.0 | 32,561 |
 | `california-housing` | `gvlassis/california_housing` @ `17110e60` | MIT | 16,640 |
+| `scienceqa` | `derek-thomas/ScienceQA` @ `f18b0a70` (test split) | CC BY-NC-SA 4.0 — **NonCommercial** | 4,241 |
 
 **Each licence was read at its source, and for `movies` that turned out to mean no licence at all.** vega-datasets declares a per-resource licence for **58 of its 73 resources**, and `movies` is one of the 15 it does not — so the silence is a choice rather than an omission, and nothing is asserted here either. The BSD-3-Clause on that repository covers its code and infrastructure, and its own `datapackage.json` says so. An earlier version of this file labelled `movies` BSD-3-Clause and cited a `LICENSE` URL that returns 404; that was the repository's code licence applied to data it only redistributes, which is exactly the mistake this paragraph now exists to prevent.
 
-Every `sha256:` in these manifests was computed from the fetched bytes here, and the two Hugging Face URLs address a 40-character commit revision rather than a default branch, so the revision is pinned as well as the content.
+**`scienceqa`'s own mirror disagrees with itself, and that is the other way this goes wrong.** The Hugging Face mirror's YAML frontmatter tags the dataset `cc-by-sa-4.0` — no NonCommercial — and a third-party gallery that read only that tag has the dataset catalogued as plain CC BY-SA. That mirror's own card *body*, three headings down under "Licensing Information," says CC BY-NC-SA 4.0, and the licensor's project site (`scienceqa.github.io`) and source repository (`github.com/lupantech/ScienceQA`) both agree with the body, not the tag. So `scienceqa/arcform.yaml` and its descriptor both carry NonCommercial, and both say plainly what it restricts: referencing this URL and building the Parquet is not redistribution and is not restricted; Meridian using the *output* commercially — on the site, in launch material, on a pricing page — is.
+
+Every `sha256:` in these manifests was computed from the fetched bytes here, and the three Hugging Face URLs address a 40-character commit revision rather than a default branch, so the revision is pinned as well as the content.
 
 `census-income` describes individuals recorded by the 1994 US Census. It is used here as a *shape of data*, and its columns use that instrument's categories rather than ones anybody would choose today.
 
@@ -30,7 +33,7 @@ You need `arc` on `PATH` and a DuckDB the manifest's `engine_version` accepts. E
 
 ## Two things worth knowing before you rely on a run
 
-**The exports are byte-reproducible, and `ORDER BY ALL` is why.** Two cold runs of all three Protocols produced identical SHA-256 digests — `5ab2c92b…`, `3021b408…` and `43b5fbc7…`. That ordering is deliberately *not* claimed to be a total order: 24 of `census-income`'s 32,561 rows are exact duplicates of another row, so ties exist. A tie between two rows that are equal in every column cannot change the output bytes, because the rows themselves are identical — which is the weaker condition that actually holds, and it holds without inventing a surrogate key.
+**The exports are byte-reproducible, and `ORDER BY ALL` is why.** Two cold runs of all four Protocols produced identical SHA-256 digests — `5ab2c92b…`, `3021b408…`, `43b5fbc7…` and `d7677afc…`. That ordering is deliberately *not* claimed to be a total order: 24 of `census-income`'s 32,561 rows, and 64 of `scienceqa`'s 4,241, are exact duplicates of another row, so ties exist. A tie between two rows that are equal in every column cannot change the output bytes, because the rows themselves are identical — which is the weaker condition that actually holds, and it holds without inventing a surrogate key. Broken and reproduced on `scienceqa`: swapping `order_by: "ALL"` for `order_by: "random()"` turned two consecutive runs' digests different (`72962916…` vs. `b4c7d1e3…`) where the real manifest gives the same digest every time.
 
 **A `sha256:` pin is provenance here, not an integrity gate.** On a genuine transfer it fails closed — corrupt a pin against an empty cache and the run stops, naming both hashes. But arcform's shared fetch cache is keyed by **URL**, and on a cache hit the pin is not consulted: with the cache warm, a manifest declaring `sha256: 0000…0` builds to exit 0 and reuses the cached bytes. Reproduced on `california-housing`. So the pin protects the first fetch on a cold machine and nothing after it, and changing a pin to name different bytes will not fetch them on a machine that already has the old ones.
 
@@ -38,6 +41,6 @@ You need `arc` on `PATH` and a DuckDB the manifest's `engine_version` accepts. E
 
 ## What finetype makes of them
 
-The `describe` step types every column semantically, and these three are a fair sample of what that buys and what it still gets wrong. `california-housing`'s coordinates come back as `geography.coordinate.latitude` and `.longitude` rather than as two doubles, and `movies.release_date` as `datetime.date.iso` — which is the difference between a dashboard that can choose a map and a date axis, and one that draws nine histograms. `movies.director` types as `identity.person.full_name`.
+The `describe` step types every column semantically, and these four are a fair sample of what that buys and what it still gets wrong. `california-housing`'s coordinates come back as `geography.coordinate.latitude` and `.longitude` rather than as two doubles, and `movies.release_date` as `datetime.date.iso` — which is the difference between a dashboard that can choose a map and a date axis, and one that draws nine histograms. `movies.director` types as `identity.person.full_name`.
 
-It is not uniformly right, and the miss is recorded here rather than quietly accepted: `census-income.final_weight` types as `identity.person.weight`. It is a Census *sampling* weight — how many people in the population the record stands for — and not a property of anybody's body.
+It is not uniformly right, and the miss is recorded here rather than quietly accepted: `census-income.final_weight` types as `identity.person.weight`. It is a Census *sampling* weight — how many people in the population the record stands for — and not a property of anybody's body. `scienceqa.grade` — a string like `grade5` — types as `finance.rate.basis_points`, which is a stranger miss than the census one and just as wrong: nothing about a school grade level resembles a rate.
