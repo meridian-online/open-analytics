@@ -21,30 +21,45 @@ freshness lever. The step DAG:
    User-Agent carrying contact info). Refreshed daily upstream.
 2. **load / normalise** (`models/load.sql`) — the file is columnar (a `fields` header
    plus positional `data` rows); flatten it to the 4-field schema (`cik`,
-   `company_name`, `ticker`, `exchange`) and normalise CIK to an unpadded numeric
-   string.
+   `company_name`, `ticker`, `exchange`). CIK is cast to an integer: the SEC file
+   carries it unpadded already, and the cast refuses anything non-numeric rather
+   than letting it through.
 3. **package** (`models/package.sql`) — add the search `corpus`, sort by
    `company_name`, write the terminal zstd Parquet.
 
 Produces `build/edgar.parquet`.
 
-### The served object and this Protocol disagree about `cik` — reconcile before the next publish
+### `cik` is an integer, and the served object is one republish behind
 
-The `cik` column of the object at `openlake.meridian.online/edgar.parquet` is a
-Parquet **integer**. Step 2 above renders it as **text** (`CAST(… AS BIGINT)::VARCHAR`),
-and has done since the file was added, so a run of this Protocol does not reproduce
-the column type of the object it is said to produce. The served object predates the
-Protocol and has not been rebuilt through it.
+**This Protocol now builds `cik` as a Parquet integer, which is what
+`datapackage.json` and `descriptor.overrides.json` have declared since 2026-08-12.**
+Step 2 used to end `CAST(… AS BIGINT)::VARCHAR` — a cast to integer thrown away
+immediately — so it built text while the descriptor declared an integer.
 
-`datapackage.json` describes the object we serve — that is its job — so `cik` is
-declared `integer` there, and `descriptor.overrides.json` pins that declaration so a
-regeneration keeps it. If a future run publishes the text column this Protocol
-builds, that pin becomes wrong and `descriptors match their data` will say so. The
-fix is to decide which representation `cik` has and make both ends say it; the
-measurement that settles the cost is in `datasets/edgar_gleif` — no published CIK
-carries a leading zero and the text/integer round trip is exact, so neither
-representation loses information. Changing step 2 changes the published bytes and
-the crosswalk build that joins to them, which is why it is not done here.
+The section this replaces predicted the failure that then happened, and it is worth
+keeping the sentence: *"If a future run publishes the text column this Protocol
+builds, that pin becomes wrong and `descriptors match their data` will say so."* A
+run did, and it does. `scripts/check_descriptors.py` reports two disagreements on
+`edgar.cik`, one for this repo's descriptor and one for the copy the object carries
+about itself in its own footer — which is why editing the descriptor alone cannot fix
+it and would take the count from 2 to 3.
+
+**The object at `openlake.meridian.online/edgar.parquet` still carries the text
+column, so both disagreements stand until it is republished from this Protocol.**
+Nothing in CI rebuilds a dataset and diffs it against what is served, so no job here
+sees this change; it is verified by running the model, which emits `BIGINT` (Parquet
+`INT64`).
+
+Republishing has a second step that is not optional. `datasets/edgar_gleif`'s
+`x-joins` declares its `coverage` measured against *the exact object* this package
+names, and says so: it "moves when they are republished, exactly as `bytes` and
+`hash` do". So a run that republishes `edgar` leaves `declared joins run against the
+published bytes` red until the crosswalk's coverage is re-derived and republished
+too. That is a second slug and a second review, not a larger single act.
+
+Neither representation loses information — no published CIK carries a leading zero
+and the text/integer round trip is exact, measured in `datasets/edgar_gleif` — so the
+choice is settled by what the descriptor already declares rather than by the data.
 
 ## Boundary (deliberate)
 
