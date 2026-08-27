@@ -1,6 +1,6 @@
 {
   "$schema": "https://datapackage.org/profiles/2.0/datapackage.json",
-  "created": "2026-08-20T20:37:18Z",
+  "created": "2026-08-10T23:53:23Z",
   "description": "The Global Legal Entity Identifier Foundation's public register of legal entities — every entity with its 20-character LEI, legal name, country, jurisdiction and registration status.",
   "homepage": "https://meridian.online/datasets/gleif",
   "licenses": [
@@ -13,9 +13,9 @@
   "name": "gleif",
   "resources": [
     {
-      "bytes": 129139086,
+      "bytes": 128008473,
       "format": "parquet",
-      "hash": "sha256:7bc2553b3d6873bf6f83aaa6081c6c5a4a1e978a4f8d11bb497dbd087fcf865f",
+      "hash": "sha256:de9b31365ea9a90de6c0367e40537611ec1bc0400d48f3aa6155258eac6e232f",
       "mediatype": "application/vnd.apache.parquet",
       "name": "gleif",
       "path": "https://openlake.meridian.online/gleif.parquet",
@@ -39,7 +39,7 @@
             "description": "The entity's official legal name, as recorded in the GLEIF golden copy. The bounds are the register's own: LEI-CDF v3.1 types this element NameType, a complexType whose simpleContent extends Tokenized500Type — the extension adds an optional xml:lang attribute and leaves the inherited value space, which restricts the text to between 1 and 500 characters. Names at both ends are genuine — single-character names are registered in several jurisdictions, and names past 200 characters are typically a registry's full form, such as the Italian convention of carrying the permitted trading abbreviations inside the registered name.",
             "name": "legal_name",
             "type": "string",
-            "x-finetype-confidence": 0.9959,
+            "x-finetype-confidence": 0.7798,
             "x-finetype-label": "representation.text.entity_name"
           },
           {
@@ -70,12 +70,8 @@
             "description": "Jurisdiction the entity is constituted under, as the GLEIF register records it. The register types this element as a country code or a country-plus-subdivision code — LEI-CDF v3.1's JurisdictionCodeType, a union of its CountryCodeType and RegionCodeType — and the pattern here is the union of those two shapes. It checks shape, not assignment: the schema itself notes that a well-formed value need not be a valid ISO 3166 entry, and values outside the ISO-assigned lists do occur in this column, so treat membership of an ISO reference list as something to verify rather than assume.",
             "name": "jurisdiction",
             "type": "string",
-            "x-finetype-confidence": 0.9992,
-            "x-finetype-label": "geography.location.country_code",
-            "x-finetype-pattern-fit": {
-              "canonical": "^[A-Z]{2}$",
-              "outcome": "widened"
-            }
+            "x-finetype-confidence": 0.9985,
+            "x-finetype-label": "geography.location.country_code"
           },
           {
             "constraints": {
@@ -86,12 +82,8 @@
             "description": "ELF (Entity Legal Form) code classifying the entity's legal form.",
             "name": "legal_form",
             "type": "string",
-            "x-finetype-confidence": 0.4237,
-            "x-finetype-label": "representation.identifier.alphanumeric_id",
-            "x-finetype-pattern-fit": {
-              "canonical": "^[A-Za-z][A-Za-z0-9 /_.#-]*[0-9][A-Za-z0-9 /_.#-]*$|^[0-9][A-Za-z0-9 /_.#-]*[A-Za-z][A-Za-z0-9 /_.#-]*$",
-              "outcome": "widened"
-            }
+            "x-finetype-confidence": 0.4361,
+            "x-finetype-label": "representation.identifier.alphanumeric_id"
           },
           {
             "constraints": {
@@ -114,7 +106,7 @@
                 "INACTIVE"
               ],
               "open": true,
-              "rows": 3398784
+              "rows": 3368431
             },
             "x-finetype-label": "representation.boolean.terms"
           },
@@ -127,7 +119,7 @@
             "description": "LEI registration lifecycle status (e.g. ISSUED, LAPSED, RETIRED).",
             "name": "registration_status",
             "type": "string",
-            "x-finetype-confidence": 0.9869,
+            "x-finetype-confidence": 0.9875,
             "x-finetype-enum-domain": {
               "cohesion": 0.7139999866485596,
               "distinct": 7,
@@ -141,7 +133,7 @@
                 "RETIRED"
               ],
               "open": true,
-              "rows": 3407818
+              "rows": 3377398
             },
             "x-finetype-label": "representation.text.word"
           },
@@ -175,7 +167,7 @@
             "description": "Lowercased, accent-stripped concatenation of legal name + city + country — a derived free-text search field, not a source attribute.",
             "name": "corpus",
             "type": "string",
-            "x-finetype-confidence": 0.9959,
+            "x-finetype-confidence": 0.9989,
             "x-finetype-label": "unknown"
           }
         ],
@@ -192,5 +184,5 @@
     }
   ],
   "title": "GLEIF — Legal Entity Identifiers",
-  "x-finetype-version": "0.6.57"
+  "x-finetype-version": "0.6.56"
 }
