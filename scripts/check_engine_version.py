@@ -150,15 +150,52 @@ def reader_pin() -> str:
     return duckdb.__version__
 
 
+def every_declared_resource_was_read(checked: int, declared: int, n_descriptors: int) -> None:
+    """Raise unless the run read every resource it was told about.
+
+    THE INVARIANT IS `checked == declared`, NOT `checked > 0`, and the difference is
+    the whole guard. A run that read nothing is not a run that agreed — but neither is
+    a run that read three of four.
+
+    An earlier version refused only the total shutout, and an independent review
+    defeated it in one move: wrapping the remote footer read in
+    `try/except CheckError: continue` — a plausible "do not let one flaky object kill
+    the whole run" change — left every test green and produced a real false pass. A
+    tree with one healthy remote and one broken one printed "1 resource(s) across 2
+    descriptor(s) … were written by the DuckDB this check is pinned to" and exited 0,
+    having never read the broken one at all.
+
+    Counting what was DECLARED and insisting the two agree closes the class rather than
+    that instance: any path that turns a read into a silent skip — broad exception
+    handling, a retry with a fallback, a best-effort flag — is visible whether it skips
+    one resource or all of them.
+
+    A BACKSTOP, and it is meant to be unreachable. Every resource in `check_resources`
+    today is either read or raises, so nothing in the current code can make these two
+    disagree. That is why it is a function with its own test rather than an inline
+    comparison: an inline one has nothing to redden when it is deleted, which is how
+    the version it replaced went untested.
+    """
+    if checked != declared:
+        raise CheckError(
+            f"read {checked} of {declared} declared resource footer(s) across "
+            f"{n_descriptors} descriptor(s). Every declared resource must be read or "
+            "the run must fail; a resource that was skipped is not a resource that "
+            "agreed, and from outside the two are identical."
+        )
+
+
 def check_resources(con, descriptor_paths: list[Path], pin: str) -> tuple[list[Mismatch], int]:
     mismatches: list[Mismatch] = []
     checked = 0
+    declared = 0
     for descriptor_path in descriptor_paths:
         package = str(descriptor_path)
         descriptor = load_descriptor(descriptor_path)
         resources = descriptor.get("resources") or []
         if not resources:
             raise CheckError(f"{package}: declares no resources")
+        declared += len(resources)
         for resource in resources:
             raw_path = resource.get("path")
             if not raw_path:
@@ -169,22 +206,18 @@ def check_resources(con, descriptor_paths: list[Path], pin: str) -> tuple[list[M
                 con.execute("LOAD httpfs")
             elif not Path(path).exists():
                 raise CheckError(f"{package}: resource points at {path}, which does not exist")
-            created_by = footer_created_by(con, path)
-            written = parse_writer_version(created_by, path)
+            try:
+                created_by = footer_created_by(con, path)
+                written = parse_writer_version(created_by, path)
+            except CheckError as exc:
+                # Re-raised, never swallowed. The package name is added because the
+                # bare failure names only a URL, and four published objects on one
+                # host are four URLs a reader then has to look up.
+                raise CheckError(f"{package}: {exc}") from exc
             checked += 1
             if written != pin:
                 mismatches.append(Mismatch(package, resource.get("name", ""), path, written, pin))
-    # A RUN THAT READ NOTHING IS NOT A RUN THAT AGREED. Every declared resource above
-    # is either read or raises, so reaching here with `checked` at zero means the loop
-    # was entered and every path through it declined — which is indistinguishable, from
-    # outside, from four footers that all matched. The live check reads only remote
-    # objects, so anything that quietly skips a remote takes the whole gate to exit 0
-    # having verified nothing.
-    if checked == 0:
-        raise CheckError(
-            f"read 0 resource footers across {len(descriptor_paths)} descriptor(s). "
-            "The check verified nothing, which is not the same as everything agreeing."
-        )
+    every_declared_resource_was_read(checked, declared, len(descriptor_paths))
     return mismatches, checked
 
 

@@ -238,6 +238,14 @@ class EngineVersionCheckSelfTest(unittest.TestCase):
             patched_version,
             original_version,
         )
+        # EACH VERSION AGAINST ITS OWN LABEL, not merely present somewhere in the
+        # output. Swapping `writer_version` and `reader_pin` in the Mismatch
+        # construction was caught only by the JSON report; all three tests that read
+        # the human message used `assertIn` on both strings independently, so a report
+        # saying "written by <the pin>; pinned to <the writer>" satisfied every one of
+        # them. That report sends a reader to change the wrong thing.
+        self.assertIn(f"was written by DuckDB {patched_version}", result.stdout)
+        self.assertIn(f"this check is pinned to DuckDB {original_version}", result.stdout)
         # The point of AC3b: this vocabulary, not the one `check_descriptors.py` uses
         # for an actual data defect.
         #
@@ -328,27 +336,172 @@ class EngineVersionCheckSelfTest(unittest.TestCase):
             result.returncode, EXIT_OK, f"a footer it could not read must not pass:\n{result.stdout}{result.stderr}"
         )
 
-    def test_a_run_that_counted_no_footers_refuses(self) -> None:
-        """The zero-count backstop, driven at the level where it is reachable.
+    def test_a_healthy_remote_beside_a_broken_one_cannot_pass(self) -> None:
+        """The case the previous round's fix did not cover, and the reason the
+        invariant is `checked == declared` rather than `checked > 0`.
 
-        `check_resources` refuses when the loop finishes having read nothing. Today no
-        CLI path reaches that: `discover()` raises on an empty tree, a descriptor with
-        no resources raises, and every resource is either read or raises. The guard is
-        there for the shape that is NOT true today — an arm that skips instead of
-        raising — and skipping remotes is exactly the change that took the whole gate
-        to exit 0 having verified nothing. A backstop with no test is a comment, so it
-        is driven here through the function rather than through the process.
+        Wrapping the remote footer read in `try/except CheckError: continue` — a
+        plausible "do not let one flaky object kill the whole run" change — used to
+        leave every test green while producing a real false pass: a tree with one
+        healthy remote and one broken one printed a success line naming both packages
+        and exited 0, having never read the broken one. Every other remote case in
+        this file has a single resource, so the zero-count guard masked it there.
+
+        This run has two, and it must not exit 0 by any route.
+        """
+        local = self.datasets / "widgets" / "widgets.parquet"
+        write_parquet(local, "SELECT i AS n FROM range(3) t(i)")
+        good = serve(local.read_bytes())
+        self.addCleanup(good.shutdown)
+        bad = serve(b"not a parquet at all")
+        self.addCleanup(bad.shutdown)
+
+        for slug, url in (("good_pkg", good.url), ("bad_pkg", bad.url)):
+            package_dir = self.datasets / slug
+            package_dir.mkdir(parents=True)
+            (package_dir / "datapackage.json").write_text(
+                json.dumps(
+                    {
+                        "name": slug,
+                        "resources": [
+                            {
+                                "name": slug,
+                                "format": "parquet",
+                                "path": url,
+                                "schema": {"fields": [{"name": "n", "type": "integer"}]},
+                            }
+                        ],
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+        result = run_check(self.datasets)
+        output = result.stdout + result.stderr
+        self.assertNotEqual(
+            result.returncode,
+            EXIT_OK,
+            f"a run holding one unreadable resource must not report success:\n{output}",
+        )
+        # And it must not claim to have checked what it did not. The mutation's
+        # signature was a success line counting only the resources it managed to read.
+        self.assertNotIn("were written by the DuckDB this check is pinned to", output)
+        # THE MESSAGE HAS TO BE THE READ FAILURE, not the count backstop. Both exit
+        # non-zero, so an assertion on the status alone cannot tell "this object is not
+        # a Parquet" from "something skipped it and the backstop noticed" — and those
+        # send a reader to two different places. Asserting the wording is what makes
+        # the `try/except … continue` mutation redden HERE rather than incidentally.
+        self.assertIn("bad_pkg", output)
+        self.assertNotIn("declared resource footer(s)", output)
+
+    def test_a_missing_local_file_is_named_rather_than_skipped(self) -> None:
+        """The same defect class on the other branch of the resolver.
+
+        `resolve_path` sends a relative path down a local arm, and turning THAT read
+        into a silent skip is the same one-line change as on the remote arm. Nothing
+        drove it: every other local case in this file points at a file that exists.
+
+        Two packages so a skip cannot be confused with an empty run, and the assertion
+        is on the WORDING — under a skip the backstop still refuses, but it refuses
+        with a count rather than with the path, and a reader needs the path.
+        """
+        write_package(self.datasets, "aaa_present")
+        package_dir = self.datasets / "zzz_absent"
+        package_dir.mkdir(parents=True)
+        (package_dir / "datapackage.json").write_text(
+            json.dumps(
+                {
+                    "name": "zzz_absent",
+                    "resources": [
+                        {
+                            "name": "zzz_absent",
+                            "format": "parquet",
+                            "path": "nothing_here.parquet",
+                            "schema": {"fields": [{"name": "n", "type": "integer"}]},
+                        }
+                    ],
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        result = run_check(self.datasets)
+        output = result.stdout + result.stderr
+        self.assertNotEqual(result.returncode, EXIT_OK, output)
+        self.assertIn("nothing_here.parquet", output)
+        self.assertIn("does not exist", output)
+        self.assertNotIn("declared resource footer(s)", output)
+
+    def test_the_backstop_is_actually_wired_into_the_loop(self) -> None:
+        """A source-text assertion, and it is second-best on purpose.
+
+        `every_declared_resource_was_read` is unreachable in the current code — every
+        resource is read or raises — so no behavioural test can notice its CALL being
+        deleted, only its body. That is the gap: the function has cover and the wiring
+        does not, and deleting one line from `check_resources` restored the exact false
+        pass this whole guard exists to prevent while every other test stayed green.
+
+        Reading the source is a weaker check than driving the behaviour and can be
+        fooled by indirection, which is why it says so here rather than pretending
+        otherwise. It is chosen over nothing, not over something better: the thing that
+        would replace it is a reachable code path, and there is none to build until a
+        resource can legitimately be skipped.
+        """
+        source = CHECKER.read_text(encoding="utf-8")
+        body_at = source.index("def check_resources(")
+        body = source[body_at:]
+        self.assertIn(
+            "every_declared_resource_was_read(checked, declared,",
+            body,
+            "check_resources must call the backstop; deleting the call is invisible to "
+            "every behavioural test in this file",
+        )
+
+    def test_the_read_count_must_equal_the_declared_count(self) -> None:
+        """The backstop itself, driven directly.
+
+        It is meant to be unreachable: every resource in `check_resources` today is
+        either read or raises, so nothing in the current code can make the two
+        disagree. That is exactly why it needs a test of its own — an inline comparison
+        has nothing to redden when it is deleted, and that is how the `checked > 0`
+        version it replaced went untested through a whole round.
         """
         sys.path.insert(0, str(CHECKER.parent))
-        import check_engine_version as cev  # noqa: PLC0415 - imported for this case only
+        import check_engine_version as cev  # noqa: PLC0415
+
+        # Agreement is silence, including the empty case.
+        cev.every_declared_resource_was_read(0, 0, 0)
+        cev.every_declared_resource_was_read(4, 4, 4)
+
+        # A partial read is the case the review found and is refused by name.
+        with self.assertRaises(cev.CheckError) as caught:
+            cev.every_declared_resource_was_read(1, 2, 2)
+        self.assertIn("read 1 of 2", str(caught.exception))
+        self.assertIn("skipped is not a resource that agreed", str(caught.exception))
+
+        # And the total shutout, which is the case the earlier version caught.
+        with self.assertRaises(cev.CheckError):
+            cev.every_declared_resource_was_read(0, 4, 4)
+
+    def test_the_count_invariant_holds_when_nothing_is_declared(self) -> None:
+        """`check_resources` compares what it READ against what was DECLARED, so the
+        empty case agrees with itself and does not raise.
+
+        Stated rather than assumed, because the earlier invariant was `checked > 0` and
+        this input was how it was driven. Nothing reaches `check_resources` with an
+        empty list through the CLI — `discover()` raises on an empty tree — so the
+        boundary is recorded here rather than left for someone to rediscover as a bug.
+        """
+        sys.path.insert(0, str(CHECKER.parent))
+        import check_engine_version as cev  # noqa: PLC0415
         import duckdb  # noqa: PLC0415
 
         con = duckdb.connect()
         self.addCleanup(con.close)
-        with self.assertRaises(cev.CheckError) as caught:
-            cev.check_resources(con, [], "1.5.5")
-        self.assertIn("read 0 resource footers", str(caught.exception))
-        self.assertIn("verified nothing", str(caught.exception))
+        self.assertEqual(cev.check_resources(con, [], "1.5.5"), ([], 0))
 
     def test_every_descriptor_is_visited_not_just_the_first(self) -> None:
         """Truncating the descriptor loop to its first entry passed the whole suite.
