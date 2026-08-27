@@ -55,3 +55,21 @@ the crosswalk build that joins to them, which is why it is not done here.
 ## Run
 
 Needs the `arc` binary and `duckdb`, plus `curl` for the fetch: `arc run`.
+
+## The step list
+
+<!-- protocol-steps: generated from arcform.yaml by scripts/check_protocol_readme.py — do not edit this block by hand -->
+
+7 steps, of which 1 runs through an opaque `command:`/shell step: `stamp_descriptor`. A shell step is invisible to the engine's staleness model and carries its interpreter and dependency pins inline, so what this Protocol guarantees stops short of it.
+
+| # | Step | How it runs |
+|---|---|---|
+| 1 | `fetch_edgar` | `op: http_fetch@1` |
+| 2 | `load` | `sql: models/load.sql` |
+| 3 | `package` | `sql: models/package.sql` |
+| 4 | `export_edgar` | `op: parquet_export@1` |
+| 5 | `describe` | `op: datapackage_describe@1` |
+| 6 | `validate` | `op: finetype_validate@1` |
+| 7 | `stamp_descriptor` | `command:` (shell) |
+
+<!-- /protocol-steps -->

@@ -14,10 +14,48 @@ orthogonal facets:
 ## The Protocol
 
 `arc run` (arcform) executes `arcform.yaml`. One **Run** → one Dataset version — the
-freshness lever. The Protocol is **all-config**: every step is a `sql:` model or a
-typed `op:` operator from the arcform catalog (`http_fetch`, `gleif_ra_fetch`,
-`archive_extract`, `parquet_export`, `splink_resolve`, `datapackage_describe`) — there
-are **no opaque `command:`/shell steps**. The step DAG:
+freshness lever.
+
+The step list below is **generated from `arcform.yaml`** by
+`scripts/check_protocol_readme.py`, and the job `protocol-readme` in
+`.github/workflows/descriptors.yml` reddens when this copy is not the manifest's. That
+includes the sentence about shell steps: it is derived from the parsed step list rather
+than written, so it cannot be true when typed and false a commit later — which is what
+happened to the sentence it replaces, and for months.
+
+<!-- protocol-steps: generated from arcform.yaml by scripts/check_protocol_readme.py — do not edit this block by hand -->
+
+All 23 steps are `sql:` models or typed `op:` operators from the arcform catalog. This Protocol runs no opaque `command:`/shell step.
+
+| # | Step | How it runs |
+|---|---|---|
+| 1 | `fetch_edgar` | `op: http_fetch@1` |
+| 2 | `fetch_gleif` | `op: http_fetch@1` |
+| 3 | `fetch_cik_lookup` | `op: http_fetch@1` |
+| 4 | `build_sec_entities` | `sql: models/sec_entities.sql` |
+| 5 | `export_sec_entities` | `op: parquet_export@1` |
+| 6 | `fetch_gleif_sec_registrations` | `op: gleif_ra_fetch@1` |
+| 7 | `fetch_ncen_2026q2` | `op: http_fetch@1` |
+| 8 | `extract_ncen_2026q2` | `op: archive_extract@1` |
+| 9 | `fetch_ncen_2026q1` | `op: http_fetch@1` |
+| 10 | `extract_ncen_2026q1` | `op: archive_extract@1` |
+| 11 | `fetch_ncen_2025q4` | `op: http_fetch@1` |
+| 12 | `extract_ncen_2025q4` | `op: archive_extract@1` |
+| 13 | `fetch_ncen_2025q3` | `op: http_fetch@1` |
+| 14 | `extract_ncen_2025q3` | `op: archive_extract@1` |
+| 15 | `load` | `sql: models/load.sql` |
+| 16 | `resolve` | `op: splink_resolve@1` |
+| 17 | `tier` | `sql: models/tier.sql` |
+| 18 | `package` | `sql: models/package.sql` |
+| 19 | `export_edgar_gleif` | `op: parquet_export@1` |
+| 20 | `describe` | `op: datapackage_describe@1` |
+| 21 | `derive_join_coverage` | `op: uv@1` |
+| 22 | `validate` | `op: finetype_validate@1` |
+| 23 | `stamp_descriptor` | `op: uv@1` |
+
+<!-- /protocol-steps -->
+
+What those steps do, in phases:
 
 1. **fetch** the source Datasets (`source.edgar`, `source.gleif`) from the openlake.
 2. **fetch** the deterministic backbone (no guessing) — **official sources only
@@ -43,6 +81,21 @@ are **no opaque `command:`/shell steps**. The step DAG:
    first-class produced asset, not an unparseable `COPY` graph-island). A **total**
    `order_by` (`company_name` is not unique — 6,906 ties) makes the bytes reproducible.
 7. **describe** — emit `datapackage.json` from the built Parquet (see Boundaries).
+8. **derive join coverage** — measure each declared `x-joins` relationship against this
+   build's own Parquet and write the `rows`/`matched` it finds into the descriptor, so
+   the published coverage is measured rather than typed. `op: uv@1` running
+   `scripts/crosswalk_join.py`: it names the six files it reads and the one it writes,
+   which is what puts the measurement inside the asset graph — before that it was a
+   `command:` step declaring nothing, and its figures went four weeks stale while the
+   Run reported nothing wrong.
+9. **validate** — gate the built Parquet against `schema.finetype.json` (check-only; it
+   writes nothing and moves no row).
+10. **stamp the descriptor into the Parquet** — write the finished `datapackage.json`
+    into the file's own footer so the object answers for itself from its URL alone,
+    then write the stamped file's `bytes`/`hash` back into the descriptor. `op: uv@1`
+    running `../../scripts/stamp_descriptor.py`. It runs last because it embeds the
+    FINISHED descriptor, and everything before the footer is compared byte for byte —
+    a stamp that moved one data byte is refused with the original left in place.
 
 ## The identifier
 
@@ -205,8 +258,11 @@ against scratch packages.
   only ~355k of 3.36M GLEIF entities are US). Individuals (insider Form 3/4/5 filers)
   are left in but carry no LEI, so they never match — the **output is entity-only by
   construction** (no PII published).
-- **Run**: needs the `arc` binary, `uv` on `PATH` (the `splink_resolve`, `gleif_ra_fetch`,
-  and `datapackage_describe` operators run their frozen scripts via `uv run`), and
-  `finetype` on `PATH` (the describe operator shells out to it); `arc run --param
-  as_of=YYYY-MM-DD`. At full scale the resolve step is real compute (~100M candidate
+- **Run**: needs the `arc` binary, `uv` on `PATH` (the `splink_resolve`,
+  `gleif_ra_fetch` and `datapackage_describe` operators run their frozen scripts via
+  `uv run`, and `derive_join_coverage` and `stamp_descriptor` are `op: uv@1` steps
+  running this repo's own Python — each pinned to its script's SHA-256 and to
+  `duckdb==1.5.5`, with the interpreter pinned in the script's PEP 723 header, so
+  neither needs a venv to exist or a global install), and `finetype` on `PATH` (the
+  describe operator shells out to it); `arc run --param as_of=YYYY-MM-DD`. At full scale the resolve step is real compute (~100M candidate
   pairs) — run it deliberately.
