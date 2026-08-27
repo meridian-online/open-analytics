@@ -14,7 +14,7 @@ is what the checker actually sees, not a string asserted in this file's memory.
 
 A rule this suite does not cover: comment out the `written != pin` comparison in
 `check_resources()` (or replace it with `False`), rerun `test_mismatch_reddens_...`,
-and it fails — see the card's report for the exact line broken and put back.
+and it fails.
 """
 
 from __future__ import annotations
@@ -24,10 +24,22 @@ import re
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
+from http.server import BaseHTTPRequestHandler
 from pathlib import Path
+from socketserver import TCPServer
+from typing import Any
 
 CHECKER = Path(__file__).with_name("check_engine_version.py")
+DESCRIPTOR_CHECKER = Path(__file__).with_name("check_descriptors.py")
+
+# The words `check_descriptors.py` prints when the DATA is wrong. This gate must never
+# print them: a writer/reader engine skew is not a claim about the data, and telling a
+# reader it is sends them to fix bytes that are correct. Pinned against that file's own
+# source by `test_the_data_defect_vocabulary_is_real`, because a phrase this file
+# invents cannot fail to be absent.
+DATA_DEFECT_VOCABULARY = "between descriptor and data"
 
 EXIT_OK = 0
 EXIT_MISMATCH = 1
@@ -103,6 +115,71 @@ def write_package(root: Path, slug: str) -> Path:
     return descriptor
 
 
+class ObjectHandler(BaseHTTPRequestHandler):
+    """Serves one Parquet over http:// so a resource path is genuinely REMOTE.
+
+    Range-aware, because that is how DuckDB reads a footer — a handler that ignored
+    `Range` would still satisfy the read and would quietly turn a footer read into a
+    whole-object download, which is the property the live check depends on.
+    """
+
+    def log_message(self, *args: Any) -> None:
+        pass
+
+    def _respond(self, body_wanted: bool) -> None:
+        if self.path != self.server.object_path:
+            self.send_response(404)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        body = self.server.body
+        match = re.match(r"bytes=(\d+)-(\d*)", self.headers.get("Range") or "")
+        if match:
+            start = int(match.group(1))
+            end = int(match.group(2)) if match.group(2) else len(body) - 1
+            end = min(end, len(body) - 1)
+            chunk = body[start : end + 1]
+            self.send_response(206)
+            self.send_header("Content-Range", f"bytes {start}-{end}/{len(body)}")
+            self.send_header("Content-Length", str(len(chunk)))
+            self.send_header("Accept-Ranges", "bytes")
+            self.end_headers()
+            if body_wanted:
+                self.wfile.write(chunk)
+            return
+        self.send_response(200)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Accept-Ranges", "bytes")
+        self.end_headers()
+        if body_wanted:
+            self.wfile.write(body)
+
+    def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler naming
+        self._respond(True)
+
+    def do_HEAD(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler naming
+        self._respond(False)
+
+
+class ObjectServer(TCPServer):
+    allow_reuse_address = True
+
+    def __init__(self, body: bytes, object_path: str = "/object.parquet") -> None:
+        super().__init__(("127.0.0.1", 0), ObjectHandler)
+        self.body = body
+        self.object_path = object_path
+
+    @property
+    def url(self) -> str:
+        return f"http://127.0.0.1:{self.server_address[1]}{self.object_path}"
+
+
+def serve(body: bytes) -> ObjectServer:
+    server = ObjectServer(body)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    return server
+
+
 def run_check(datasets_dir: Path, *extra: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
     import os
 
@@ -161,9 +238,166 @@ class EngineVersionCheckSelfTest(unittest.TestCase):
             patched_version,
             original_version,
         )
-        # The point of AC3b: this vocabulary, not "disagreement between descriptor
-        # and data" — the phrase check_descriptors.py uses for an actual data defect.
-        self.assertNotIn("disagreement between descriptor and data", result.stdout + result.stderr)
+        # The point of AC3b: this vocabulary, not the one `check_descriptors.py` uses
+        # for an actual data defect.
+        #
+        # THE ASSERTED STRING IS TAKEN FROM THAT TOOL RATHER THAN PARAPHRASED. It
+        # prints "N disagreement(s) between descriptor and data"; the earlier version
+        # of this line asserted the absence of "disagreement between descriptor and
+        # data" — the singular, without the `(s)` — which no output of either tool can
+        # contain. A negative assertion that can never match is green against every
+        # possible headline, including the data-defect vocabulary it exists to forbid.
+        # `DATA_DEFECT_VOCABULARY` is asserted below to be a real substring of the
+        # sibling tool's own source, so a rewording there reddens this rather than
+        # silently emptying it again.
+        self.assertNotIn(DATA_DEFECT_VOCABULARY, result.stdout + result.stderr)
+
+    def test_a_remote_resource_is_read_rather_than_skipped(self) -> None:
+        """The live check reads ONLY remote objects, and every other case in this file
+        is a local file — so until this one existed, `if is_remote: continue` passed
+        all seven and took the real gate to exit 0 having read no footers at all.
+
+        The object is served from the loopback, so this needs no host: what is under
+        test is that the remote arm is entered and its footer parsed, not that any
+        particular origin answers.
+        """
+        local = self.datasets / "widgets" / "widgets.parquet"
+        write_parquet(local, "SELECT i AS n FROM range(3) t(i)")
+        server = serve(local.read_bytes())
+        self.addCleanup(server.shutdown)
+        package_dir = self.datasets / "remote_widgets"
+        package_dir.mkdir(parents=True)
+        (package_dir / "datapackage.json").write_text(
+            json.dumps(
+                {
+                    "name": "remote_widgets",
+                    "resources": [
+                        {
+                            "name": "remote_widgets",
+                            "format": "parquet",
+                            "path": server.url,
+                            "schema": {"fields": [{"name": "n", "type": "integer"}]},
+                        }
+                    ],
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        result = run_check(
+            self.datasets, "--only", "remote_widgets", env={"DUCKDB_VERSION": "0.0.0"}
+        )
+        # It must REDDEN, which it can only do having actually read the footer over
+        # http. A skip would exit 0, and so would a skip dressed as a pass.
+        self.assertOutcome(result, EXIT_MISMATCH, "WRITER/READER ENGINE MISMATCH", "0.0.0")
+        self.assertIn("127.0.0.1", result.stdout + result.stderr)
+
+    def test_a_footer_it_cannot_read_is_an_error_not_a_pass(self) -> None:
+        """A remote object that is not a Parquet must redden, not be shrugged off.
+
+        This is NOT the zero-count guard — the read raises before anything is counted,
+        which is why that guard needs its own test below. Both exist because they fail
+        differently: this one is an object that answered wrongly, and that one is a
+        loop that declined to ask.
+        """
+        server = serve(b"not a parquet at all")
+        self.addCleanup(server.shutdown)
+        package_dir = self.datasets / "unreadable"
+        package_dir.mkdir(parents=True)
+        (package_dir / "datapackage.json").write_text(
+            json.dumps(
+                {
+                    "name": "unreadable",
+                    "resources": [
+                        {
+                            "name": "unreadable",
+                            "format": "parquet",
+                            "path": server.url,
+                            "schema": {"fields": [{"name": "n", "type": "integer"}]},
+                        }
+                    ],
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        result = run_check(self.datasets, "--only", "unreadable")
+        self.assertNotEqual(
+            result.returncode, EXIT_OK, f"a footer it could not read must not pass:\n{result.stdout}{result.stderr}"
+        )
+
+    def test_a_run_that_counted_no_footers_refuses(self) -> None:
+        """The zero-count backstop, driven at the level where it is reachable.
+
+        `check_resources` refuses when the loop finishes having read nothing. Today no
+        CLI path reaches that: `discover()` raises on an empty tree, a descriptor with
+        no resources raises, and every resource is either read or raises. The guard is
+        there for the shape that is NOT true today — an arm that skips instead of
+        raising — and skipping remotes is exactly the change that took the whole gate
+        to exit 0 having verified nothing. A backstop with no test is a comment, so it
+        is driven here through the function rather than through the process.
+        """
+        sys.path.insert(0, str(CHECKER.parent))
+        import check_engine_version as cev  # noqa: PLC0415 - imported for this case only
+        import duckdb  # noqa: PLC0415
+
+        con = duckdb.connect()
+        self.addCleanup(con.close)
+        with self.assertRaises(cev.CheckError) as caught:
+            cev.check_resources(con, [], "1.5.5")
+        self.assertIn("read 0 resource footers", str(caught.exception))
+        self.assertIn("verified nothing", str(caught.exception))
+
+    def test_every_descriptor_is_visited_not_just_the_first(self) -> None:
+        """Truncating the descriptor loop to its first entry passed the whole suite.
+
+        The live tree's first descriptor sorts to a dataset that agrees, so a
+        truncated loop would report success across "1 resource(s) across 4
+        descriptor(s)" and nothing enforced the discrepancy. Here the AGREEING package
+        sorts first and the disagreeing one second, so a loop that stops early exits 0
+        and this reddens.
+        """
+        write_package(self.datasets, "aaa_agrees")
+        descriptor = write_package(self.datasets, "zzz_disagrees")
+        parquet = descriptor.parent / "zzz_disagrees.parquet"
+        original, patched = patch_created_by_to_disagree(parquet)
+        original_version = re.search(r"(\d+\.\d+\.\d+)", original).group(1)
+
+        result = run_check(self.datasets, env={"DUCKDB_VERSION": original_version})
+        # The reddening is the first half: a loop that stopped after `aaa_agrees`
+        # exits 0 here, because the only disagreement is in the package it never
+        # reached.
+        self.assertOutcome(result, EXIT_MISMATCH, "zzz_disagrees")
+        # And the COUNT is the enforcement rather than the prose. The failure summary
+        # names how many resources were read and which packages they came from; a
+        # truncated loop reports one and names one.
+        self.assertIn("across 2 resource(s)", result.stdout + result.stderr)
+        self.assertIn("aaa_agrees, zzz_disagrees", result.stdout + result.stderr)
+
+        # The same count on the PASS path, which is the branch a truncated loop would
+        # actually reach in production — the live tree's first descriptor agrees, so
+        # the gate would print success over one of four and nothing would object.
+        original_pin = re.search(r"(\d+\.\d+\.\d+)", real_created_by(self.datasets / "aaa_agrees" / "aaa_agrees.parquet")).group(1)
+        parquet.write_bytes(parquet.read_bytes().replace(patched.encode(), original.encode(), 1))
+        agreeing = run_check(self.datasets, env={"DUCKDB_VERSION": original_pin})
+        self.assertOutcome(agreeing, EXIT_OK, "2 resource(s) across 2 descriptor(s)")
+
+    def test_the_data_defect_vocabulary_is_real(self) -> None:
+        """`DATA_DEFECT_VOCABULARY` must be a substring of `check_descriptors.py`.
+
+        Without this, the negative assertion in the mismatch test is a phrase this
+        file made up, and a made-up phrase is guaranteed absent from every output —
+        green whatever the gate prints, which is exactly how the earlier singular
+        spelling ("disagreement between descriptor and data") became vacuous.
+        """
+        self.assertIn(
+            DATA_DEFECT_VOCABULARY,
+            DESCRIPTOR_CHECKER.read_text(encoding="utf-8"),
+            "the sibling tool no longer prints this phrase, so the negative assertion "
+            "that guards against it is now vacuous — take the new wording from that file",
+        )
 
     def test_mismatch_still_reddens_when_the_pin_itself_differs_from_the_footer(self) -> None:
         """The same disagreement, produced the other way: an untouched footer held

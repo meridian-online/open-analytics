@@ -174,6 +174,17 @@ def check_resources(con, descriptor_paths: list[Path], pin: str) -> tuple[list[M
             checked += 1
             if written != pin:
                 mismatches.append(Mismatch(package, resource.get("name", ""), path, written, pin))
+    # A RUN THAT READ NOTHING IS NOT A RUN THAT AGREED. Every declared resource above
+    # is either read or raises, so reaching here with `checked` at zero means the loop
+    # was entered and every path through it declined — which is indistinguishable, from
+    # outside, from four footers that all matched. The live check reads only remote
+    # objects, so anything that quietly skips a remote takes the whole gate to exit 0
+    # having verified nothing.
+    if checked == 0:
+        raise CheckError(
+            f"read 0 resource footers across {len(descriptor_paths)} descriptor(s). "
+            "The check verified nothing, which is not the same as everything agreeing."
+        )
     return mismatches, checked
 
 
