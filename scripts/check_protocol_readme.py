@@ -27,8 +27,15 @@ the document.
 
 EVERY MANIFEST IS REQUIRED TO CARRY THE BLOCK. A check that quietly skips the dataset
 whose README has no block would pass loudest exactly when a new Protocol shipped
-undocumented, so a manifest with a README and no block is a failure, not a skip, and
-the number of manifests examined is printed on every run.
+undocumented, so a manifest with a README and no block is a failure, not a skip.
+
+Every run prints how many manifests it examined out of how many it found, and those
+two numbers are allowed to differ: a fault in one dataset is collected and the rest
+are still held to their READMEs, so `examined 3 manifest(s) of 4 found` is a state
+this check can actually reach and therefore a line a test can pin. It was not, in the
+first cut — a fault returned immediately, so every run either examined all of them or
+printed nothing, the two numbers were equal on every reachable input, and the line
+that existed to say "this run was not vacuous" said nothing a mutation could disturb.
 
     check_protocol_readme.py              check; exit 1 on disagreement
     check_protocol_readme.py --write      regenerate each block in place
@@ -235,6 +242,7 @@ def main(argv: list[str] | None = None) -> int:
         return EXIT_ERROR
 
     disagreements: list[str] = []
+    faults: list[str] = []
     written: list[Path] = []
     examined = 0
 
@@ -251,11 +259,20 @@ def main(argv: list[str] | None = None) -> int:
             text = readme_path.read_text(encoding="utf-8")
             start, end = locate_block(readme_path, text, create=args.write)
         except CheckError as exc:
-            print(f"protocol readme: {exc}", file=sys.stderr)
-            return EXIT_ERROR
+            # COLLECTED, NOT RETURNED. Returning on the first fault made the count
+            # below unfalsifiable: every run either examined all of them or printed
+            # nothing at all, so `examined` and `len(manifests)` could not differ and
+            # a line claiming to distinguish the two was claiming nothing. Collecting
+            # gives that line a value a broken tree can move, and it is the better
+            # report besides — four datasets with four faults name four, not one.
+            faults.append(f"{exc}")
+            continue
 
         wanted = render(steps)
         found = text[start:end]
+        # AFTER the block was read and compared, never before: this counts datasets
+        # this run actually held to their manifest, which is the number the line
+        # below is for.
         examined += 1
 
         if args.write:
@@ -279,10 +296,21 @@ def main(argv: list[str] | None = None) -> int:
             disagreements.extend(report(readme_path, found, wanted))
 
     # Printed on every run, pass or fail. A check that examined nothing and a check
-    # that examined everything both exit 0, and this line is what tells them apart.
+    # that examined everything both exit 0, and this line is what tells them apart —
+    # which is only true because the two numbers CAN differ, above.
     print(f"protocol readme: examined {examined} manifest(s) of {len(manifests)} found")
     for manifest_path in manifests:
         print(f"  {manifest_path}")
+
+    if faults:
+        print(
+            f"\nprotocol readme: {len(faults)} of {len(manifests)} manifest(s) could "
+            f"not be held to a README at all\n",
+            file=sys.stderr,
+        )
+        for fault in faults:
+            print(f"  {fault}", file=sys.stderr)
+        return EXIT_ERROR
 
     if args.write:
         if written:

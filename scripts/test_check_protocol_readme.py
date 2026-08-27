@@ -289,6 +289,35 @@ class EveryManifestIsExamined(ScratchTree):
         self.assertEqual(result.returncode, EXIT_OK, result.stdout + result.stderr)
         self.assertIn("examined 3 manifest(s) of 3 found", result.stdout)
 
+    def test_a_faulty_dataset_does_not_stop_the_others_and_the_count_says_so(self) -> None:
+        """The line that says this run was not vacuous, pinned on a tree that moves it.
+
+        `examined N of M found` is only evidence if N and M can differ. They can:
+        the dataset with no block is collected as a fault and the other two are still
+        held to their manifests, so the count reads 2 of 3. A check that printed the
+        number of manifests it FOUND rather than the number it READ would print 3 of
+        3 here and this case reddens.
+        """
+        self.three_datasets()
+        (self.datasets / "beta" / "README.md").write_text("# beta\n", encoding="utf-8")
+        result = run_check(self.datasets)
+        self.assertEqual(result.returncode, EXIT_ERROR, result.stdout + result.stderr)
+        self.assertIn("examined 2 manifest(s) of 3 found", result.stdout)
+        self.assertIn("1 of 3 manifest(s) could not be held to a README at all", result.stderr)
+        self.assertIn("beta/README.md", result.stderr)
+        self.assertNotIn("alpha/README.md", result.stderr)
+
+    def test_every_faulty_dataset_is_named_not_just_the_first(self) -> None:
+        self.three_datasets()
+        for slug in ("alpha", "gamma"):
+            (self.datasets / slug / "README.md").write_text(f"# {slug}\n", encoding="utf-8")
+        result = run_check(self.datasets)
+        self.assertEqual(result.returncode, EXIT_ERROR, result.stdout + result.stderr)
+        self.assertIn("examined 1 manifest(s) of 3 found", result.stdout)
+        self.assertIn("2 of 3 manifest(s) could not be held to a README at all", result.stderr)
+        self.assertIn("alpha/README.md", result.stderr)
+        self.assertIn("gamma/README.md", result.stderr)
+
     def test_a_disagreement_in_the_last_dataset_still_reddens(self) -> None:
         """The failure a first-dataset-only check would miss."""
         self.three_datasets()
