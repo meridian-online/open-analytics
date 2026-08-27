@@ -72,14 +72,21 @@ concurrency:
 
 env:
   # This is the READER's pin — the version every job below installs to run its own
-  # checks. It is deliberately not reconciled here against the pin the publish
-  # pipeline uses to WRITE these objects: that pipeline lives in a private repo this
-  # public one cannot read, so a shared literal is not available without crossing a
-  # boundary this repo does not cross. Instead of comparing two files in two repos,
-  # `engine-version-matches-the-pin` compares this pin against what each published
-  # object's own footer says wrote it — the difference, if any, is stated dynamically
-  # at check time rather than declared statically here, and is a version skew between
-  # writer and reader, not a claim about the two repos' literals agreeing.
+  # checks. It is deliberately not reconciled here against the pin that WROTE the
+  # published objects, and the reason is that no single literal in this repo holds
+  # that pin. The pipeline that publishes them runs elsewhere, so its literal is not
+  # readable from here at all. A second writer pin IS in this repo and is a separate
+  # literal from this one: datasets/edgar_gleif/arcform.yaml pins
+  # `uv run --with duckdb==<version>` for derive_join_coverage, which writes the
+  # `coverage` block into that dataset's datapackage.json. Bumping this env var does
+  # not move it, and nothing here reconciles the two — a real gap, stated rather
+  # than papered over.
+  #
+  # So `engine-version-matches-the-pin` does not compare literals at all. It compares
+  # this pin against what each published object's own FOOTER says wrote it, which is
+  # the one writer statement that travels with the bytes. The difference, if any, is
+  # a version skew between writer and reader, established dynamically at check time —
+  # not a claim that any two files' literals agree.
   DUCKDB_VERSION: "1.5.5"
   PYTHON_VERSION: "3.12"
 

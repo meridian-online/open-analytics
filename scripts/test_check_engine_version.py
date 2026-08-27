@@ -605,5 +605,82 @@ class EngineVersionCheckSelfTest(unittest.TestCase):
         self.assertOutcome(run_check(self.datasets), EXIT_ERROR, "no datasets/*/datapackage.json")
 
 
+def _checker_module():
+    """Import check_engine_version.py so its functions can be called directly.
+
+    Every other case here drives the checker as a SUBPROCESS, which is the right shape
+    for the end-to-end rules. It is the wrong shape for the case below: an absent
+    `created_by` cannot be produced by byte-patching, because the field is fixed-width
+    and blanking it to spaces leaves a value that is present and merely unparseable.
+    """
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("check_engine_version", CHECKER)
+    module = importlib.util.module_from_spec(spec)
+    # Registered BEFORE exec: the checker declares a dataclass, and `dataclasses` resolves
+    # a field's type by looking its module up in `sys.modules`. Exec'ing an unregistered
+    # module makes that lookup return None and the import dies inside the decorator.
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+class _StubConnection:
+    """A `con` whose `execute(...).fetchall()` returns exactly what a case hands it."""
+
+    def __init__(self, rows: list) -> None:
+        self._rows = rows
+
+    def execute(self, *_args: Any, **_kwargs: Any) -> "_StubConnection":
+        return self
+
+    def fetchall(self) -> list:
+        return self._rows
+
+
+class FooterCreatedByTest(unittest.TestCase):
+    """`footer_created_by`'s own absent-value guard.
+
+    `test_footer_with_no_created_by_is_an_error_not_a_mismatch` promises this coverage by
+    its name and does not deliver it: it blanks the footer to SPACES, which is a present,
+    truthy value, so it exercises `parse_writer_version`'s unparseable branch instead —
+    which is why it asserts "does not name a DuckDB version" and not the absent-footer
+    message. With only that case in the suite, replacing this guard's `raise` with a
+    fabricated `created_by` string left all 16 tests green: a check whose whole job is to
+    read the writer off the footer could invent one and nothing said so.
+
+    Three shapes, because they fail differently: no rows at all, a NULL `created_by`, and
+    an empty string. `parquet_file_metadata()` can return any of them for a footer that
+    records no writer.
+    """
+
+    def setUp(self) -> None:
+        self.module = _checker_module()
+
+    def _assert_refuses(self, rows: list, label: str) -> None:
+        with self.assertRaises(self.module.CheckError) as caught:
+            self.module.footer_created_by(_StubConnection(rows), "/x/widgets.parquet")
+        message = str(caught.exception)
+        self.assertIn("no writer engine is on record", message, label)
+        self.assertIn("widgets.parquet", message, label)
+
+    def test_no_rows_is_an_error(self) -> None:
+        self._assert_refuses([], "an empty result set")
+
+    def test_null_created_by_is_an_error(self) -> None:
+        self._assert_refuses([(None,)], "a NULL created_by")
+
+    def test_empty_created_by_is_an_error(self) -> None:
+        self._assert_refuses([("",)], "an empty created_by")
+
+    def test_a_real_created_by_is_returned_unchanged(self) -> None:
+        """The other half: the guard must not refuse a footer that DOES name a writer, or
+        it would redden for every healthy object and the three cases above would pass on a
+        function that always raises."""
+        written = "DuckDB version v1.5.5 (build 0123456789)"
+        got = self.module.footer_created_by(_StubConnection([(written,)]), "/x/widgets.parquet")
+        self.assertEqual(got, written)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
