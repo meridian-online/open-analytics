@@ -1,4 +1,14 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = "==3.12.*"
+# ///
+# The interpreter this script runs under, for anything that runs it as a `uv` script.
+# duckdb is NOT declared here on purpose: the version is pinned once, in the manifest
+# step that runs this (`op: uv@1`, `deps:`), so it cannot drift from the pin the
+# arcform operator refuses an unpinned value against. `uv run --script` installs what
+# THIS block names as well as what the step names, so a second copy here would be a
+# second thing to keep in step. Running the file with a plain `python` is unaffected —
+# these are comments.
 """Run the joins a package declares, against the objects that package points at.
 
 `schema.foreignKeys` says *every* value on the left exists on the right. When that

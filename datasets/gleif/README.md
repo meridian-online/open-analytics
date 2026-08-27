@@ -38,3 +38,21 @@ Produces `build/gleif.parquet`.
 
 Needs the `arc` binary and `duckdb`, plus `curl`, `jq` and `unzip` for the fetch:
 `arc run`.
+
+## The step list
+
+<!-- protocol-steps: generated from arcform.yaml by scripts/check_protocol_readme.py — do not edit this block by hand -->
+
+7 steps, of which 3 run through an opaque `command:`/shell step: `fetch_gleif`, `stamp_version`, `stamp_descriptor`. A shell step is invisible to the engine's staleness model and carries its interpreter and dependency pins inline, so what this Protocol guarantees stops short of it.
+
+| # | Step | How it runs |
+|---|---|---|
+| 1 | `fetch_gleif` | `command:` (shell) |
+| 2 | `load` | `sql: models/load.sql` |
+| 3 | `package` | `sql: models/package.sql` |
+| 4 | `export_gleif` | `op: parquet_export@1` |
+| 5 | `describe` | `op: datapackage_describe@1` |
+| 6 | `stamp_version` | `command:` (shell) |
+| 7 | `stamp_descriptor` | `command:` (shell) |
+
+<!-- /protocol-steps -->

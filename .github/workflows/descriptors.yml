@@ -44,6 +44,16 @@
 # object still answers. The script refuses to run — exit 2 — while a repository host is
 # still reachable, so a demonstration that quietly ran unblocked cannot pass.
 #
+# `protocol-readme-self-test` and `protocol-readme` are the first jobs here that read
+# `arcform.yaml` at all. Nothing in this workflow runs `arc`, so a Protocol change has
+# always been invisible to CI — and the visible half of that, a README describing a step
+# list the manifest no longer has, went wrong and stayed wrong for months. The pair has
+# the same order and the same reason as every pair above: the self-test builds scratch
+# manifests with deliberate disagreements and asserts the exit status and the message,
+# then the check runs against the shipped datasets. The manifest is PARSED, never
+# grepped: `grep -c 'command:' datasets/edgar_gleif/arcform.yaml` is 4 with no
+# `command:` step in the file.
+#
 # `publish-seam` covers the other direction — that a publish declares what it
 # uploaded, and that it uploads nothing a finished Run did not produce alongside the
 # descriptor on disk — against a scratch HTTP object store and scratch B4 Run records,
@@ -89,6 +99,10 @@ env:
   # not a claim that any two files' literals agree.
   DUCKDB_VERSION: "1.5.5"
   PYTHON_VERSION: "3.12"
+  # `arcform.yaml` is read as YAML by scripts/check_protocol_readme.py. Pinned for the
+  # same reason every other version on this page is: a resolver picking the version of
+  # the day makes what ran a property of the day rather than of this file.
+  PYYAML_VERSION: "6.0.3"
 
 jobs:
   self-test:
@@ -274,6 +288,47 @@ jobs:
             echo
             echo '```'
             cat joins.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $status
+
+  protocol-readme-self-test:
+    name: the step-list check can fail
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: install pyyaml
+        run: python -m pip install --disable-pip-version-check "pyyaml==${PYYAML_VERSION}"
+      - name: scratch manifests, exit status and message
+        run: python scripts/test_check_protocol_readme.py
+
+  protocol-readme:
+    name: every README's step list is its manifest's
+    needs: protocol-readme-self-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: install pyyaml
+        run: python -m pip install --disable-pip-version-check "pyyaml==${PYYAML_VERSION}"
+      - name: every datasets/*/README.md against the manifest beside it
+        shell: bash
+        run: |
+          set +e
+          python scripts/check_protocol_readme.py > protocol-readme.log 2>&1
+          status=$?
+          set -e
+          cat protocol-readme.log
+          {
+            echo '### README step list vs manifest'
+            echo
+            echo '```'
+            cat protocol-readme.log
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           exit $status

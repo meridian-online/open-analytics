@@ -1,4 +1,13 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = "==3.12.*"
+# ///
+# The interpreter this script runs under, for anything that runs it as a `uv` script.
+# duckdb is NOT declared here on purpose: the manifest step that runs this under
+# `op: uv@1` pins it in `deps:`, and `uv run --script` installs what this block names
+# as well as what the step names, so a second copy would be a second thing to keep in
+# step. The three manifests that still invoke this through `python3` are unaffected —
+# these are comments.
 """Put a dataset's descriptor inside the dataset, and read it back out of one URL.
 
 A `datapackage.json` says what a Parquet's columns are, what they may contain,

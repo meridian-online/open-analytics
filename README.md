@@ -149,13 +149,25 @@ clause that makes each export reproducible still decides the data bytes and a
 stamp that moved one is refused with the original left in place. `read` is the
 consumer's half.
 
+`scripts/check_protocol_readme.py` reads a fourth direction — from the manifest
+into the README beside it. Each `datasets/*/README.md` carries its step list in a
+generated block, and the check regenerates that block from the parsed
+`arcform.yaml` and compares it byte for byte. The sentence about shell steps is
+generated too, so it cannot be true when written and false a commit later: adding
+a `command:` step rewrites it into one that names the step. The manifest is parsed
+as YAML rather than scanned — `grep -c 'command:' datasets/edgar_gleif/arcform.yaml`
+returns 4 for a file with no `command:` step in it.
+
 ```sh
-pip install duckdb
+pip install duckdb pyyaml
 python scripts/check_descriptors.py            # 0 conformant · 1 disagreement · 2 could not check
 python scripts/check_descriptors.py --write-catalogue   # rewrite the Rows column from the counted rows
 python scripts/test_check_descriptors.py       # the self-test: the check on deliberately broken fixtures
 python scripts/test_stamp_descriptor.py        # the self-test: the stamp lands, the data does not move
 python scripts/test_publish_dataset.py         # the self-test: publish against a scratch object store
+python scripts/check_protocol_readme.py        # every README's step list against its manifest
+python scripts/check_protocol_readme.py --write  # regenerate each README's step block
+python scripts/test_check_protocol_readme.py   # the self-test: the step-list check on broken fixtures
 python scripts/publish_dataset.py verify       # every declared bytes + hash against the object served
 ```
 
@@ -167,7 +179,7 @@ repository host is still reachable, because a blocked-host demonstration that
 quietly ran unblocked would pass forever and prove nothing. CI blackholes those
 hosts in `/etc/hosts` after checkout and runs it there.
 
-The first four run on every push and pull request, and weekly, from
+Everything above `verify` runs on every push and pull request, and weekly, from
 [`.github/workflows/descriptors.yml`](.github/workflows/descriptors.yml).
 `verify` re-hashes every file, so it runs on merge, weekly and on demand rather
 than per pull request — `bytes` is covered per pull request by a one-byte range
