@@ -258,8 +258,8 @@
         "cardinality": "partial — most left rows have no match, and the referenced side also holds keys this crosswalk does not carry. Neither side contains the other.",
         "compareAs": "text",
         "coverage": {
-          "matched": 6353,
-          "rows": 185175
+          "matched": 6298,
+          "rows": 184436
         },
         "description": "SEC-side identity: a cik-typed edge to the EDGAR company-ticker table. `edgar` is a ticker/exchange listing, not the CIK universe, so it covers a small part of the registrants this crosswalk keys on; the direction of containment runs neither way. Join by rendering `edgar.cik` (an integer) as text and comparing it to `key` (text) — the rendering is exact, because no published CIK carries a leading zero.",
         "evidence": "For key_type='cik' rows, `key` is the EDGAR Central Index Key as reported to SEC EDGAR. Where both sides hold the same registrant the values agree exactly; the shortfall is coverage, not disagreement — `edgar` is built from the SEC's company-tickers file, so its reach follows that file rather than the registrant population.",
@@ -283,8 +283,8 @@
         "cardinality": "partial — most left rows match; the remainder carry an LEI that is not in the GLEIF object this descriptor names. `coverage` below is the measured count and is the part checked against the data.",
         "compareAs": "exact",
         "coverage": {
-          "matched": 207946,
-          "rows": 208246
+          "matched": 206980,
+          "rows": 207099
         },
         "description": "GLEIF-side identity: the LEI each edge resolved to. Join `lei` to `gleif.lei` directly — both sides are text and no rendering is involved.",
         "evidence": {
