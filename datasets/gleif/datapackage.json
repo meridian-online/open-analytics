@@ -1,6 +1,6 @@
 {
   "$schema": "https://datapackage.org/profiles/2.0/datapackage.json",
-  "created": "2026-08-10T23:53:23Z",
+  "created": "2026-08-28T06:24:39Z",
   "description": "The Global Legal Entity Identifier Foundation's public register of legal entities — every entity with its 20-character LEI, legal name, country, jurisdiction and registration status.",
   "homepage": "https://meridian.online/datasets/gleif",
   "licenses": [
@@ -13,9 +13,9 @@
   "name": "gleif",
   "resources": [
     {
-      "bytes": 128008473,
+      "bytes": 129398960,
       "format": "parquet",
-      "hash": "sha256:de9b31365ea9a90de6c0367e40537611ec1bc0400d48f3aa6155258eac6e232f",
+      "hash": "sha256:5df6bf1403c39e73643f1b2ae74ae6776484943935f4fdc523490f6274578c8a",
       "mediatype": "application/vnd.apache.parquet",
       "name": "gleif",
       "path": "https://openlake.meridian.online/gleif.parquet",
@@ -36,10 +36,10 @@
               "maxLength": 500,
               "minLength": 1
             },
-            "description": "The entity's official legal name, as recorded in the GLEIF golden copy. The bounds are the register's own: LEI-CDF v3.1 types this element NameType, a complexType whose simpleContent extends Tokenized500Type — the extension adds an optional xml:lang attribute and leaves the inherited value space, which restricts the text to between 1 and 500 characters. Names at both ends are genuine — single-character names are registered in several jurisdictions, and names past 200 characters are typically a registry's full form, such as the Italian convention of carrying the permitted trading abbreviations inside the registered name.",
+            "description": "The entity's official legal name, as recorded in the GLEIF golden copy. The bounds are the register's own: LEI-CDF v3.1 types this element NameType, a complexType whose simpleContent extends Tokenized500Type — the extension adds an optional xml:lang attribute and leaves the inherited value space, which restricts the text to between 1 and 500 characters. Names at both ends are genuine — single-character names are registered in several jurisdictions, and names past 200 characters are typically a registry's full form, such as the Italian convention of carrying the permitted trading abbreviations inside the registered name. The type on this field is declared by Meridian, not inferred: finetype returns `representation.text.entity_name` on 424 of 600 independent 100-value samples of this column and one of several other types on the rest, so an inferred label here is a draw. `x-finetype-confidence` on this field is that agreement rate over 600 samples, NOT a model score for a single run.",
             "name": "legal_name",
             "type": "string",
-            "x-finetype-confidence": 0.7798,
+            "x-finetype-confidence": 0.71,
             "x-finetype-label": "representation.text.entity_name"
           },
           {
@@ -70,8 +70,12 @@
             "description": "Jurisdiction the entity is constituted under, as the GLEIF register records it. The register types this element as a country code or a country-plus-subdivision code — LEI-CDF v3.1's JurisdictionCodeType, a union of its CountryCodeType and RegionCodeType — and the pattern here is the union of those two shapes. It checks shape, not assignment: the schema itself notes that a well-formed value need not be a valid ISO 3166 entry, and values outside the ISO-assigned lists do occur in this column, so treat membership of an ISO reference list as something to verify rather than assume.",
             "name": "jurisdiction",
             "type": "string",
-            "x-finetype-confidence": 0.9985,
-            "x-finetype-label": "geography.location.country_code"
+            "x-finetype-confidence": 0.961,
+            "x-finetype-label": "geography.location.country_code",
+            "x-finetype-pattern-fit": {
+              "canonical": "^[A-Z]{2}$",
+              "outcome": "widened"
+            }
           },
           {
             "constraints": {
@@ -82,8 +86,12 @@
             "description": "ELF (Entity Legal Form) code classifying the entity's legal form.",
             "name": "legal_form",
             "type": "string",
-            "x-finetype-confidence": 0.4361,
-            "x-finetype-label": "representation.identifier.alphanumeric_id"
+            "x-finetype-confidence": 0.6,
+            "x-finetype-label": "representation.identifier.alphanumeric_id",
+            "x-finetype-pattern-fit": {
+              "canonical": "^[A-Za-z][A-Za-z0-9 /_.#-]*[0-9][A-Za-z0-9 /_.#-]*$|^[0-9][A-Za-z0-9 /_.#-]*[A-Za-z][A-Za-z0-9 /_.#-]*$",
+              "outcome": "widened"
+            }
           },
           {
             "constraints": {
@@ -106,7 +114,7 @@
                 "INACTIVE"
               ],
               "open": true,
-              "rows": 3368431
+              "rows": 3405578
             },
             "x-finetype-label": "representation.boolean.terms"
           },
@@ -119,7 +127,7 @@
             "description": "LEI registration lifecycle status (e.g. ISSUED, LAPSED, RETIRED).",
             "name": "registration_status",
             "type": "string",
-            "x-finetype-confidence": 0.9875,
+            "x-finetype-confidence": 0.9557,
             "x-finetype-enum-domain": {
               "cohesion": 0.7139999866485596,
               "distinct": 7,
@@ -133,7 +141,7 @@
                 "RETIRED"
               ],
               "open": true,
-              "rows": 3377398
+              "rows": 3414617
             },
             "x-finetype-label": "representation.text.word"
           },
@@ -164,11 +172,15 @@
             "x-finetype-label": "datetime.date.iso"
           },
           {
-            "description": "Lowercased, accent-stripped concatenation of legal name + city + country — a derived free-text search field, not a source attribute.",
+            "constraints": {
+              "maxLength": 65536,
+              "minLength": 1
+            },
+            "description": "Lowercased, accent-stripped concatenation of legal name + city + country — a derived free-text search field, not a source attribute. The type on this field is declared by Meridian, not inferred: finetype returns `representation.text.plain_text` on 377 of 600 independent 100-value samples of this column and `unknown` on 207, so an inferred label here is a draw — and the previously published `unknown` was one such draw. `x-finetype-confidence` on this field is that agreement rate over 600 samples, NOT a model score for a single run.",
             "name": "corpus",
             "type": "string",
-            "x-finetype-confidence": 0.9989,
-            "x-finetype-label": "unknown"
+            "x-finetype-confidence": 0.63,
+            "x-finetype-label": "representation.text.plain_text"
           }
         ],
         "primaryKey": [
@@ -184,5 +196,5 @@
     }
   ],
   "title": "GLEIF — Legal Entity Identifiers",
-  "x-finetype-version": "0.6.56"
+  "x-finetype-version": "0.6.57"
 }
