@@ -1,7 +1,7 @@
 {
   "name": "edgar",
-  "title": "SEC EDGAR — Company Tickers",
-  "description": "Every company with securities registered with the U.S. Securities and Exchange Commission — its Central Index Key (CIK), ticker symbol, exchange and legal name, from the SEC's EDGAR system.",
+  "title": "SEC EDGAR \u2014 Company Tickers",
+  "description": "Every company with securities registered with the U.S. Securities and Exchange Commission \u2014 its Central Index Key (CIK), ticker symbol, exchange and legal name, from the SEC's EDGAR system.",
   "homepage": "https://meridian.online/datasets/edgar",
   "licenses": [
     {
@@ -21,14 +21,20 @@
   },
   "fields": {
     "cik": {
-      "description": "SEC EDGAR Central Index Key — the registrant's identifier in EDGAR, stored as an integer. Unpadded: no leading zeros are stored and none are implied, so the decimal rendering of this column is the CIK. Join it to `edgar_gleif.key` by rendering it as text — see that package's `x-joins`.",
+      "description": "SEC EDGAR Central Index Key \u2014 the registrant's identifier in EDGAR, stored as an integer. Unpadded: no leading zeros are stored and none are implied, so the decimal rendering of this column is the CIK. Join it to `edgar_gleif.key` by rendering it as text \u2014 see that package's `x-joins`.",
       "type": "integer",
       "constraints": {
         "pattern": "^[0-9]+$"
       }
     },
     "company_name": {
-      "description": "Legal name of the registrant as carried in the SEC company-tickers file."
+      "description": "Legal name of the registrant as carried in the SEC company-tickers file. The type on this field is declared by Meridian, not inferred: finetype returns `representation.text.entity_name` on 572 of 600 independent 100-value samples of this column and one of four other types on the rest, so an inferred label here is a draw. `x-finetype-confidence` on this field is that agreement rate over 600 samples of this exact object, NOT a model score for a single run.",
+      "x-finetype-label": "representation.text.entity_name",
+      "x-finetype-confidence": 0.95,
+      "constraints": {
+        "minLength": 2,
+        "maxLength": 200
+      }
     },
     "ticker": {
       "description": "Exchange ticker symbol for the registrant's security."
@@ -37,7 +43,13 @@
       "description": "Listing venue for the ticker (e.g. NYSE, Nasdaq, CBOE, OTC)."
     },
     "corpus": {
-      "description": "Lowercased, accent-stripped concatenation of name + ticker + exchange — a derived free-text search field, not a source attribute."
+      "description": "Lowercased, accent-stripped concatenation of name + ticker + exchange \u2014 a derived free-text search field, not a source attribute. The type on this field is declared by Meridian, not inferred: finetype returns `representation.text.plain_text` on 484 of 600 independent 100-value samples of this column, `unknown` on 97 and one of seven other types on the rest, so an inferred label here is a draw. `x-finetype-confidence` on this field is that agreement rate over 600 samples of this exact object, NOT a model score for a single run.",
+      "x-finetype-label": "representation.text.plain_text",
+      "x-finetype-confidence": 0.81,
+      "constraints": {
+        "minLength": 1,
+        "maxLength": 65536
+      }
     }
   },
   "primaryKey": [
