@@ -28,9 +28,21 @@ engine_version: ">=1.2"
 db: build/edgar_gleif.db
 
 params:
-  # Stamped on every row. Pin at run time: arc run --param as_of=2026-07-14
-  as_of:
-    default: ""
+  # Stamped on every row. REQUIRED — no default, so a run without it stops with
+  # "missing required parameter 'as_of'" rather than starting.
+  #
+  #   arc run --force --param as_of=2026-08-28
+  #
+  # It had `default: ""` until 2026-08-28, and package.sql reads it as
+  # `CAST(nullif(getenv('ARC_PARAM_AS_OF'), '') AS DATE)`, so an omitted flag produced
+  # a NULL column across every row rather than an error. That happened on a real
+  # rebuild: all 209,412 rows came back empty, and it surfaced looking like a TYPING
+  # regression — as_of fell from `datetime.date.iso` @ 1.0 to `unknown` @ 0.0 and its
+  # Frictionless type flipped date → string. Only reading the descriptor diff field by
+  # field separated "the column is empty" from "the label moved", and the pinned-label
+  # fix that was about to be applied would have published a blank column wearing a
+  # correct-looking date label.
+  as_of: {}
 
 # Transient API/network blips shouldn't sink a run — retry fetches with backoff.
 defaults:

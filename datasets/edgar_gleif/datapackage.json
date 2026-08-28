@@ -1,6 +1,6 @@
 {
   "$schema": "https://datapackage.org/profiles/2.0/datapackage.json",
-  "created": "2026-07-29T07:27:00Z",
+  "created": "2026-08-28T08:22:46Z",
   "description": "A resolved crosswalk linking SEC EDGAR registrants (CIK / ticker / fund series) to their GLEIF Legal Entity Identifier (LEI) — one row per asserted identity, each carrying its provenance tier, method and confidence. Authoritative edges come from official SEC/GLEIF registration (no guessing); the operating-company tail is linked by probabilistic name resolution (Fellegi-Sunter / Splink): exact normalized-name matches are confirmed (~95% precision), while name-only fuzzy matches are surfaced as candidates rather than auto-confirmed. A point-in-time snapshot, with an as-of date on every row.",
   "homepage": "https://meridian.online/datasets/edgar_gleif",
   "licenses": [
@@ -13,9 +13,9 @@
   "name": "edgar_gleif",
   "resources": [
     {
-      "bytes": 10340436,
+      "bytes": 10483619,
       "format": "parquet",
-      "hash": "sha256:b7ef78933ab1a3cb80bf882c151b17efcd9352da4088ece91cc1fec44c6dc33f",
+      "hash": "sha256:796e2dfdb7fdceb58c611aeed76ca7a80b0b8f7fb1d657fb376ae2ed2692627d",
       "mediatype": "application/vnd.apache.parquet",
       "name": "edgar_gleif",
       "path": "https://openlake.meridian.online/edgar_gleif.parquet",
@@ -39,7 +39,7 @@
                 "series"
               ],
               "open": true,
-              "rows": 207099
+              "rows": 209413
             },
             "x-finetype-label": "representation.text.word"
           },
@@ -52,8 +52,12 @@
             "description": "The SEC-side identifier this edge is keyed on, read according to `key_type`: for cik rows an EDGAR Central Index Key in decimal digits with no leading zeros; for series rows an SEC fund identifier — an uppercase letter prefix followed by digits (S…, CEF…). Text, not a number: the two schemes share one column, so the pattern above is their union and no arithmetic type describes it. To join it to `edgar.cik`, render that integer column as text — see `x-joins`.",
             "name": "key",
             "type": "string",
-            "x-finetype-confidence": 0.566,
-            "x-finetype-label": "representation.numeric.integer_number"
+            "x-finetype-confidence": 0.5464,
+            "x-finetype-label": "representation.numeric.integer_number",
+            "x-finetype-pattern-fit": {
+              "canonical": "^-?[0-9]+$",
+              "outcome": "widened"
+            }
           },
           {
             "constraints": {
@@ -69,10 +73,11 @@
               "maxLength": 65536,
               "minLength": 1
             },
+            "description": "The type on this field is declared by Meridian, not inferred: finetype returns `representation.text.entity_name` on 246 of 300 independent 100-value samples of this column, and unknown on 36, plain_text on 14 and full_address on 2, so an inferred label here is a draw. `x-finetype-confidence` on this field is that agreement rate over 300 samples, NOT a model score for a single run.",
             "name": "company_name",
             "type": "string",
-            "x-finetype-confidence": 0.9746,
-            "x-finetype-label": "representation.text.plain_text"
+            "x-finetype-confidence": 0.82,
+            "x-finetype-label": "representation.text.entity_name"
           },
           {
             "constraints": {
@@ -91,7 +96,7 @@
             },
             "name": "legal_name",
             "type": "string",
-            "x-finetype-confidence": 0.9571,
+            "x-finetype-confidence": 0.5562,
             "x-finetype-label": "representation.text.entity_name"
           },
           {
@@ -103,7 +108,7 @@
             "description": "GLEIF's authoritative entity category (e.g. GENERAL, FUND, BRANCH); GENERAL when unknown.",
             "name": "category",
             "type": "string",
-            "x-finetype-confidence": 0.8803,
+            "x-finetype-confidence": 0.8063,
             "x-finetype-enum-domain": {
               "cohesion": 0.5,
               "distinct": 4,
@@ -114,7 +119,7 @@
                 "SOLE_PROPRIETOR"
               ],
               "open": true,
-              "rows": 207099
+              "rows": 209413
             },
             "x-finetype-label": "representation.text.word"
           },
@@ -122,11 +127,15 @@
             "constraints": {
               "pattern": "^[A-Z]{2}(-[A-Z0-9]{1,3})?$"
             },
-            "description": "Jurisdiction the entity is constituted under, as GLEIF records it: an ISO 3166-1 alpha-2 country code, or an ISO 3166-2 subdivision code (country, hyphen, subdivision) where GLEIF holds one — US-DE, AE-SH.",
+            "description": "Jurisdiction the entity is constituted under, as GLEIF records it: an ISO 3166-1 alpha-2 country code, or an ISO 3166-2 subdivision code (country, hyphen, subdivision) where GLEIF holds one — US-DE, AE-SH. The type on this field is declared by Meridian, not inferred: finetype returns `geography.location.state_code` on 260 of 300 independent 100-value samples of this column, and geography.location.country_code on 34 and unknown on 6, so an inferred label here is a draw. `x-finetype-confidence` on this field is that agreement rate over 300 samples, NOT a model score for a single run.",
             "name": "jurisdiction",
             "type": "string",
-            "x-finetype-confidence": 0.9997,
-            "x-finetype-label": "geography.location.state_code"
+            "x-finetype-confidence": 0.87,
+            "x-finetype-label": "geography.location.state_code",
+            "x-finetype-pattern-fit": {
+              "canonical": "^[A-Z]{2}$",
+              "outcome": "widened"
+            }
           },
           {
             "constraints": {
@@ -134,22 +143,24 @@
               "minLength": 1,
               "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$"
             },
+            "description": "The type on this field is declared by Meridian, not inferred: finetype returns `representation.text.word` on 262 of 300 independent 100-value samples of this column, and geography.location.state_code on 38, so an inferred label here is a draw. `x-finetype-confidence` on this field is that agreement rate over 300 samples, NOT a model score for a single run.",
             "name": "reg_status",
             "type": "string",
-            "x-finetype-confidence": 0.9897,
+            "x-finetype-confidence": 0.87,
             "x-finetype-enum-domain": {
-              "cohesion": 0.8330000042915344,
-              "distinct": 6,
+              "cohesion": 0.7139999866485596,
+              "distinct": 7,
               "domain": [
                 "ANNULLED",
                 "DUPLICATE",
                 "ISSUED",
                 "LAPSED",
+                "PENDING_ARCHIVAL",
                 "PENDING_TRANSFER",
                 "RETIRED"
               ],
               "open": true,
-              "rows": 206918
+              "rows": 209413
             },
             "x-finetype-label": "representation.text.word"
           },
@@ -162,7 +173,7 @@
             "description": "How the edge was established. Authoritative: sec-registration (GLEIF RA000665) or sec-ncen (SEC Form N-CEN). Probabilistic: exact_name (identical normalized company name) or jaro_winkler (fuzzy name).",
             "name": "method",
             "type": "string",
-            "x-finetype-confidence": 0.6873,
+            "x-finetype-confidence": 0.7909,
             "x-finetype-enum-domain": {
               "cohesion": 0.5,
               "distinct": 4,
@@ -173,7 +184,7 @@
                 "sec-registration"
               ],
               "open": true,
-              "rows": 207099
+              "rows": 209413
             },
             "x-finetype-label": "representation.text.word"
           },
@@ -183,22 +194,10 @@
               "minLength": 1,
               "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$"
             },
-            "description": "Provenance tier, in precedence order: authoritative (deterministic SEC/GLEIF registration — no guessing), confirmed (exact normalized-name Splink match, ~95% precision), candidate (name-only fuzzy match, surfaced NOT asserted), ambiguous (one exact name matched more than one entity). A deterministic edge always wins over a name match for the same key.",
+            "description": "Provenance tier, in precedence order: authoritative (deterministic SEC/GLEIF registration — no guessing), confirmed (exact normalized-name Splink match, ~95% precision), candidate (name-only fuzzy match, surfaced NOT asserted), ambiguous (one exact name matched more than one entity). A deterministic edge always wins over a name match for the same key. The type on this field is declared by Meridian, not inferred: finetype returns `representation.text.word` on 193 of 300 independent 100-value samples of this column, and datetime.component.month_name on 107, so an inferred label here is a draw. `x-finetype-confidence` on this field is that agreement rate over 300 samples, NOT a model score for a single run.",
             "name": "tier",
             "type": "string",
-            "x-finetype-confidence": 0.6,
-            "x-finetype-enum-domain": {
-              "cohesion": 1.0,
-              "distinct": 4,
-              "domain": [
-                "ambiguous",
-                "authoritative",
-                "candidate",
-                "confirmed"
-              ],
-              "open": true,
-              "rows": 207099
-            },
+            "x-finetype-confidence": 0.64,
             "x-finetype-label": "representation.text.word"
           },
           {
@@ -208,7 +207,7 @@
             "description": "Edge confidence in [0, 1]: 1.0 for authoritative edges; the Fellegi-Sunter posterior match probability under the frozen resolution model for probabilistic edges.",
             "name": "confidence",
             "type": "number",
-            "x-finetype-confidence": 0.9997,
+            "x-finetype-confidence": 0.9978,
             "x-finetype-label": "representation.numeric.decimal_number"
           },
           {
@@ -217,6 +216,7 @@
               "minLength": 10,
               "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
             },
+            "description": "The date this linkage was asserted — the vintage of the sources the edge was resolved from, stamped on every row at build time. Constant within any one published build, and that is the point: an edge carries its own vintage, so a row copied out of this table into a warehouse still says when it was true, and two builds unioned together stay tellable apart. The package's top-level `created` records when the descriptor was written, which is a different fact and does not travel with the rows. A link is a claim about two identifiers at a moment: EDGAR registrants change name and CIK, LEIs lapse and transfer, and an edge resolved in July is not evidence about December. Read it as the as-at date for the claim, not as a modification timestamp.",
             "format": "%Y-%m-%d",
             "name": "as_of",
             "type": "date",
@@ -224,11 +224,15 @@
             "x-finetype-label": "datetime.date.iso"
           },
           {
-            "description": "Lowercased, accent-stripped concatenation of the display name, legal name, ticker and LEI — a derived free-text search field, not a source attribute.",
+            "constraints": {
+              "maxLength": 65536,
+              "minLength": 1
+            },
+            "description": "Lowercased, accent-stripped concatenation of the display name, legal name, ticker and LEI — a derived free-text search field, not a source attribute. The type on this field is declared by Meridian, not inferred: finetype returns `representation.text.plain_text` on 186 of 300 independent 100-value samples of this column, and unknown on 75, alphanumeric_id on 37 and semicolon_separated on 2, so an inferred label here is a draw. `x-finetype-confidence` on this field is that agreement rate over 300 samples, NOT a model score for a single run.",
             "name": "corpus",
             "type": "string",
-            "x-finetype-confidence": 0.6,
-            "x-finetype-label": "unknown"
+            "x-finetype-confidence": 0.62,
+            "x-finetype-label": "representation.text.plain_text"
           }
         ],
         "primaryKey": [
@@ -252,14 +256,14 @@
   "title": "EDGAR ↔ GLEIF — company-to-LEI crosswalk",
   "x-finetype-version": "0.6.57",
   "x-joins": {
-    "$comment": "How to join this crosswalk to the packages it references, and how far each join reaches. These are NOT `schema.foreignKeys`: a Data Package foreign key asserts that every value on the left exists on the right, and neither of these joins satisfies that against the published bytes — see each `cardinality` and `coverage`. Declaring them as foreign keys would advertise a guarantee the data does not keep, so the guarantee is dropped and the reachable part is stated instead. `coverage` is measured against the exact objects this descriptor names in `resources[].path`, and moves when they are republished, exactly as `bytes` and `hash` do.",
+    "$comment": "How to join this crosswalk to the packages it references, and how far each join reaches. These are NOT `schema.foreignKeys`: a Data Package foreign key asserts that every value on the left exists on the right, and neither of these joins satisfies that against the published bytes — see each `cardinality` and (in the built descriptor) `coverage`. Declaring them as foreign keys would advertise a guarantee the data does not keep, so the guarantee is dropped and the reachable part is stated instead. `coverage` does NOT live in this file: a hand-typed row count decays as soon as an upstream source grows, which is exactly what happened here (four weeks stale on 2026-08-13). `crosswalk_join.py --write` measures it from the build and writes it into the generated `datapackage.json` instead.",
     "joins": [
       {
         "cardinality": "partial — most left rows have no match, and the referenced side also holds keys this crosswalk does not carry. Neither side contains the other.",
         "compareAs": "text",
         "coverage": {
-          "matched": 6298,
-          "rows": 184436
+          "matched": 6350,
+          "rows": 186223
         },
         "description": "SEC-side identity: a cik-typed edge to the EDGAR company-ticker table. `edgar` is a ticker/exchange listing, not the CIK universe, so it covers a small part of the registrants this crosswalk keys on; the direction of containment runs neither way. Join by rendering `edgar.cik` (an integer) as text and comparing it to `key` (text) — the rendering is exact, because no published CIK carries a leading zero.",
         "evidence": "For key_type='cik' rows, `key` is the EDGAR Central Index Key as reported to SEC EDGAR. Where both sides hold the same registrant the values agree exactly; the shortfall is coverage, not disagreement — `edgar` is built from the SEC's company-tickers file, so its reach follows that file rather than the registrant population.",
@@ -280,11 +284,11 @@
         }
       },
       {
-        "cardinality": "partial — most left rows match; the remainder carry an LEI that is not in the GLEIF object this descriptor names. `coverage` below is the measured count and is the part checked against the data.",
+        "cardinality": "partial — most left rows match; the remainder carry an LEI that is not in the GLEIF object this descriptor names. `coverage` is written into the built descriptor, not into this file — see `verifiedBy` below.",
         "compareAs": "exact",
         "coverage": {
-          "matched": 206980,
-          "rows": 207099
+          "matched": 209413,
+          "rows": 209413
         },
         "description": "GLEIF-side identity: the LEI each edge resolved to. Join `lei` to `gleif.lei` directly — both sides are text and no rendering is involved.",
         "evidence": {
@@ -317,6 +321,6 @@
         }
       }
     ],
-    "verifiedBy": "datasets/edgar_gleif/scripts/crosswalk_join.py — runs each join above against the published objects and fails if a declared `coverage` is wrong."
+    "verifiedBy": "datasets/edgar_gleif/scripts/crosswalk_join.py — the same script both writes and checks `coverage`. Run with `--write`, right after `describe`, it measures each join above against this build's own Parquet and writes `coverage` into datapackage.json (arcform.yaml step `derive_join_coverage`). Run with no flags, it re-measures against the published objects instead and fails if the committed `coverage` disagrees."
   }
 }

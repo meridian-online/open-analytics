@@ -62,7 +62,7 @@
     },
     "reg_status": {
       "type": "string",
-      "enum": ["ANNULLED", "DUPLICATE", "ISSUED", "LAPSED", "PENDING_TRANSFER", "RETIRED"]
+      "enum": ["ANNULLED", "DUPLICATE", "ISSUED", "LAPSED", "PENDING_ARCHIVAL", "PENDING_TRANSFER", "RETIRED"]
     },
     "ticker": {
       "type": "string",
