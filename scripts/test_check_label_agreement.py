@@ -124,6 +124,23 @@ BETA = package(
 )
 
 
+def correction(*, drop: tuple[str, ...] = (), **over: Any) -> dict[str, Any]:
+    """A well-formed correction on `beta.legal_name`, before whatever a case breaks."""
+    entry: dict[str, Any] = {
+        "package": "beta",
+        "pointer": "resources[name=beta].schema.fields[name=legal_name].constraints.maxLength",
+        "verdict": "wrong",
+        "declares": 200,
+        "becomes": 500,
+        "blocked_on": "A republish of the object whose footer carries this descriptor.",
+        "reason": "Beta narrowed a register-typed bound to a measurement of its own snapshot.",
+    }
+    entry.update(over)
+    for key in drop:
+        entry.pop(key, None)
+    return entry
+
+
 class ScratchTree(unittest.TestCase):
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory(prefix="label-agreement-selftest-")
@@ -140,8 +157,17 @@ class ScratchTree(unittest.TestCase):
         return path
 
     def reasons(self, *entries: dict[str, Any]) -> None:
+        self.agreement(reasons=list(entries))
+
+    def agreement(
+        self,
+        reasons: list[dict[str, Any]] | None = None,
+        corrections: list[dict[str, Any]] | None = None,
+    ) -> None:
         (self.datasets / "label-agreement.json").write_text(
-            json.dumps({"reasons": list(entries)}, indent=2) + "\n", encoding="utf-8"
+            json.dumps({"reasons": reasons or [], "corrections": corrections or []}, indent=2)
+            + "\n",
+            encoding="utf-8",
         )
 
     def run_check(self, *extra: str) -> subprocess.CompletedProcess[str]:
@@ -569,6 +595,301 @@ class TheFindingsAreWritableAsJson(ScratchTree):
             findings["differences"][0]["values"],
             {"alpha.legal_name": 500, "beta.legal_name": 200},
         )
+
+
+CORRECTION_POINTER = "resources[name=beta].schema.fields[name=legal_name].constraints.maxLength"
+
+
+class ACorrectionNamesTheDefectAndClosesNothing(ScratchTree):
+    """The state the reasons file could not express, and the one it must not become.
+
+    A reason says a difference is legitimate and closes it. A correction says it is a
+    defect and closes NOTHING — the difference is still counted, still printed, and
+    `--strict` still fails on it. Every case here drives that asymmetry, because a
+    correction that quietened the check would be a reason with a different word on it.
+    """
+
+    def differing(self, maxlength: int = 200) -> None:
+        moved = copy.deepcopy(BETA)
+        moved["resources"][0]["schema"]["fields"][0]["constraints"]["maxLength"] = maxlength
+        self.write(ALPHA)
+        self.write(moved)
+
+    def test_the_difference_is_reported_and_still_counted(self) -> None:
+        self.differing()
+        self.agreement(corrections=[correction()])
+        result = self.run_check()
+        self.assertEqual(result.returncode, EXIT_OK, self.both(result))
+        self.assertIn("constraints.maxLength differs [correction declared]", result.stdout)
+        self.assertIn("correction: beta.legal_name declares 200 and must become 500", result.stdout)
+        self.assertIn("1 carrying a declared correction and still disagreeing", result.stdout)
+        self.assertIn("0 with no stated reason", result.stdout)
+        self.assertIn("--strict still fails on it", result.stdout)
+
+    def test_strict_still_fails_on_a_difference_a_correction_adjudicated(self) -> None:
+        """The one property that separates a correction from a reason."""
+        self.differing()
+        self.agreement(corrections=[correction()])
+        strict = self.run_check("--strict")
+        self.assertEqual(strict.returncode, EXIT_DISAGREEMENT, self.both(strict))
+        self.assertIn("FAILED under --strict", strict.stderr)
+        self.assertIn("1 of them adjudicated by a correction", strict.stderr)
+
+    def test_a_correction_reddens_when_the_declaration_moves(self) -> None:
+        self.differing()
+        self.agreement(corrections=[correction()])
+        self.assertEqual(self.run_check().returncode, EXIT_OK)
+
+        self.differing(300)
+        result = self.run_check()
+        self.assertEqual(result.returncode, EXIT_DISAGREEMENT, self.both(result))
+        self.assertIn("1 declared correction(s) no longer describe", result.stderr)
+        self.assertIn("it pins 200", result.stderr)
+        self.assertIn("the package declares 300", result.stderr)
+        self.assertIn("moved:", result.stderr)
+
+    def test_a_correction_reddens_when_the_fix_lands(self) -> None:
+        """The property a note in a PR body does not have: it expires by being done."""
+        self.differing()
+        self.agreement(corrections=[correction()])
+        self.assertEqual(self.run_check().returncode, EXIT_OK)
+
+        self.differing(500)  # the corrected value — alpha and beta now agree
+        result = self.run_check()
+        self.assertEqual(result.returncode, EXIT_DISAGREEMENT, self.both(result))
+        self.assertIn("landed:", result.stderr)
+        self.assertIn("the package now declares what this entry asked for", result.stderr)
+        self.assertIn("delete it, the defect is gone", result.stderr)
+
+
+class ACorrectionReachesWhatTheComparisonCannot(ScratchTree):
+    """The two instances that are not a difference between two constraints.
+
+    A description corrected in one descriptor and copy-pasted uncorrected into its
+    sibling, and a join whose cardinality one surface reads differently. Neither is
+    visible to a comparison of `constraints` across a label group — the first because
+    descriptions are deliberately never compared, the second because it is not a field
+    property at all — so a mechanism that could only pin a compared property would leave
+    both exactly as unaccounted for as writing nothing down.
+    """
+
+    def test_a_description_is_pinnable_though_it_is_never_compared(self) -> None:
+        alpha = copy.deepcopy(ALPHA)
+        beta = copy.deepcopy(BETA)
+        beta["resources"][0]["schema"]["fields"][0]["description"] = (
+            "Always an ISO 3166-1 alpha-2 country code."
+        )
+        self.write(alpha)
+        self.write(beta)
+        self.agreement(
+            corrections=[
+                correction(
+                    pointer="resources[name=beta].schema.fields[name=legal_name].description",
+                    declares_contains="Always an ISO 3166-1 alpha-2 country code",
+                    drop=("declares", "becomes"),
+                )
+            ]
+        )
+        result = self.run_check()
+        self.assertEqual(result.returncode, EXIT_OK, self.both(result))
+        # The comparison still does not see it, and the pin still holds it.
+        self.assertNotIn("description differs", result.stdout)
+        self.assertIn("declares text containing 'Always an ISO 3166-1", result.stdout)
+
+    def test_the_pinned_phrase_going_away_is_what_landing_looks_like(self) -> None:
+        alpha = copy.deepcopy(ALPHA)
+        beta = copy.deepcopy(BETA)
+        beta["resources"][0]["schema"]["fields"][0]["description"] = "Hedged, and correct."
+        self.write(alpha)
+        self.write(beta)
+        self.agreement(
+            corrections=[
+                correction(
+                    pointer="resources[name=beta].schema.fields[name=legal_name].description",
+                    declares_contains="Always an ISO 3166-1 alpha-2 country code",
+                    drop=("declares", "becomes"),
+                )
+            ]
+        )
+        result = self.run_check()
+        self.assertEqual(result.returncode, EXIT_DISAGREEMENT, self.both(result))
+        self.assertIn("landed:", result.stderr)
+        self.assertIn("the pinned phrase is gone", result.stderr)
+
+    def test_a_package_level_declaration_no_field_grouping_could_address(self) -> None:
+        alpha = copy.deepcopy(ALPHA)
+        beta = copy.deepcopy(BETA)
+        beta["x-joins"] = {"joins": [{"name": "alpha", "cardinality": "partial — most miss"}]}
+        self.write(alpha)
+        self.write(beta)
+        self.agreement(
+            corrections=[
+                correction(
+                    pointer="x-joins.joins[name=alpha].cardinality",
+                    verdict="right",
+                    declares_contains="partial",
+                    disagrees="A surface outside this repository reads it as confirmed.",
+                    drop=("declares", "becomes"),
+                )
+            ]
+        )
+        result = self.run_check()
+        self.assertEqual(result.returncode, EXIT_OK, self.both(result))
+        self.assertIn("[right] beta · x-joins.joins[name=alpha].cardinality", result.stdout)
+        self.assertIn("A surface outside this repository", result.stdout)
+
+    def test_a_declaration_pinned_as_right_reddens_when_someone_changes_it(self) -> None:
+        """The cheap wrong fix: close the disagreement by moving the side that is right."""
+        alpha = copy.deepcopy(ALPHA)
+        beta = copy.deepcopy(BETA)
+        beta["x-joins"] = {"joins": [{"name": "alpha", "cardinality": "confirmed"}]}
+        self.write(alpha)
+        self.write(beta)
+        self.agreement(
+            corrections=[
+                correction(
+                    pointer="x-joins.joins[name=alpha].cardinality",
+                    verdict="right",
+                    declares_contains="partial",
+                    disagrees="A surface outside this repository reads it as confirmed.",
+                    drop=("declares", "becomes"),
+                )
+            ]
+        )
+        result = self.run_check()
+        self.assertEqual(result.returncode, EXIT_DISAGREEMENT, self.both(result))
+        self.assertIn("gone from a declaration pinned as right", result.stderr)
+
+
+class APointerNamesAThingAndNotAPosition(ScratchTree):
+    """An index would have moved under an insertion and gone on reading as live."""
+
+    def test_a_field_inserted_above_the_target_does_not_move_the_pin(self) -> None:
+        moved = copy.deepcopy(BETA)
+        moved["resources"][0]["schema"]["fields"][0]["constraints"]["maxLength"] = 200
+        moved["resources"][0]["schema"]["fields"].insert(
+            0, field("lei", "identifier.entity.lei", constraints={"maxLength": 20})
+        )
+        self.write(ALPHA)
+        self.write(moved)
+        self.agreement(corrections=[correction()])
+        result = self.run_check()
+        self.assertEqual(result.returncode, EXIT_OK, self.both(result))
+        self.assertIn("correction: beta.legal_name declares 200 and must become 500", result.stdout)
+
+    def test_a_pointer_naming_no_field_reddens(self) -> None:
+        self.settled()
+        self.agreement(
+            corrections=[
+                correction(
+                    pointer="resources[name=beta].schema.fields[name=absent].constraints.maxLength"
+                )
+            ]
+        )
+        result = self.run_check()
+        self.assertEqual(result.returncode, EXIT_DISAGREEMENT, self.both(result))
+        self.assertIn("0 element(s) carry that name", result.stderr)
+
+    def test_a_pointer_naming_an_unread_package_reddens(self) -> None:
+        self.settled()
+        self.agreement(corrections=[correction(package="gamma")])
+        result = self.run_check()
+        self.assertEqual(result.returncode, EXIT_DISAGREEMENT, self.both(result))
+        self.assertIn("no datasets/gamma/datapackage.json was read", result.stderr)
+
+
+class ACorrectionWithoutItsClaimIsRefused(ScratchTree):
+    """Each field a correction is refused for is one the entry could not be checked by."""
+
+    def refused(self, entry: dict[str, Any], expected: str) -> None:
+        self.settled()
+        self.agreement(corrections=[entry])
+        result = self.run_check()
+        self.assertEqual(result.returncode, EXIT_ERROR, self.both(result))
+        self.assertIn(expected, result.stderr)
+
+    def test_a_wrong_verdict_with_no_becomes(self) -> None:
+        self.refused(correction(drop=("becomes",)), "names no `becomes:`")
+
+    def test_a_becomes_that_changes_nothing(self) -> None:
+        self.refused(correction(becomes=200), "the value already declared")
+
+    def test_a_right_verdict_with_no_disagrees(self) -> None:
+        self.refused(
+            correction(verdict="right", drop=("becomes",)), "names no `disagrees:`"
+        )
+
+    def test_a_becomes_on_a_substring_pin(self) -> None:
+        self.refused(
+            correction(declares_contains="ISO 3166", drop=("declares",)),
+            "names a `becomes:` and must not",
+        )
+
+    def test_no_blocked_on(self) -> None:
+        self.refused(correction(drop=("blocked_on",)), "carries no `blocked_on:`")
+
+    def test_no_reason(self) -> None:
+        self.refused(correction(drop=("reason",)), "carries no `reason:`")
+
+    def test_both_pin_forms(self) -> None:
+        self.refused(
+            correction(declares_contains="200"), "of `declares:`/`declares_contains:`"
+        )
+
+    def test_an_index_form_pointer(self) -> None:
+        self.refused(
+            correction(pointer="resources[0].schema.fields[0].constraints.maxLength"),
+            "there is no index form",
+        )
+
+    def test_a_pointer_matching_two_elements_names_nothing(self) -> None:
+        """Refused rather than resolved by taking the first — a first match is a guess."""
+        twinned = copy.deepcopy(BETA)
+        twinned["x-joins"] = {
+            "joins": [{"name": "alpha", "cardinality": "partial"}, {"name": "alpha"}]
+        }
+        self.write(ALPHA)
+        self.write(twinned)
+        self.agreement(
+            corrections=[
+                correction(
+                    pointer="x-joins.joins[name=alpha].cardinality",
+                    verdict="right",
+                    declares_contains="partial",
+                    disagrees="Something outside this repository.",
+                    drop=("declares", "becomes"),
+                )
+            ]
+        )
+        result = self.run_check()
+        self.assertEqual(result.returncode, EXIT_DISAGREEMENT, self.both(result))
+        self.assertIn("2 element(s) carry that name", result.stderr)
+
+
+class TheShippedAgreementFileIsRead(unittest.TestCase):
+    """The corrections this repository actually ships, held to the packages it ships.
+
+    The cases above run on scratch trees, which is the right altitude for the mechanism
+    and the wrong one for the entries. An entry whose pointer named nothing in a real
+    descriptor would be a verdict about a declaration that does not exist, and every
+    scratch case above would still pass.
+    """
+
+    def test_every_shipped_correction_resolves_and_is_live(self) -> None:
+        root = Path(__file__).resolve().parent.parent / "datasets"
+        if not (root / "label-agreement.json").exists():  # pragma: no cover
+            self.skipTest("no shipped agreement file")
+        result = subprocess.run(
+            [sys.executable, str(CHECK), "--datasets-dir", str(root)],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, EXIT_OK, result.stdout + result.stderr)
+        self.assertNotIn("no longer describe", result.stderr)
+        entries = json.loads((root / "label-agreement.json").read_text())["corrections"]
+        self.assertTrue(entries, "the file ships no corrections")
+        for entry in entries:
+            self.assertIn(f"· {entry['pointer']}", result.stdout)
 
 
 if __name__ == "__main__":

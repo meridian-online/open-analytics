@@ -68,6 +68,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from dataclasses import dataclass, field as dataclass_field
 from pathlib import Path
@@ -126,6 +127,9 @@ class Difference:
     prop: str  # "type", "format", "constraints.<name>", or LABEL_KEY
     values: dict[str, Any]  # package.field -> declared value (ABSENT if undeclared)
     reason: str | None = None  # filled in from the reasons file when one matches
+    # Corrections that judge one of the values above. They are printed, they never fill
+    # in `reason`, and `--strict` reads `reason` — so a correction cannot close anything.
+    corrections: list["Correction"] = dataclass_field(default_factory=list)
 
     def stanza(self) -> dict[str, Any]:
         """The entry that would close this difference, minus the reason itself."""
@@ -141,8 +145,80 @@ def render_value(value: Any) -> str:
     return "(absent)" if value is ABSENT else json.dumps(value, ensure_ascii=False)
 
 
-def read_package(path: Path) -> list[Field]:
-    """Every field the descriptor at `path` declares, as comparable properties."""
+class Unresolved(Exception):
+    """A pointer that names nothing in the descriptor it was written against."""
+
+
+@dataclass(frozen=True)
+class Step:
+    key: str
+    select: str | None
+
+
+POINTER_STEP = re.compile(r"^([^.\[\]]+)(?:\[name=([^.\[\]]+)\])?$")
+
+
+def parse_pointer(pointer: str) -> list[Step]:
+    """Parse `resources[name=gleif].schema.fields[name=legal_name].constraints.maxLength`.
+
+    A list step is addressed by the `name` its element carries and never by index. A
+    field inserted above `legal_name` moves every index below it, and a pin that
+    silently starts naming its neighbour reads exactly like a live one — which is the
+    whole failure this file exists to make impossible. There is no index form to fall
+    back to, so a pointer either names a thing by its name or is refused here.
+    """
+    if not pointer.strip():
+        raise CheckError("a pointer must name at least one step")
+    steps: list[Step] = []
+    for raw in pointer.split("."):
+        match = POINTER_STEP.match(raw)
+        if match is None:
+            raise CheckError(
+                f"{pointer!r}: step {raw!r} is not `key` or `key[name=value]`. A list step "
+                f"is addressed by the `name` its element carries; there is no index form"
+            )
+        steps.append(Step(match.group(1), match.group(2)))
+    return steps
+
+
+def render_pointer(steps: list[Step]) -> str:
+    return ".".join(
+        step.key if step.select is None else f"{step.key}[name={step.select}]" for step in steps
+    )
+
+
+def resolve(document: Any, steps: list[Step]) -> Any:
+    """The one value `steps` names, or `Unresolved` — never a guess and never a first match."""
+    here: Any = document
+    walked: list[Step] = []
+    for step in steps:
+        walked.append(step)
+        trail = render_pointer(walked)
+        if not isinstance(here, dict) or step.key not in here:
+            raise Unresolved(f"nothing is declared at {trail}")
+        here = here[step.key]
+        if step.select is None:
+            continue
+        if not isinstance(here, list):
+            raise Unresolved(f"{trail}: {step.key} is a {type(here).__name__}, not a list")
+        matched = [
+            entry for entry in here if isinstance(entry, dict) and entry.get("name") == step.select
+        ]
+        if len(matched) != 1:
+            raise Unresolved(
+                f"{trail}: {len(matched)} element(s) carry that name, and a pointer that "
+                f"matches other than exactly one names nothing"
+            )
+        here = matched[0]
+    return here
+
+
+def read_package(path: Path) -> tuple[dict[str, Any], list[Field]]:
+    """The descriptor at `path`, and every field it declares as comparable properties.
+
+    The whole document comes back as well as the fields: a correction points at any
+    declaration in it, including the ones this check deliberately does not compare.
+    """
     try:
         document = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
@@ -207,7 +283,7 @@ def read_package(path: Path) -> list[Field]:
                     properties=properties,
                 )
             )
-    return fields
+    return document, fields
 
 
 def compare(members: list[Field], props: list[str]) -> list[tuple[str, dict[str, Any]]]:
@@ -287,7 +363,20 @@ class Reason:
     where: str = ""
 
 
-def load_reasons(path: Path) -> list[Reason]:
+def read_agreement(path: Path) -> dict[str, Any]:
+    """`datasets/label-agreement.json`, or an empty document when there is none."""
+    if not path.exists():
+        return {}
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise CheckError(f"{path}: cannot be read as JSON: {exc}") from exc
+    if not isinstance(document, dict):
+        raise CheckError(f"{path}: is not a JSON object")
+    return document
+
+
+def load_reasons(path: Path, document: dict[str, Any]) -> list[Reason]:
     """The stated reasons, each pinned to the exact values it excuses.
 
     A reason is refused unless it names one grouping, one property, at least two
@@ -296,14 +385,8 @@ def load_reasons(path: Path) -> list[Reason]:
     stop matching, and `report` calls that out instead of letting the old sentence go
     on standing for a difference nobody has looked at since.
     """
-    if not path.exists():
+    if not document:
         return []
-    try:
-        document = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        raise CheckError(f"{path}: cannot be read as JSON: {exc}") from exc
-    if not isinstance(document, dict):
-        raise CheckError(f"{path}: is not a JSON object")
     entries = document.get("reasons")
     if not isinstance(entries, list):
         raise CheckError(f"{path}: declares no `reasons` list")
@@ -366,11 +449,246 @@ def attach(differences: list[Difference], reasons: list[Reason]) -> None:
                 break
 
 
+@dataclass
+class Correction:
+    """A verdict on one declaration: which side is wrong, and what act lands the fix.
+
+    A REASON AND A CORRECTION ARE OPPOSITES AND THE FILE HOLDS BOTH. A reason says a
+    difference is legitimate and closes it. A correction says it is a defect, names the
+    side that is wrong and the value it must become — and closes NOTHING: the difference
+    goes on being reported, `--strict` goes on failing on it, and the only thing that has
+    changed is that the answer is written down where this check can hold it to the
+    packages. That asymmetry is the point. A correction that closed a difference would be
+    a reason with a different word on it, and a bug excused by a sentence.
+    """
+
+    package: str
+    pointer: str
+    steps: list[Step]
+    verdict: str  # "wrong" — this declaration is a defect; "right" — it is not, and is pinned
+    pinned: Any  # the exact value `declares` names
+    contains: str | None  # or the substring `declares_contains` names, for prose
+    becomes: Any
+    has_becomes: bool
+    disagrees: str
+    blocked_on: str
+    text: str
+    where: str
+    state: str = "declared"  # "declared" | "landed" | "moved" | "missing"
+    found: Any = None
+    detail: str = ""
+
+    @property
+    def ident(self) -> str | None:
+        """`<package>.<field>`, when the pointer names a property of a schema field.
+
+        Derived from the steps rather than declared beside them: an entry that named its
+        own field could name a field the pointer does not reach, and then the correction
+        would print against a difference it has nothing to do with.
+        """
+        steps = self.steps
+        if len(steps) < 4:
+            return None
+        if steps[0].key != "resources" or steps[0].select is None:
+            return None
+        if steps[1].key != "schema" or steps[2].key != "fields" or steps[2].select is None:
+            return None
+        return f"{self.package}.{steps[2].select}"
+
+    @property
+    def prop(self) -> str | None:
+        """The property name a difference would carry for this pointer, or None."""
+        # 0..2 are `resources[..].schema.fields[..]`; the property is whatever follows.
+        rest = self.steps[3:] if self.ident else []
+        if len(rest) == 1 and rest[0].select is None:
+            return rest[0].key
+        if len(rest) == 2 and rest[0].key == "constraints" and rest[1].select is None:
+            return f"constraints.{rest[1].key}"
+        return None
+
+    def pin_text(self) -> str:
+        if self.contains is not None:
+            return f"text containing {self.contains!r}"
+        return render_value(self.pinned)
+
+
+def load_corrections(path: Path, document: dict[str, Any]) -> list[Correction]:
+    """The stated corrections, each pinned to the exact declaration it judges.
+
+    Refused unless it names a package, a resolvable-shaped pointer, exactly one of
+    `declares`/`declares_contains`, a verdict, a `blocked_on` naming the act that lands
+    the fix, and a `reason`. `verdict: wrong` must name what the value `becomes` — except
+    in the `declares_contains` form, where the pinned phrase going away IS the landing and
+    a `becomes` would be a second, unpinned claim about prose. `verdict: right` must name
+    who `disagrees`, because a declaration nobody disputes needs no entry at all.
+    """
+    entries = document.get("corrections", [])
+    if not isinstance(entries, list):
+        raise CheckError(f"{path}: `corrections` is a {type(entries).__name__}, not a list")
+
+    corrections: list[Correction] = []
+    for index, entry in enumerate(entries, start=1):
+        where = f"{path} correction {index}"
+        if not isinstance(entry, dict):
+            raise CheckError(f"{where}: is not an object")
+        package = entry.get("package")
+        pointer = entry.get("pointer")
+        verdict = entry.get("verdict")
+        blocked_on = entry.get("blocked_on")
+        text = entry.get("reason")
+        if not isinstance(package, str) or not package.strip():
+            raise CheckError(f"{where}: `package:` is not a non-empty string")
+        if not isinstance(pointer, str):
+            raise CheckError(f"{where}: `pointer:` is not a string")
+        try:
+            steps = parse_pointer(pointer)
+        except CheckError as exc:
+            raise CheckError(f"{where}: {exc}") from exc
+        if verdict not in ("wrong", "right"):
+            raise CheckError(
+                f"{where}: `verdict:` is {verdict!r}; it is `wrong` (this declaration is a "
+                f"defect) or `right` (it is not, and something outside it disagrees)"
+            )
+        named = [key for key in ("declares", "declares_contains") if key in entry]
+        if len(named) != 1:
+            raise CheckError(
+                f"{where}: declares {named or 'neither'} of `declares:`/`declares_contains:`; "
+                f"exactly one pins what the package says today"
+            )
+        contains = None
+        pinned = None
+        if named[0] == "declares_contains":
+            contains = entry["declares_contains"]
+            if not isinstance(contains, str) or not contains.strip():
+                raise CheckError(f"{where}: `declares_contains:` is not a non-empty string")
+        else:
+            pinned = entry["declares"]
+        has_becomes = "becomes" in entry
+        becomes = entry.get("becomes")
+        if verdict == "wrong" and contains is None:
+            if not has_becomes:
+                raise CheckError(
+                    f"{where}: `verdict: wrong` names no `becomes:`. A correction that does not "
+                    f"say what the value must become is a complaint, and nothing can tell when "
+                    f"it has been acted on"
+                )
+            if becomes == pinned:
+                raise CheckError(
+                    f"{where}: `becomes:` is the value already declared, so nothing would change "
+                    f"and the entry could never go stale"
+                )
+        elif has_becomes:
+            reason = (
+                "the pinned phrase going away is what landing looks like"
+                if contains is not None
+                else "`verdict: right` says the declaration stands"
+            )
+            raise CheckError(f"{where}: names a `becomes:` and must not — {reason}")
+        disagrees = entry.get("disagrees", "")
+        if verdict == "right":
+            if not isinstance(disagrees, str) or not disagrees.strip():
+                raise CheckError(
+                    f"{where}: `verdict: right` names no `disagrees:`. A declaration nothing "
+                    f"disputes needs no entry, so an entry that names no disputant pins nothing"
+                )
+        elif disagrees:
+            raise CheckError(f"{where}: names `disagrees:` on a `verdict: wrong` entry")
+        if not isinstance(blocked_on, str) or not blocked_on.strip():
+            raise CheckError(
+                f"{where}: carries no `blocked_on:`. A correction that does not name the act "
+                f"that lands it is indistinguishable from one nobody intends to land"
+            )
+        if not isinstance(text, str) or not text.strip():
+            raise CheckError(
+                f"{where}: carries no `reason:`. A verdict with no sentence behind it is an "
+                f"assertion, not a correction"
+            )
+        corrections.append(
+            Correction(
+                package=package.strip(),
+                pointer=pointer,
+                steps=steps,
+                verdict=verdict,
+                pinned=pinned,
+                contains=contains,
+                becomes=becomes,
+                has_becomes=has_becomes,
+                disagrees=disagrees.strip(),
+                blocked_on=blocked_on.strip(),
+                text=text.strip(),
+                where=where,
+            )
+        )
+    return corrections
+
+
+def judge(corrections: list[Correction], documents: dict[str, dict[str, Any]]) -> None:
+    """Hold every correction to what its package declares right now.
+
+    Three ways an entry stops being live, and each one has to redden. The declaration
+    MOVED, so the verdict is about a value nothing carries any more. The correction
+    LANDED, so the defect is gone and the entry would otherwise sit there naming a bug
+    that no longer exists. Or the pointer resolves to nothing at all. A correction that
+    survived any of these would be exactly the standing licence the reasons file refuses.
+    """
+    for correction in corrections:
+        document = documents.get(correction.package)
+        if document is None:
+            correction.state = "missing"
+            correction.detail = (
+                f"no datasets/{correction.package}/datapackage.json was read by this run"
+            )
+            continue
+        try:
+            value = resolve(document, correction.steps)
+        except Unresolved as exc:
+            correction.state = "missing"
+            correction.detail = str(exc)
+            continue
+        correction.found = value
+        if correction.contains is not None:
+            if isinstance(value, str) and correction.contains in value:
+                correction.state = "declared"
+            elif correction.verdict == "wrong":
+                correction.state = "landed"
+                correction.detail = "the pinned phrase is gone — the correction is in place"
+            else:
+                correction.state = "moved"
+                correction.detail = "the pinned phrase is gone from a declaration pinned as right"
+            continue
+        if value == correction.pinned:
+            correction.state = "declared"
+        elif correction.has_becomes and value == correction.becomes:
+            correction.state = "landed"
+            correction.detail = "the package now declares what this entry asked for"
+        else:
+            correction.state = "moved"
+            correction.detail = "the package declares neither the pinned value nor the corrected one"
+
+
+def attach_corrections(differences: list[Difference], corrections: list[Correction]) -> None:
+    """Show a live correction beside the difference it bears on. It closes nothing."""
+    for difference in differences:
+        for correction in corrections:
+            if correction.state != "declared":
+                continue
+            ident = correction.ident
+            if ident is None or correction.prop != difference.prop:
+                continue
+            if ident in difference.values:
+                difference.corrections.append(correction)
+
+
 def report(differences: list[Difference]) -> list[str]:
     lines: list[str] = []
     for difference in differences:
         grouping = "label" if difference.kind == "concept" else "field name"
-        state = "accounted for" if difference.reason else "OPEN"
+        if difference.reason:
+            state = "accounted for"
+        elif difference.corrections:
+            state = "correction declared"
+        else:
+            state = "OPEN"
         lines.append(
             f"  {grouping} {difference.key!r} — {difference.prop} differs "
             f"[{state}]"
@@ -379,10 +697,54 @@ def report(differences: list[Difference]) -> list[str]:
             lines.append(f"      {ident}: {render_value(value)}")
         if difference.reason:
             lines.append(f"      reason: {difference.reason}")
+            continue
+        for correction in difference.corrections:
+            if correction.verdict == "wrong":
+                target = (
+                    f" and must become {render_value(correction.becomes)}"
+                    if correction.has_becomes
+                    else " and must lose that wording"
+                )
+                lines.append(
+                    f"      correction: {correction.ident} declares "
+                    f"{correction.pin_text()}{target}"
+                )
+            else:
+                lines.append(
+                    f"      correction: {correction.ident} declares "
+                    f"{correction.pin_text()} and is RIGHT — {correction.disagrees}"
+                )
+            lines.append(f"          blocked on: {correction.blocked_on}")
+        if difference.corrections:
+            # Said at the difference, not only in the file's comment: the reader who
+            # sees a verdict beside a disagreement is the one who has to be told that
+            # the disagreement is still here.
+            lines.append(
+                "      a correction states what is wrong; it does not make the packages agree, "
+                "so this difference is still counted and --strict still fails on it"
+            )
+            continue
+        stanza = json.dumps(difference.stanza(), indent=2, ensure_ascii=False)
+        lines.append("      to close it, decide it is legitimate and add to the reasons file:")
+        lines.extend(f"      {line}" for line in stanza.splitlines())
+    return lines
+
+
+def report_corrections(corrections: list[Correction]) -> list[str]:
+    lines: list[str] = []
+    for correction in corrections:
+        lines.append(f"  [{correction.verdict}] {correction.package} · {correction.pointer}")
+        if correction.verdict == "wrong" and correction.has_becomes:
+            lines.append(
+                f"      declares {correction.pin_text()}, and must become "
+                f"{render_value(correction.becomes)}"
+            )
         else:
-            stanza = json.dumps(difference.stanza(), indent=2, ensure_ascii=False)
-            lines.append("      to close it, decide it is legitimate and add to the reasons file:")
-            lines.extend(f"      {line}" for line in stanza.splitlines())
+            lines.append(f"      declares {correction.pin_text()}")
+        if correction.verdict == "right":
+            lines.append(f"      disagrees: {correction.disagrees}")
+        lines.append(f"      blocked on: {correction.blocked_on}")
+        lines.append(f"      why: {correction.text}")
     return lines
 
 
@@ -416,30 +778,43 @@ def main(argv: list[str] | None = None) -> int:
         return EXIT_ERROR
 
     fields: list[Field] = []
+    documents: dict[str, dict[str, Any]] = {}
     faults: list[str] = []
     examined = 0
     for path in descriptors:
         try:
-            fields.extend(read_package(path))
+            document, package_fields = read_package(path)
         except CheckError as exc:
             # Collected, not returned: four unreadable descriptors name four, and the
             # `examined N of M` line below can only be worth printing if the two
             # numbers are able to differ.
             faults.append(str(exc))
             continue
+        documents[path.parent.name] = document
+        fields.extend(package_fields)
         examined += 1
 
     try:
-        reasons = load_reasons(reasons_path)
+        agreement = read_agreement(reasons_path)
+        reasons = load_reasons(reasons_path, agreement)
     except CheckError as exc:
         faults.append(str(exc))
-        reasons = []
+        agreement, reasons = {}, []
+    try:
+        corrections = load_corrections(reasons_path, agreement)
+    except CheckError as exc:
+        faults.append(str(exc))
+        corrections = []
+    judge(corrections, documents)
 
     concepts, concept_groups = concept_differences(fields)
     names, name_groups = name_differences(fields)
     differences = concepts + names
     attach(differences, reasons)
+    attach_corrections(differences, corrections)
     stale = [reason for reason in reasons if not reason.used]
+    live = [item for item in corrections if item.state == "declared"]
+    lapsed = [item for item in corrections if item.state != "declared"]
     ungrouped = sorted(
         item.ident for item in fields if item.label is None or item.label == NOT_A_CONCEPT
     )
@@ -485,6 +860,21 @@ def main(argv: list[str] | None = None) -> int:
                         }
                         for difference in differences
                     ],
+                    "corrections": [
+                        {
+                            "package": item.package,
+                            "pointer": item.pointer,
+                            "verdict": item.verdict,
+                            "declares": item.contains if item.contains is not None else item.pinned,
+                            "declares_is_substring": item.contains is not None,
+                            "becomes": item.becomes if item.has_becomes else None,
+                            "blocked_on": item.blocked_on,
+                            "disagrees": item.disagrees or None,
+                            "reason": item.text,
+                            "state": item.state,
+                        }
+                        for item in corrections
+                    ],
                     "stale_reasons": [
                         {
                             "kind": reason.kind,
@@ -515,12 +905,26 @@ def main(argv: list[str] | None = None) -> int:
         return EXIT_ERROR
 
     open_differences = [difference for difference in differences if not difference.reason]
+    corrected = [item for item in open_differences if item.corrections]
+    unlooked = [item for item in open_differences if not item.corrections]
     if differences:
         print(
             f"\nlabel agreement: {len(differences)} difference(s) between packages "
-            f"describing the same thing — {len(open_differences)} with no stated reason\n"
+            f"describing the same thing — {len(differences) - len(open_differences)} closed by a "
+            f"stated reason, {len(corrected)} carrying a declared correction and still "
+            f"disagreeing, {len(unlooked)} with no stated reason\n"
         )
         for line in report(differences):
+            print(line)
+
+    if live:
+        print(
+            f"\nlabel agreement: {len(live)} declaration(s) adjudicated in {reasons_path}. A "
+            f"correction is NOT a reason: it names the side that is wrong and the act that "
+            f"lands the fix, the difference goes on being reported, and --strict goes on "
+            f"failing on it. It reddens when the value moves and when the fix arrives.\n"
+        )
+        for line in report_corrections(live):
             print(line)
 
     if stale:
@@ -539,10 +943,29 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"      it pins {ident}: {render_value(value)}", file=sys.stderr)
         return EXIT_DISAGREEMENT
 
+    if lapsed:
+        print(
+            f"\nlabel agreement: {len(lapsed)} declared correction(s) no longer describe what "
+            f"the package declares. A correction is pinned to the value it judges, so one that "
+            f"matches nothing has either LANDED — delete it, the defect is gone — or the "
+            f"declaration MOVED and the verdict is about a value nothing carries any more:\n",
+            file=sys.stderr,
+        )
+        for item in lapsed:
+            print(f"  {item.where}: {item.package} · {item.pointer}", file=sys.stderr)
+            print(f"      it pins {item.pin_text()}", file=sys.stderr)
+            if item.state != "missing":
+                print(
+                    f"      the package declares {render_value(item.found)}", file=sys.stderr
+                )
+            print(f"      {item.state}: {item.detail}", file=sys.stderr)
+        return EXIT_DISAGREEMENT
+
     if args.strict and open_differences:
         print(
             f"\nlabel agreement: FAILED under --strict — {len(open_differences)} "
-            f"difference(s) carry no stated reason",
+            f"difference(s) carry no stated reason, {len(corrected)} of them adjudicated by a "
+            f"correction that names the defect without fixing it",
             file=sys.stderr,
         )
         return EXIT_DISAGREEMENT
