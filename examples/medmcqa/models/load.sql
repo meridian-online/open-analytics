@@ -34,3 +34,41 @@ SELECT
     WHEN 3 THEN opd
   END AS answer_text
 FROM read_parquet('build/medmcqa.projected.parquet');
+
+-- GATE the table on the two facts the rest of this Protocol asserts about it, in the
+-- shape ../../datasets/edgar_gleif/models/package.sql uses: stop the Run rather than
+-- export something whose description is not true of it.
+--
+-- 1. `cop` IS AN ANSWER. The source's `test` split withholds answers — all 6,150 of
+--    its rows carry `cop = -1` — so pointing the fetch at it, which is one URL and one
+--    hash away in arcform.yaml, would export 6,150 rows with `answer_text` NULL on
+--    every one and a descriptor still claiming the column joins the correct option in.
+--    That is the mistake this gate exists for; it is not hypothetical, it is the other
+--    file in the same directory of the same repository.
+SELECT CASE WHEN v.rows > 0 THEN error(
+         'medmcqa: ' || v.rows || ' row(s) carry a `cop` outside 0-3, so `answer_text` '
+         || 'is NULL on them and this is not a split with answers in it. The source''s '
+         || '`test` split sets cop = -1 on every row; check which file arcform.yaml '
+         || 'fetches. Distinct out-of-range value(s): ' || v.values) END
+FROM (
+  SELECT count(*) AS rows,
+         array_to_string(list_sort(list(DISTINCT cop)), ', ') AS values
+  FROM medmcqa
+  WHERE cop IS NULL OR cop < 0 OR cop > 3
+) v;
+
+-- 2. `id` IS UNIQUE, which is what makes `ORDER BY ALL` in arcform.yaml a TOTAL order
+--    and lets this Protocol claim byte-reproducibility without the weaker
+--    tie-between-identical-rows argument ../scienceqa/arcform.yaml has to make. If a
+--    future split or revision repeats an id, the claim in the README stops being true
+--    and the export's row order stops being pinned by anything.
+SELECT CASE WHEN v.repeated > 0 THEN error(
+         'medmcqa: `id` is not unique — ' || v.repeated || ' value(s) appear more than '
+         || 'once across ' || v.rows || ' row(s), so ORDER BY ALL is not a total order '
+         || 'and the export''s bytes are not pinned. e.g. ' || v.examples) END
+FROM (
+  SELECT (SELECT count(*) FROM medmcqa) AS rows,
+         count(*) AS repeated,
+         array_to_string(list_slice(list_sort(list(id)), 1, 5), ', ') AS examples
+  FROM (SELECT id FROM medmcqa GROUP BY id HAVING count(*) > 1)
+) v;
