@@ -1,0 +1,143 @@
+# The `medmcqa` demo Protocol — 4,183 medical entrance-exam questions, as a recipe,
+# with the two coordinates a map is drawn from computed here rather than shipped.
+#
+# NOTHING HERE IS PUBLISHED. This Protocol references a third-party URL and builds a
+# local Parquet. Meridian hosts none of it, and no step writes to openlake. See
+# ../README.md for why `examples/` and `datasets/` are different things.
+#
+# THIS IS THE FIRST DEMO PROTOCOL THAT COMPUTES A PROJECTION. The other four export
+# the columns their source already has. This one adds `projection_x`, `projection_y`
+# and `projection_fit_id` by embedding the question text and reducing the vectors to
+# two dimensions — the coordinates Apple's Embedding Atlas gallery joins in from a
+# precomputed Parquet it built out of band. Here they are a step in the recipe, so
+# the map has a lineage instead of a provenance-free file behind it.
+#
+# THE SOURCE'S THREE OFFICIAL SURFACES STATE THREE DIFFERENT THINGS ABOUT THE LICENCE,
+# and none of them is being asserted here.
+#   • The Hugging Face repository's YAML frontmatter tags the dataset `apache-2.0`.
+#   • The SAME card's own "Licensing Information" section, read at revision 91c6572c,
+#     says "[Needs More Information]" — the licensor declining to state terms.
+#   • The authors' own source repository, github.com/medmcqa/medmcqa, carries an MIT
+#     LICENSE.md over a tree of `train.py`, `model.py`, `dataset.py`, notebooks and a
+#     requirements.txt — code, and no data. A code repository's licence is not a grant
+#     over data it links to, which is the mistake ../movies/arcform.yaml records
+#     against a BSD-3-Clause that covered vega-datasets' infrastructure.
+# ../scienceqa/arcform.yaml records a mirror's YAML tag disagreeing with its own card
+# body. This is the same class with a third surface in it, and the resolution is the
+# same: a tag is not the licensor, so no licence is asserted, all three readings are
+# written into descriptor.overrides.json, and this Protocol relies on none of them.
+# Referencing a URL an end user may lawfully fetch is not redistribution, which is the
+# basis every Protocol in this directory stands on. Treat the OUTPUT as unlicensed
+# third-party content until someone gets terms in writing from the licensor.
+#
+# WHICH SPLIT, AND WHY. The source publishes three — train (182,822 rows), validation
+# (4,183) and test (6,150). This Protocol fetches `validation`, for two reasons that
+# point the same way:
+#   • `test` is not usable as a demo at all. All 6,150 of its rows carry `cop = -1`:
+#     the answers are withheld for leaderboard scoring, so the correct-option column
+#     is a constant and `answer_text` would be empty on every row. Verified by reading
+#     the file, not by reading the card.
+#   • `train` is 182,822 rows and `umap_project` is single-threaded BY DESIGN — it
+#     pins the thread count to one before numpy and numba are imported, because a
+#     multi-threaded BLAS reduction is not deterministic and this Protocol's whole
+#     claim is that two runs land on the same map. So the projection's cost grows with
+#     the corpus and does not fall to more cores.
+# `validation` is the smallest split that still carries answers, which makes it the
+# honest demo slice. TO BUILD `train` INSTEAD, three lines change and nothing else:
+# the `url:` and `sha256:` in `fetch_medmcqa` below, and the row counts in
+# descriptor.overrides.json and README.md. The train file is
+# data/train-00000-of-00001.parquet at this same revision, 85,899,025 bytes,
+# sha256 b119434ba551517a6ec0ba1f7e0b4c029165ed284a4704f262ce37c791c493c5. Budget for
+# the projection before starting it; nothing here caps a run that would take hours.
+#
+# WHICH COLUMN IS EMBEDDED. `question`, and not by choice here: the Embedding Atlas
+# gallery's own generator comment for this dataset is
+# `SELECT row_number() OVER () AS id, question AS text FROM data_frame`, so `question`
+# is the column whose map anybody comparing against that gallery is looking at.
+#
+# THE EMBEDDING EXTENSION IS NOT FETCHED, AND THAT IS THE ONE THING THIS PROTOCOL DOES
+# NOT DO FROM A URL. `text_embed@1` names a loadable DuckDB extension the Protocol
+# puts on disk; it never downloads or installs one. There is no published URL for that
+# artifact today, so `vendor/staticembed.duckdb_extension` is git-ignored and README.md
+# says how to build and place it. The step refuses in milliseconds, naming the file it
+# looked for, when it is absent — it does not reach for one. When the extension has a
+# URL, this becomes an `http_fetch@1` step like the one above it and nothing else here
+# moves.
+#
+# WHY THE URL IS PINNED BY REVISION AND BY HASH, and what that pin is worth: the same
+# as ../scienceqa/arcform.yaml, which states it at length. The URL addresses a
+# 40-character commit revision rather than a default branch. On a real transfer the
+# `sha256:` fails closed; on a shared-cache HIT it is not consulted, because arcform's
+# fetch cache is keyed by URL. Provenance, not an integrity gate.
+#
+# Produces: build/medmcqa.parquet + datapackage.json
+name: medmcqa
+engine: duckdb
+engine_version: ">=1.2"
+db: build/medmcqa.db
+
+defaults:
+  retry:
+    max_attempts: 3
+    backoff_sec: 2.0
+
+steps:
+  - name: fetch_medmcqa
+    op: http_fetch@1
+    with:
+      url: https://huggingface.co/datasets/openlifescienceai/medmcqa/resolve/91c6572c454088bf71b679ad90aa8dffcd0d5868/data/validation-00000-of-00001.parquet
+      out: build/medmcqa.src.parquet
+      sha256: b768a1ea34afc9f80d3106d9b21f80fa8a00ec450a1f6cd641af72ca9e591021
+      headers:
+        User-Agent: "Meridian Protocol (open-analytics demo; research@meridian.online)"
+
+  # The source is already Parquet and its columns are already scalars, so it is fed to
+  # the embedder as fetched. ../supergpqa/arcform.yaml has one more step than this at
+  # the same point, and the difference is its source being JSONL: `text_embed` reads
+  # Parquet, so that Protocol has to convert before it can embed and this one does not.
+  - name: embed_questions
+    op: text_embed@1
+    with:
+      input: build/medmcqa.src.parquet
+      text_column: question
+      extension: vendor/staticembed.duckdb_extension
+      out: build/medmcqa.embedded.parquet
+      vector_column: embedding
+
+  # `metric: cosine`, not the default euclidean. The vectors this extension returns
+  # are L2-normalised, so each one is a direction and the distance that reads it as
+  # one is the angle between them. Under euclidean two directions that agree would
+  # still be scored on a chord length — the same ordering for normalised vectors, but
+  # a different layout, and saying which reading is meant is the point of the knob.
+  - name: project_questions
+    op: umap_project@1
+    with:
+      input: build/medmcqa.embedded.parquet
+      columns: [embedding]
+      out: build/medmcqa.projected.parquet
+      metric: cosine
+
+  - name: load
+    sql: models/load.sql
+    depends_on: [build/medmcqa.projected.parquet]
+    produces: [medmcqa]
+
+  # ORDER BY ALL is what makes the bytes reproduce, the same reason every other
+  # Protocol in this directory gives it. Here it IS a total order and the weaker
+  # claim ../scienceqa/arcform.yaml has to make is not needed: `id` is the source's
+  # own UUID, it sorts first, and all 4,183 of these rows carry a distinct one — 0
+  # duplicate rows on any column, checked against the fetched file.
+  - name: export_medmcqa
+    op: parquet_export@1
+    with:
+      input: medmcqa
+      dest: build/medmcqa.parquet
+      compression: zstd
+      order_by: "ALL"
+
+  - name: describe
+    op: datapackage_describe@1
+    with:
+      parquet: build/medmcqa.parquet
+      overrides: descriptor.overrides.json
+      out: datapackage.json
