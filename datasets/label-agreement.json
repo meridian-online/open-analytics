@@ -1,0 +1,23 @@
+{
+  "$comment": "Why two published packages describe one thing differently, read by scripts/check_label_agreement.py. It sits beside registry.json rather than inside a package because no single descriptor can own a statement about two of them. EACH ENTRY PINS THE VALUES IT EXCUSES, and that is the whole mechanism: a reason closes ONE difference between THESE values, so a package moving one of them makes the entry stop matching, the check exits 1 as a stale reason, and the difference is reported again. An entry that named only the label would be a standing licence to disagree about it forever, which is silencing the check with extra steps. An entry with no `reason` sentence is refused outright. Nothing here is written by a script — a check that can write its own exemptions can be silenced by running it. Differences absent from this file are OPEN: the check prints them on every run with the entry that would close them, and does not fail, because two packages may legitimately differ where their populations differ and no check can know which.",
+  "reasons": [
+    {
+      "concept": "geography.location.country_code",
+      "property": "constraints.pattern",
+      "values": {
+        "gleif.country": "^[A-Z]{2}$",
+        "gleif.jurisdiction": "^[A-Z]{2}(-[A-Z0-9]{1,3})?$"
+      },
+      "reason": "The GLEIF register types these two elements differently and this label is coarser than that distinction. LEI-CDF v3.1 types `country` as CountryCodeType, a two-letter code and nothing else, and `jurisdiction` as JurisdictionCodeType, a union of CountryCodeType and RegionCodeType which admits country-hyphen-subdivision (US-DE, AE-SH). Each pattern is the shape its own element is typed to, both descriptions in the descriptor say so, and making them agree would mean one of the two lying about the register it came from. Note the direction for a reader validating both: every value `country` admits, `jurisdiction` admits too. If `gleif.jurisdiction` is ever relabelled to `geography.location.state_code` — which is what `edgar_gleif.jurisdiction` carries for the same source column, and is reported as an open difference by this same check — it leaves this group, this entry stops matching, and the check reddens until someone deletes it. That is intended."
+    },
+    {
+      "concept": "finance.securities.ticker",
+      "property": "constraints.pattern",
+      "values": {
+        "edgar.ticker": "^[A-Z]{1,7}([./-][A-Z]{1,4})?$|^[A-Z]{4}\\.$",
+        "edgar_gleif.ticker": "^[A-Z]{1,7}([./-][A-Z]{1,4})?$"
+      },
+      "reason": "The populations differ and the patterns are each true of their own. `edgar` carries a ticker for every security in the SEC company-tickers file; `edgar_gleif` carries only the subset that resolved to an LEI. The four-letter-plus-period form occurs in the EDGAR column and `edgar.ticker` is widened to admit it — its `x-finetype-pattern-fit` records the widening against finetype's canonical pattern — while the crosswalk snapshot contains no such value and declares the canonical pattern unwidened. So `edgar`'s pattern is the union of the two: a validation routine written against it passes both datasets, and one written against `edgar_gleif`'s narrower pattern fails on EDGAR rows. That asymmetry is the thing worth knowing, and it is why this is recorded rather than closed by widening `edgar_gleif` — a pattern wider than its own column would be less true of the bytes it describes, and changing it would need a republish of the object whose footer carries this descriptor."
+    }
+  ]
+}
