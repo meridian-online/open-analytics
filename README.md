@@ -158,6 +158,34 @@ a `command:` step rewrites it into one that names the step. The manifest is pars
 as YAML rather than scanned — `grep -c 'command:' datasets/edgar_gleif/arcform.yaml`
 returns 4 for a file with no `command:` step in it.
 
+`scripts/check_label_agreement.py` reads the only direction the four above cannot:
+between the packages. Each of them judges one package against its own bytes, and
+all four can pass while the published descriptors contradict one another — the
+`jurisdiction` pattern that failed 371,995 of 3,377,394 rows disagreed with a sibling
+package, not with its own data. This groups fields by their shared
+`x-finetype-label`, and separately by field name across packages, and reports every
+`type`, `format` or `constraints` declaration that differs, naming each value. It
+reports rather than blocks: two packages may legitimately differ where their
+populations differ, and no check can know which. `datasets/label-agreement.json` is
+where a difference that is legitimate is closed by a stated reason — pinned to the
+exact values it excuses, so moving one of them makes the entry stale and the check
+exits 1 rather than going on excusing a difference nobody has looked at since.
+
+That file holds a second, opposite list. A difference that is a defect rather than a
+legitimate one cannot honestly be closed by a reason, and a descriptor is stamped into
+the Parquet footer of the object it describes and declares that object's sha256 — so
+correcting a published declaration is a republish and not an edit, and no branch can
+carry the fix. `corrections` is where that verdict is recorded: which side is wrong,
+what the value must become, and the act that lands it. It closes nothing. The
+difference goes on being reported and counted and `--strict` goes on failing on it;
+what changes is that the answer is held to the packages. Each entry pins a declaration
+by a pointer addressed by the `name` its element carries rather than by index, so it
+reddens when the declaration moves *and* when the fix arrives, and it can only be
+deleted by the thing being true. Pointers reach declarations the comparison never sees
+— a field's `description`, a join's `cardinality` — because a copy-pasted caveat
+corrected in one descriptor and not its sibling is invisible to a check that
+deliberately never compares prose.
+
 ```sh
 pip install duckdb pyyaml
 python scripts/check_descriptors.py            # 0 conformant · 1 disagreement · 2 could not check
@@ -169,6 +197,9 @@ python scripts/check_protocol_readme.py        # every README's step list agains
 python scripts/check_protocol_readme.py --write  # regenerate each README's step block
 python scripts/test_check_protocol_readme.py   # the self-test: the step-list check on broken fixtures
 python scripts/publish_dataset.py verify       # every declared bytes + hash against the object served
+python scripts/check_label_agreement.py         # every concept, as each package describes it
+python scripts/check_label_agreement.py --strict  # and fail on a difference with no stated reason
+python scripts/test_check_label_agreement.py   # the self-test: the cross-package check on broken fixtures
 ```
 
 `scripts/test_self_description_needs_no_repository.py` is the one that cannot be

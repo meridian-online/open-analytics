@@ -54,6 +54,41 @@
 # grepped: `grep -c 'command:' datasets/edgar_gleif/arcform.yaml` is 4 with no
 # `command:` step in the file.
 #
+# `label-agreement-self-test` and `label-agreement` are the first jobs here that read
+# more than one package at a time. Every other check on this page judges one package
+# against its own bytes, and all of them can pass while the four contradict each other
+# — `gleif.jurisdiction` declared `^[A-Z]{2}$` against `edgar_gleif`'s
+# `^[A-Z]{2}(-[A-Z0-9]{1,3})?$` and failed 371,995 of 3,377,394 rows, and the
+# disagreement lived in the space between the descriptors, which nothing read.
+# `check_label_agreement.py` groups fields by their shared `x-finetype-label` and by
+# their field name across packages, and reports every declaration that differs.
+#
+# THE SECOND JOB DOES NOT BLOCK ON A DIFFERENCE, AND THAT IS DELIBERATE. Two packages
+# may legitimately differ where their populations differ, and no check can know which,
+# so a difference is printed into the step summary and exits 0. What DOES redden is a
+# stale stated reason: `datasets/label-agreement.json` records why a difference is
+# legitimate and pins the exact values it excuses, so moving one of those values makes
+# the entry stop describing anything and this job fails until someone looks. A reason
+# closes one difference between those values; it never becomes a licence for the label.
+#
+# A STALE CORRECTION REDDENS IT TOO, AND A LIVE ONE BUYS NOTHING. The same file's
+# `corrections` list records the opposite verdict — this difference is a defect, here is
+# the side that is wrong, the value it must become and the act that lands it — for the
+# differences a reason would have to lie about. It closes nothing: the difference is
+# still counted and `--strict` still fails on it. Every correction is blocked on the
+# same act, and that is structural rather than a coincidence: a descriptor is stamped
+# into the footer of the object it describes and declares that object's sha256, so
+# `descriptors-match-their-data` above reads the footer copy and a repository-only edit
+# reddens it. Correcting a published declaration is a republish, which is why this
+# repository records verdicts it cannot apply. An entry pins its declaration by a
+# pointer addressed by name rather than index, so this job fails both when the
+# declaration moves and when the fix arrives and the entry should be deleted.
+#
+# `--strict` turns an unaccounted difference into a failure too, and is NOT used here
+# yet: differences on `main` today are still open, and a job red on arrival is a job
+# that gets deleted. Turning it on is the step after they are closed, and a correction
+# does not close one — a republish does.
+#
 # `publish-seam` covers the other direction — that a publish declares what it
 # uploaded, and that it uploads nothing a finished Run did not produce alongside the
 # descriptor on disk — against a scratch HTTP object store and scratch B4 Run records,
@@ -332,6 +367,50 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           exit $status
+
+  label-agreement-self-test:
+    name: the cross-package check can fail
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: scratch packages, exit status and message
+        run: python scripts/test_check_label_agreement.py
+
+  label-agreement:
+    name: the packages describe one concept one way
+    needs: label-agreement-self-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: every package's declarations against its siblings'
+        shell: bash
+        run: |
+          set +e
+          python scripts/check_label_agreement.py --json label-agreement-check.json > label.log 2>&1
+          status=$?
+          set -e
+          cat label.log
+          {
+            echo '### Cross-package concept agreement'
+            echo
+            echo '```'
+            cat label.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $status
+      - name: upload the findings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: label-agreement-check
+          path: label-agreement-check.json
+          if-no-files-found: ignore
 
   publish-seam:
     name: a publish declares what it uploaded
