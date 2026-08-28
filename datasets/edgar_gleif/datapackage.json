@@ -258,7 +258,7 @@
         "cardinality": "partial — most left rows have no match, and the referenced side also holds keys this crosswalk does not carry. Neither side contains the other.",
         "compareAs": "text",
         "coverage": {
-          "matched": 6298,
+          "matched": 6305,
           "rows": 184436
         },
         "description": "SEC-side identity: a cik-typed edge to the EDGAR company-ticker table. `edgar` is a ticker/exchange listing, not the CIK universe, so it covers a small part of the registrants this crosswalk keys on; the direction of containment runs neither way. Join by rendering `edgar.cik` (an integer) as text and comparing it to `key` (text) — the rendering is exact, because no published CIK carries a leading zero.",
