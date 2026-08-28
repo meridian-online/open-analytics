@@ -38,7 +38,7 @@ DESCRIPTIONS ARE NOT COMPARED. Each package's prose names its own register and i
 own provenance, so two descriptions of one concept are supposed to differ and a
 textual comparison would be all noise. The consequence is stated rather than hidden:
 a copy-pasted caveat corrected in one descriptor and not the other is a real instance
-of this card's class that this check cannot see. Neither are `x-finetype-confidence`,
+of the disagreement this check exists for and cannot see. Neither are `x-finetype-confidence`,
 `x-finetype-pattern-fit` or `x-finetype-enum-domain`, which are measurements OF a
 column rather than declarations ABOUT a concept, and differ by construction.
 
@@ -55,13 +55,35 @@ A reason is never written by this script. `--json` and the printed stanza make t
 entry obvious to paste, with the reason left as a TODO — because a check that could
 write its own exemptions is a check that can be silenced by running it.
 
-    check_label_agreement.py              report; exit 1 only on a stale reason
+A CORRECTION IS THE OPPOSITE OF A REASON AND CLOSES NOTHING. There were two states for
+three. A difference was OPEN — nobody has looked — or closed by a reason saying it is
+legitimate, and a difference that is a DEFECT is neither: someone has looked, knows
+which side is wrong and what it must become, and cannot land the fix here. A descriptor
+is stamped into the Parquet footer of the object it describes and declares that object's
+sha256, so correcting a published declaration is a republish and not an edit — which
+makes that third state the standing condition of every difference this check will ever
+find, not a property of the ones open today. With two states to choose from, all of them
+read as unexamined, and the only alternative was a reason written for a bug.
+
+So `corrections` in the same file records the verdict and quietens nothing: the
+difference goes on being reported, goes on being counted, and `--strict` goes on failing
+on it. What it buys is that the answer is held to the packages. An entry pins a
+declaration by a `pointer` addressed by the `name` its element carries — never by index,
+because a field inserted above the target moves every index below it and a pin that
+starts naming its neighbour reads exactly like a live one — and it reddens when the
+declaration MOVES and when the fix LANDS, so it can be deleted only by the thing being
+true. Pointers reach declarations the comparison never sees, which is what the instances
+require: a description corrected in one descriptor and copy-pasted uncorrected into its
+sibling, and a join's cardinality that is not a field property at all.
+
+    check_label_agreement.py              report; exit 1 on a stale reason or correction
     check_label_agreement.py --strict     also exit 1 on a difference with no reason
     check_label_agreement.py --json OUT   write the findings as JSON as well
 
-Exit 0 agreement, or differences that are all accounted for. Exit 1 a stale or
-unused reason (or, under --strict, an unaccounted difference). Exit 2 a fault: a
-descriptor that cannot be read, a malformed reasons file, or no packages at all.
+Exit 0 agreement, or differences that are all closed by a reason. Exit 1 a stale or
+unused reason, a correction whose declaration moved or whose fix landed, or — under
+--strict — a difference with no reason, INCLUDING one a correction adjudicated. Exit 2
+a fault: a descriptor that cannot be read, a malformed agreement file, or no packages.
 """
 
 from __future__ import annotations

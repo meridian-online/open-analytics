@@ -41,7 +41,28 @@ moves a declaration in a package and asserts what the report says about it:
     reads the same as a field the sweep never reached;
   * an empty `datasets/` directory and an unreadable descriptor — the vacuous pass
     and the partial sweep, each refused by name, with `examined N of M` asserted
-    where N and M differ.
+    where N and M differ;
+  * A CORRECTION THAT CLOSES NOTHING. The property that separates it from a reason is
+    that `--strict` still exits 1 on a difference a correction adjudicated, so that is
+    driven directly: the same tree, the same entry, and the status asserted. Its
+    siblings drive the two ways an entry stops being live — the declaration MOVING and
+    the fix LANDING — and assert WHICH of the two the check says, because both exit 1
+    and a case reading only the status would pass with the states swapped;
+  * a pointer resolved by NAME. A field inserted above the target is the mutation: an
+    index would have moved under it and gone on reading as live. Its pair asserts that
+    a pointer matching two elements names nothing rather than taking the first;
+  * a `description` and a package-level join, pinned though neither is ever compared —
+    the two instances that a mechanism able to pin only a compared constraint would
+    leave exactly as unaccounted for as writing nothing down;
+  * every field a correction is refused for, each one a claim the entry could not
+    otherwise be checked by: no `becomes`, a `becomes` that changes nothing, a
+    `verdict: right` naming no disputant, no `blocked_on`, no `reason`, both pin forms
+    at once, and an index-form pointer;
+  * THE ENTRIES THIS REPOSITORY SHIPS, run against the descriptors it ships. Every case
+    above is a scratch tree, which is the right altitude for the mechanism and the wrong
+    one for the entries: a shipped pointer naming a field no descriptor carries would be
+    a verdict about a declaration that does not exist, and every scratch case would
+    still pass.
 
 Nothing here touches the network or the real `datasets/` tree.
 """
@@ -190,7 +211,7 @@ class ScratchTree(unittest.TestCase):
 
 
 class TwoPackagesStopAgreeing(ScratchTree):
-    """The direction the card names: make two packages differ where they agree."""
+    """The plainest direction: make two packages differ where they agree."""
 
     def test_a_moved_maxlength_is_reported_and_both_values_are_named(self) -> None:
         self.settled()

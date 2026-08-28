@@ -70,9 +70,24 @@
 # legitimate and pins the exact values it excuses, so moving one of those values makes
 # the entry stop describing anything and this job fails until someone looks. A reason
 # closes one difference between those values; it never becomes a licence for the label.
+#
+# A STALE CORRECTION REDDENS IT TOO, AND A LIVE ONE BUYS NOTHING. The same file's
+# `corrections` list records the opposite verdict — this difference is a defect, here is
+# the side that is wrong, the value it must become and the act that lands it — for the
+# differences a reason would have to lie about. It closes nothing: the difference is
+# still counted and `--strict` still fails on it. Every correction is blocked on the
+# same act, and that is structural rather than a coincidence: a descriptor is stamped
+# into the footer of the object it describes and declares that object's sha256, so
+# `descriptors-match-their-data` above reads the footer copy and a repository-only edit
+# reddens it. Correcting a published declaration is a republish, which is why this
+# repository records verdicts it cannot apply. An entry pins its declaration by a
+# pointer addressed by name rather than index, so this job fails both when the
+# declaration moves and when the fix arrives and the entry should be deleted.
+#
 # `--strict` turns an unaccounted difference into a failure too, and is NOT used here
-# yet: four of the six differences on `main` today are open, and a job red on arrival
-# is a job that gets deleted. Turning it on is the step after those four are closed.
+# yet: differences on `main` today are still open, and a job red on arrival is a job
+# that gets deleted. Turning it on is the step after they are closed, and a correction
+# does not close one — a republish does.
 #
 # `publish-seam` covers the other direction — that a publish declares what it
 # uploaded, and that it uploads nothing a finished Run did not produce alongside the

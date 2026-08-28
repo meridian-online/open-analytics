@@ -171,6 +171,21 @@ where a difference that is legitimate is closed by a stated reason — pinned to
 exact values it excuses, so moving one of them makes the entry stale and the check
 exits 1 rather than going on excusing a difference nobody has looked at since.
 
+That file holds a second, opposite list. A difference that is a defect rather than a
+legitimate one cannot honestly be closed by a reason, and a descriptor is stamped into
+the Parquet footer of the object it describes and declares that object's sha256 — so
+correcting a published declaration is a republish and not an edit, and no branch can
+carry the fix. `corrections` is where that verdict is recorded: which side is wrong,
+what the value must become, and the act that lands it. It closes nothing. The
+difference goes on being reported and counted and `--strict` goes on failing on it;
+what changes is that the answer is held to the packages. Each entry pins a declaration
+by a pointer addressed by the `name` its element carries rather than by index, so it
+reddens when the declaration moves *and* when the fix arrives, and it can only be
+deleted by the thing being true. Pointers reach declarations the comparison never sees
+— a field's `description`, a join's `cardinality` — because a copy-pasted caveat
+corrected in one descriptor and not its sibling is invisible to a check that
+deliberately never compares prose.
+
 ```sh
 pip install duckdb pyyaml
 python scripts/check_descriptors.py            # 0 conformant · 1 disagreement · 2 could not check
