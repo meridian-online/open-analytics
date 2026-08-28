@@ -65,7 +65,7 @@ copies to each other.
 | Dataset | Rows | License | Source | Descriptor |
 |---|---|---|---|---|
 | GLEIF — Legal Entity Identifiers | 3.38M | CC0-1.0 | [GLEIF](https://www.gleif.org/) | [datapackage.json](datasets/gleif/datapackage.json) |
-| SEC EDGAR — Company Tickers | 10,387 | Public domain | [SEC](https://www.sec.gov/) | [datapackage.json](datasets/edgar/datapackage.json) |
+| SEC EDGAR — Company Tickers | 10,391 | Public domain | [SEC](https://www.sec.gov/) | [datapackage.json](datasets/edgar/datapackage.json) |
 | NAICS — Industry Classification (2022) | 2,125 | Public domain | [U.S. Census Bureau](https://www.census.gov/naics/) | [datapackage.json](datasets/naics/datapackage.json) |
 | EDGAR ↔ GLEIF — company-to-LEI crosswalk | 207,099 | CC0-1.0 | SEC + GLEIF | [datapackage.json](datasets/edgar_gleif/datapackage.json) |
 
