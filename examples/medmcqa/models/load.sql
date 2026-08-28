@@ -5,8 +5,8 @@
 -- fetched file's columns plus `embedding`, `projection_x`, `projection_y` and
 -- `projection_fit_id`. Two things happen here and nothing else.
 --
---   • `embedding` is DROPPED. It is a FLOAT[256] per row — 4,183 x 256 floats, about
---     4 MB of vectors — and no chart in the analysis surface reads a vector column.
+--   • `embedding` is DROPPED. It is a FLOAT[256] per row — 182,822 x 256 floats, about
+--     187 MB of vectors — and no chart in the analysis surface reads a vector column.
 --     What a map needs is the two coordinates the vectors were reduced to, and those
 --     survive. An analyst who wants the vectors themselves runs the Protocol and
 --     reads build/medmcqa.embedded.parquet, which is where they already are.
@@ -21,7 +21,7 @@
 -- from the source under different vocabularies for the same data. What the names mean
 -- is written down in descriptor.overrides.json, which is the file that exists for it.
 --
--- `topic_name` is NULL on 3,760 of these 4,183 rows and `exp` on 1,977. Both are
+-- `topic_name` is NULL on 95,613 of these 182,822 rows and `exp` on 21,953. Both are
 -- carried through as the source has them rather than defaulted to a blank string: a
 -- missing explanation and an empty explanation are different facts.
 CREATE OR REPLACE TABLE medmcqa AS

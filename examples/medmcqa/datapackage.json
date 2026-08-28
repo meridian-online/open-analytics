@@ -1,7 +1,7 @@
 {
   "$schema": "https://datapackage.org/profiles/2.0/datapackage.json",
-  "created": "2026-08-28T14:10:43Z",
-  "description": "4,183 multiple-choice medical entrance-exam questions (the source's `validation` split, out of 182,822 train + 4,183 validation + 6,150 test), each with its four options, the index of the correct one, the correct option's text joined in, an explanation where the source gives one, and the subject and topic it was filed under. WHAT projection_x AND projection_y ARE: this Protocol embeds the `question` column with a static sentence embedder and reduces the vectors to two dimensions with UMAP, so each row carries a position on a map of what the questions are about. READ THEM AS REGIONS, NOT AS DISTANCES OR NEIGHBOURS. A UMAP layout preserves which points fall in a group and not how far apart any two of them are, so a dense area of this map is a topic and the gap between two areas is not a measurement. There is no `neighbors` column here and one cannot be read off these two coordinates: nearest-neighbour lookup belongs to the 256-dimensional vectors, which live in build/medmcqa.embedded.parquet and are not carried into this export. `projection_fit_id` is the same value on every row and fingerprints the exact numbers and knobs this fit consumed — two files sharing it came from one fit and their positions are comparable; two that do not, are not. WHICH SPLIT: `test` is unusable as a demo because all 6,150 of its rows withhold the answer (`cop = -1`), and `train` is 182,822 rows against a single-threaded projection. LICENCE — NOT ASSERTED, AND THE SOURCE'S THREE SURFACES DISAGREE: the Hugging Face repository's YAML frontmatter tags this `apache-2.0`; the same card's own Licensing Information section, at revision 91c6572c, reads '[Needs More Information]'; and the authors' source repository github.com/medmcqa/medmcqa carries an MIT LICENSE over a tree of training code with no data in it, which is a licence over the code and not a grant over the data. Treat the output as unlicensed third-party content until terms are obtained from the licensor. Demo data: referenced by pinned URL and revision and built locally. Meridian does not host, publish or redistribute this dataset.",
+  "created": "2026-08-28T14:32:16Z",
+  "description": "182,822 multiple-choice medical entrance-exam questions (the source's `train` split, out of 182,822 train + 4,183 validation + 6,150 test), each with its four options, the index of the correct one, the correct option's text joined in, an explanation where the source gives one, and the subject and topic it was filed under. WHAT projection_x AND projection_y ARE: this Protocol embeds the `question` column with a static sentence embedder and reduces the vectors to two dimensions with UMAP, so each row carries a position on a map of what the questions are about. READ THEM AS REGIONS, NOT AS DISTANCES OR NEIGHBOURS. A UMAP layout preserves which points fall in a group and not how far apart any two of them are, so a dense area of this map is a topic and the gap between two areas is not a measurement. There is no `neighbors` column here and one cannot be read off these two coordinates: nearest-neighbour lookup belongs to the 256-dimensional vectors, which live in build/medmcqa.embedded.parquet and are not carried into this export. `projection_fit_id` is the same value on every row and fingerprints the exact numbers and knobs this fit consumed — two files sharing it came from one fit and their positions are comparable; two that do not, are not. WHICH SPLIT: `train`, which is the split the Embedding Atlas gallery's own loader fetches, so a reader comparing this output against that gallery is looking at the same corpus. `test` is unusable as a demo because all 6,150 of its rows withhold the answer (`cop = -1`), and models/load.sql stops the run rather than build it. LICENCE — NOT ASSERTED, AND THE SOURCE'S THREE SURFACES DISAGREE: the Hugging Face repository's YAML frontmatter tags this `apache-2.0`; the same card's own Licensing Information section, at revision 91c6572c, reads '[Needs More Information]'; and the authors' source repository github.com/medmcqa/medmcqa carries an MIT LICENSE over a tree of training code with no data in it, which is a licence over the code and not a grant over the data. Treat the output as unlicensed third-party content until terms are obtained from the licensor. Demo data: referenced by pinned URL and revision and built locally. Meridian does not host, publish or redistribute this dataset.",
   "licenses": [
     {
       "name": "notspecified",
@@ -12,9 +12,9 @@
   "name": "medmcqa",
   "resources": [
     {
-      "bytes": 923087,
+      "bytes": 49384765,
       "format": "parquet",
-      "hash": "sha256:da378d789a066a3db4ef3101d7cc8e8a9ab6f9fbce612371ed7ae032c9e0f4b9",
+      "hash": "sha256:b008a789aa14db7819d7ab8c90226127427674e747b5dcfb529f627d1853082b",
       "mediatype": "application/vnd.apache.parquet",
       "name": "medmcqa",
       "path": "medmcqa.parquet",
@@ -24,7 +24,7 @@
             "constraints": {
               "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
             },
-            "description": "The source's own UUID for the question. Distinct on all 4,183 rows, which is what makes this Protocol's `ORDER BY ALL` export a total order.",
+            "description": "The source's own UUID for the question. Distinct on all 182,822 rows, which is what makes this Protocol's `ORDER BY ALL` export a total order. models/load.sql stops the run if it ever stops being distinct.",
             "format": "uuid",
             "name": "id",
             "type": "string",
@@ -39,7 +39,7 @@
             "description": "The question text. THIS is the column that was embedded and projected — the Embedding Atlas gallery's own generator for this dataset names it, as `SELECT row_number() OVER () AS id, question AS text FROM data_frame`.",
             "name": "question",
             "type": "string",
-            "x-finetype-confidence": 0.9949,
+            "x-finetype-confidence": 1.0,
             "x-finetype-label": "representation.text.plain_text"
           },
           {
@@ -50,7 +50,7 @@
             "description": "Answer option A, under the source's own abbreviated name.",
             "name": "opa",
             "type": "string",
-            "x-finetype-confidence": 0.9452,
+            "x-finetype-confidence": 0.9843,
             "x-finetype-label": "representation.text.entity_name"
           },
           {
@@ -72,7 +72,7 @@
             "description": "Answer option C, under the source's own abbreviated name.",
             "name": "opc",
             "type": "string",
-            "x-finetype-confidence": 0.9899,
+            "x-finetype-confidence": 0.8881,
             "x-finetype-label": "representation.text.entity_name"
           },
           {
@@ -83,14 +83,14 @@
             "description": "Answer option D, under the source's own abbreviated name.",
             "name": "opd",
             "type": "string",
-            "x-finetype-confidence": 0.9949,
+            "x-finetype-confidence": 0.9952,
             "x-finetype-label": "representation.text.entity_name"
           },
           {
             "constraints": {
               "pattern": "^-?[0-9]+$"
             },
-            "description": "Correct option: 0-based index into opa/opb/opc/opd, as the source records it. Meaningless on its own without the four option columns — read answer_text instead. The source's `test` split sets this to -1 on every row; this Protocol builds `validation`, where it is 0-3.",
+            "description": "Correct option: 0-based index into opa/opb/opc/opd, as the source records it. Meaningless on its own without the four option columns — read answer_text instead. The source's `test` split sets this to -1 on every row; this Protocol builds `train`, where it is 0-3, and models/load.sql stops the run if a value outside 0-3 ever appears.",
             "name": "cop",
             "type": "integer",
             "x-finetype-confidence": 0.6,
@@ -102,7 +102,7 @@
               "minLength": 1,
               "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$"
             },
-            "description": "Whether the source filed the question as `single` or `multi`. 2,816 of these 4,183 rows are `single` and 1,367 are `multi`.",
+            "description": "Whether the source filed the question as `single` or `multi`. 120,765 of these 182,822 rows are `single` and 62,057 are `multi`.",
             "name": "choice_type",
             "type": "string",
             "x-finetype-confidence": 0.6,
@@ -114,12 +114,12 @@
                 "single"
               ],
               "open": true,
-              "rows": 4183
+              "rows": 182822
             },
             "x-finetype-label": "representation.text.word"
           },
           {
-            "description": "The source's worked explanation of the correct answer, under its own abbreviated name. NULL on 1,977 of these 4,183 rows, and left NULL rather than blanked: no explanation and an empty explanation are different facts.",
+            "description": "The source's worked explanation of the correct answer, under its own abbreviated name. NULL on 21,953 of these 182,822 rows, and left NULL rather than blanked: no explanation and an empty explanation are different facts.",
             "name": "exp",
             "type": "string",
             "x-finetype-confidence": 1.0,
@@ -131,14 +131,13 @@
           },
           {
             "constraints": {
-              "maxLength": 100,
-              "minLength": 1,
-              "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$|^[A-Za-z]{11} & [A-Za-z]{10}$|^[A-Za-z]{6} & [A-Za-z]{10} [A-Za-z]{8}$|^[A-Za-z]{8} [A-Za-z]{8}$"
+              "maxLength": 200,
+              "minLength": 2
             },
             "description": "The medical subject the question was filed under — 21 distinct values across these rows.",
             "name": "subject_name",
             "type": "string",
-            "x-finetype-confidence": 0.6306,
+            "x-finetype-confidence": 0.9615,
             "x-finetype-enum-domain": {
               "cohesion": 0.8100000023841858,
               "distinct": 21,
@@ -166,35 +165,19 @@
                 "Unknown"
               ],
               "open": true,
-              "rows": 4183
+              "rows": 182822
             },
-            "x-finetype-label": "representation.text.word",
-            "x-finetype-pattern-fit": {
-              "canonical": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$",
-              "outcome": "widened"
-            }
+            "x-finetype-label": "representation.text.entity_name"
           },
           {
             "constraints": {
               "maxLength": 200,
               "minLength": 2
             },
-            "description": "A finer label within the subject. NULL on 3,760 of these 4,183 rows, and left NULL.",
+            "description": "A finer label within the subject. NULL on 95,613 of these 182,822 rows, and left NULL.",
             "name": "topic_name",
             "type": "string",
-            "x-finetype-confidence": 0.4598,
-            "x-finetype-enum-domain": {
-              "cohesion": 1.0,
-              "distinct": 4,
-              "domain": [
-                "AIIMS 2017",
-                "AIIMS 2018",
-                "AIIMS 2019",
-                "AIIMS 2020"
-              ],
-              "open": true,
-              "rows": 423
-            },
+            "x-finetype-confidence": 0.9934,
             "x-finetype-label": "representation.text.entity_name"
           },
           {
@@ -218,20 +201,25 @@
             "x-finetype-label": "representation.numeric.decimal_number"
           },
           {
+            "constraints": {
+              "maxLength": 100,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$"
+            },
             "description": "A fingerprint of the exact feature matrix and knobs the UMAP fit consumed, the same value on every row. Two exports carrying the same value came from one fit and their coordinates are comparable; two carrying different values are two maps, and a position in one says nothing about a position in the other.",
             "name": "projection_fit_id",
             "type": "string",
-            "x-finetype-confidence": 0.6721,
+            "x-finetype-confidence": 0.9691,
             "x-finetype-enum-domain": {
               "cohesion": 1.0,
               "distinct": 1,
               "domain": [
-                "d7fca0118e451179"
+                "11a9885bf3127d42"
               ],
               "open": true,
-              "rows": 4183
+              "rows": 182822
             },
-            "x-finetype-label": "unknown"
+            "x-finetype-label": "representation.text.word"
           },
           {
             "constraints": {
@@ -241,7 +229,7 @@
             "description": "The text of the correct option, joined here from `cop` so a reader does not have to index the four option columns by hand.",
             "name": "answer_text",
             "type": "string",
-            "x-finetype-confidence": 0.9997,
+            "x-finetype-confidence": 0.9978,
             "x-finetype-label": "representation.text.entity_name"
           }
         ]
@@ -251,7 +239,7 @@
   "sources": [
     {
       "path": "https://huggingface.co/datasets/openlifescienceai/medmcqa",
-      "title": "openlifescienceai/medmcqa on Hugging Face, revision 91c6572c (validation split)"
+      "title": "openlifescienceai/medmcqa on Hugging Face, revision 91c6572c (train split)"
     },
     {
       "path": "https://medmcqa.github.io",
