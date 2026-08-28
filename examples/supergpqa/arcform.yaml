@@ -1,0 +1,137 @@
+# The `supergpqa` demo Protocol — 26,529 graduate-level questions across 285
+# subfields, as a recipe, with the two coordinates a map is drawn from computed here
+# rather than shipped.
+#
+# NOTHING HERE IS PUBLISHED. This Protocol references a third-party URL and builds a
+# local Parquet. Meridian hosts none of it, and no step writes to openlake. See
+# ../README.md for why `examples/` and `datasets/` are different things.
+#
+# THE LICENCE OBLIGATION IS THE FIRST THING TO KNOW ABOUT THIS ONE. SuperGPQA is
+# ODC-BY, which asserts no copyright over the underlying content and requires instead
+# that you "give appropriate credit to the original creators of any third-party data
+# included" and "comply with the respective licenses of the referenced datasets". The
+# source card names FIFTEEN such datasets. A summary line saying "and fifteen
+# upstreams" is not credit to fifteen creators, so all fifteen ride in
+# descriptor.overrides.json's `sources` by name and by link, and `models/corpus.sql`
+# STOPS THE RUN if any of them has gone missing from that file — the obligation is
+# checked on every run rather than trusted to survive editing. See that file for the
+# list and the gate.
+#
+# WHICH COLUMN IS EMBEDDED. `question`. This is the second Protocol in this directory
+# to compute a projection; ../medmcqa/arcform.yaml is the first and states at length
+# what the coordinates do and do not support. Short version, and it is in README.md
+# and the descriptor too because it is the thing a reader is most likely to get wrong:
+# read the map as REGIONS. UMAP preserves which points fall together, not how far
+# apart two of them are. There is no `neighbors` column and none can be recovered from
+# two coordinates.
+#
+# WHY THIS HAS TWO MORE STEPS THAN ../medmcqa. The source is JSONL and `text_embed`
+# reads Parquet, so the corpus is shaped and exported before it can be embedded. That
+# buys something beyond the format conversion: `models/corpus.sql` is where the
+# source's `options` array is flattened and where three facts about the data are
+# gated, and it runs SECOND — before the embed and the projection, which are the two
+# expensive steps. A Protocol that discovers its input is wrong after projecting
+# 26,529 vectors has spent the money for nothing.
+#
+# THE TYPES ARE DECLARED, NOT INFERRED. `read_json`'s auto-detection samples the file
+# and settles the schema from what it sees, so a column's type becomes a property of
+# the sample rather than of this manifest. models/corpus.sql names all ten columns and
+# their types instead. This is the same move datasets/edgar makes for company_name and
+# corpus, and for the same reason.
+#
+# THE EMBEDDING EXTENSION IS NOT FETCHED, and it is the one input here that does not
+# arrive from a URL. `text_embed@1` names a loadable DuckDB extension the Protocol
+# puts on disk; it never downloads or installs one, and there is no published URL for
+# that artifact today, so `vendor/staticembed.duckdb_extension` is git-ignored and
+# README.md says how to build and place it. Absent, the step refuses in milliseconds
+# naming the file it looked for. When the artifact has a URL this becomes an
+# `http_fetch@1` step and nothing else here moves.
+#
+# WHY THE URL IS PINNED BY REVISION AND BY HASH, and what that pin is worth: the same
+# as ../scienceqa/arcform.yaml, which states it at length. On a real transfer the
+# `sha256:` fails closed; on a shared-cache HIT it is not consulted, because arcform's
+# fetch cache is keyed by URL. Provenance, not an integrity gate.
+#
+# Produces: build/supergpqa.parquet + datapackage.json
+name: supergpqa
+engine: duckdb
+engine_version: ">=1.2"
+db: build/supergpqa.db
+
+defaults:
+  retry:
+    max_attempts: 3
+    backoff_sec: 2.0
+
+steps:
+  - name: fetch_supergpqa
+    op: http_fetch@1
+    with:
+      url: https://huggingface.co/datasets/m-a-p/SuperGPQA/resolve/4430d4458112c7d4497fdcf94d7cc223313d6acf/SuperGPQA-all.jsonl
+      out: build/supergpqa.src.jsonl
+      sha256: 28b998e70205ee95e540317b5adc06a06552a3961fb50b153df126b833f7a910
+      headers:
+        User-Agent: "Meridian Protocol (open-analytics demo; research@meridian.online)"
+
+  # descriptor.overrides.json is a declared input, not just the describe step's
+  # sidecar, because models/corpus.sql reads it: the fifteen-upstream attribution the
+  # licence requires is checked against that file here, at step 2, so editing the
+  # descriptor re-runs the gate instead of leaving it clean over a list it no longer
+  # matches.
+  - name: corpus
+    sql: models/corpus.sql
+    depends_on: [build/supergpqa.src.jsonl, descriptor.overrides.json]
+    produces: [corpus]
+
+  # ORDER BY ALL here, and not only on the final export. This file is what the
+  # projection is fit over, and `umap_project` pins row order by reading its input
+  # single-threaded with insertion order preserved — which pins the fit to the order
+  # of THIS file. `uuid` is distinct on all 26,529 rows and sorts first, so the order
+  # is total and the map lands in the same place on every run.
+  - name: export_corpus
+    op: parquet_export@1
+    with:
+      input: corpus
+      dest: build/supergpqa.corpus.parquet
+      compression: zstd
+      order_by: "ALL"
+
+  - name: embed_questions
+    op: text_embed@1
+    with:
+      input: build/supergpqa.corpus.parquet
+      text_column: question
+      extension: vendor/staticembed.duckdb_extension
+      out: build/supergpqa.embedded.parquet
+      vector_column: embedding
+
+  # `metric: cosine`, not the default euclidean, for the reason ../medmcqa/arcform.yaml
+  # gives: the vectors this extension returns are L2-normalised, so each is a direction
+  # and the distance that reads it as one is the angle between them.
+  - name: project_questions
+    op: umap_project@1
+    with:
+      input: build/supergpqa.embedded.parquet
+      columns: [embedding]
+      out: build/supergpqa.projected.parquet
+      metric: cosine
+
+  - name: load
+    sql: models/load.sql
+    depends_on: [build/supergpqa.projected.parquet]
+    produces: [supergpqa]
+
+  - name: export_supergpqa
+    op: parquet_export@1
+    with:
+      input: supergpqa
+      dest: build/supergpqa.parquet
+      compression: zstd
+      order_by: "ALL"
+
+  - name: describe
+    op: datapackage_describe@1
+    with:
+      parquet: build/supergpqa.parquet
+      overrides: descriptor.overrides.json
+      out: datapackage.json
