@@ -1,0 +1,305 @@
+{
+  "$schema": "https://datapackage.org/profiles/2.0/datapackage.json",
+  "created": "2026-08-28T14:16:36Z",
+  "description": "26,529 graduate-level multiple-choice questions spanning 13 disciplines, 72 fields and 285 subfields, each with its 4 to 10 answer options, the correct option as text and as a letter, a difficulty label and whether the question requires calculation. WHAT projection_x AND projection_y ARE: this Protocol embeds the `question` column with a static sentence embedder and reduces the vectors to two dimensions with UMAP, so each row carries a position on a map of what the questions are about. READ THEM AS REGIONS, NOT AS DISTANCES OR NEIGHBOURS. A UMAP layout preserves which points fall in a group and not how far apart any two of them are, so a dense area of this map is a subfield and the gap between two areas is not a measurement. There is no `neighbors` column here and one cannot be read off these two coordinates: nearest-neighbour lookup belongs to the 256-dimensional vectors, which live in build/supergpqa.embedded.parquet and are not carried into this export. `projection_fit_id` is the same value on every row and fingerprints the exact numbers and knobs this fit consumed — two files sharing it came from one fit and their positions are comparable; two that do not, are not. LICENCE — ODC-BY, AND THE ATTRIBUTION IS THE OBLIGATION: the Open Data Commons Attribution License asserts no copyright over the underlying content and instead requires credit to the original creators of any third-party data included, and compliance with each referenced dataset's own licence. SuperGPQA's card names fifteen such datasets and all fifteen are listed individually in `sources` below, by name and by the card's own link, because a summary line is not credit to fifteen creators. Anyone using this output carries those obligations forward. Demo data: referenced by pinned URL and revision and built locally. Meridian does not host, publish or redistribute this dataset.",
+  "licenses": [
+    {
+      "name": "ODC-BY-1.0",
+      "path": "https://opendatacommons.org/licenses/by/",
+      "title": "Open Data Commons Attribution License. It asserts no copyright over the underlying content; what it requires is credit to the original creators of any third-party data included, and compliance with the respective licences of the referenced datasets. The fifteen datasets SuperGPQA's own card names are listed individually under `sources`."
+    }
+  ],
+  "name": "supergpqa",
+  "resources": [
+    {
+      "bytes": 6075679,
+      "format": "parquet",
+      "hash": "sha256:74cd964ff62403eeac95c31e8fa987ec169b3cdb5fe1d94d348dcc5ef859f7a1",
+      "mediatype": "application/vnd.apache.parquet",
+      "name": "supergpqa",
+      "path": "supergpqa.parquet",
+      "schema": {
+        "fields": [
+          {
+            "description": "The source's own identifier for the question. Distinct on all 26,529 rows, which is what makes this Protocol's `ORDER BY ALL` exports a total order and pins the row order the UMAP fit was taken over.",
+            "name": "uuid",
+            "type": "string",
+            "x-finetype-confidence": 1.0,
+            "x-finetype-label": "technology.identifier.uuid"
+          },
+          {
+            "description": "The question text. THIS is the column that was embedded and projected.",
+            "name": "question",
+            "type": "string",
+            "x-finetype-confidence": 0.9999,
+            "x-finetype-label": "unknown"
+          },
+          {
+            "description": "The 4 to 10 answer options the source offers, joined with ' || ' — the source's `options` array flattened to a single delimited string, because a list column is not a shape the export/describe pair in this directory has handled. The delimiter is ' || ' and not the ' | ' examples/scienceqa uses, because 31 of these 26,529 rows carry ' | ' inside an option and splitting on it would return the wrong options for those 31. models/corpus.sql stops the run if ' || ' ever appears inside an option.",
+            "name": "answer_options",
+            "type": "string",
+            "x-finetype-confidence": 1.0,
+            "x-finetype-label": "unknown"
+          },
+          {
+            "constraints": {
+              "maxLength": 200,
+              "minLength": 2
+            },
+            "description": "The text of the correct option, as the source records it.",
+            "name": "answer",
+            "type": "string",
+            "x-finetype-confidence": 1.0,
+            "x-finetype-label": "representation.text.entity_name"
+          },
+          {
+            "constraints": {
+              "maxLength": 100,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$"
+            },
+            "description": "The correct option's letter, A through J. It selects `answer` out of `answer_options` on all 26,529 rows; models/corpus.sql stops the run if the letter and the text ever name different options.",
+            "name": "answer_letter",
+            "type": "string",
+            "x-finetype-confidence": 0.9509,
+            "x-finetype-enum-domain": {
+              "cohesion": 1.0,
+              "distinct": 10,
+              "domain": [
+                "A",
+                "B",
+                "C",
+                "D",
+                "E",
+                "F",
+                "G",
+                "H",
+                "I",
+                "J"
+              ],
+              "open": true,
+              "rows": 26529
+            },
+            "x-finetype-label": "representation.text.word"
+          },
+          {
+            "constraints": {
+              "maxLength": 100,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$|^[A-Za-z]{10} [a-z]{3} [A-Za-z]{4}$|^[A-Za-z]{8} [A-Za-z]{7}$"
+            },
+            "description": "The broadest of the source's three subject levels — 13 distinct values across these rows, e.g. Engineering.",
+            "name": "discipline",
+            "type": "string",
+            "x-finetype-confidence": 0.5,
+            "x-finetype-enum-domain": {
+              "cohesion": 0.8460000157356262,
+              "distinct": 13,
+              "domain": [
+                "Agronomy",
+                "Economics",
+                "Education",
+                "Engineering",
+                "History",
+                "Law",
+                "Literature and Arts",
+                "Management",
+                "Medicine",
+                "Military Science",
+                "Philosophy",
+                "Science",
+                "Sociology"
+              ],
+              "open": true,
+              "rows": 26529
+            },
+            "x-finetype-label": "representation.text.word",
+            "x-finetype-pattern-fit": {
+              "canonical": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$",
+              "outcome": "widened"
+            }
+          },
+          {
+            "constraints": {
+              "maxLength": 100,
+              "minLength": 1
+            },
+            "description": "The middle subject level — 72 distinct values, e.g. Electronic Science and Technology.",
+            "name": "field",
+            "type": "string",
+            "x-finetype-confidence": 0.4987,
+            "x-finetype-label": "geography.location.city"
+          },
+          {
+            "constraints": {
+              "maxLength": 200,
+              "minLength": 2
+            },
+            "description": "The finest subject level — 285 distinct values, e.g. Circuits and Systems. This is the count the source's own title refers to as its graduate disciplines.",
+            "name": "subfield",
+            "type": "string",
+            "x-finetype-confidence": 0.9972,
+            "x-finetype-label": "representation.text.entity_name"
+          },
+          {
+            "constraints": {
+              "maxLength": 100,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$"
+            },
+            "description": "The source's difficulty label: `easy` (7,731 rows), `middle` (11,748) or `hard` (7,050).",
+            "name": "difficulty",
+            "type": "string",
+            "x-finetype-confidence": 0.3586,
+            "x-finetype-enum-domain": {
+              "cohesion": 1.0,
+              "distinct": 3,
+              "domain": [
+                "easy",
+                "hard",
+                "middle"
+              ],
+              "open": true,
+              "rows": 26529
+            },
+            "x-finetype-label": "representation.text.word"
+          },
+          {
+            "description": "Whether the source marks the question as requiring calculation — true on 11,229 of these 26,529 rows.",
+            "name": "is_calculation",
+            "type": "boolean",
+            "x-finetype-confidence": 0.9955,
+            "x-finetype-enum-domain": {
+              "cohesion": 1.0,
+              "distinct": 2,
+              "domain": [
+                "false",
+                "true"
+              ],
+              "open": true,
+              "rows": 26529
+            },
+            "x-finetype-label": "representation.boolean.terms"
+          },
+          {
+            "constraints": {
+              "pattern": "^-?[0-9]+(\\.[0-9]+)?([eE][+-]?[0-9]+)?$"
+            },
+            "description": "The first UMAP coordinate of this row's question text. A position on a map, not a measurement: read the map as regions. See the package description.",
+            "name": "projection_x",
+            "type": "number",
+            "x-finetype-confidence": 0.6,
+            "x-finetype-label": "representation.numeric.decimal_number"
+          },
+          {
+            "constraints": {
+              "pattern": "^-?[0-9]+(\\.[0-9]+)?([eE][+-]?[0-9]+)?$"
+            },
+            "description": "The second UMAP coordinate of this row's question text. Read with projection_x and only against rows sharing this row's projection_fit_id.",
+            "name": "projection_y",
+            "type": "number",
+            "x-finetype-confidence": 0.6,
+            "x-finetype-label": "representation.numeric.decimal_number"
+          },
+          {
+            "constraints": {
+              "maxLength": 100,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$"
+            },
+            "description": "A fingerprint of the exact feature matrix and knobs the UMAP fit consumed, the same value on every row. Two exports carrying the same value came from one fit and their coordinates are comparable; two carrying different values are two maps, and a position in one says nothing about a position in the other.",
+            "name": "projection_fit_id",
+            "type": "string",
+            "x-finetype-confidence": 0.9275,
+            "x-finetype-enum-domain": {
+              "cohesion": 1.0,
+              "distinct": 1,
+              "domain": [
+                "4226cd0f1a355705"
+              ],
+              "open": true,
+              "rows": 26529
+            },
+            "x-finetype-label": "representation.text.word"
+          }
+        ]
+      }
+    }
+  ],
+  "sources": [
+    {
+      "path": "https://huggingface.co/datasets/m-a-p/SuperGPQA",
+      "title": "m-a-p/SuperGPQA on Hugging Face, revision 4430d445 (SuperGPQA-all.jsonl)"
+    },
+    {
+      "path": "https://arxiv.org/abs/2502.14739",
+      "title": "SuperGPQA — M-A-P Team et al., \"SuperGPQA: Scaling LLM Evaluation across 285 Graduate Disciplines\", arXiv:2502.14739 (licensor)"
+    },
+    {
+      "path": "https://huggingface.co/minishlab/potion-base-8M",
+      "title": "minishlab/potion-base-8M — the static embedding model whose vectors projection_x and projection_y are a UMAP reduction of, embedded in and applied by the staticembed DuckDB extension"
+    },
+    {
+      "path": "https://lawbench.opencompass.org.cn/home",
+      "title": "SuperGPQA upstream: LawBench — one of the fifteen datasets SuperGPQA draws third-party content from, credited here by name and link because its ODC-BY licence requires credit to each original creator and compliance with each dataset's own licence. Transcribed from the source card at revision 4430d445."
+    },
+    {
+      "path": "https://medmcqa.github.io/",
+      "title": "SuperGPQA upstream: MedMCQA — one of the fifteen datasets SuperGPQA draws third-party content from, credited here by name and link because its ODC-BY licence requires credit to each original creator and compliance with each dataset's own licence. Transcribed from the source card at revision 4430d445."
+    },
+    {
+      "path": "https://github.com/jind11/MedQA",
+      "title": "SuperGPQA upstream: MedQA — one of the fifteen datasets SuperGPQA draws third-party content from, credited here by name and link because its ODC-BY licence requires credit to each original creator and compliance with each dataset's own licence. Transcribed from the source card at revision 4430d445."
+    },
+    {
+      "path": "https://huggingface.co/datasets/TIGER-Lab/MMLU-Pro",
+      "title": "SuperGPQA upstream: MMLU-Pro — one of the fifteen datasets SuperGPQA draws third-party content from, credited here by name and link because its ODC-BY licence requires credit to each original creator and compliance with each dataset's own licence. Transcribed from the source card at revision 4430d445."
+    },
+    {
+      "path": "https://huggingface.co/datasets/microsoft/MMLU-CF",
+      "title": "SuperGPQA upstream: MMLU-CF — one of the fifteen datasets SuperGPQA draws third-party content from, credited here by name and link because its ODC-BY licence requires credit to each original creator and compliance with each dataset's own licence. Transcribed from the source card at revision 4430d445."
+    },
+    {
+      "path": "https://github.com/KL4805/ShoppingMMLU",
+      "title": "SuperGPQA upstream: ShoppingMMLU — one of the fifteen datasets SuperGPQA draws third-party content from, credited here by name and link because its ODC-BY licence requires credit to each original creator and compliance with each dataset's own licence. Transcribed from the source card at revision 4430d445."
+    },
+    {
+      "path": "https://utmathhomepage.github.io/",
+      "title": "SuperGPQA upstream: UTMath — one of the fifteen datasets SuperGPQA draws third-party content from, credited here by name and link because its ODC-BY licence requires credit to each original creator and compliance with each dataset's own licence. Transcribed from the source card at revision 4430d445."
+    },
+    {
+      "path": "https://ezmonyi.github.io/ChatMusician/",
+      "title": "SuperGPQA upstream: MusicTheoryBench — one of the fifteen datasets SuperGPQA draws third-party content from, credited here by name and link because its ODC-BY licence requires credit to each original creator and compliance with each dataset's own licence. Transcribed from the source card at revision 4430d445."
+    },
+    {
+      "path": "https://omni-math.github.io/",
+      "title": "SuperGPQA upstream: Omni-Math — one of the fifteen datasets SuperGPQA draws third-party content from, credited here by name and link because its ODC-BY licence requires credit to each original creator and compliance with each dataset's own licence. Transcribed from the source card at revision 4430d445."
+    },
+    {
+      "path": "https://toloka.ai/math-benchmark",
+      "title": "SuperGPQA upstream: U-MATH — one of the fifteen datasets SuperGPQA draws third-party content from, credited here by name and link because its ODC-BY licence requires credit to each original creator and compliance with each dataset's own licence. Transcribed from the source card at revision 4430d445."
+    },
+    {
+      "path": "https://huggingface.co/Putnam-AXIOM",
+      "title": "SuperGPQA upstream: Putnam-AXIOM — one of the fifteen datasets SuperGPQA draws third-party content from, credited here by name and link because its ODC-BY licence requires credit to each original creator and compliance with each dataset's own licence. Transcribed from the source card at revision 4430d445."
+    },
+    {
+      "path": "https://github.com/openai/simple-evals",
+      "title": "SuperGPQA upstream: Short-form Factuality — one of the fifteen datasets SuperGPQA draws third-party content from, credited here by name and link because its ODC-BY licence requires credit to each original creator and compliance with each dataset's own licence. Transcribed from the source card at revision 4430d445."
+    },
+    {
+      "path": "https://openstellarteam.github.io/ChineseSimpleQA/",
+      "title": "SuperGPQA upstream: Chinese SimpleQA — one of the fifteen datasets SuperGPQA draws third-party content from, credited here by name and link because its ODC-BY licence requires credit to each original creator and compliance with each dataset's own licence. Transcribed from the source card at revision 4430d445."
+    },
+    {
+      "path": "https://artofproblemsolving.com/wiki/index.php/AIME_Problems_and_Solutions",
+      "title": "SuperGPQA upstream: AIME-AOPS — one of the fifteen datasets SuperGPQA draws third-party content from, credited here by name and link because its ODC-BY licence requires credit to each original creator and compliance with each dataset's own licence. Transcribed from the source card at revision 4430d445."
+    },
+    {
+      "path": "https://huggingface.co/datasets/AI-MO/aimo-validation-aime",
+      "title": "SuperGPQA upstream: AIMO Validation AIME — one of the fifteen datasets SuperGPQA draws third-party content from, credited here by name and link because its ODC-BY licence requires credit to each original creator and compliance with each dataset's own licence. Transcribed from the source card at revision 4430d445."
+    }
+  ],
+  "title": "SuperGPQA — graduate-level questions across 285 subfields, with a map of their question text",
+  "x-finetype-version": "0.6.57"
+}
