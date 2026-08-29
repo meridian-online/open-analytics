@@ -22,14 +22,15 @@
       "schema": {
         "fields": [
           {
-            "constraints": {
-              "pattern": "^[0-9]+$"
-            },
-            "description": "SEC EDGAR Central Index Key — the registrant's identifier in EDGAR, stored as an integer. Unpadded: no leading zeros are stored and none are implied, so the decimal rendering of this column is the CIK. Join it to `edgar_gleif.key` by rendering it as text — see that package's `x-joins`.",
+            "constraints": {},
+            "description": "SEC EDGAR Central Index Key — the registrant's identifier in EDGAR, stored as an integer. Unpadded: no leading zeros are stored and none are implied, so the decimal rendering of this column is the CIK. The SEC renders a CIK zero-padded in URLs and filenames (`CIK0000320193`); that is a rendering convention applied to the identifier, not the value the company-tickers file this column is built from carries, and the Parquet column is a signed 64-bit integer. Join it to `edgar_gleif.key` by rendering it as text — see that package's `x-joins`.",
             "name": "cik",
             "type": "integer",
             "x-finetype-confidence": 0.85,
-            "x-finetype-label": "representation.identifier.numeric_code"
+            "x-finetype-label": "representation.identifier.numeric_code",
+            "x-finetype-unsupported-constraints": {
+              "pattern": "^[0-9]+$"
+            }
           },
           {
             "constraints": {

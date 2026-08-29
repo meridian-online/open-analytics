@@ -186,8 +186,25 @@ deleted by the thing being true. Pointers reach declarations the comparison neve
 corrected in one descriptor and not its sibling is invisible to a check that
 deliberately never compares prose.
 
+`scripts/check_frictionless.py` reads the one direction none of the others do: it asks
+the reference implementation whether these packages load at all. Data Package v2's
+Table Schema field object is a fifteen-branch `oneOf`, one branch per type, each giving
+`constraints` its own properties set, so a keyword beside the wrong `type` is a
+whole-package refusal rather than surplus a reader skips — and every check above passed
+while `frictionless` refused three of the four descriptors shipped here. It attributes
+each refusal to the field that drew it by re-offering that field on its own, because
+`frictionless` names no field in its note and raises the same sentence for every `date`
+column; a note the fields do not account for is reported against the package rather
+than dropped. `datasets/frictionless-rejections.json` works the same way as
+`corrections` above and closes nothing for the same reason: the refusals carried today
+are the describing engine's, and the act that lands their fix is a regeneration and a
+republish. An entry pins the exact notes and the pointer, and it reddens when the
+refusal changes, when the declaration moves and when the fix lands — and a refusal with
+no entry reddens too.
+
 ```sh
 pip install duckdb pyyaml
+pip install frictionless==5.19.0                # the reference implementation
 python scripts/check_descriptors.py            # 0 conformant · 1 disagreement · 2 could not check
 python scripts/check_descriptors.py --write-catalogue   # rewrite the Rows column from the counted rows
 python scripts/test_check_descriptors.py       # the self-test: the check on deliberately broken fixtures
@@ -200,6 +217,8 @@ python scripts/publish_dataset.py verify       # every declared bytes + hash aga
 python scripts/check_label_agreement.py         # every concept, as each package describes it
 python scripts/check_label_agreement.py --strict  # and fail on a difference with no stated reason
 python scripts/test_check_label_agreement.py   # the self-test: the cross-package check on broken fixtures
+python scripts/check_frictionless.py           # every descriptor through the reference implementation
+python scripts/test_check_frictionless.py      # the self-test: the conformance check on broken fixtures
 ```
 
 `scripts/test_self_description_needs_no_repository.py` is the one that cannot be

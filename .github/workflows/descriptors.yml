@@ -89,6 +89,29 @@
 # that gets deleted. Turning it on is the step after they are closed, and a correction
 # does not close one — a republish does.
 #
+# `frictionless-self-test` and `descriptors-are-accepted-by-the-reference-implementation`
+# are the first jobs here to ask the question a consumer's toolchain asks first: does
+# `frictionless` load this package at all. Every check above reads declarations back
+# against bytes, a sibling descriptor or a manifest, and all of them passed while three
+# of the four descriptors this repository ships were refused outright — v2's field object
+# is a fifteen-branch `oneOf`, one branch per type, each giving `constraints` its own
+# properties set, so `pattern` beside `"type": "integer"` is a whole-package refusal
+# rather than surplus a reader skips.
+#
+# WHICH FIELD, NOT ONLY WHICH MESSAGE. `frictionless` reports `constraint "pattern" is
+# not supported by type "date"` twice for `gleif` and names neither field, so the check
+# re-offers each field on its own in a minimal package and attributes the notes it draws
+# by name. A note the fields do not account for is reported against the package rather
+# than dropped.
+#
+# `datasets/frictionless-rejections.json` works the same way as `label-agreement.json`'s
+# `corrections`, and for the same structural reason: a descriptor is stamped into the
+# footer of the object it describes and declares that object's sha256, so a declaration
+# is republished rather than edited. An entry records a refusal that is known, pins the
+# exact notes and says which act lands the fix; it closes nothing. It reddens when the
+# refusal changes, when the declaration moves, and when the fix lands — and a refusal
+# with no entry reddens too, which is what makes the pair a gate rather than a report.
+#
 # `publish-seam` covers the other direction — that a publish declares what it
 # uploaded, and that it uploads nothing a finished Run did not produce alongside the
 # descriptor on disk — against a scratch HTTP object store and scratch B4 Run records,
@@ -138,6 +161,14 @@ env:
   # same reason every other version on this page is: a resolver picking the version of
   # the day makes what ran a property of the day rather than of this file.
   PYYAML_VERSION: "6.0.3"
+  # The reference Frictionless implementation, which the two jobs at the foot of this
+  # page put every descriptor through. This literal is NOT reconciled against
+  # `datasets/frictionless-rejections.json`'s `frictionless_version` by comparing the
+  # two files: `check_frictionless.py` compares the rejections file against the version
+  # that is actually IMPORTED at check time, so a bump here with no re-measurement there
+  # exits 2 and names both versions. Two literals, and the one that decides is the
+  # runtime.
+  FRICTIONLESS_VERSION: "5.19.0"
 
 jobs:
   self-test:
@@ -410,6 +441,54 @@ jobs:
         with:
           name: label-agreement-check
           path: label-agreement-check.json
+          if-no-files-found: ignore
+
+  frictionless-self-test:
+    name: the conformance check can fail
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: install frictionless
+        run: python -m pip install --disable-pip-version-check "frictionless==${FRICTIONLESS_VERSION}"
+      - name: scratch packages, exit status and message
+        run: python scripts/test_check_frictionless.py
+
+  descriptors-are-accepted-by-the-reference-implementation:
+    name: the reference implementation loads every descriptor
+    needs: frictionless-self-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: install frictionless
+        run: python -m pip install --disable-pip-version-check "frictionless==${FRICTIONLESS_VERSION}"
+      - name: every datapackage.json through frictionless
+        shell: bash
+        run: |
+          set +e
+          python scripts/check_frictionless.py --json frictionless-check.json > frictionless.log 2>&1
+          status=$?
+          set -e
+          cat frictionless.log
+          {
+            echo '### Descriptors vs the reference implementation'
+            echo
+            echo '```'
+            cat frictionless.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $status
+      - name: upload the findings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frictionless-check
+          path: frictionless-check.json
           if-no-files-found: ignore
 
   publish-seam:
