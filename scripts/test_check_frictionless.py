@@ -416,6 +416,20 @@ class AnEntryThatCannotBeChecked(ScratchTree):
             "there is no index form",
         )
 
+    def test_an_index_form_pointer_on_an_accepted_package_is_still_a_fault(self) -> None:
+        """The case above is decided by the match loop either way; this one is not.
+
+        An entry for a package the reference implementation now ACCEPTS is short-
+        circuited before its pointer is ever resolved, so a malformed pointer there is
+        seen only by the entry-reading pass. Without that pass this exits 1 saying the
+        entry is stale, which is a verdict about an entry nobody can read.
+        """
+        self.settled()
+        self.rejections(entry(pointer="resources[0].schema.fields[1]"))
+        result = self.run_check()
+        self.assertEqual(result.returncode, EXIT_ERROR, self.both(result))
+        self.assertIn("there is no index form", result.stderr)
+
     def test_the_same_refusal_stated_twice(self) -> None:
         self.settled()
         self.write(self.with_pattern("alpha", "opened"))
