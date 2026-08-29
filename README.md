@@ -195,7 +195,7 @@ while `frictionless` refused three of the four descriptors shipped here. It attr
 each refusal to the field that drew it by re-offering that field on its own, because
 `frictionless` names no field in its note and raises the same sentence for every `date`
 column; a note the fields do not account for is reported against the package rather
-than dropped. `datasets/frictionless-rejections.json` is the same instrument as
+than dropped. `datasets/frictionless-rejections.json` works the same way as
 `corrections` above and closes nothing for the same reason: the refusals carried today
 are the describing engine's, and the act that lands their fix is a regeneration and a
 republish. An entry pins the exact notes and the pointer, and it reddens when the

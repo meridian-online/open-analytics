@@ -104,8 +104,8 @@
 # by name. A note the fields do not account for is reported against the package rather
 # than dropped.
 #
-# `datasets/frictionless-rejections.json` is the same instrument as `label-agreement.json`'s
-# `corrections` and for the same structural reason: a descriptor is stamped into the
+# `datasets/frictionless-rejections.json` works the same way as `label-agreement.json`'s
+# `corrections`, and for the same structural reason: a descriptor is stamped into the
 # footer of the object it describes and declares that object's sha256, so a declaration
 # is republished rather than edited. An entry records a refusal that is known, pins the
 # exact notes and says which act lands the fix; it closes nothing. It reddens when the

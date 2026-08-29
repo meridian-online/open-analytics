@@ -25,8 +25,8 @@ and the notes it draws are attributed to it by name. Notes the whole package rai
 that no single field accounts for are reported against the package itself rather than
 dropped — an unattributed refusal must not read as no refusal.
 
-THE ENTRIES CLOSE NOTHING AND CANNOT BE WRITTEN TO SILENCE ONE. This mirrors
-`label-agreement.json`'s `corrections`, for the same structural reason: a descriptor
+THE ENTRIES CLOSE NOTHING AND CANNOT BE WRITTEN TO SILENCE ONE. This works the same
+way as `label-agreement.json`'s `corrections`, for the same structural reason: a descriptor
 is stamped into the Parquet footer of the object it describes and declares that
 object's sha256, so a declaration cannot be corrected here — only republished. An
 entry records a refusal that is known, says which act lands the fix, and pins the
