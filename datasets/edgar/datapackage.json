@@ -1,5 +1,22 @@
 {
   "$schema": "https://datapackage.org/profiles/2.0/datapackage.json",
+  "contributors": [
+    {
+      "path": "https://www.sec.gov/",
+      "roles": [
+        "author"
+      ],
+      "title": "U.S. Securities and Exchange Commission"
+    },
+    {
+      "path": "https://meridian.online",
+      "roles": [
+        "publisher",
+        "wrangler"
+      ],
+      "title": "Meridian"
+    }
+  ],
   "created": "2026-08-28T05:16:03Z",
   "description": "Every company with securities registered with the U.S. Securities and Exchange Commission — its Central Index Key (CIK), ticker symbol, exchange and legal name, from the SEC's EDGAR system.",
   "homepage": "https://meridian.online/datasets/edgar",
