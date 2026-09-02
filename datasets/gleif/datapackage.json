@@ -1,5 +1,22 @@
 {
   "$schema": "https://datapackage.org/profiles/2.0/datapackage.json",
+  "contributors": [
+    {
+      "path": "https://www.gleif.org/",
+      "roles": [
+        "author"
+      ],
+      "title": "Global Legal Entity Identifier Foundation"
+    },
+    {
+      "path": "https://meridian.online",
+      "roles": [
+        "publisher",
+        "wrangler"
+      ],
+      "title": "Meridian"
+    }
+  ],
   "created": "2026-08-28T06:24:39Z",
   "description": "The Global Legal Entity Identifier Foundation's public register of legal entities — every entity with its 20-character LEI, legal name, country, jurisdiction and registration status.",
   "homepage": "https://meridian.online/datasets/gleif",
