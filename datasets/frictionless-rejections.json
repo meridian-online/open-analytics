@@ -1,48 +1,5 @@
 {
-  "$comment": "Descriptors this repository ships that `frictionless` refuses, and why each is still here. Read scripts/check_frictionless.py before editing: an entry closes nothing. The refusal goes on being reported and this check goes on failing until the entry is deleted, and it can be deleted only by the refusal being gone. It reddens when the refusal changes, when the declaration moves, and when the fix lands, so it cannot go stale in silence. A refusal with no entry here fails too. `frictionless_version` is held to the version installed when the check runs, because a refusal measured against one implementation and read against another reads exactly like one measured now.",
+  "$comment": "Descriptors this repository ships that `frictionless` refuses, and why each is still here. Read scripts/check_frictionless.py before editing: an entry closes nothing. The refusal goes on being reported and this check goes on failing until the entry is deleted, and it can be deleted only by the refusal being gone. It reddens when the refusal changes, when the declaration moves, and when the fix lands, so it cannot go stale in silence. A refusal with no entry here fails too. `frictionless_version` is held to the version installed when the check runs, because a refusal measured against one implementation and read against another reads exactly like one measured now. EMPTY on purpose: all four committed descriptors were re-emitted against the corrected constraint-routing engine (finetype b2ba501a / released as 0.6.58) and are now accepted, so there is nothing left to account for. `check_frictionless.py` treats an unaccounted refusal as a fault with or without entries here, so this list staying empty is what keeps every future refusal loud rather than a matter of remembering to add an entry.",
   "frictionless_version": "5.19.0",
-  "rejections": [
-    {
-      "package": "edgar_gleif",
-      "pointer": "resources[name=edgar_gleif].schema.fields[name=confidence]",
-      "notes": [
-        "constraint \"pattern\" is not supported by type \"number\""
-      ],
-      "blocked_on": "A regeneration of this descriptor against finetype b2ba501a or later, and then a republish of the object. The engine that wrote this field routed every constraint the label's validation states into `constraints` without reference to the declared type; it now routes each keyword by the declared type's Data Package v2 vocabulary and carries what the type has no place for on `x-finetype-unsupported-constraints`. Re-emitting is what moves these keywords. Editing them here would not: `scripts/stamp_descriptor.py` writes the descriptor into the object's own Parquet footer and the descriptor declares that object's sha256, so this repository's copy cannot move ahead of the object's without `check_descriptors.py` reporting the two as different.",
-      "reason": "`confidence` is declared `number` and carries the digit-shape `pattern` that finetype's label validation states. v2's `number` branch gives `constraints` `minimum`/`maximum`/`enum`/`required`/`unique` and no `pattern`, so the whole package is refused for it. The pattern is true of the column; the standard has nowhere to put it on this type."
-    },
-    {
-      "package": "edgar_gleif",
-      "pointer": "resources[name=edgar_gleif].schema.fields[name=as_of]",
-      "notes": [
-        "constraint \"maxLength\" is not supported by type \"date\"",
-        "constraint \"minLength\" is not supported by type \"date\"",
-        "constraint \"pattern\" is not supported by type \"date\""
-      ],
-      "blocked_on": "A regeneration of this descriptor against finetype b2ba501a or later, and then a republish of the object. The engine that wrote this field routed every constraint the label's validation states into `constraints` without reference to the declared type; it now routes each keyword by the declared type's Data Package v2 vocabulary and carries what the type has no place for on `x-finetype-unsupported-constraints`. Re-emitting is what moves these keywords. Editing them here would not: `scripts/stamp_descriptor.py` writes the descriptor into the object's own Parquet footer and the descriptor declares that object's sha256, so this repository's copy cannot move ahead of the object's without `check_descriptors.py` reporting the two as different.",
-      "reason": "`as_of` is declared `date` and carries the ISO-8601 `pattern` and the ten-character length envelope that `datetime.date.iso`'s validation states. v2's `date` branch gives `constraints` `minimum`/`maximum`/`enum`/`required`/`unique` and none of these three. All three are true of the column and none has a place on this type."
-    },
-    {
-      "package": "gleif",
-      "pointer": "resources[name=gleif].schema.fields[name=initial_registration]",
-      "notes": [
-        "constraint \"maxLength\" is not supported by type \"date\"",
-        "constraint \"minLength\" is not supported by type \"date\"",
-        "constraint \"pattern\" is not supported by type \"date\""
-      ],
-      "blocked_on": "A regeneration of this descriptor against finetype b2ba501a or later, and then a republish of the object. The engine that wrote this field routed every constraint the label's validation states into `constraints` without reference to the declared type; it now routes each keyword by the declared type's Data Package v2 vocabulary and carries what the type has no place for on `x-finetype-unsupported-constraints`. Re-emitting is what moves these keywords. Editing them here would not: `scripts/stamp_descriptor.py` writes the descriptor into the object's own Parquet footer and the descriptor declares that object's sha256, so this repository's copy cannot move ahead of the object's without `check_descriptors.py` reporting the two as different.",
-      "reason": "Same defect and same engine as `edgar_gleif.as_of`: a `date` field carrying the ISO-8601 pattern and length envelope of `datetime.date.iso`, which v2's `date` branch has no place for."
-    },
-    {
-      "package": "gleif",
-      "pointer": "resources[name=gleif].schema.fields[name=next_renewal]",
-      "notes": [
-        "constraint \"maxLength\" is not supported by type \"date\"",
-        "constraint \"minLength\" is not supported by type \"date\"",
-        "constraint \"pattern\" is not supported by type \"date\""
-      ],
-      "blocked_on": "A regeneration of this descriptor against finetype b2ba501a or later, and then a republish of the object. The engine that wrote this field routed every constraint the label's validation states into `constraints` without reference to the declared type; it now routes each keyword by the declared type's Data Package v2 vocabulary and carries what the type has no place for on `x-finetype-unsupported-constraints`. Re-emitting is what moves these keywords. Editing them here would not: `scripts/stamp_descriptor.py` writes the descriptor into the object's own Parquet footer and the descriptor declares that object's sha256, so this repository's copy cannot move ahead of the object's without `check_descriptors.py` reporting the two as different.",
-      "reason": "Same defect and same engine as `gleif.initial_registration`, on the register's other date column."
-    }
-  ]
+  "rejections": []
 }
