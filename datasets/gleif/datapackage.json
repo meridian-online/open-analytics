@@ -163,30 +163,30 @@
             "x-finetype-label": "representation.text.word"
           },
           {
-            "constraints": {
-              "maxLength": 10,
-              "minLength": 10,
-              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
-            },
             "description": "Date the LEI was first registered (calendar date sliced from the golden-copy timestamp).",
             "format": "%Y-%m-%d",
             "name": "initial_registration",
             "type": "date",
             "x-finetype-confidence": 1.0,
-            "x-finetype-label": "datetime.date.iso"
-          },
-          {
-            "constraints": {
+            "x-finetype-label": "datetime.date.iso",
+            "x-finetype-unsupported-constraints": {
               "maxLength": 10,
               "minLength": 10,
               "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
-            },
+            }
+          },
+          {
             "description": "Date the LEI registration is next due for renewal.",
             "format": "%Y-%m-%d",
             "name": "next_renewal",
             "type": "date",
             "x-finetype-confidence": 1.0,
-            "x-finetype-label": "datetime.date.iso"
+            "x-finetype-label": "datetime.date.iso",
+            "x-finetype-unsupported-constraints": {
+              "maxLength": 10,
+              "minLength": 10,
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            }
           },
           {
             "constraints": {
@@ -213,5 +213,5 @@
     }
   ],
   "title": "GLEIF — Legal Entity Identifiers",
-  "x-finetype-version": "0.6.57"
+  "x-finetype-version": "0.6.58"
 }

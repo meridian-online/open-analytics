@@ -212,27 +212,27 @@
             "x-finetype-label": "representation.text.word"
           },
           {
-            "constraints": {
-              "pattern": "^-?[0-9]+(\\.[0-9]+)?([eE][+-]?[0-9]+)?$"
-            },
             "description": "Edge confidence in [0, 1]: 1.0 for authoritative edges; the Fellegi-Sunter posterior match probability under the frozen resolution model for probabilistic edges.",
             "name": "confidence",
             "type": "number",
             "x-finetype-confidence": 0.9978,
-            "x-finetype-label": "representation.numeric.decimal_number"
+            "x-finetype-label": "representation.numeric.decimal_number",
+            "x-finetype-unsupported-constraints": {
+              "pattern": "^-?[0-9]+(\\.[0-9]+)?([eE][+-]?[0-9]+)?$"
+            }
           },
           {
-            "constraints": {
-              "maxLength": 10,
-              "minLength": 10,
-              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
-            },
             "description": "The date this linkage was asserted — the vintage of the sources the edge was resolved from, stamped on every row at build time. Constant within any one published build, and that is the point: an edge carries its own vintage, so a row copied out of this table into a warehouse still says when it was true, and two builds unioned together stay tellable apart. The package's top-level `created` records when the descriptor was written, which is a different fact and does not travel with the rows. A link is a claim about two identifiers at a moment: EDGAR registrants change name and CIK, LEIs lapse and transfer, and an edge resolved in July is not evidence about December. Read it as the as-at date for the claim, not as a modification timestamp.",
             "format": "%Y-%m-%d",
             "name": "as_of",
             "type": "date",
             "x-finetype-confidence": 1.0,
-            "x-finetype-label": "datetime.date.iso"
+            "x-finetype-label": "datetime.date.iso",
+            "x-finetype-unsupported-constraints": {
+              "maxLength": 10,
+              "minLength": 10,
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            }
           },
           {
             "constraints": {
@@ -265,7 +265,7 @@
     }
   ],
   "title": "EDGAR ↔ GLEIF — company-to-LEI crosswalk",
-  "x-finetype-version": "0.6.57",
+  "x-finetype-version": "0.6.58",
   "x-joins": {
     "$comment": "How to join this crosswalk to the packages it references, and how far each join reaches. These are NOT `schema.foreignKeys`: a Data Package foreign key asserts that every value on the left exists on the right, and neither of these joins satisfies that against the published bytes — see each `cardinality` and (in the built descriptor) `coverage`. Declaring them as foreign keys would advertise a guarantee the data does not keep, so the guarantee is dropped and the reachable part is stated instead. `coverage` does NOT live in this file: a hand-typed row count decays as soon as an upstream source grows, which is exactly what happened here (four weeks stale on 2026-08-13). `crosswalk_join.py --write` measures it from the build and writes it into the generated `datapackage.json` instead.",
     "joins": [

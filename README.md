@@ -190,8 +190,9 @@ deliberately never compares prose.
 the reference implementation whether these packages load at all. Data Package v2's
 Table Schema field object is a fifteen-branch `oneOf`, one branch per type, each giving
 `constraints` its own properties set, so a keyword beside the wrong `type` is a
-whole-package refusal rather than surplus a reader skips — and every check above passed
-while `frictionless` refused three of the four descriptors shipped here. It attributes
+whole-package refusal rather than surplus a reader skips — which is why the reference-implementation
+job exists and is strict with an empty rejections list. All four descriptors shipped here are now
+accepted by `frictionless==5.19.0`, validating the engine correction. It attributes
 each refusal to the field that drew it by re-offering that field on its own, because
 `frictionless` names no field in its note and raises the same sentence for every `date`
 column; a note the fields do not account for is reported against the package rather
@@ -205,7 +206,7 @@ no entry reddens too.
 ```sh
 pip install duckdb pyyaml
 pip install frictionless==5.19.0                # the reference implementation
-python scripts/check_descriptors.py            # 0 conformant · 1 disagreement · 2 could not check
+python scripts/check_descriptors.py            # every descriptor against its data
 python scripts/check_descriptors.py --write-catalogue   # rewrite the Rows column from the counted rows
 python scripts/test_check_descriptors.py       # the self-test: the check on deliberately broken fixtures
 python scripts/test_stamp_descriptor.py        # the self-test: the stamp lands, the data does not move
