@@ -18,53 +18,18 @@
         "edgar_gleif.ticker": "^[A-Z]{1,7}([./-][A-Z]{1,4})?$"
       },
       "reason": "The populations differ and the patterns are each true of their own. `edgar` carries a ticker for every security in the SEC company-tickers file; `edgar_gleif` carries only the subset that resolved to an LEI. The four-letter-plus-period form occurs in the EDGAR column and `edgar.ticker` is widened to admit it — its `x-finetype-pattern-fit` records the widening against finetype's canonical pattern — while the crosswalk snapshot contains no such value and declares the canonical pattern unwidened. So `edgar`'s pattern is the union of the two: a validation routine written against it passes both datasets, and one written against `edgar_gleif`'s narrower pattern fails on EDGAR rows. That asymmetry is the thing worth knowing, and it is why this is recorded rather than closed by widening `edgar_gleif` — a pattern wider than its own column would be less true of the bytes it describes, and changing it would need a republish of the object whose footer carries this descriptor."
+    },
+    {
+      "field": "jurisdiction",
+      "property": "x-finetype-label",
+      "values": {
+        "edgar_gleif.jurisdiction": "geography.location.state_code",
+        "gleif.jurisdiction": "geography.location.country_code"
+      },
+      "reason": "Both labels are a partial fit for one column, not a disagreement about it. The GLEIF element behind `jurisdiction` mixes ISO 3166-1 country codes with ISO 3166-2 subdivision codes in a single value — `^[A-Z]{2}(-[A-Z0-9]{1,3})?$` on both sides says so, and it is the same pattern in both packages. No label in today's taxonomy names that union: `country_code` and `state_code` each name one half of it, so whichever one a package picks is provisional rather than wrong. Closing this for real means the column declaring its own type instead of taking the nearer of two inexact labels, which is not available today. Until it is, neither label moves and this entry is what keeps the difference recorded as looked-at rather than open."
     }
   ],
   "corrections": [
-    {
-      "package": "edgar_gleif",
-      "pointer": "resources[name=edgar_gleif].schema.fields[name=legal_name].constraints.maxLength",
-      "verdict": "wrong",
-      "declares": 200,
-      "becomes": 500,
-      "blocked_on": "A republish of edgar_gleif.parquet. `scripts/stamp_descriptor.py` writes the descriptor into the object's own Parquet footer and the descriptor declares that object's sha256, so this repository's copy cannot move ahead of the object's without `check_descriptors.py`'s self-description scan reporting the two as different. The value cannot be edited here; it can only be republished.",
-      "reason": "`edgar_gleif.legal_name` is GLEIF's own `legal_name` column carried through the join unchanged — `datasets/edgar_gleif/models/package.sql` selects `g.legal_name` — so it is the same register element as `gleif.legal_name`, which types it LEI-CDF v3.1 NameType over Tokenized500Type and says so in its description. 2..200 is neither that value space nor a measurement of this snapshot: measured 2026-08-29 against this repository's build at `datasets/edgar_gleif/build/edgar_gleif.parquet`, the column runs 2..137 over 209,413 rows. It is the same 2..200 that `edgar.company_name` carries, which is where it came from. The value true of both the register and these bytes is the register's, so this side moves and `gleif.legal_name` stays. That build is not tracked here, so no check in CI re-derives the 2..137 — it is a measurement stated with the object it was taken from, not a pinned figure."
-    },
-    {
-      "package": "edgar_gleif",
-      "pointer": "resources[name=edgar_gleif].schema.fields[name=legal_name].constraints.minLength",
-      "verdict": "wrong",
-      "declares": 2,
-      "becomes": 1,
-      "blocked_on": "A republish of edgar_gleif.parquet, for the same reason as the maxLength above: the declaration lives inside the object it describes.",
-      "reason": "The lower bound has the same defect as the upper one and the same fix. The register admits a one-character name and `gleif.legal_name` declares it, saying in its own description that single-character names are genuinely registered in several jurisdictions. This snapshot happens to bottom out at 2 (measured 2026-08-29 against `datasets/edgar_gleif/build/edgar_gleif.parquet`), which makes 2 true of today's bytes and false of the element — and a bound that a routine written against the sibling package will trip on the first refresh that admits one."
-    },
-    {
-      "package": "gleif",
-      "pointer": "resources[name=gleif].schema.fields[name=legal_name].constraints.maxLength",
-      "verdict": "right",
-      "declares": 500,
-      "disagrees": "`edgar_gleif.legal_name` declares 200 for this same register element, and is the side the corrections above move.",
-      "blocked_on": "Nothing. This side is already right; the entry exists so that the disagreement cannot be closed from this end.",
-      "reason": "This is the register's own value space and the descriptor names the type it is reading. Pinned as correct so that nobody resolves the difference by narrowing the side that is not wrong — which would make both packages agree and both be less true of the register. Measured 2026-08-29 against `datasets/gleif/build/gleif.parquet`, the column runs 1..307 over 3,414,617 rows, inside the declared space at both ends."
-    },
-    {
-      "package": "gleif",
-      "pointer": "resources[name=gleif].schema.fields[name=legal_name].constraints.minLength",
-      "verdict": "right",
-      "declares": 1,
-      "disagrees": "`edgar_gleif.legal_name` declares 2 for this same register element.",
-      "blocked_on": "Nothing. This side is already right.",
-      "reason": "Tokenized500Type's value space starts at one character and this column reaches it: the measurement above bottoms out at 1. Pinned for the same reason as the upper bound."
-    },
-    {
-      "package": "edgar_gleif",
-      "pointer": "resources[name=edgar_gleif].schema.fields[name=jurisdiction].description",
-      "verdict": "wrong",
-      "declares_contains": "an ISO 3166-1 alpha-2 country code, or an ISO 3166-2 subdivision code",
-      "blocked_on": "A republish of edgar_gleif.parquet. The wording is authored in `datasets/edgar_gleif/descriptor.overrides.json`, generated into `datapackage.json` and stamped into the object's footer, and the footer copy is what a consumer holding the URL reads. Editing the repository's copy alone would leave the object still saying it.",
-      "reason": "The sibling `gleif.jurisdiction` describes the same GLEIF element and hedges exactly this, saying that a well-formed value need not be a valid ISO 3166 entry and that values outside the ISO-assigned lists do occur in the column. This description asserts the membership flatly, and its own bytes refute it: measured 2026-08-29 against `datasets/edgar_gleif/build/edgar_gleif.parquet`, the column carries XX on 6 rows, EU on 1 and UN on 1, none of them an ISO 3166-1 assigned country code, among 231 distinct values. The caveat was corrected in one descriptor and left copy-pasted in the other. This check does not compare descriptions and by design never will — two packages' prose is supposed to differ and comparing it would be all noise — so this instance is invisible to the comparison and is pinned here instead, which is the only thing that holds it to the package at all. The landing test is the phrase going away, not a replacement wording: a pinned sentence of prose would be a second claim nothing could check."
-    },
     {
       "package": "edgar_gleif",
       "pointer": "x-joins.joins[name=edgar].cardinality",

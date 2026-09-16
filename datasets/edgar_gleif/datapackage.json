@@ -102,9 +102,10 @@
           },
           {
             "constraints": {
-              "maxLength": 200,
-              "minLength": 2
+              "maxLength": 500,
+              "minLength": 1
             },
+            "description": "The entity's official legal name — GLEIF's own `legal_name` column, carried through the join unchanged (`models/package.sql` selects `g.legal_name`), so it is the same register element `gleif.legal_name` describes and takes the same bounds. LEI-CDF v3.1 types this element NameType, a complexType whose simpleContent extends Tokenized500Type, restricting the text to between 1 and 500 characters — the value space `gleif.legal_name`'s own description names for the same element, not a bound measured off one build. A snapshot narrower than the register at either end would be true of today's rows and false of the element a consumer is validating against.",
             "name": "legal_name",
             "type": "string",
             "x-finetype-confidence": 0.5562,
@@ -138,7 +139,7 @@
             "constraints": {
               "pattern": "^[A-Z]{2}(-[A-Z0-9]{1,3})?$"
             },
-            "description": "Jurisdiction the entity is constituted under, as GLEIF records it: an ISO 3166-1 alpha-2 country code, or an ISO 3166-2 subdivision code (country, hyphen, subdivision) where GLEIF holds one — US-DE, AE-SH. The type on this field is declared by Meridian, not inferred: finetype returns `geography.location.state_code` on 260 of 300 independent 100-value samples of this column, and geography.location.country_code on 34 and unknown on 6, so an inferred label here is a draw. `x-finetype-confidence` on this field is that agreement rate over 300 samples, NOT a model score for a single run.",
+            "description": "Jurisdiction the entity is constituted under, as GLEIF records it: a country code or a country-plus-subdivision code (country, hyphen, subdivision) where GLEIF holds one — US-DE, AE-SH. It checks shape, not assignment: a well-formed value need not be a valid ISO 3166 entry, and values outside the ISO-assigned lists do occur in this column, so treat membership of an ISO reference list as something to verify rather than assume. The type on this field is declared by Meridian, not inferred: finetype returns `geography.location.state_code` on 260 of 300 independent 100-value samples of this column, and geography.location.country_code on 34 and unknown on 6, so an inferred label here is a draw. `x-finetype-confidence` on this field is that agreement rate over 300 samples, NOT a model score for a single run.",
             "name": "jurisdiction",
             "type": "string",
             "x-finetype-confidence": 0.87,
