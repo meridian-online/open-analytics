@@ -29,13 +29,7 @@
       }
     },
     "company_name": {
-      "description": "Legal name of the registrant as carried in the SEC company-tickers file. The type on this field is declared by Meridian, not inferred: finetype returns `representation.text.entity_name` on 572 of 600 independent 100-value samples of this column and one of four other types on the rest, so an inferred label here is a draw. `x-finetype-confidence` on this field is that agreement rate over 600 samples of this exact object, NOT a model score for a single run.",
-      "x-finetype-label": "representation.text.entity_name",
-      "x-finetype-confidence": 0.95,
-      "constraints": {
-        "minLength": 2,
-        "maxLength": 200
-      }
+      "description": "Legal name of the registrant as carried in the SEC company-tickers file. The type on this field is declared, not inferred: `nominations.finetype.json` beside this descriptor nominates `representation.text.entity_name` and says why, so the field carries `x-finetype-nominated` and no confidence. Inferred, the label is a draw: finetype returned it on 572 of 600 independent 100-value samples of this column and one of four other types on the rest."
     },
     "ticker": {
       "description": "Exchange ticker symbol for the registrant's security."
@@ -44,13 +38,7 @@
       "description": "Listing venue for the ticker (e.g. NYSE, Nasdaq, CBOE, OTC)."
     },
     "corpus": {
-      "description": "Lowercased, accent-stripped concatenation of name + ticker + exchange \u2014 a derived free-text search field, not a source attribute. The type on this field is declared by Meridian, not inferred: finetype returns `representation.text.plain_text` on 484 of 600 independent 100-value samples of this column, `unknown` on 97 and one of seven other types on the rest, so an inferred label here is a draw. `x-finetype-confidence` on this field is that agreement rate over 600 samples of this exact object, NOT a model score for a single run.",
-      "x-finetype-label": "representation.text.plain_text",
-      "x-finetype-confidence": 0.81,
-      "constraints": {
-        "minLength": 1,
-        "maxLength": 65536
-      }
+      "description": "Lowercased, accent-stripped concatenation of name + ticker + exchange \u2014 a derived free-text search field, not a source attribute. The type on this field is declared, not inferred: `nominations.finetype.json` beside this descriptor nominates `representation.text.plain_text` and says why, so the field carries `x-finetype-nominated` and no confidence. Inferred, the label is a draw: finetype returned it on 484 of 600 independent 100-value samples of this column, `unknown` on 97 and one of seven other types on the rest."
     }
   },
   "primaryKey": [

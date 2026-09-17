@@ -255,6 +255,10 @@ steps:
     with:
       parquet: build/edgar_gleif.parquet
       overrides: descriptor.overrides.json
+      # The columns whose type is declared rather than inferred. finetype takes each one
+      # as given, carries its label's bounds, marks it x-finetype-nominated and states no
+      # confidence for it; the file says why each was declared.
+      nominations: nominations.finetype.json
       out: datapackage.json
     preconditions:
       - tool:

@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "resources": {
+    "edgar_gleif": {
+      "jurisdiction": {
+        "label": "geography.location.country_code",
+        "why": "GLEIF's jurisdiction code: an ISO 3166-1 country code, or a country-plus-subdivision code such as US-DE. No taxonomy label names that union. Every value begins with the country, so country code is the nearest label that is true of the column; state code, which inference published, is false of the country-only rows. The pattern stays widened in descriptor.overrides.json to admit the subdivision suffix, the same union gleif.jurisdiction declares."
+      },
+      "tier": {
+        "label": "representation.text.word",
+        "why": "One of four lowercase provenance words: authoritative, confirmed, candidate or ambiguous. Inferred, some samples of this column read those words as month names."
+      },
+      "corpus": {
+        "label": "representation.text.plain_text",
+        "why": "A derived search field: display name, legal name, ticker and LEI, lowercased, accent-stripped and concatenated. It is free text by construction. Inferred, samples of this column come back `plain_text`, `unknown` or an identifier type depending on the run."
+      },
+      "reg_status": {
+        "label": "representation.text.word",
+        "why": "GLEIF's LEI registration status, a single upper-case token such as ISSUED or LAPSED: the same register element gleif.registration_status carries, declared with the same label."
+      },
+      "company_name": {
+        "label": "representation.text.entity_name",
+        "why": "The SEC display name of the registrant, carried through the join. Inferred, the label is a draw between samples; declared, it carries the label edgar.company_name carries."
+      }
+    }
+  }
+}

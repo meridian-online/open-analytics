@@ -68,7 +68,8 @@ steps:
       order_by: "company_name, cik, ticker"
 
   # ── Describe: EMIT datapackage.json from the built Parquet ───────────────────────
-  # datapackage_describe types every column with finetype (`profile … -o datapackage`)
+  # datapackage_describe types every column nominations.finetype.json does not declare
+  # with finetype (`profile … -o datapackage`)
   # and overlays descriptor.overrides.json (identity, licenses, sources, per-field prose,
   # primaryKey). Hard-fails if a curated key names a column absent from the Parquet.
   - name: describe
@@ -76,6 +77,10 @@ steps:
     with:
       parquet: build/edgar.parquet
       overrides: descriptor.overrides.json
+      # The columns whose type is declared rather than inferred. finetype takes each one
+      # as given, carries its label's bounds, marks it x-finetype-nominated and states no
+      # confidence for it; the file says why each was declared.
+      nominations: nominations.finetype.json
       out: datapackage.json
 
   # ── Validate: GATE the built Parquet against the self-derived finetype contract ──

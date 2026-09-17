@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "resources": {
+    "gleif": {
+      "legal_name": {
+        "label": "representation.text.entity_name",
+        "why": "The entity's registered legal name from the GLEIF golden copy. Inferred, the label is a draw between samples. The length bounds are NOT the label's: descriptor.overrides.json keeps the register's own (LEI-CDF NameType, 1 to 500 characters), because names shorter than two characters and longer than two hundred are genuinely registered and the label's bounds would refuse them."
+      },
+      "corpus": {
+        "label": "representation.text.plain_text",
+        "why": "A derived search field: legal name, city and country, lowercased, accent-stripped and concatenated. It is free text by construction. Inferred, samples of this column come back `plain_text` on some runs and `unknown` on others, and `unknown` has been published before."
+      }
+    }
+  }
+}

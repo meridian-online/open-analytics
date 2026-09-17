@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "resources": {
+    "edgar": {
+      "company_name": {
+        "label": "representation.text.entity_name",
+        "why": "The registrant's name as the SEC company-tickers file carries it. Inferred, the label is a draw: independent samples of this column come back `entity_name` on most runs and one of several other types on the rest, so the published label depended on which sample a run took."
+      },
+      "corpus": {
+        "label": "representation.text.plain_text",
+        "why": "A derived search field: name, ticker and exchange, lowercased, accent-stripped and concatenated. It is free text by construction. Inferred, samples of this column come back `plain_text` on some runs and `unknown` on others."
+      }
+    }
+  }
+}
