@@ -17,7 +17,7 @@
       "title": "Meridian"
     }
   ],
-  "created": "2026-08-28T05:16:03Z",
+  "created": "2026-09-17T00:17:39Z",
   "description": "Every company with securities registered with the U.S. Securities and Exchange Commission — its Central Index Key (CIK), ticker symbol, exchange and legal name, from the SEC's EDGAR system.",
   "homepage": "https://meridian.online/datasets/edgar",
   "licenses": [
@@ -30,9 +30,9 @@
   "name": "edgar",
   "resources": [
     {
-      "bytes": 277713,
+      "bytes": 278320,
       "format": "parquet",
-      "hash": "sha256:60af20bdcbc731d190f9e5fb075d69707da8bfd27e31d1da24a811449a041ec8",
+      "hash": "sha256:3dc65776711ebb9a5f824b206b6f214adb573d4e97b86e8851909005cfd592e6",
       "mediatype": "application/vnd.apache.parquet",
       "name": "edgar",
       "path": "https://openlake.meridian.online/edgar.parquet",
@@ -54,11 +54,11 @@
               "maxLength": 200,
               "minLength": 2
             },
-            "description": "Legal name of the registrant as carried in the SEC company-tickers file. The type on this field is declared by Meridian, not inferred: finetype returns `representation.text.entity_name` on 572 of 600 independent 100-value samples of this column and one of four other types on the rest, so an inferred label here is a draw. `x-finetype-confidence` on this field is that agreement rate over 600 samples of this exact object, NOT a model score for a single run.",
+            "description": "Legal name of the registrant as carried in the SEC company-tickers file. The type on this field is declared, not inferred: `nominations.finetype.json` beside this descriptor nominates `representation.text.entity_name` and says why, so the field carries `x-finetype-nominated` and no confidence. Inferred, the label is a draw: finetype returned it on 572 of 600 independent 100-value samples of this column and one of four other types on the rest.",
             "name": "company_name",
             "type": "string",
-            "x-finetype-confidence": 0.95,
-            "x-finetype-label": "representation.text.entity_name"
+            "x-finetype-label": "representation.text.entity_name",
+            "x-finetype-nominated": true
           },
           {
             "constraints": {
@@ -103,11 +103,11 @@
               "maxLength": 65536,
               "minLength": 1
             },
-            "description": "Lowercased, accent-stripped concatenation of name + ticker + exchange — a derived free-text search field, not a source attribute. The type on this field is declared by Meridian, not inferred: finetype returns `representation.text.plain_text` on 484 of 600 independent 100-value samples of this column, `unknown` on 97 and one of seven other types on the rest, so an inferred label here is a draw. `x-finetype-confidence` on this field is that agreement rate over 600 samples of this exact object, NOT a model score for a single run.",
+            "description": "Lowercased, accent-stripped concatenation of name + ticker + exchange — a derived free-text search field, not a source attribute. The type on this field is declared, not inferred: `nominations.finetype.json` beside this descriptor nominates `representation.text.plain_text` and says why, so the field carries `x-finetype-nominated` and no confidence. Inferred, the label is a draw: finetype returned it on 484 of 600 independent 100-value samples of this column, `unknown` on 97 and one of seven other types on the rest.",
             "name": "corpus",
             "type": "string",
-            "x-finetype-confidence": 0.81,
-            "x-finetype-label": "representation.text.plain_text"
+            "x-finetype-label": "representation.text.plain_text",
+            "x-finetype-nominated": true
           }
         ],
         "primaryKey": [
@@ -124,5 +124,5 @@
     }
   ],
   "title": "SEC EDGAR — Company Tickers",
-  "x-finetype-version": "0.6.57"
+  "x-finetype-version": "0.6.60"
 }
