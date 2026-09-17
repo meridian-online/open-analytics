@@ -16,6 +16,23 @@
       "path": "https://www.sec.gov/"
     }
   ],
+  "contributors": [
+    {
+      "path": "https://www.sec.gov/",
+      "roles": [
+        "author"
+      ],
+      "title": "U.S. Securities and Exchange Commission"
+    },
+    {
+      "path": "https://meridian.online",
+      "roles": [
+        "publisher",
+        "wrangler"
+      ],
+      "title": "Meridian"
+    }
+  ],
   "resource": {
     "path": "https://openlake.meridian.online/edgar.parquet"
   },
