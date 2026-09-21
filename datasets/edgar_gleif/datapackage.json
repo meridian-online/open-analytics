@@ -11,7 +11,7 @@
       "title": "Meridian"
     }
   ],
-  "created": "2026-08-28T08:22:46Z",
+  "created": "2026-09-17T00:18:31Z",
   "description": "A resolved crosswalk linking SEC EDGAR registrants (CIK / ticker / fund series) to their GLEIF Legal Entity Identifier (LEI) — one row per asserted identity, each carrying its provenance tier, method and confidence. Authoritative edges come from official SEC/GLEIF registration (no guessing); the operating-company tail is linked by probabilistic name resolution (Fellegi-Sunter / Splink): exact normalized-name matches are confirmed (~95% precision), while name-only fuzzy matches are surfaced as candidates rather than auto-confirmed. A point-in-time snapshot, with an as-of date on every row.",
   "homepage": "https://meridian.online/datasets/edgar_gleif",
   "licenses": [
@@ -24,9 +24,9 @@
   "name": "edgar_gleif",
   "resources": [
     {
-      "bytes": 10483619,
+      "bytes": 10485583,
       "format": "parquet",
-      "hash": "sha256:796e2dfdb7fdceb58c611aeed76ca7a80b0b8f7fb1d657fb376ae2ed2692627d",
+      "hash": "sha256:7ca2419d2cf168def3dffed89e394a4219f3232965fddc53f57e4fa18ab2dad0",
       "mediatype": "application/vnd.apache.parquet",
       "name": "edgar_gleif",
       "path": "https://openlake.meridian.online/edgar_gleif.parquet",
@@ -68,6 +68,9 @@
             "x-finetype-pattern-fit": {
               "canonical": "^-?[0-9]+$",
               "outcome": "widened"
+            },
+            "x-finetype-unsupported-constraints": {
+              "pattern": "^-?[0-9]+$|^[A-Z0-9]{10}$"
             }
           },
           {
@@ -81,14 +84,14 @@
           },
           {
             "constraints": {
-              "maxLength": 65536,
-              "minLength": 1
+              "maxLength": 200,
+              "minLength": 2
             },
-            "description": "The type on this field is declared by Meridian, not inferred: finetype returns `representation.text.entity_name` on 246 of 300 independent 100-value samples of this column, and unknown on 36, plain_text on 14 and full_address on 2, so an inferred label here is a draw. `x-finetype-confidence` on this field is that agreement rate over 300 samples, NOT a model score for a single run.",
+            "description": "The type on this field is declared, not inferred: `nominations.finetype.json` beside this descriptor nominates `representation.text.entity_name` and says why, so the field carries `x-finetype-nominated` and no confidence. Inferred, the label is a draw: finetype returned it on 246 of 300 independent 100-value samples of this column, and unknown on 36, plain_text on 14 and full_address on 2.",
             "name": "company_name",
             "type": "string",
-            "x-finetype-confidence": 0.82,
-            "x-finetype-label": "representation.text.entity_name"
+            "x-finetype-label": "representation.text.entity_name",
+            "x-finetype-nominated": true
           },
           {
             "constraints": {
@@ -139,11 +142,11 @@
             "constraints": {
               "pattern": "^[A-Z]{2}(-[A-Z0-9]{1,3})?$"
             },
-            "description": "Jurisdiction the entity is constituted under, as GLEIF records it: a country code or a country-plus-subdivision code (country, hyphen, subdivision) where GLEIF holds one — US-DE, AE-SH. It checks shape, not assignment: a well-formed value need not be a valid ISO 3166 entry, and values outside the ISO-assigned lists do occur in this column, so treat membership of an ISO reference list as something to verify rather than assume. The type on this field is declared by Meridian, not inferred: finetype returns `geography.location.state_code` on 260 of 300 independent 100-value samples of this column, and geography.location.country_code on 34 and unknown on 6, so an inferred label here is a draw. `x-finetype-confidence` on this field is that agreement rate over 300 samples, NOT a model score for a single run.",
+            "description": "Jurisdiction the entity is constituted under, as GLEIF records it: a country code or a country-plus-subdivision code (country, hyphen, subdivision) where GLEIF holds one — US-DE, AE-SH. It checks shape, not assignment: a well-formed value need not be a valid ISO 3166 entry, and values outside the ISO-assigned lists do occur in this column, so treat membership of an ISO reference list as something to verify rather than assume. The type on this field is declared, not inferred: `nominations.finetype.json` beside this descriptor nominates `geography.location.country_code` and says why, so the field carries `x-finetype-nominated` and no confidence. No label names the union of the two shapes, and every value begins with its country; the pattern here stays widened past that label's two letters to admit the subdivision suffix. Inferred, the label is a draw: finetype returned geography.location.state_code on 260 of 300 independent 100-value samples of this column, geography.location.country_code on 34 and unknown on 6.",
             "name": "jurisdiction",
             "type": "string",
-            "x-finetype-confidence": 0.87,
-            "x-finetype-label": "geography.location.state_code",
+            "x-finetype-label": "geography.location.country_code",
+            "x-finetype-nominated": true,
             "x-finetype-pattern-fit": {
               "canonical": "^[A-Z]{2}$",
               "outcome": "widened"
@@ -155,10 +158,9 @@
               "minLength": 1,
               "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$"
             },
-            "description": "The type on this field is declared by Meridian, not inferred: finetype returns `representation.text.word` on 262 of 300 independent 100-value samples of this column, and geography.location.state_code on 38, so an inferred label here is a draw. `x-finetype-confidence` on this field is that agreement rate over 300 samples, NOT a model score for a single run.",
+            "description": "GLEIF's registration status for the matched LEI record — ISSUED, LAPSED, RETIRED or another of the register's states. The type on this field is declared, not inferred: `nominations.finetype.json` beside this descriptor nominates `representation.text.word` and says why, so the field carries `x-finetype-nominated` and no confidence. Inferred, the label is a draw: finetype returned it on 262 of 300 independent 100-value samples of this column and geography.location.state_code on 38.",
             "name": "reg_status",
             "type": "string",
-            "x-finetype-confidence": 0.87,
             "x-finetype-enum-domain": {
               "cohesion": 0.7139999866485596,
               "distinct": 7,
@@ -174,7 +176,8 @@
               "open": true,
               "rows": 209413
             },
-            "x-finetype-label": "representation.text.word"
+            "x-finetype-label": "representation.text.word",
+            "x-finetype-nominated": true
           },
           {
             "constraints": {
@@ -206,11 +209,23 @@
               "minLength": 1,
               "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$"
             },
-            "description": "Provenance tier, in precedence order: authoritative (deterministic SEC/GLEIF registration — no guessing), confirmed (exact normalized-name Splink match, ~95% precision), candidate (name-only fuzzy match, surfaced NOT asserted), ambiguous (one exact name matched more than one entity). A deterministic edge always wins over a name match for the same key. The type on this field is declared by Meridian, not inferred: finetype returns `representation.text.word` on 193 of 300 independent 100-value samples of this column, and datetime.component.month_name on 107, so an inferred label here is a draw. `x-finetype-confidence` on this field is that agreement rate over 300 samples, NOT a model score for a single run.",
+            "description": "Provenance tier, in precedence order: authoritative (deterministic SEC/GLEIF registration — no guessing), confirmed (exact normalized-name Splink match, ~95% precision), candidate (name-only fuzzy match, surfaced NOT asserted), ambiguous (one exact name matched more than one entity). A deterministic edge always wins over a name match for the same key. The type on this field is declared, not inferred: `nominations.finetype.json` beside this descriptor nominates `representation.text.word` and says why, so the field carries `x-finetype-nominated` and no confidence. Inferred, the label is a draw: finetype returned it on 193 of 300 independent 100-value samples of this column and datetime.component.month_name on 107.",
             "name": "tier",
             "type": "string",
-            "x-finetype-confidence": 0.64,
-            "x-finetype-label": "representation.text.word"
+            "x-finetype-enum-domain": {
+              "cohesion": 1.0,
+              "distinct": 4,
+              "domain": [
+                "ambiguous",
+                "authoritative",
+                "candidate",
+                "confirmed"
+              ],
+              "open": true,
+              "rows": 209413
+            },
+            "x-finetype-label": "representation.text.word",
+            "x-finetype-nominated": true
           },
           {
             "description": "Edge confidence in [0, 1]: 1.0 for authoritative edges; the Fellegi-Sunter posterior match probability under the frozen resolution model for probabilistic edges.",
@@ -240,11 +255,11 @@
               "maxLength": 65536,
               "minLength": 1
             },
-            "description": "Lowercased, accent-stripped concatenation of the display name, legal name, ticker and LEI — a derived free-text search field, not a source attribute. The type on this field is declared by Meridian, not inferred: finetype returns `representation.text.plain_text` on 186 of 300 independent 100-value samples of this column, and unknown on 75, alphanumeric_id on 37 and semicolon_separated on 2, so an inferred label here is a draw. `x-finetype-confidence` on this field is that agreement rate over 300 samples, NOT a model score for a single run.",
+            "description": "Lowercased, accent-stripped concatenation of the display name, legal name, ticker and LEI — a derived free-text search field, not a source attribute. The type on this field is declared, not inferred: `nominations.finetype.json` beside this descriptor nominates `representation.text.plain_text` and says why, so the field carries `x-finetype-nominated` and no confidence. Inferred, the label is a draw: finetype returned it on 186 of 300 independent 100-value samples of this column, and unknown on 75, alphanumeric_id on 37 and semicolon_separated on 2.",
             "name": "corpus",
             "type": "string",
-            "x-finetype-confidence": 0.62,
-            "x-finetype-label": "representation.text.plain_text"
+            "x-finetype-label": "representation.text.plain_text",
+            "x-finetype-nominated": true
           }
         ],
         "primaryKey": [
@@ -266,7 +281,7 @@
     }
   ],
   "title": "EDGAR ↔ GLEIF — company-to-LEI crosswalk",
-  "x-finetype-version": "0.6.58",
+  "x-finetype-version": "0.6.60",
   "x-joins": {
     "$comment": "How to join this crosswalk to the packages it references, and how far each join reaches. These are NOT `schema.foreignKeys`: a Data Package foreign key asserts that every value on the left exists on the right, and neither of these joins satisfies that against the published bytes — see each `cardinality` and (in the built descriptor) `coverage`. Declaring them as foreign keys would advertise a guarantee the data does not keep, so the guarantee is dropped and the reachable part is stated instead. `coverage` does NOT live in this file: a hand-typed row count decays as soon as an upstream source grows, which is exactly what happened here (four weeks stale on 2026-08-13). `crosswalk_join.py --write` measures it from the build and writes it into the generated `datapackage.json` instead.",
     "joins": [

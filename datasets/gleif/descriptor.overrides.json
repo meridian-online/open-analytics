@@ -16,6 +16,23 @@
       "path": "https://www.gleif.org/"
     }
   ],
+  "contributors": [
+    {
+      "path": "https://www.gleif.org/",
+      "roles": [
+        "author"
+      ],
+      "title": "Global Legal Entity Identifier Foundation"
+    },
+    {
+      "path": "https://meridian.online",
+      "roles": [
+        "publisher",
+        "wrangler"
+      ],
+      "title": "Meridian"
+    }
+  ],
   "resource": {
     "path": "https://openlake.meridian.online/gleif.parquet"
   },
@@ -24,13 +41,11 @@
       "description": "The 20-character ISO 17442 Legal Entity Identifier \u2014 the entity's globally unique key in the GLEIF register."
     },
     "legal_name": {
-      "description": "The entity's official legal name, as recorded in the GLEIF golden copy. The bounds are the register's own: LEI-CDF v3.1 types this element NameType, a complexType whose simpleContent extends Tokenized500Type \u2014 the extension adds an optional xml:lang attribute and leaves the inherited value space, which restricts the text to between 1 and 500 characters. Names at both ends are genuine \u2014 single-character names are registered in several jurisdictions, and names past 200 characters are typically a registry's full form, such as the Italian convention of carrying the permitted trading abbreviations inside the registered name. The type on this field is declared by Meridian, not inferred: finetype returns `representation.text.entity_name` on 424 of 600 independent 100-value samples of this column and one of several other types on the rest, so an inferred label here is a draw. `x-finetype-confidence` on this field is that agreement rate over 600 samples, NOT a model score for a single run.",
+      "description": "The entity's official legal name, as recorded in the GLEIF golden copy. The bounds are the register's own: LEI-CDF v3.1 types this element NameType, a complexType whose simpleContent extends Tokenized500Type \u2014 the extension adds an optional xml:lang attribute and leaves the inherited value space, which restricts the text to between 1 and 500 characters. Names at both ends are genuine \u2014 single-character names are registered in several jurisdictions, and names past 200 characters are typically a registry's full form, such as the Italian convention of carrying the permitted trading abbreviations inside the registered name. The type on this field is declared, not inferred: `nominations.finetype.json` beside this descriptor nominates `representation.text.entity_name` and says why, so the field carries `x-finetype-nominated` and no confidence. Its bounds are the register's rather than that label's, whose two to two hundred characters would refuse the genuine names at both ends. Inferred, the label is a draw: finetype returned it on 424 of 600 independent 100-value samples of this column and one of several other types on the rest.",
       "constraints": {
         "minLength": 1,
         "maxLength": 500
-      },
-      "x-finetype-label": "representation.text.entity_name",
-      "x-finetype-confidence": 0.71
+      }
     },
     "country": {
       "description": "Country of the entity's legal address, as the GLEIF register records it. The register types this element as a two-letter country code (LEI-CDF v3.1's CountryCodeType), and the pattern here is that shape. It checks shape, not assignment: the schema itself notes that a well-formed pair of upper-case letters need not be a valid ISO 3166 entry, and values outside the ISO-assigned list do occur in this column, so treat membership of an ISO reference list as something to verify rather than assume."
@@ -74,13 +89,7 @@
       "description": "Date the LEI registration is next due for renewal."
     },
     "corpus": {
-      "description": "Lowercased, accent-stripped concatenation of legal name + city + country \u2014 a derived free-text search field, not a source attribute. The type on this field is declared by Meridian, not inferred: finetype returns `representation.text.plain_text` on 377 of 600 independent 100-value samples of this column and `unknown` on 207, so an inferred label here is a draw \u2014 and the previously published `unknown` was one such draw. `x-finetype-confidence` on this field is that agreement rate over 600 samples, NOT a model score for a single run.",
-      "x-finetype-label": "representation.text.plain_text",
-      "x-finetype-confidence": 0.63,
-      "constraints": {
-        "minLength": 1,
-        "maxLength": 65536
-      }
+      "description": "Lowercased, accent-stripped concatenation of legal name + city + country \u2014 a derived free-text search field, not a source attribute. The type on this field is declared, not inferred: `nominations.finetype.json` beside this descriptor nominates `representation.text.plain_text` and says why, so the field carries `x-finetype-nominated` and no confidence. Inferred, the label is a draw: finetype returned it on 377 of 600 independent 100-value samples of this column and `unknown` on 207, and the previously published `unknown` was one such draw."
     }
   },
   "primaryKey": [

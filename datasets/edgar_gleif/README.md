@@ -211,10 +211,15 @@ and expect few rows or none, because the values it removes are still in there.
     resource `path`, no per-field prose `description`, and no relational metadata
     (`primaryKey`, `x-joins`, and their evidence and coverage). None of that is
     derivable from column values, so it lives in the sidecar. finetype's semantic
-    labels are also only as good as the installed finetype — a wrong label, type or
-    constraint is corrected by adding the field to the sidecar's `fields` map (an
-    override may set any field key, including `type`, `constraints` and
-    `x-finetype-label`, and wins over what finetype emitted).
+    labels are also only as good as the installed finetype, so a column whose label
+    must not depend on a run is declared in **`nominations.finetype.json`**, which the
+    step passes to finetype: a nominated column carries the label the file names and
+    that label's constraints, is marked `x-finetype-nominated`, and states no
+    confidence. The sidecar curates around that typing and not over it: it sets a
+    field's `constraints` and prose and no `x-finetype-label` or
+    `x-finetype-confidence`, and `datapackage_describe` refuses `type`,
+    `x-finetype-label` or `x-finetype-confidence` on a nominated column and warns about
+    them on any other.
   - The step **hard-fails** if a curated `primaryKey` / `foreignKey` names a column
     absent from the built Parquet — the descriptor-drift guard. Keep the sidecar in
     step with `models/package.sql`'s output columns.

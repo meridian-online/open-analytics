@@ -17,7 +17,7 @@
       "title": "Meridian"
     }
   ],
-  "created": "2026-08-20T20:32:39Z",
+  "created": "2026-09-17T00:17:29Z",
   "description": "The 2022 North American Industry Classification System — the standard taxonomy for classifying business establishments by industry, from broad sectors down to specific national industries.",
   "homepage": "https://meridian.online/datasets/naics",
   "licenses": [
@@ -30,9 +30,9 @@
   "name": "naics",
   "resources": [
     {
-      "bytes": 349319,
+      "bytes": 349888,
       "format": "parquet",
-      "hash": "sha256:70e559f59081e98f99311ed812d04f5141f668e092dfa486d05d328a263d0776",
+      "hash": "sha256:fbb6b9b26b2295447cb557e835d844c6a8c90392da85097b0955dd93ab617747",
       "mediatype": "application/vnd.apache.parquet",
       "name": "naics",
       "path": "https://openlake.meridian.online/naics.parquet",
@@ -85,18 +85,26 @@
             "x-finetype-label": "representation.text.word"
           },
           {
+            "constraints": {
+              "maxLength": 65536,
+              "minLength": 1
+            },
             "description": "Official Census description of the industry; NULL for codes that defer to a child code.",
             "name": "description",
             "type": "string",
-            "x-finetype-confidence": 1.0,
-            "x-finetype-label": "unknown"
+            "x-finetype-label": "representation.text.plain_text",
+            "x-finetype-nominated": true
           },
           {
+            "constraints": {
+              "maxLength": 65536,
+              "minLength": 1
+            },
             "description": "Lowercased, accent-stripped concatenation of title + description — a derived free-text search field, not a source attribute.",
             "name": "corpus",
             "type": "string",
-            "x-finetype-confidence": 1.0,
-            "x-finetype-label": "unknown"
+            "x-finetype-label": "representation.text.plain_text",
+            "x-finetype-nominated": true
           }
         ],
         "primaryKey": [
@@ -112,5 +120,5 @@
     }
   ],
   "title": "NAICS — Industry Classification (2022)",
-  "x-finetype-version": "0.6.57"
+  "x-finetype-version": "0.6.60"
 }

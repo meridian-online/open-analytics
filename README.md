@@ -74,10 +74,20 @@ run of the checks below, not maintained by hand.
 
 Each dataset carries a [Data Package](https://datapackage.org/) descriptor
 (`datasets/<name>/datapackage.json`) with the canonical download URL, byte
-size, SHA-256 hash, and a Table Schema. Column types and constraints are
-inferred by [finetype](https://github.com/meridian-online/finetype) from the
-published data — the `x-finetype-*` fields carry the semantic type and its
-confidence.
+size, SHA-256 hash, and a Table Schema. Column types and constraints come from
+[finetype](https://github.com/meridian-online/finetype): `x-finetype-label` carries
+each column's semantic type, and a column finetype inferred from the published data
+carries `x-finetype-confidence` beside it.
+
+A column whose type is declared rather than inferred carries
+`"x-finetype-nominated": true`. Its label is the one named in that dataset's
+`datasets/<name>/nominations.finetype.json`, which also says why the column was
+declared; finetype takes the label as given, does not check it against the data and
+does not let inference overturn it, and publishes the label's own constraints unless
+the dataset's curated sidecar states narrower or wider ones for a stated reason. **A
+nominated field carries no `x-finetype-confidence`**: nothing was inferred, so there
+is no confidence to report, and a confidence beside a declared type would be a number
+nobody measured.
 
 Crosswalk datasets additionally declare their relationships as Frictionless
 `foreignKeys` in the schema, each annotated with the resolution evidence:

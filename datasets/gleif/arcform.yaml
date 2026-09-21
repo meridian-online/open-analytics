@@ -67,13 +67,18 @@ steps:
       order_by: "country, legal_name, lei"
 
   # ── Describe: EMIT datapackage.json from the built Parquet ───────────────────────
-  # finetype types every column; descriptor.overrides.json overlays the curated half
+  # finetype types every column nominations.finetype.json does not declare;
+  # descriptor.overrides.json overlays the curated half
   # (identity, licenses, sources, per-field prose, primaryKey). Hard-fails on drift.
   - name: describe
     op: datapackage_describe@1
     with:
       parquet: build/gleif.parquet
       overrides: descriptor.overrides.json
+      # The columns whose type is declared rather than inferred. finetype takes each one
+      # as given, carries its label's bounds, marks it x-finetype-nominated and states no
+      # confidence for it; the file says why each was declared.
+      nominations: nominations.finetype.json
       out: datapackage.json
 
   # ── Stamp: record WHICH finetype produced the descriptor ─────────────────────────

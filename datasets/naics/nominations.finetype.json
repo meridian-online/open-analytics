@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "resources": {
+    "naics": {
+      "description": {
+        "label": "representation.text.plain_text",
+        "why": "The Census Bureau's own prose describing each industry, carried as free text and NULL where a code defers to its child. Inferred, finetype labels this column `unknown`, and an `unknown` field publishes no length bounds at all; the column is prose, so plain text is what it is."
+      },
+      "corpus": {
+        "label": "representation.text.plain_text",
+        "why": "A derived search field: title and description, lowercased, accent-stripped and concatenated. It is free text by construction, not a source attribute. Inferred, finetype labels it `unknown` and it publishes no length bounds."
+      }
+    }
+  }
+}

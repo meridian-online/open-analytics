@@ -16,6 +16,23 @@
       "path": "https://www.census.gov/naics/"
     }
   ],
+  "contributors": [
+    {
+      "path": "https://www.census.gov/naics/",
+      "roles": [
+        "author"
+      ],
+      "title": "U.S. Census Bureau"
+    },
+    {
+      "path": "https://meridian.online",
+      "roles": [
+        "publisher",
+        "wrangler"
+      ],
+      "title": "Meridian"
+    }
+  ],
   "resource": {
     "path": "https://openlake.meridian.online/naics.parquet"
   },
