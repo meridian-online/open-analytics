@@ -465,7 +465,7 @@ class CrosswalkJoinSelfTest(unittest.TestCase):
             run_join(self.datasets, "--strict"),
             EXIT_VIOLATIONS,
             "right: cardinality opens 'complete — all 3 rows match.'",
-            "FAILED under --strict — 1 cardinality clause(s) disagree with their coverage",
+            "FAILED under --strict — 1 cardinality clause(s) do not open with the sentence their coverage states",
         )
 
     def test_strict_passes_a_clause_its_coverage_states(self) -> None:

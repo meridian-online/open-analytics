@@ -566,7 +566,7 @@ def main(argv: list[str] | None = None) -> int:
     if clauses and args.strict:
         print(
             f"\ncrosswalk join: FAILED under --strict — {len(clauses)} cardinality clause(s) "
-            f"disagree with their coverage"
+            f"do not open with the sentence their coverage states"
         )
         return EXIT_VIOLATIONS
 
