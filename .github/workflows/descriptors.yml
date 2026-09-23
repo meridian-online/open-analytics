@@ -63,20 +63,24 @@
 # `check_label_agreement.py` groups fields by their shared `x-finetype-label` and by
 # their field name across packages, and reports every declaration that differs.
 #
-# THE SECOND JOB DOES NOT BLOCK ON A DIFFERENCE, AND THAT IS DELIBERATE. Two packages
-# may legitimately differ where their populations differ, and no check can know which,
-# so a difference is printed into the step summary and exits 0. What DOES redden is a
-# stale stated reason: `datasets/label-agreement.json` records why a difference is
-# legitimate and pins the exact values it excuses, so moving one of those values makes
-# the entry stop describing anything and this job fails until someone looks. A reason
-# closes one difference between those values; it never becomes a licence for the label.
+# THE SECOND JOB RUNS `--strict`, SO A DIFFERENCE WITH NO STATED REASON FAILS IT. Two
+# packages may legitimately differ where their populations differ, and no check can know
+# which, so a difference passes when `datasets/label-agreement.json` records why it is
+# legitimate, and the step summary prints each difference beside its reason. A difference
+# with no reason exits 1 and the job stays red until a reason is written for it or the
+# declaration is corrected and republished so the packages agree; the job is not deleted
+# to get a merge through. A stale stated reason reddens it too: the file pins the exact
+# values each reason excuses, so moving one of those values makes the entry stop
+# describing anything and this job fails until someone looks. A reason closes one
+# difference between those values; it never becomes a licence for the label.
 #
 # A STALE CORRECTION REDDENS IT TOO, AND A LIVE ONE BUYS NOTHING. The same file's
 # `corrections` list records the opposite verdict — this difference is a defect, here is
 # the side that is wrong, the value it must become and the act that lands it — for the
 # differences a reason would have to lie about. It closes nothing: the difference is
-# still counted and `--strict` still fails on it. Every correction is blocked on the
-# same act, and that is structural rather than a coincidence: a descriptor is stamped
+# still counted and `--strict` still fails on it. The check's summary line counts the
+# corrections the list holds, and a correction, when one exists, is blocked on a
+# republish, which is structural rather than a coincidence: a descriptor is stamped
 # into the footer of the object it describes and declares that object's sha256, so
 # `descriptors-match-their-data` above reads the footer copy and a repository-only edit
 # reddens it. Correcting a published declaration is a republish, which is why this
@@ -84,10 +88,10 @@
 # pointer addressed by name rather than index, so this job fails both when the
 # declaration moves and when the fix arrives and the entry should be deleted.
 #
-# `--strict` turns an unaccounted difference into a failure too, and is NOT used here
-# yet: differences on `main` today are still open, and a job red on arrival is a job
-# that gets deleted. Turning it on is the step after they are closed, and a correction
-# does not close one — a republish does.
+# `--strict` runs here because each difference on `main` carries a stated reason, and a
+# new difference without one turns this job red at the pull request that introduces it.
+# A correction does not close a difference, since `--strict` fails on one a correction
+# adjudicates; a reason closes it, and a republish that makes the packages agree removes it.
 #
 # `frictionless-self-test` and `descriptors-are-accepted-by-the-reference-implementation`
 # are the first jobs here to ask the question a consumer's toolchain asks first: does
@@ -423,7 +427,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          python scripts/check_label_agreement.py --json label-agreement-check.json > label.log 2>&1
+          python scripts/check_label_agreement.py --strict --json label-agreement-check.json > label.log 2>&1
           status=$?
           set -e
           cat label.log
