@@ -894,6 +894,10 @@ class TheShippedAgreementFileIsRead(unittest.TestCase):
     and the wrong one for the entries. An entry whose pointer named nothing in a real
     descriptor would be a verdict about a declaration that does not exist, and every
     scratch case above would still pass.
+
+    The list is empty when no verdict is outstanding. The loop below then holds nothing,
+    so the case pins the other half: a file that carries no corrections prints no
+    corrections block, and one that carries them prints each.
     """
 
     def test_every_shipped_correction_resolves_and_is_live(self) -> None:
@@ -908,7 +912,11 @@ class TheShippedAgreementFileIsRead(unittest.TestCase):
         self.assertEqual(result.returncode, EXIT_OK, result.stdout + result.stderr)
         self.assertNotIn("no longer describe", result.stderr)
         entries = json.loads((root / "label-agreement.json").read_text())["corrections"]
-        self.assertTrue(entries, "the file ships no corrections")
+        self.assertEqual(
+            "declaration(s) adjudicated in" in result.stdout,
+            bool(entries),
+            "the report's corrections block and the file's corrections list disagree",
+        )
         for entry in entries:
             self.assertIn(f"· {entry['pointer']}", result.stdout)
 
