@@ -389,12 +389,12 @@ class CrosswalkJoinSelfTest(unittest.TestCase):
     def test_write_replaces_a_stale_clause_and_keeps_the_explanation(self) -> None:
         """The shipped defect, inverted: prose says complete, the fixture measures 2 of 3.
 
-        The explanation names a file, so its full stop inside `datapackage.json` must
-        not be read as the end of the first sentence.
+        The first sentence names a file, so the full stop inside `left.parquet` must not
+        be read as the end of it — or half of the stale sentence survives the rewrite.
         """
         self.lay_left(
             include_coverage=False,
-            cardinality="complete — every row matches. The key is rendered as text per `datapackage.json`. Kept.",
+            cardinality="complete — every row of `left.parquet` matches. The key is rendered as text. Kept.",
         )
         self.assertOutcome(
             run_join(self.datasets, "--write"),
@@ -403,7 +403,7 @@ class CrosswalkJoinSelfTest(unittest.TestCase):
         )
         self.assertEqual(
             self.read_left_cardinality(),
-            "partial — 2 of 3 rows match. The key is rendered as text per `datapackage.json`. Kept.",
+            "partial — 2 of 3 rows match. The key is rendered as text. Kept.",
         )
 
     def test_write_states_complete_coverage_over_a_partial_clause(self) -> None:
