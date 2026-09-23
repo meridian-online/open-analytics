@@ -292,7 +292,7 @@ steps:
       script: scripts/crosswalk_join.py
       # The script is addressed by its bytes, so editing it is a manifest edit as well.
       # `shasum -a 256 datasets/edgar_gleif/scripts/crosswalk_join.py` prints this.
-      sha256: 94ea3dc469184f8e10b432544401f3f50c2f50ab79127c0fe6ad112c64a6b1e0
+      sha256: e936e472abecf7fe648226daf1e7a4fd9f89d0553a39d487f67c4b625a9c44ea
       # Pinned to DUCKDB_VERSION in .github/workflows/descriptors.yml — keep the two in
       # step, or this step measures with a different engine than the check that verifies
       # it. The interpreter is pinned in the script's own PEP 723 block (3.12), which is

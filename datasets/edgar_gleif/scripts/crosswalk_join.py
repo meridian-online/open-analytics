@@ -34,6 +34,7 @@ The declaration it reads, at the root of a `datapackage.json`:
           "compareAs":   "text" | "exact"     how to compare the two sides
           "where":       {"field": col, "equals": value}      optional row filter
           "coverage":    {"rows": int, "matched": int}
+          "cardinality": "<clause>. <explanation>"             optional
         }
       ]
     }
@@ -44,24 +45,41 @@ the exact objects named in `resources[].path`, so they move when those objects a
 republished — the same property `bytes` and `hash` already have, and the reason the
 workflow runs this on a schedule rather than only on merge.
 
+`cardinality` is prose for a reader, and its first sentence restates `coverage`:
+`complete — all N rows match.` or `partial — M of N rows match.` That sentence
+belongs to this script, not to a person — a hand-typed one is prose about a
+measurement written at a different time from the measurement, and it goes stale the
+same way a hand-typed row count did. Everything after it is the explanation, and that
+stays a person's: WRITE mode carries it over unchanged. The first sentence ends at the
+first `.` followed by whitespace or the end of the string, so an explanation must not
+be packed into it.
+
 Two modes, one measurement:
 
   CHECK (default): `coverage` must already be present. Each join is measured
   against the objects `resources[].path` names — which for a published package is
-  the live URL — and a disagreement is reported. This is what CI runs.
+  the live URL — and a disagreement is reported. This is what CI runs. It also
+  reads each join's `cardinality` against its declared `coverage`, and reports a
+  join whose first sentence is not the one that coverage derives; `--strict` turns
+  that report into exit 1. A join with no `cardinality` claims nothing, so nothing is
+  reported for it.
 
   WRITE (`--write`): `coverage` is optional on input and is unconditionally
-  overwritten with what gets measured; the descriptor is rewritten in place. Pass
+  overwritten with what gets measured, and so is the first sentence of
+  `cardinality`; the descriptor is rewritten in place. Pass
   `--local NAME=PATH` (repeatable) to read resource NAME from a local file instead
   of its declared `path` — a build has not published yet, so the declared `path`
   for its own not-yet-uploaded resource still names the OLD object. This is what
   the arcform pipeline runs, right after `describe`, so the coverage a descriptor
-  ships with is measured from that build rather than typed by hand.
+  ships with, and the sentence that states it, are measured from that build rather
+  than typed by hand.
 
 Exit codes, distinct because a status alone cannot tell a refusal from a crash:
 
   0  every declared join ran — and, in CHECK mode, its declared coverage was exact
-  1  CHECK mode only: a join ran and the data disagreed with what the descriptor claims
+  1  CHECK mode only: a join ran and the data disagreed with what the descriptor
+     claims — or, under `--strict`, a `cardinality` does not open with the sentence
+     its `coverage` derives
   2  the run could not complete — a declaration this script does not implement, a
      reference that does not resolve, or bytes it could not read
 """
@@ -91,6 +109,36 @@ REQUIRED_COVERAGE_KEYS = {"rows", "matched"}
 
 class JoinError(Exception):
     """The join could not be run. Never a verdict about the data."""
+
+
+# The end of `cardinality`'s first sentence: a full stop followed by whitespace or the
+# end of the text. A full stop inside a token — `datapackage.json`, 95.5% — is not one.
+SENTENCE_END = re.compile(r"\.(?=\s|$)")
+
+
+def coverage_clause(coverage: dict[str, int]) -> str:
+    """The sentence `cardinality` opens with, stated from `coverage` and nothing else."""
+    rows, matched = coverage["rows"], coverage["matched"]
+    if rows == 0:
+        return "empty — the join applies to no rows."
+    if matched == rows:
+        return "complete — the one row matches." if rows == 1 else f"complete — all {rows:,} rows match."
+    return f"partial — {matched:,} of {rows:,} rows match."
+
+
+def split_cardinality(text: str) -> tuple[str, str]:
+    """(first sentence, the explanation after it) of a `cardinality` string."""
+    end = SENTENCE_END.search(text)
+    if end is None:
+        return text.strip(), ""
+    return text[: end.end()].strip(), text[end.end() :].strip()
+
+
+def derive_cardinality(text: str | None, coverage: dict[str, int]) -> str:
+    """`text` with its first sentence replaced by the one `coverage` derives."""
+    _, explanation = split_cardinality(text or "")
+    clause = coverage_clause(coverage)
+    return f"{clause} {explanation}" if explanation else clause
 
 
 def quote_ident(name: str) -> str:
@@ -202,6 +250,12 @@ def validate(
                 f"got {sorted(where)}"
             )
 
+    cardinality = join.get("cardinality")
+    if cardinality is not None and not isinstance(cardinality, str):
+        raise JoinError(
+            f"join {label!r}: `cardinality` must be a string; got {type(cardinality).__name__}"
+        )
+
     coverage = join.get("coverage")
     if not require_coverage:
         # WRITE mode: whatever is here (present, absent, or stale) is about to be
@@ -253,7 +307,11 @@ def run_join(
     *,
     write: bool = False,
     local_overrides: dict[str, str] | None = None,
-) -> list[str]:
+) -> tuple[list[str], list[str]]:
+    """Run one join: (coverage disagreements, cardinality clauses its coverage does not state).
+
+    WRITE mode returns two empty lists — it replaces both claims with what it measured.
+    """
     local_overrides = local_overrides or {}
     label = str(join.get("name") or (join.get("reference") or {}).get("resource") or "<unnamed>")
     local, target, compare, where, coverage = validate(join, label, require_coverage=not write)
@@ -343,9 +401,25 @@ def run_join(
         # what the caller re-serialises once every join in it has been measured.
         join["coverage"] = {"rows": rows, "matched": matched}
         print(f"    coverage written: rows {rows:,}  matched {matched:,}")
-        return []
+        # The sentence that states the coverage is rewritten from the same measurement,
+        # in the same pass, so the two cannot be written at different times.
+        join["cardinality"] = derive_cardinality(join.get("cardinality"), join["coverage"])
+        print(f"    cardinality written: {join['cardinality']}")
+        return [], []
 
     assert coverage is not None  # require_coverage=True guarantees this in CHECK mode
+    clauses: list[str] = []
+    cardinality = join.get("cardinality")
+    if cardinality is not None:
+        opening, _ = split_cardinality(cardinality)
+        derived = coverage_clause(coverage)
+        print(f"    cardinality opens  {opening}")
+        if opening != derived:
+            clauses.append(
+                f"{label}: cardinality opens {opening!r}; its coverage of {coverage['matched']:,} "
+                f"of {coverage['rows']:,} row(s) states {derived!r}"
+            )
+
     problems: list[str] = []
     if rows != coverage["rows"]:
         problems.append(
@@ -355,7 +429,7 @@ def run_join(
         problems.append(
             f"{label}: descriptor declares {coverage['matched']:,} matched row(s); the join finds {matched:,}"
         )
-    return problems
+    return problems, clauses
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -382,6 +456,12 @@ def main(argv: list[str] | None = None) -> int:
         metavar="NAME=PATH",
         help="read resource NAME from local file PATH instead of its declared `path` (repeatable); "
         "for --write against a build that has not published yet",
+    )
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="CHECK mode: also exit 1 on a join whose `cardinality` does not open with the "
+        "sentence its `coverage` states (reported either way)",
     )
     args = parser.parse_args(argv)
 
@@ -416,6 +496,7 @@ def main(argv: list[str] | None = None) -> int:
 
     con = duckdb.connect()
     problems: list[str] = []
+    clauses: list[str] = []
     ran = 0
 
     try:
@@ -431,18 +512,18 @@ def main(argv: list[str] | None = None) -> int:
                 raise JoinError(f"{descriptor_path}: `x-joins` declares no joins")
             print(f"{descriptor_path}")
             for join in joins:
-                problems.extend(
-                    run_join(
-                        con,
-                        descriptor_path,
-                        descriptor,
-                        join,
-                        index,
-                        args.sample,
-                        write=args.write,
-                        local_overrides=local_overrides,
-                    )
+                join_problems, join_clauses = run_join(
+                    con,
+                    descriptor_path,
+                    descriptor,
+                    join,
+                    index,
+                    args.sample,
+                    write=args.write,
+                    local_overrides=local_overrides,
                 )
+                problems.extend(join_problems)
+                clauses.extend(join_clauses)
                 ran += 1
             if args.write:
                 save_descriptor(descriptor_path, descriptor)
@@ -457,10 +538,23 @@ def main(argv: list[str] | None = None) -> int:
         return EXIT_ERROR
 
     if args.write:
-        print(f"\ncrosswalk join: wrote measured coverage for {ran} declared join(s) into {len(written)} descriptor(s)")
+        print(
+            f"\ncrosswalk join: wrote measured coverage for {ran} declared join(s) into "
+            f"{len(written)} descriptor(s), each with the cardinality clause that states it"
+        )
         for path in written:
             print(f"  wrote {path}")
         return EXIT_OK
+
+    # Reported before the coverage verdict and whatever that verdict is: a clause that
+    # disagrees with its coverage is a second defect, not a consequence of the first.
+    if clauses:
+        print(
+            f"\ncrosswalk join: {len(clauses)} join(s) whose cardinality does not open with the "
+            f"sentence its coverage states — `--write` derives it\n"
+        )
+        for clause in clauses:
+            print(f"  {clause}")
 
     if problems:
         print(f"\ncrosswalk join: {len(problems)} declared join fact(s) the data does not bear out\n")
@@ -469,7 +563,19 @@ def main(argv: list[str] | None = None) -> int:
         print(f"\ncrosswalk join: FAILED — {len(problems)} disagreement(s) across {ran} join(s)")
         return EXIT_VIOLATIONS
 
+    if clauses and args.strict:
+        print(
+            f"\ncrosswalk join: FAILED under --strict — {len(clauses)} cardinality clause(s) "
+            f"disagree with their coverage"
+        )
+        return EXIT_VIOLATIONS
+
     print(f"\ncrosswalk join: {ran} declared join(s) ran against the published bytes and covered what they claim")
+    if clauses:
+        print(
+            f"crosswalk join: {len(clauses)} cardinality clause(s) reported above, "
+            f"not failed without --strict"
+        )
     return EXIT_OK
 
 
