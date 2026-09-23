@@ -19,6 +19,11 @@ instead of comparing it to one. The case worth reddening there is a written figu
 that does not match a fresh, independent measurement of the fixture — see
 `test_write_computes_and_persists_coverage_when_absent`.
 
+`cardinality`'s first sentence is covered from both sides, at the bottom: `--write`
+must replace it with the one the measured coverage states and keep the explanation
+after it, and CHECK must report a first sentence its declared coverage does not state
+— and fail on it only under `--strict`.
+
 Not covered, named rather than implied: the multi-field arity mismatch, the
 ambiguous-resource branch, and the missing-`x-joins` branch each behave correctly in
 the shipped runner but no case here reddens when they are deleted.
@@ -374,6 +379,112 @@ class CrosswalkJoinSelfTest(unittest.TestCase):
             EXIT_ERROR,
             "--local expects NAME=PATH",
         )
+
+    # ----------------------------------------------------- the cardinality clause
+
+    def read_left_cardinality(self) -> str:
+        descriptor = json.loads((self.datasets / "left" / "datapackage.json").read_text(encoding="utf-8"))
+        return descriptor["x-joins"]["joins"][0]["cardinality"]
+
+    def test_write_replaces_a_stale_clause_and_keeps_the_explanation(self) -> None:
+        """The shipped defect, inverted: prose says complete, the fixture measures 2 of 3.
+
+        The explanation names a file, so its full stop inside `datapackage.json` must
+        not be read as the end of the first sentence.
+        """
+        self.lay_left(
+            include_coverage=False,
+            cardinality="complete — every row matches. The key is rendered as text per `datapackage.json`. Kept.",
+        )
+        self.assertOutcome(
+            run_join(self.datasets, "--write"),
+            EXIT_OK,
+            "cardinality written: partial — 2 of 3 rows match.",
+        )
+        self.assertEqual(
+            self.read_left_cardinality(),
+            "partial — 2 of 3 rows match. The key is rendered as text per `datapackage.json`. Kept.",
+        )
+
+    def test_write_states_complete_coverage_over_a_partial_clause(self) -> None:
+        """The gleif shape: prose says a remainder misses, and every row matches.
+
+        The clause after the semicolon is part of the first sentence, so it goes with
+        it — keeping it would leave "the remainder" beside a coverage with none.
+        """
+        self.lay_left(
+            include_coverage=False,
+            cardinality="partial — most rows match; the remainder carry a key the right side lacks. Kept.",
+        )
+        alt = self.datasets / "right_alt.parquet"
+        write_parquet(alt, "SELECT * FROM (VALUES (101), (102), (999)) t(id)")
+        self.assertOutcome(run_join(self.datasets, "--write", "--local", f"right={alt}"), EXIT_OK)
+        self.assertEqual(self.read_left_cardinality(), "complete — all 3 rows match. Kept.")
+
+    def test_write_adds_a_clause_where_none_was_declared(self) -> None:
+        self.lay_left(include_coverage=False)
+        self.assertOutcome(run_join(self.datasets, "--write"), EXIT_OK)
+        self.assertEqual(self.read_left_cardinality(), "partial — 2 of 3 rows match.")
+
+    def test_write_states_a_join_with_no_rows_in_scope_as_empty(self) -> None:
+        """0 of 0 is not "complete — all 0 rows match"."""
+        self.lay_left(include_coverage=False, where={"field": "key_type", "equals": "absent"})
+        self.assertOutcome(run_join(self.datasets, "--write"), EXIT_OK)
+        self.assertEqual(self.read_left_cardinality(), "empty — the join applies to no rows.")
+
+    def test_write_states_a_single_matched_row_in_the_singular(self) -> None:
+        self.lay_left(include_coverage=False, where={"field": "key", "equals": "101"})
+        self.assertOutcome(run_join(self.datasets, "--write"), EXIT_OK)
+        self.assertEqual(self.read_left_cardinality(), "complete — the one row matches.")
+
+    def test_what_write_produces_passes_check_under_strict(self) -> None:
+        """--write then CHECK --strict over the same bytes: the writer satisfies its own check."""
+        self.lay_left(include_coverage=False, cardinality="partial — most rows match. Kept.")
+        self.assertOutcome(run_join(self.datasets, "--write"), EXIT_OK)
+        result = run_join(self.datasets, "--strict")
+        self.assertOutcome(result, EXIT_OK, "1 declared join(s) ran")
+        self.assertNotIn("does not open with", result.stdout)
+
+    def test_check_reports_a_clause_its_coverage_does_not_state(self) -> None:
+        """Coverage agrees with the data; the prose beside it does not agree with the coverage."""
+        self.lay_left(cardinality="complete — all 3 rows match. Kept.")
+        result = run_join(self.datasets)
+        self.assertOutcome(
+            result,
+            EXIT_OK,
+            "1 join(s) whose cardinality does not open with the sentence its coverage states",
+            "right: cardinality opens 'complete — all 3 rows match.'; its coverage of 2 of 3 row(s) "
+            "states 'partial — 2 of 3 rows match.'",
+            "not failed without --strict",
+        )
+        self.assertIn("right: cardinality opens", result.stdout)
+
+    def test_strict_fails_on_a_clause_its_coverage_does_not_state(self) -> None:
+        self.lay_left(cardinality="complete — all 3 rows match. Kept.")
+        self.assertOutcome(
+            run_join(self.datasets, "--strict"),
+            EXIT_VIOLATIONS,
+            "right: cardinality opens 'complete — all 3 rows match.'",
+            "FAILED under --strict — 1 cardinality clause(s) disagree with their coverage",
+        )
+
+    def test_strict_passes_a_clause_its_coverage_states(self) -> None:
+        """A check that reported every clause would pass the two cases above; not this one."""
+        self.lay_left(cardinality="partial — 2 of 3 rows match. Kept.")
+        result = run_join(self.datasets, "--strict")
+        self.assertOutcome(result, EXIT_OK, "cardinality opens  partial — 2 of 3 rows match.")
+        self.assertNotIn("does not open with", result.stdout)
+
+    def test_strict_passes_a_join_that_declares_no_clause(self) -> None:
+        """No `cardinality` claims nothing, so there is nothing for it to disagree with."""
+        self.lay_left()
+        result = run_join(self.datasets, "--strict")
+        self.assertOutcome(result, EXIT_OK, "1 declared join(s) ran")
+        self.assertNotIn("does not open with", result.stdout)
+
+    def test_non_string_cardinality_refuses(self) -> None:
+        self.lay_left(cardinality=["partial"])
+        self.assertOutcome(run_join(self.datasets), EXIT_ERROR, "`cardinality` must be a string; got list")
 
 
 if __name__ == "__main__":
