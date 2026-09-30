@@ -240,7 +240,7 @@ steps:
   # itself. Same reported version as last time this step ran = skip (precondition_tool);
   # any difference = run; no finetype resolvable on PATH = halt, naming the step and
   # what the lookup found — never a silent skip. Replaces the `command:` interim this
-  # card's design used before arcform gained the declarative kind (arcform#50, 5bb81ec).
+  # step used before arcform gained the declarative kind (arcform#50, 5bb81ec).
   #
   # The operator also writes the package-level `x-finetype-version`, and it is the
   # only thing in this manifest that writes it. The value is the same resolved
