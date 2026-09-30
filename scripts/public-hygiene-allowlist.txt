@@ -1,0 +1,26 @@
+# Allowlist for scripts/check-public-hygiene.sh. One entry per line:
+#
+#     <tracked/file/path> | <exact matched text> | <why this is honest text, not a pointer>
+#
+# An entry clears every line in its file that matches exactly that text, and an
+# entry that clears nothing makes the gate exit 2, so a stale entry cannot linger.
+
+# "card" here is the dataset card a data host publishes beside a dataset (its README and
+# licence page). These lines credit the dataset's creators or say where a value was read
+# from, and they name no record kept anywhere outside this repository.
+examples/medmcqa/arcform.yaml | the card | "the card" is the source dataset's published dataset card: the comment says a column's values are read out of the data file, not taken from what the dataset card says
+examples/supergpqa/README.md | the card | "the card" is the source dataset's published dataset card, which lists the fifteen third-party datasets whose creators the licence requires this Protocol to credit; the revision cited is that card's own
+examples/supergpqa/datapackage.json | the card | "the card" is the source dataset's published dataset card, whose link each `sources` entry carries; this is a published descriptor's description text, read by the descriptor gates and the publish path, so it is not reworded
+examples/supergpqa/descriptor.overrides.json | the card | "the card" is the source dataset's published dataset card, whose link each `sources` entry carries; this text is copied into the published descriptor, so it is not reworded
+examples/supergpqa/models/corpus.sql | that card | "that card" is the source dataset's published dataset card, the list of third-party datasets the SQL transcribes
+examples/supergpqa/models/corpus.sql | the card | "the card" is the source dataset's published dataset card, whose link each `sources` entry carries
+# A CI job id that describes what the job checks. It names no planning record: it matches
+# the shape of a long kebab-case slug and nothing else. The id appears once as the job key
+# and once in the comment beside the job list.
+.github/workflows/descriptors.yml | descriptors-are-accepted-by-the-reference-implementation | a CI job id that describes what the job checks (every descriptor is loaded by the reference implementation); it is not a reference to any record outside this repository
+# Fixture paths in a self-test: each test builds a scratch datasets/ tree and asserts which
+# dataset's README the checker names in its error. They are synthetic names in a temporary
+# directory, not documents in any checkout.
+scripts/test_check_protocol_readme.py | alpha/README.md | a fixture path in a scratch datasets/ tree built by the test, asserted against the checker's error output; not a path in any other checkout
+scripts/test_check_protocol_readme.py | beta/README.md | a fixture path in a scratch datasets/ tree built by the test, asserted against the checker's error output; not a path in any other checkout
+scripts/test_check_protocol_readme.py | gamma/README.md | a fixture path in a scratch datasets/ tree built by the test, asserted against the checker's error output; not a path in any other checkout

@@ -892,7 +892,7 @@ class DescriptorCheckSelfTest(unittest.TestCase):
         )
 
     def test_object_describing_itself_with_a_type_its_column_contradicts_fails(self) -> None:
-        """The card's case: a dataset whose self-description disagrees with its own contents."""
+        """A column that declares a type its own values contradict is a violation."""
         descriptor = write_package(
             self.datasets,
             "widgets",

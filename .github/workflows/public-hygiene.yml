@@ -1,0 +1,35 @@
+name: public-hygiene
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# This repository is public. The gate reads the text content of the files git tracks at
+# the checked-out commit and fails when a line carries an identifier that only resolves
+# inside a private planning tracker. It does not read history, commit messages or
+# pull-request text. It skips three things: the allowlist file, binary files, and, for
+# the slug rule alone, anything under vendor/. Ignored and untracked files are not
+# tracked, so they are not read either.
+#
+# A workflow of its own rather than a job in descriptors.yml: the gate needs no
+# toolchain, no cache and no build, and finishes in seconds, so it reports on a push or a
+# pull request while the descriptor jobs are still queued or failing.
+jobs:
+  planning-identifiers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # fetch-depth 1 is enough: the gate reads no history.
+      - uses: actions/checkout@v4
+
+      # The gate's own regression test runs first. A hygiene gate fails silently in both
+      # directions, because it can stop matching or start matching honest prose, so
+      # "the gate still works" has to be established before "the tree is clean" means
+      # anything.
+      - name: hygiene gate self-test
+        run: ./scripts/check-public-hygiene-selftest.sh
+
+      # No working-directory: the gate changes to the repository root itself.
+      - name: private planning identifiers
+        run: ./scripts/check-public-hygiene.sh
