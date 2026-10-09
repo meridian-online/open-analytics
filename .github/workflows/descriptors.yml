@@ -93,6 +93,17 @@
 # A correction does not close a difference, since `--strict` fails on one a correction
 # adjudicates; a reason closes it, and a republish that makes the packages agree removes it.
 #
+# `constraint-ratchet-self-test` and `constraint-ratchet` read the one direction none of
+# the above can: a package against its own predecessor. `descriptors-match-their-data`
+# passes a descriptor whose constraints were loosened, because a looser constraint still
+# fits the bytes; its self-description rule reddens only while the published footer still
+# carries the old descriptor, and goes quiet once the loosened one is stamped in. The
+# ratchet reads the predecessor from git instead (`origin/main`, so the checkout fetches
+# full history) and refuses a constraint that `descriptor.overrides.json` held there and
+# the descriptor no longer carries, unless the sidecar was moved to the new value in the
+# same change. On a push to `main` the base is the tip itself, so the comparison is empty
+# and the job is only meaningful on a pull request.
+#
 # `frictionless-self-test` and `descriptors-are-accepted-by-the-reference-implementation`
 # are the first jobs here to ask the question a consumer's toolchain asks first: does
 # `frictionless` load this package at all. Every check above reads declarations back
@@ -445,6 +456,54 @@ jobs:
         with:
           name: label-agreement-check
           path: label-agreement-check.json
+          if-no-files-found: ignore
+
+  constraint-ratchet-self-test:
+    name: the constraint ratchet can fail
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: scratch repositories, exit status and message
+        run: python scripts/test_check_constraint_ratchet.py
+
+  constraint-ratchet:
+    name: no hand-held constraint is replaced by a looser emitted one
+    needs: constraint-ratchet-self-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The predecessor is read from git. A shallow checkout has no origin/main,
+          # and the check exits 2 rather than pass without one.
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: every datapackage.json against the constraints its predecessor carried
+        shell: bash
+        run: |
+          set +e
+          python scripts/check_constraint_ratchet.py --base origin/main --json constraint-ratchet-check.json > ratchet.log 2>&1
+          status=$?
+          set -e
+          cat ratchet.log
+          {
+            echo '### Hand-held constraints vs predecessor'
+            echo
+            echo '```'
+            cat ratchet.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $status
+      - name: upload the findings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: constraint-ratchet-check
+          path: constraint-ratchet-check.json
           if-no-files-found: ignore
 
   frictionless-self-test:
