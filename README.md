@@ -147,8 +147,33 @@ measured count, in the form that cell was already written in.
 back into the descriptor. `verify` re-reads every published object in full and
 refuses when a descriptor and its endpoint disagree on either `bytes` or `hash`.
 `restamp` writes what the endpoint currently serves into the descriptor. Its
-`publish` subcommand exists to make uploading and declaring one act rather than
-two, but nothing calls it yet — see *What's coming here*.
+`publish` subcommand makes uploading and declaring one act rather than two, and
+the publishing pipeline, which lives outside this repository, calls it for the
+objects it uploads. Before the upload, `publish` requires one finished Run to have
+produced both the bytes and the descriptor, from the records `arc run` leaves
+under the Protocol's `build/.arcform/runs/`.
+
+**`publish --run-record PATH` writes that Run's record to `PATH` before the
+uploader runs**, so the pipeline can serve it beside the object. It is the record
+`arc run` wrote with one field changed: `run.protocol.dir`, an absolute path on
+the machine that ran the Protocol, becomes `datasets/<slug>`. The publish stops
+with exit 2 and nothing uploaded when the record cannot be written at `PATH`, when
+no Run governs the bytes, or when any other absolute path is left in the record;
+a publish that fails after the record is written removes it again.
+
+`trace URL` is the reader's half. It needs the object's URL and nothing else: no
+checkout and no credentials. It reads `manifest.json` at the object's origin,
+finds the dataset entry whose `sha256`, a 16-hex prefix, matches the bytes served,
+fetches the record that entry names, and prints the run id, the Protocol's
+`manifest_sha256`, the engine versions and the start and finish times. The entry
+names the run under one key beside its other five,
+`"run": {"id": "<run id>", "record": "<URL of the record>"}`. `trace` exits 0
+only when a file the Run produced has the served bytes' sha256 as its
+`content_hash`. Exit 1 names which link is missing: no manifest entry matches the
+bytes, which is how an object replaced by hand after its last publish shows up;
+the entry names no record; the record cannot be fetched or read; the record is
+another run than the one the entry names; or the record's hash for the artefact
+differs from the bytes served.
 
 `scripts/stamp_descriptor.py` writes the third direction — from the descriptor
 into the object. `stamp` puts the finished descriptor in the Parquet's footer and
@@ -225,6 +250,7 @@ python scripts/check_protocol_readme.py        # every README's step list agains
 python scripts/check_protocol_readme.py --write  # regenerate each README's step block
 python scripts/test_check_protocol_readme.py   # the self-test: the step-list check on broken fixtures
 python scripts/publish_dataset.py verify       # every declared bytes + hash against the object served
+python scripts/publish_dataset.py trace URL    # the Run that made a served object, from its URL alone
 python scripts/check_label_agreement.py         # every concept, as each package describes it
 python scripts/check_label_agreement.py --strict  # and fail on a difference with no stated reason
 python scripts/test_check_label_agreement.py   # the self-test: the cross-package check on broken fixtures
@@ -266,11 +292,10 @@ corrections are published in place.
   wired into all four Protocols and nothing has been rebuilt and republished
   through it yet, so `parquet_kv_metadata` on a live URL still returns nothing.
   See *Ask a dataset what it is* above.
-- **The publish pipeline calling `publish_dataset.py publish`.** The seam that
-  makes uploading an object and declaring its size one act is written and
-  tested, but the out-of-repo pipeline that actually uploads does not call it.
-  Until it does, a republish can still move an object without its descriptor —
-  which is how `edgar` came to advertise a size the endpoint did not serve.
+- **A served object's run record.** `publish --run-record` and `trace` are
+  written and tested here, but the publishing pipeline does not yet pass
+  `--run-record` or name the run in `manifest.json`. Until it does, `trace` on a
+  live URL exits 1 with *names no run record*.
 
 ## License
 
