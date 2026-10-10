@@ -1518,7 +1518,8 @@ def main(argv: list[str] | None = None) -> int:
         metavar="DIR",
         help="the demo Protocols whose descriptors the licence rule also reads (default: examples/ beside "
         "--datasets-dir, and an absent default reads as none). A directory named here must exist and hold "
-        "descriptors, so a rename cannot leave the rule checking nothing. --only narrows these by slug too.",
+        "descriptors, so a rename cannot leave the rule checking nothing. --only narrows these by slug too, but "
+        "a slug must still exist under --datasets-dir: one that exists only here is refused.",
     )
     parser.add_argument("--json", metavar="FILE", type=Path, help="also write the findings as JSON")
     parser.add_argument(
