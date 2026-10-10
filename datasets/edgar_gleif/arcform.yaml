@@ -211,11 +211,19 @@ steps:
   # engine can't parse, which was a graph ISLAND that could silently ship a stale
   # Parquet. Now a first-class produced asset. The TOTAL order_by (company_name is not
   # unique — 6,906 ties) makes the bytes reproducible; row_group_size preserves layout.
+  #
+  # ONE WRITER PER FILE. This writes the UNSTAMPED Parquet to build/stage/, and
+  # `stamp_descriptor` at the end of the run writes the published build/edgar_gleif.parquet
+  # beside it. When both steps wrote the same path, the stamp rewrote this step's output,
+  # arcform correctly saw that output no longer match what this step wrote, and the run
+  # re-ran this step and every step downstream of it on every invocation — a publish
+  # could never be a no-op. The same holds for the three descriptors below
+  # (build/stage/described.json → build/stage/measured.json → datapackage.json).
   - name: export_edgar_gleif
     op: parquet_export@1
     with:
       input: edgar_gleif_out
-      dest: build/edgar_gleif.parquet
+      dest: build/stage/edgar_gleif.parquet
       compression: zstd
       row_group_size: 50000
       order_by: "company_name, key_type, key, lei"
@@ -253,13 +261,15 @@ steps:
   - name: describe
     op: datapackage_describe@1
     with:
-      parquet: build/edgar_gleif.parquet
+      parquet: build/stage/edgar_gleif.parquet
       overrides: descriptor.overrides.json
       # The columns whose type is declared rather than inferred. finetype takes each one
       # as given, carries its label's bounds, marks it x-finetype-nominated and states no
       # confidence for it; the file says why each was declared.
       nominations: nominations.finetype.json
-      out: datapackage.json
+      # Staged, not published: the published datapackage.json is written once, by the last
+      # step, and `created` in it is carried forward from the previous publish there.
+      out: build/stage/described.json
     preconditions:
       - tool:
           name: finetype
@@ -292,7 +302,7 @@ steps:
       script: scripts/crosswalk_join.py
       # The script is addressed by its bytes, so editing it is a manifest edit as well.
       # `shasum -a 256 datasets/edgar_gleif/scripts/crosswalk_join.py` prints this.
-      sha256: 1c4f7d542853b9714420250056a6e45f285251ce561c0237798d6b264f5d6367
+      sha256: 97ccebdc92a0b958a39b9939a4f7baa2ed1b7431a128d1eae27c2267facb7176
       # Pinned to DUCKDB_VERSION in .github/workflows/descriptors.yml — keep the two in
       # step, or this step measures with a different engine than the check that verifies
       # it. The interpreter is pinned in the script's own PEP 723 block (3.12), which is
@@ -305,6 +315,13 @@ steps:
         - edgar_gleif
         - --datasets-dir
         - ../../datasets
+        # Reads the descriptor `describe` staged and writes the measured one beside it.
+        # Writing back into describe's own file would make `describe` stale on every
+        # run, by the rule in the note above export_edgar_gleif.
+        - --descriptor
+        - edgar_gleif=build/stage/described.json
+        - --out
+        - build/stage/measured.json
         # `--local` is load-bearing, not cosmetic: right after `describe`, the resource
         # this descriptor names for ITSELF still declares the URL the PREVIOUS publish
         # produced — this build has not been uploaded yet — so without an override the
@@ -312,7 +329,7 @@ steps:
         # three are this Protocol's own build outputs, so the step reads nothing over
         # the network.
         - --local
-        - edgar_gleif=build/edgar_gleif.parquet
+        - edgar_gleif=build/stage/edgar_gleif.parquet
         - --local
         - edgar=build/edgar.parquet
         - --local
@@ -326,19 +343,20 @@ steps:
       # sibling that renamed a resource would change this measurement, so it is
       # declared here rather than left invisible.
       reads:
-        - build/edgar_gleif.parquet
+        - build/stage/edgar_gleif.parquet
         - build/edgar.parquet
         - build/gleif.parquet
-        - datapackage.json
+        - build/stage/described.json
         - ../../datasets/edgar/datapackage.json
         - ../../datasets/gleif/datapackage.json
         - ../../datasets/naics/datapackage.json
-      # The measurement is written back into the descriptor `describe` emitted, in
-      # place. Declaring it is what makes this step re-run when `describe` re-runs —
-      # the absence of that edge is why the published coverage figures went four weeks
-      # stale while this step reported nothing wrong.
+      # The measurement is written to its own file, read from the descriptor `describe`
+      # emitted. Declaring the read is what makes this step re-run when `describe`
+      # re-runs — the absence of that edge is why the published coverage figures went
+      # four weeks stale while this step reported nothing wrong — and writing a file of
+      # its own is what lets `describe` stay fresh after this step has run.
       produces:
-        - datapackage.json
+        - build/stage/measured.json
 
   # ── Validate: GATE the built Parquet against the self-derived finetype contract ─
   # finetype_validate makes finetype LOAD-BEARING, not just post-hoc descriptive:
@@ -353,7 +371,7 @@ steps:
   - name: validate
     op: finetype_validate@1
     with:
-      parquet: build/edgar_gleif.parquet
+      parquet: build/stage/edgar_gleif.parquet
       schema: schema.finetype.json
   # ── Self-describe: put the descriptor INSIDE the Parquet it describes ───────────
   # Someone holding https://openlake.meridian.online/edgar_gleif.parquet
@@ -399,7 +417,7 @@ steps:
       # with the edgar, gleif and naics manifests, which still call it through
       # `command:` and are not pinned to its bytes; editing it there is a manifest edit
       # here.
-      sha256: b926a77bed9956951814bc2e50d372a6ab7be8b05764d0977f42e3ca5158c72a
+      sha256: 862029f3b1e6fd2c3a0f3deed7331397dbf0f1874b951810dd5727ddd57a5292
       # This step imports duckdb, and until now ran under whatever bare `python3` was on
       # PATH — the same exposure `derive_join_coverage` was already carrying when it
       # failed three retries mid-republish on a machine whose `python3` had no duckdb.
@@ -410,15 +428,27 @@ steps:
       args:
         - stamp
         - --descriptor
-        - datapackage.json
+        - build/stage/measured.json
         - --parquet
+        - build/stage/edgar_gleif.parquet
+        - --out
         - build/edgar_gleif.parquet
-      # Both names appear on both sides, and that is what the step does: it reads the
-      # finished descriptor, writes it into the Parquet's footer, then measures the
-      # stamped file and writes the new `bytes`/`hash` back into the descriptor.
-      reads:
+        - --out-descriptor
         - datapackage.json
-        - build/edgar_gleif.parquet
+        - --carry-created
+      # It reads the staged descriptor and Parquet, writes the descriptor into a copy of
+      # the Parquet's footer, then measures the stamped file and writes the new
+      # `bytes`/`hash` into the published descriptor. It is the ONLY writer of both
+      # published files, so nothing it writes was produced by an earlier step.
+      #
+      # `--carry-created`: `created` in the published datapackage.json is when this data
+      # first appeared. While the data pages equal the ones already published at
+      # build/edgar_gleif.parquet it keeps that descriptor's `created`; it takes the one
+      # `describe` just wrote only when the pages are different. The embedded footer
+      # never carries it.
+      reads:
+        - build/stage/measured.json
+        - build/stage/edgar_gleif.parquet
       produces:
         - build/edgar_gleif.parquet
         - datapackage.json
