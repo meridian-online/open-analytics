@@ -29,6 +29,14 @@ a trimmed copy of the actual 2026-08-12 record instead (`scripts/testdata/`), so
 to arcform's real encoding reddens something here even though `build/` is gitignored and
 none of this repository's own Run records are committed.
 
+The record cases cover what a stranger holding only an object URL is given.
+`publish --run-record` must write the Run's record before the upload, which an
+uploader that refuses unless the record is already on disk makes observable, and
+must serve it with `run.protocol.dir` relative and no other machine path in it.
+`trace` runs as a copy of the script alone in an empty directory with an
+environment of PATH only, against a fake `manifest.json` and record at the
+store's origin, and each way the trace can break is its own case.
+
 No case reaches the network. The store is bound to 127.0.0.1 on an ephemeral
 port, so the suite is offline and cannot be flaky for a reason that has nothing
 to do with the seam.
@@ -45,7 +53,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import re
 import shlex
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -53,7 +64,7 @@ import threading
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 PUBLISHER = Path(__file__).with_name("publish_dataset.py")
 
@@ -89,6 +100,21 @@ NO_OP_SOURCE = "import sys\nsys.exit(0)\n"
 
 # An uploader that fails outright.
 FAILING_SOURCE = "import sys\nsys.stderr.write('the bucket said no\\n')\nsys.exit(3)\n"
+
+# A faithful uploader that first refuses unless a Run record is already on disk at
+# its third argument — so a publish passes only if the record was written BEFORE
+# the upload, which a check of the file afterwards cannot tell apart.
+PUT_AFTER_RECORD_SOURCE = '''\
+import pathlib, sys, urllib.request
+
+source, url, record = sys.argv[1], sys.argv[2], sys.argv[3]
+if not pathlib.Path(record).is_file():
+    sys.stderr.write("no run record on disk when the upload began\\n")
+    sys.exit(4)
+request = urllib.request.Request(url, data=pathlib.Path(source).read_bytes(), method="PUT")
+with urllib.request.urlopen(request) as response:
+    sys.exit(0 if response.status < 300 else 1)
+'''
 
 
 def sha256_of(body: bytes) -> str:
@@ -189,6 +215,8 @@ class PublishSeamSelfTest(unittest.TestCase):
         self.no_op_script.write_text(NO_OP_SOURCE, encoding="utf-8")
         self.failing_script = self.root / "failing_upload.py"
         self.failing_script.write_text(FAILING_SOURCE, encoding="utf-8")
+        self.record_gate_script = self.root / "put_after_record.py"
+        self.record_gate_script.write_text(PUT_AFTER_RECORD_SOURCE, encoding="utf-8")
 
     # ------------------------------------------------------------- fixtures
 
@@ -326,8 +354,18 @@ class PublishSeamSelfTest(unittest.TestCase):
                     "contract_version": contract_version,
                     "run": {
                         "run_id": run_id,
+                        "attempt_id": run_id,
+                        # arcform writes the Protocol's ABSOLUTE directory here, on the
+                        # machine that ran it — the one field a served copy must not carry.
+                        "protocol": {
+                            "name": slug,
+                            "manifest_sha256": sha256_hex(f"arcform.yaml for {slug}".encode()),
+                            "dir": str(protocol_dir),
+                        },
+                        "engine": {"arc": "0.1.0", "duckdb": "v1.5.5"},
+                        "params": [],
                         "started_at": started_at,
-                        "finished_at": started_at,
+                        "finished_at": "2026-08-12T00:00:09Z",
                         "outcome": outcome,
                     },
                     "assets": assets,
@@ -1086,6 +1124,336 @@ class PublishSeamSelfTest(unittest.TestCase):
 
     def test_an_empty_datasets_tree_is_an_error_not_a_pass(self) -> None:
         self.assertOutcome(self.run_seam("verify"), EXIT_ERROR, "no */datapackage.json")
+
+    # ------------------------------------------- the record served beside it
+
+    def publish_with_record(
+        self, artefact: Path, record: Path, *, script: Path | None = None, slug: str = "widgets"
+    ) -> subprocess.CompletedProcess[str]:
+        """`publish --run-record`, through an uploader that refuses unless the record is already on disk."""
+        gate = script is None
+        uploader = self.uploader(str(record), script=self.record_gate_script) if gate else self.uploader(script=script)
+        return self.run_seam(
+            "publish",
+            "--dataset",
+            slug,
+            "--file",
+            str(artefact),
+            "--uploader",
+            uploader,
+            "--run-record",
+            str(record),
+            "--readback-attempts",
+            "1",
+            "--readback-delay",
+            "0",
+        )
+
+    def edit_run_record(self, path: Path, edit: Any) -> None:
+        document = json.loads(path.read_text(encoding="utf-8"))
+        edit(document)
+        path.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+
+    def printed_run_id(self, result: subprocess.CompletedProcess[str]) -> str:
+        found = re.search(r"^publish: Run (\S+) produced both", result.stdout, re.MULTILINE)
+        self.assertIsNotNone(found, f"publish printed no run id\n--- output ---\n{result.stdout}{result.stderr}")
+        assert found is not None
+        return found.group(1)
+
+    def test_publish_writes_the_record_of_the_run_it_verified_before_the_upload(self) -> None:
+        """The record lands where the caller asked, before the uploader runs, as arcform wrote it.
+
+        The uploader refuses unless the record is already on disk, so this passes only
+        if the record was written first. The written record is compared whole against
+        arcform's, with one field changed, so a dropped asset, step or engine version
+        reddens it as surely as a wrong run id does.
+        """
+        descriptor = self.write_dataset()
+        artefact = self.publishable(b"PAR1" + b"recorded rows" * 30)
+        source = self.datasets / "widgets" / "build" / ".arcform" / "runs" / "20260812-000000-aaaaaaaa.json"
+        record = self.root / "out" / "run.json"
+        record.parent.mkdir()
+
+        result = self.publish_with_record(artefact, record)
+        self.assertOutcome(result, EXIT_OK, f"wrote Run 20260812-000000-aaaaaaaa's record to {record}")
+        self.assertDeclaresWhatIsServed(descriptor)
+
+        written = json.loads(record.read_text(encoding="utf-8"))
+        self.assertEqual(written["run"]["run_id"], self.printed_run_id(result), "the record names another run than publish printed")
+        expected = json.loads(source.read_text(encoding="utf-8"))
+        expected["run"]["protocol"]["dir"] = "datasets/widgets"
+        self.assertEqual(written, expected, "the served record is not arcform's record with only run.protocol.dir changed")
+        for key in ("name", "manifest_sha256"):
+            self.assertTrue(written["run"]["protocol"][key])
+        self.assertEqual(written["run"]["engine"], {"arc": "0.1.0", "duckdb": "v1.5.5"})
+        self.assertTrue(all(asset.get("content_hash") for asset in written["assets"]))
+        self.assertTrue(all(step.get("status", {}).get("state") for step in written["steps"]))
+
+    def test_the_written_record_names_no_machine_path(self) -> None:
+        """arcform's absolute `run.protocol.dir` is served as `datasets/<slug>`, and nothing absolute remains."""
+        self.write_dataset()
+        artefact = self.publishable(b"PAR1" + b"no machine path" * 30)
+        record = self.root / "run.json"
+        self.assertOutcome(self.publish_with_record(artefact, record), EXIT_OK)
+
+        text = record.read_text(encoding="utf-8")
+        written = json.loads(text)
+        self.assertEqual(written["run"]["protocol"]["dir"], "datasets/widgets")
+        for root in {str(self.root), str(self.root.resolve())}:
+            self.assertNotIn(root, text, "the record names the directory the Run ran in")
+
+        def strings(value: Any) -> Iterable[str]:
+            if isinstance(value, dict):
+                for key, item in value.items():
+                    yield str(key)
+                    yield from strings(item)
+            elif isinstance(value, list):
+                for item in value:
+                    yield from strings(item)
+            elif isinstance(value, str):
+                yield value
+
+        rooted = [value for value in strings(written) if value.startswith("/") or re.match(r"^[A-Za-z]:[\\/]", value)]
+        self.assertEqual(rooted, [], "the record still carries an absolute path")
+
+    def test_a_machine_path_elsewhere_in_the_record_stops_the_publish(self) -> None:
+        """A second absolute path is refused before the upload, not served and not silently rewritten."""
+        protocol_dir = self.datasets / "widgets"
+        cases = {
+            "/steps/0/io/stdout_path": lambda doc: doc["steps"][0].setdefault("io", {}).update(
+                stdout_path=str(protocol_dir / "build" / "export.log")
+            ),
+            "/steps/0/resolved_with/command": lambda doc: doc["steps"][0].setdefault("resolved_with", {}).update(
+                command=f"uv run {protocol_dir.resolve()}/scripts/export.py --out build/widgets.parquet"
+            ),
+        }
+        for pointer, edit in cases.items():
+            with self.subTest(pointer=pointer):
+                self.store.server.objects.clear()  # type: ignore[attr-defined]
+                if protocol_dir.exists():
+                    shutil.rmtree(protocol_dir)
+                descriptor = self.write_dataset()
+                before = descriptor.read_bytes()
+                artefact = self.publishable(b"PAR1" + b"leaky record" * 30)
+                self.edit_run_record(protocol_dir / "build" / ".arcform" / "runs" / "20260812-000000-aaaaaaaa.json", edit)
+                record = self.root / "run.json"
+                self.assertOutcome(self.publish_with_record(artefact, record), EXIT_ERROR, pointer, "nothing was uploaded")
+                self.assertFalse(record.exists(), "a record carrying a machine path was written")
+                self.assertIsNone(self.store.get("widgets.parquet"), "the object was uploaded anyway")
+                self.assertEqual(descriptor.read_bytes(), before)
+
+    def test_a_record_that_cannot_be_written_leaves_the_endpoint_unchanged(self) -> None:
+        """Upload, declaration and record are one act, so an unwritable record stops all three."""
+        descriptor = self.write_dataset()
+        before = descriptor.read_bytes()
+        artefact = self.publishable(b"PAR1" + b"unwritable" * 30)
+        occupied = self.root / "a-directory"
+        occupied.mkdir()
+        for record in (self.root / "no-such-dir" / "run.json", occupied):
+            with self.subTest(record=record.name):
+                result = self.publish_with_record(artefact, record, script=self.put_script)
+                self.assertOutcome(result, EXIT_ERROR, "cannot write the Run record", "nothing was uploaded")
+                self.assertIsNone(self.store.get("widgets.parquet"), "the object was uploaded anyway")
+                self.assertEqual(descriptor.read_bytes(), before, "the descriptor was stamped anyway")
+
+    def test_a_failed_upload_leaves_no_record_behind(self) -> None:
+        """A record on disk means the whole act completed, so a failed upload takes it back."""
+        descriptor = self.write_dataset()
+        before = descriptor.read_bytes()
+        artefact = self.publishable(b"PAR1" + b"upload fails" * 30)
+        record = self.root / "run.json"
+        result = self.publish_with_record(artefact, record, script=self.failing_script)
+        self.assertOutcome(result, EXIT_ERROR, "uploader exited 3")
+        self.assertIn("wrote Run", result.stdout, "the record was never written, so its removal proves nothing")
+        self.assertFalse(record.exists(), "a record outlived a publish that failed")
+        self.assertEqual(descriptor.read_bytes(), before)
+
+    def test_a_record_asked_for_where_no_run_governs_is_an_error(self) -> None:
+        """No Protocol means no Run, and a record of nothing is not written as though it were one."""
+        self.write_dataset(protocol=False, arcform_state=False)
+        artefact = self.artefact(b"PAR1" + b"no protocol" * 30)
+        record = self.root / "run.json"
+        result = self.publish_with_record(artefact, record, script=self.put_script)
+        self.assertOutcome(result, EXIT_ERROR, "no Run governs these bytes", "nothing was uploaded")
+        self.assertFalse(record.exists())
+        self.assertIsNone(self.store.get("widgets.parquet"))
+
+    # -------------------------------------- which Run made a served object
+
+    def served_with_record(self, body: bytes) -> tuple[str, str, dict[str, Any]]:
+        """The store as the publishing pipeline leaves it, built through the seam itself.
+
+        `publish --run-record` writes the record; the object and that record are then
+        put at `<slug>/<sha16>.parquet` and `<slug>/<sha16>.run.json`, and
+        `manifest.json` at the origin names both. Returns the object's URL, the run id
+        and the manifest, which a case edits and puts back to move one link.
+        """
+        self.write_dataset()
+        artefact = self.publishable(body)
+        record = self.root / "served.run.json"
+        result = self.publish_with_record(artefact, record)
+        self.assertOutcome(result, EXIT_OK)
+        run_id = self.printed_run_id(result)
+
+        key = sha256_hex(body)[:16]
+        self.store.put(f"widgets/{key}.parquet", body)
+        self.store.put(f"widgets/{key}.run.json", record.read_bytes())
+        manifest = {
+            "datasets": {
+                "other": {
+                    "url": self.store.url("other/0123456789abcdef.parquet"),
+                    "rows": 1,
+                    "bytes": 1,
+                    "sha256": "0123456789abcdef",
+                    "published": "2026-10-01T00:00:00Z",
+                },
+                "widgets": {
+                    "url": self.store.url(f"widgets/{key}.parquet"),
+                    "rows": 30,
+                    "bytes": len(body),
+                    "sha256": key,
+                    "published": "2026-10-10T00:00:00Z",
+                    "run": {"id": run_id, "record": self.store.url(f"widgets/{key}.run.json")},
+                },
+            },
+            "updated": "2026-10-10T00:00:00Z",
+        }
+        self.put_manifest(manifest)
+        return self.store.url(f"widgets/{key}.parquet"), run_id, manifest
+
+    def put_manifest(self, manifest: dict[str, Any]) -> None:
+        self.store.put("manifest.json", json.dumps(manifest, indent=2).encode())
+
+    def trace(self, url: str) -> subprocess.CompletedProcess[str]:
+        """`trace` as a stranger runs it: the script alone in an empty directory, no credentials.
+
+        The copy has no `datasets/` beside it and the environment carries nothing but
+        PATH, so the only things the command can read are the URL and its origin. Two
+        levels down, because the script looks for a checkout at its parent's parent,
+        and `self.root` holds this suite's own `datasets/`.
+        """
+        alone = self.root / "a-stranger" / "bin"
+        alone.mkdir(parents=True, exist_ok=True)
+        script = alone / PUBLISHER.name
+        shutil.copyfile(PUBLISHER, script)
+        return subprocess.run(
+            [sys.executable, str(script), "trace", url],
+            capture_output=True,
+            text=True,
+            check=False,
+            cwd=alone,
+            env={"PATH": os.environ.get("PATH", "")},
+        )
+
+    def test_trace_names_the_run_that_made_a_served_object(self) -> None:
+        """From the URL alone, the run id, the Protocol's manifest_sha256, the engine and the times."""
+        body = b"PAR1" + b"traced rows" * 30
+        url, run_id, _ = self.served_with_record(body)
+        result = self.trace(url)
+        self.assertOutcome(
+            result,
+            EXIT_OK,
+            f"Run {run_id} made them",
+            sha256_hex("arcform.yaml for widgets".encode()),
+            "arc 0.1.0, duckdb v1.5.5",
+            "2026-08-12T00:00:00Z",
+            "2026-08-12T00:00:09Z",
+            f"is {sha256_of(body)}, the sha256 of the bytes served",
+        )
+
+    def test_trace_matches_by_the_bytes_served_not_by_the_url(self) -> None:
+        """The descriptor's own URL serves the same bytes as the content-addressed copy, so it traces too."""
+        body = b"PAR1" + b"same bytes, other url" * 30
+        _, run_id, _ = self.served_with_record(body)
+        self.assertOutcome(self.trace(self.store.url("widgets.parquet")), EXIT_OK, f"Run {run_id} made them")
+
+    def test_an_object_replaced_by_hand_is_traced_to_no_entry(self) -> None:
+        """The first way a trace breaks: bytes written after the last publish match no manifest entry."""
+        self.served_with_record(b"PAR1" + b"published" * 30)
+        self.store.put("widgets.parquet", b"PAR1" + b"replaced by hand" * 30)
+        self.assertOutcome(
+            self.trace(self.store.url("widgets.parquet")),
+            EXIT_DISAGREEMENT,
+            "no manifest.json entry matches the bytes served",
+            "replaced after the last publish",
+        )
+
+    def test_an_entry_whose_hash_is_too_short_matches_nothing(self) -> None:
+        """A prefix shorter than the manifest's sixteen hex digits names too many objects to match one.
+
+        Each value below IS a prefix of the served digest, so only the length rule
+        refuses it; the empty one is there because every digest starts with it.
+        """
+        body = b"PAR1" + b"short prefix" * 30
+        url, _, manifest = self.served_with_record(body)
+        for short in ("", sha256_hex(body)[:4], sha256_hex(body)[:15]):
+            with self.subTest(prefix=short):
+                manifest["datasets"]["widgets"]["sha256"] = short
+                self.put_manifest(manifest)
+                self.assertOutcome(self.trace(url), EXIT_DISAGREEMENT, "no manifest.json entry matches the bytes served")
+
+    def test_an_entry_that_names_no_record_is_not_traced(self) -> None:
+        """The second way: today's manifest shape, the five keys and no run."""
+        url, _, manifest = self.served_with_record(b"PAR1" + b"no run key" * 30)
+        del manifest["datasets"]["widgets"]["run"]
+        self.put_manifest(manifest)
+        self.assertOutcome(self.trace(url), EXIT_DISAGREEMENT, "the manifest.json entry for widgets names no run record")
+
+    def test_a_record_that_cannot_be_fetched_is_not_traced(self) -> None:
+        """The third way: the manifest points at a record the origin does not serve."""
+        url, _, manifest = self.served_with_record(b"PAR1" + b"record gone" * 30)
+        record_url = manifest["datasets"]["widgets"]["run"]["record"]
+        del self.store.server.objects["/" + record_url.split("/", 3)[3]]  # type: ignore[attr-defined]
+        self.assertOutcome(self.trace(url), EXIT_DISAGREEMENT, "names cannot be fetched", "404")
+
+    def test_a_record_that_is_not_a_run_record_is_not_traced(self) -> None:
+        url, _, manifest = self.served_with_record(b"PAR1" + b"record garbled" * 30)
+        record_url = manifest["datasets"]["widgets"]["run"]["record"]
+        self.store.put(record_url.split("/", 3)[3], b"{ not json")
+        self.assertOutcome(self.trace(url), EXIT_DISAGREEMENT, "cannot be read as a Run record")
+
+    def test_a_record_whose_artefact_hash_differs_is_not_traced(self) -> None:
+        """The fourth way: the record served beside the object attests other bytes."""
+        body = b"PAR1" + b"attested" * 30
+        url, _, manifest = self.served_with_record(body)
+        record_key = manifest["datasets"]["widgets"]["run"]["record"].split("/", 3)[3]
+        document = json.loads(self.store.get(record_key) or b"{}")
+        other = sha256_hex(b"PAR1" + b"some other build" * 30)
+        for asset in document["assets"]:
+            if asset["path"].endswith(".parquet"):
+                asset["content_hash"] = other
+        self.store.put(record_key, json.dumps(document).encode())
+        self.assertOutcome(
+            self.trace(url),
+            EXIT_DISAGREEMENT,
+            "the run record's content hash for the artefact differs from the bytes served",
+            f"build/widgets.parquet sha256:{other}",
+        )
+
+    def test_a_record_whose_run_never_reached_the_producing_step_is_not_traced(self) -> None:
+        """The record must say the Run PRODUCED the bytes, not merely list them."""
+        body = b"PAR1" + b"listed, not produced" * 30
+        url, _, manifest = self.served_with_record(body)
+        record_key = manifest["datasets"]["widgets"]["run"]["record"].split("/", 3)[3]
+        document = json.loads(self.store.get(record_key) or b"{}")
+        for step in document["steps"]:
+            if step["name"] == "export":
+                step["status"] = dict(NEVER_REACHED)
+        self.store.put(record_key, json.dumps(document).encode())
+        self.assertOutcome(self.trace(url), EXIT_DISAGREEMENT, "differs from the bytes served")
+
+    def test_a_manifest_naming_another_run_than_its_record_is_not_traced(self) -> None:
+        url, run_id, manifest = self.served_with_record(b"PAR1" + b"two run ids" * 30)
+        manifest["datasets"]["widgets"]["run"]["id"] = "20990101-000000-ffffffff"
+        self.put_manifest(manifest)
+        self.assertOutcome(
+            self.trace(url), EXIT_DISAGREEMENT, "names Run 20990101-000000-ffffffff", f"is Run {run_id}"
+        )
+
+    def test_an_origin_with_no_manifest_is_an_error_not_a_verdict(self) -> None:
+        url, _, _ = self.served_with_record(b"PAR1" + b"no manifest" * 30)
+        del self.store.server.objects["/manifest.json"]  # type: ignore[attr-defined]
+        self.assertOutcome(self.trace(url), EXIT_ERROR, "manifest.json")
 
 
 if __name__ == "__main__":
