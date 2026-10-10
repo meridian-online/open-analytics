@@ -7,7 +7,7 @@ orthogonal facets:
 | File | Facet | Answers |
 |---|---|---|
 | `arcform.yaml` (+ `models/`, `descriptor.overrides.json`, `scripts/test_ingest_lei.py`) | **Protocol** — how it's made | run `arc run` → produces the Dataset **and** its descriptor; the test runs the models against scratch sources and pins what they refuse |
-| `datapackage.json` | **Descriptor** — what it is | schema, finetype labels, `x-joins`/evidence — **emitted** by the `describe` step, no longer hand-authored |
+| `datapackage.json` | **Descriptor** — what it is | schema, finetype labels, `x-joins`/evidence — **emitted** by the `describe` step (staged) and published by the stamp step, no longer hand-authored |
 | `scripts/crosswalk_join.py` (+ `test_crosswalk_join.py`) | **Proof** — that the join runs | executes every declared `x-joins` against the published objects and checks the coverage each one claims |
 | `../registry.json` (this dataset's entry) | **Address** — how it's found | stable `uid`, `crosswalk.edgar_gleif`, manifest pointer |
 
@@ -211,15 +211,19 @@ and expect few rows or none, because the values it removes are still in there.
 - **Publish** — the content-addressed R2 upload + `manifest.json` / catalog pointer
   flip — stays in the out-of-repo publish pipeline. It *reads* this Protocol's terminal output
   `build/edgar_gleif.parquet`; it is not an arcform step.
-- **Describe** — `datapackage.json` is **emitted** from the built Parquet by the
-  `describe` step, not hand-authored. The step splits the descriptor by authority:
-  - `finetype profile build/edgar_gleif.parquet -o datapackage` types every column
+- **Describe** — `datapackage.json` is **emitted**, not hand-authored. The `describe`
+  step reads the staged Parquet, `build/stage/edgar_gleif.parquet`, and writes
+  `build/stage/described.json`; the coverage step writes a copy of it carrying the
+  measured coverage to `build/stage/measured.json`; the stamp step alone writes
+  `datapackage.json`. The `describe` step splits the descriptor by authority:
+  - `finetype profile build/stage/edgar_gleif.parquet -o datapackage` types every column
     from its taxonomy — the *machine-decidable* half: per-field `type` / `format`,
     the `x-finetype-*` semantic labels + observed constraints, and the resource
-    `bytes` / `hash` / `format` (computed straight from the Parquet).
+    `bytes` / `hash` / `format` (computed straight from the staged Parquet; the stamp
+    step re-measures `bytes` and `hash` against the published file).
   - the `datapackage_describe` operator (which embeds the former `describe.py`) overlays
     **`descriptor.overrides.json`** — the *curated* half finetype cannot infer — and
-    writes `datapackage.json`. Overrides win; finetype fills the rest.
+    writes `build/stage/described.json`. Overrides win; finetype fills the rest.
   - **finetype gap (deliberate split, not a workaround).** finetype emits exactly
     one typed Data Resource and nothing above the field level: no package identity
     (`title` / `description` / `homepage` / `licenses` / `sources`), no published
