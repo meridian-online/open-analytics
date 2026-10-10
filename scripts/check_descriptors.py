@@ -27,7 +27,8 @@ What it asserts, per resource:
                    — when the Parquet carries its own descriptor in its footer (see
                      `stamp_descriptor.py`), that copy is read back out of the file and
                      held to the same rules: it must agree with this repository's copy
-                     apart from the two keys a file cannot state about itself, and its
+                     apart from what a file cannot state about itself (each resource's
+                     `bytes` and `hash`, the package's `created`), and its
                      field set, types and primary key must agree with the columns and
                      rows actually present.
                      An object that carries none is not a violation unless

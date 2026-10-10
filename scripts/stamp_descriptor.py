@@ -44,8 +44,8 @@ write is a latent version of that failure.
 own size or its own digest, because stating them changes them — write the size in
 and the file is longer than the number just written. Those two fields stay in the
 repository copy, which is measured against the finished object; the embedded copy
-is the repository copy with exactly those two keys removed from each resource, and
-`check_descriptors.py` holds it to that.
+is the repository copy with those two keys removed from each resource and `created`
+removed from the package (below), and `check_descriptors.py` holds it to that.
 
 That is why `stamp` also rewrites the descriptor's `bytes` and `hash`: stamping
 lengthens the file, so the figures `describe` measured off the unstamped build are

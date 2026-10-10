@@ -390,10 +390,11 @@ steps:
   # literal strings in this manifest, and the descriptor does not exist until describe
   # has read the very Parquet that would have to carry it.
   #
-  # The embedded copy omits the resource `bytes` and `hash`: a file cannot state its
-  # own size, because writing the value changes it. Those stay in datapackage.json,
-  # measured against the finished object; check_descriptors.py holds the two copies to
-  # each other.
+  # The embedded copy omits the resource `bytes` and `hash`, and the package's
+  # `created`: a file cannot state its own size, because writing the value changes it,
+  # and a write time moves on a publish that changed nothing else. Those stay in
+  # datapackage.json, measured against the finished object; check_descriptors.py holds
+  # the two copies to each other.
   #
   # Everything before the footer is compared byte for byte, so the order_by above still
   # decides the data bytes and a stamp that moved one is refused with the original left
@@ -417,7 +418,7 @@ steps:
       # with the edgar, gleif and naics manifests, which still call it through
       # `command:` and are not pinned to its bytes; editing it there is a manifest edit
       # here.
-      sha256: 862029f3b1e6fd2c3a0f3deed7331397dbf0f1874b951810dd5727ddd57a5292
+      sha256: b22581b77414303312aa5040e70a66ccd96a6bfd1902820e487428441018b9c2
       # This step imports duckdb, and until now ran under whatever bare `python3` was on
       # PATH — the same exposure `derive_join_coverage` was already carrying when it
       # failed three retries mid-republish on a machine whose `python3` had no duckdb.

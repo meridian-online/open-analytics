@@ -53,10 +53,13 @@ The same descriptor, without the SQL:
 python scripts/stamp_descriptor.py read https://openlake.meridian.online/naics.parquet
 ```
 
-The embedded copy omits the resource's `bytes` and `hash`, and only those. A file
-cannot state its own size or its own digest — writing the value changes the value
-— so those two stay in this repository's copy, which is measured against the
-finished object. Everything else is identical, and
+The embedded copy omits the resource's `bytes` and `hash` and the package's
+`created`, and only those. A file cannot state its own size or its own digest —
+writing the value changes the value — and `created` is a write time that moves on a
+publish that changed nothing else, so a file that stated it would be a different file
+every time. Those stay in this repository's copy, which is measured against the
+finished object; there `created` means when the data first appeared, and a republish
+of unchanged data keeps it. Everything else is identical, and
 [`scripts/check_descriptors.py`](scripts/check_descriptors.py) holds the two
 copies to each other.
 
