@@ -213,6 +213,17 @@ republish. An entry pins the exact notes and the pointer, and it reddens when th
 refusal changes, when the declaration moves and when the fix lands — and a refusal with
 no entry reddens too.
 
+`scripts/check_constraint_ratchet.py` reads a package against its own predecessor in git.
+A constraint a person decided lives in `descriptor.overrides.json`, and a regeneration
+keeps it only while that overlay is applied; if it is not, the descriptor carries
+finetype's own constraint instead, looser than the one it replaced and still true of
+the bytes, so `check_descriptors.py` has nothing to object to. The ratchet refuses a
+constraint the sidecar held at `--base` (default `origin/main`) that the descriptor no
+longer carries unless the sidecar was moved to the new value in the same change, and it
+lists every field that changed — columns added or removed, each `constraints` key,
+`x-finetype-confidence` — whether or not it refuses. It reads the predecessor from git
+rather than from the published object's footer because a restamp moves the footer.
+
 ```sh
 pip install duckdb pyyaml
 pip install frictionless==5.19.0                # the reference implementation
@@ -230,6 +241,9 @@ python scripts/check_label_agreement.py --strict  # and fail on a difference wit
 python scripts/test_check_label_agreement.py   # the self-test: the cross-package check on broken fixtures
 python scripts/check_frictionless.py           # every descriptor through the reference implementation
 python scripts/test_check_frictionless.py      # the self-test: the conformance check on broken fixtures
+python scripts/check_constraint_ratchet.py     # every hand-held constraint, against origin/main
+python scripts/check_constraint_ratchet.py --base HEAD~1  # or against the previous commit
+python scripts/test_check_constraint_ratchet.py  # the self-test: the ratchet on scratch repositories
 ```
 
 `scripts/test_self_description_needs_no_repository.py` is the one that cannot be
