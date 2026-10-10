@@ -1614,6 +1614,8 @@ def main(argv: list[str] | None = None) -> int:
     # publish no object, and rules 1 to 8 have nothing of theirs to read.
     for package, descriptor in [*packages.items(), *example_packages.items()]:
         violations.extend(check_licence(package, descriptor))
+    licence_read_datasets = [Path(package).parent.name for package in packages]
+    licence_read_examples = [Path(package).parent.name for package in example_packages]
 
     readme_path = args.readme if args.readme is not None else args.datasets_dir.parent / "README.md"
     try:
@@ -1632,13 +1634,10 @@ def main(argv: list[str] | None = None) -> int:
 
     checked = ", ".join(path.parent.name for path in descriptor_paths)
 
-    def names(paths: list[Path]) -> str:
-        return ", ".join(path.parent.name for path in paths) or "none"
-
     licence_read = (
-        f"licence rule read {len(descriptor_paths) + len(example_paths)} descriptor(s) for internal "
-        f"consistency only, compared against nothing upstream: {args.datasets_dir.name}/ ({names(descriptor_paths)}), "
-        f"{examples_dir.name}/ ({names(example_paths)})"
+        f"licence rule read {len(licence_read_datasets) + len(licence_read_examples)} descriptor(s) for internal "
+        f"consistency only, compared against nothing upstream: {args.datasets_dir.name}/ "
+        f"({', '.join(licence_read_datasets) or 'none'}), {examples_dir.name}/ ({', '.join(licence_read_examples) or 'none'})"
     )
     if args.json:
         args.json.write_text(
@@ -1648,8 +1647,8 @@ def main(argv: list[str] | None = None) -> int:
                     "self_described": self_described,
                     "resources": resource_count,
                     "licence_read": {
-                        "datasets": [path.parent.name for path in descriptor_paths],
-                        "examples": [path.parent.name for path in example_paths],
+                        "datasets": licence_read_datasets,
+                        "examples": licence_read_examples,
                     },
                     "violations": [asdict(v) for v in violations],
                 },
