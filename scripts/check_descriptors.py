@@ -55,6 +55,35 @@ And once, over the catalogue in README.md:
                      the check pass. `--write-catalogue` corrects the figures from the
                      measurement rather than by hand. See `render_count` for the rule.
 
+And over every descriptor in `datasets/` AND in `examples/`:
+
+  9. licence       — each descriptor carries a licence identifier (`licenses[].name`;
+                     a source that asserts none is recorded as `notspecified`, so an
+                     absent identifier means nobody decided). Where an identifier carries
+                     a NonCommercial clause (`CC-BY-NC-SA-4.0`, `Non-Commercial`), the
+                     package `description` must have a sentence that pairs "commercial"
+                     with a word of restriction, so the clause is stated beside the data
+                     and not only in an identifier a reader must know how to decode.
+                     The run prints which directories it read.
+
+                     THIS RULE ASSERTS INTERNAL CONSISTENCY ONLY. It compares the
+                     identifier against nothing upstream, on purpose: a mirror's metadata
+                     is not the licensor, and a mirror's tag can be wrong where the
+                     licensor's text is right. A check that reconciled the two would
+                     fail the correct descriptor and pass the wrong one. Which licence a
+                     dataset is under is a reading of the licensor, and it is not this
+                     script's to make. Nor does it name a dataset: the rule is about
+                     what a descriptor says of itself, so a new Protocol is covered
+                     without an edit here. It does not look the other way: a
+                     description that states a restriction its identifier lacks is not
+                     flagged, because a vocabulary check cannot tell "restricted" from
+                     "not restricted".
+
+                     `examples/` descriptors are held to this rule alone. Their Parquet is
+                     built on the machine that runs the Protocol and is published
+                     nowhere, so rules 1 to 8 have no object to read, and the catalogue
+                     is the table for `datasets/`.
+
 Exit codes are distinct on purpose, because a status alone cannot tell a refusal
 apart from a crash:
 
@@ -1355,6 +1384,115 @@ def check_catalogue(
     return violations, checked
 
 
+LICENCE_IDENTIFIER_RULE = "licence.identifier"
+LICENCE_RESTRICTION_RULE = "licence.restriction"
+
+# A sentence states a commercial-use restriction when it holds both a word about
+# commerce and a word of restriction. "Commercial" alone is not enough: it is also
+# the second half of the licence's own name ("Attribution-NonCommercial-ShareAlike"),
+# and a description that only names the licence has stated nothing about what it
+# restricts. The restriction words are the plain ways to say a thing is not allowed;
+# a description that says it another way fails and is reworded, which costs a
+# sentence, where a vocabulary wide enough to take any phrasing would take the
+# licence's own name as well.
+COMMERCIAL_WORD = re.compile(r"commercial", re.IGNORECASE)
+RESTRICTION_WORD = re.compile(
+    r"restrict|prohibit|forbid|\b(?:may|must|shall|should|can|will) not\b|\bcannot\b|"
+    r"\bnot (?:be )?(?:permitted|allowed|used|for)\b",
+    re.IGNORECASE,
+)
+SENTENCE_BREAK = re.compile(r"(?<=[.;!?])\s+|\n+")
+
+
+def identifier_is_noncommercial(identifier: str) -> bool:
+    """True when a licence identifier carries a NonCommercial clause.
+
+    Read as tokens, so the SPDX form (`CC-BY-NC-SA-4.0`), the spelled forms
+    (`Non-Commercial`, `NonCommercial`) and a space-separated name all land. Splitting
+    on tokens is what keeps `nc` from matching inside a longer word.
+    """
+    tokens = [token for token in re.split(r"[^a-z0-9]+", identifier.lower()) if token]
+    if "nc" in tokens or "noncommercial" in tokens:
+        return True
+    return any(first == "non" and second == "commercial" for first, second in zip(tokens, tokens[1:]))
+
+
+def states_commercial_restriction(text: str) -> bool:
+    """True when one sentence of `text` pairs a commercial word with a word of restriction."""
+    return any(
+        COMMERCIAL_WORD.search(sentence) and RESTRICTION_WORD.search(sentence)
+        for sentence in SENTENCE_BREAK.split(text)
+    )
+
+
+def check_licence(package: str, descriptor: dict[str, Any]) -> list[Violation]:
+    """Rule 9: the descriptor names its licence, and states what a NonCommercial one restricts.
+
+    Reads the descriptor and nothing else, so it runs on a Protocol whose Parquet exists
+    only on the machine that built it. It compares the identifier against nothing
+    upstream; see the module docstring for why that is the point.
+    """
+    licences = descriptor.get("licenses")
+    identifiers: list[str] = []
+    if isinstance(licences, list):
+        for entry in licences:
+            name = entry.get("name") if isinstance(entry, dict) else None
+            if isinstance(name, str) and name.strip():
+                identifiers.append(name.strip())
+
+    if not identifiers:
+        return [
+            Violation(
+                package,
+                "(package)",
+                "licenses",
+                LICENCE_IDENTIFIER_RULE,
+                "carries no licence identifier: `licenses` must hold an entry with a non-empty `name`. "
+                "A source that asserts no licence is recorded as `notspecified`, so that an absent "
+                "identifier cannot be mistaken for a decision",
+            )
+        ]
+
+    noncommercial = [identifier for identifier in identifiers if identifier_is_noncommercial(identifier)]
+    if noncommercial:
+        description = descriptor.get("description")
+        if not states_commercial_restriction(description if isinstance(description, str) else ""):
+            return [
+                Violation(
+                    package,
+                    "(package)",
+                    "description",
+                    LICENCE_RESTRICTION_RULE,
+                    f"licence identifier {noncommercial[0]!r} carries a NonCommercial clause, but no sentence "
+                    "of `description` states what it restricts: none pairs a word about commercial use "
+                    "with a word of restriction (restrict, prohibit, may not, not allowed, ...). Naming "
+                    "the licence is not stating its restriction",
+                )
+            ]
+    return []
+
+
+def discover_examples(examples_dir: Path, only: Iterable[str] | None, *, required: bool) -> list[Path]:
+    """The descriptors under `examples/`, narrowed by `--only` the way `discover` narrows datasets.
+
+    `required` is true when the directory was named on the command line. A named
+    directory that is missing or holds no descriptor is an error, so a rename cannot
+    turn the licence rule into a check of nothing without anyone being told. Left to its
+    default, an absent directory reads as zero descriptors, which the run's summary says.
+    """
+    if not examples_dir.is_dir():
+        if required:
+            raise CheckError(f"no examples directory at {examples_dir}")
+        return []
+    paths = sorted(examples_dir.glob("*/datapackage.json"))
+    if required and not paths:
+        raise CheckError(f"no examples/*/datapackage.json under {examples_dir}")
+    if only:
+        wanted = set(only)
+        paths = [path for path in paths if path.parent.name in wanted]
+    return paths
+
+
 def discover(datasets_dir: Path, only: Iterable[str] | None) -> list[Path]:
     paths = sorted(datasets_dir.glob("*/datapackage.json"))
     if only:
@@ -1372,6 +1510,14 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--datasets-dir", default="datasets", type=Path)
     parser.add_argument("--only", action="append", metavar="SLUG", help="restrict to one dataset slug (repeatable)")
+    parser.add_argument(
+        "--examples-dir",
+        type=Path,
+        metavar="DIR",
+        help="the demo Protocols whose descriptors the licence rule also reads (default: examples/ beside "
+        "--datasets-dir, and an absent default reads as none). A directory named here must exist and hold "
+        "descriptors, so a rename cannot leave the rule checking nothing. --only narrows these by slug too.",
+    )
     parser.add_argument("--json", metavar="FILE", type=Path, help="also write the findings as JSON")
     parser.add_argument(
         "--readme",
@@ -1408,6 +1554,14 @@ def main(argv: list[str] | None = None) -> int:
         # `--only` narrows what gets scanned and reported below. Skip the second
         # discovery when there is nothing to narrow.
         all_descriptor_paths = descriptor_paths if not args.only else discover(args.datasets_dir, None)
+    except CheckError as exc:
+        print(f"descriptor check: {exc}", file=sys.stderr)
+        return EXIT_ERROR
+
+    examples_dir = args.examples_dir if args.examples_dir is not None else args.datasets_dir.parent / "examples"
+    try:
+        example_paths = discover_examples(examples_dir, args.only, required=args.examples_dir is not None)
+        example_packages = {str(path): load_descriptor(path) for path in example_paths}
     except CheckError as exc:
         print(f"descriptor check: {exc}", file=sys.stderr)
         return EXIT_ERROR
@@ -1454,6 +1608,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"descriptor check: {exc}", file=sys.stderr)
         return EXIT_ERROR
 
+    # Rule 9 reads the descriptor alone, so it reads `examples/` too: those Protocols
+    # publish no object, and rules 1 to 8 have nothing of theirs to read.
+    for package, descriptor in [*packages.items(), *example_packages.items()]:
+        violations.extend(check_licence(package, descriptor))
+
     readme_path = args.readme if args.readme is not None else args.datasets_dir.parent / "README.md"
     try:
         catalogue_violations, catalogue_rows = check_catalogue(
@@ -1470,6 +1629,15 @@ def main(argv: list[str] | None = None) -> int:
         return EXIT_ERROR
 
     checked = ", ".join(path.parent.name for path in descriptor_paths)
+
+    def names(paths: list[Path]) -> str:
+        return ", ".join(path.parent.name for path in paths) or "none"
+
+    licence_read = (
+        f"licence rule read {len(descriptor_paths) + len(example_paths)} descriptor(s) for internal "
+        f"consistency only, compared against nothing upstream: {args.datasets_dir.name}/ ({names(descriptor_paths)}), "
+        f"{examples_dir.name}/ ({names(example_paths)})"
+    )
     if args.json:
         args.json.write_text(
             json.dumps(
@@ -1477,6 +1645,10 @@ def main(argv: list[str] | None = None) -> int:
                     "checked": checked,
                     "self_described": self_described,
                     "resources": resource_count,
+                    "licence_read": {
+                        "datasets": [path.parent.name for path in descriptor_paths],
+                        "examples": [path.parent.name for path in example_paths],
+                    },
                     "violations": [asdict(v) for v in violations],
                 },
                 indent=2,
@@ -1489,6 +1661,7 @@ def main(argv: list[str] | None = None) -> int:
         f"{len(self_described)} of {resource_count} resource(s) carry their own description"
         + (f" ({', '.join(self_described)})" if self_described else "")
         + f"; {catalogue_rows} catalogue row count(s) measured against the objects they link to"
+        + f"; {licence_read}"
     )
     if not violations:
         print(

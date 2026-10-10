@@ -42,6 +42,16 @@ footer is the surface people see, a check that kept reading only the file in
 `datasets/` would go on passing while that surface drifted. So they stamp a
 deliberately wrong description into a real footer and assert the checker names it.
 
+The licence group covers rule 9, which reads the descriptor alone and so runs over
+`examples/` as well as `datasets/`. Its cases are built to redden when a rule is
+removed, and two of them are built at the level where the defect would occur rather
+than where the code is written: a description that only NAMES a NonCommercial
+licence must fail as surely as one that says nothing, because the licence's own name
+contains the word "commercial"; and an identifier is read as tokens, so a licence
+that merely contains the letters `nc` inside a longer word is not mistaken for one.
+They also pin what the rule does not do: it fetches nothing and compares the
+identifier against nothing upstream.
+
 No case touches the network: every fixture resource is a relative path next to its
 descriptor, so the self-test runs offline and cannot be flaky for a reason that has
 nothing to do with the check.
@@ -63,6 +73,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import stamp_descriptor as sd  # noqa: E402 - found beside this file
 
 CHECKER = Path(__file__).with_name("check_descriptors.py")
+
+# The licence every fixture carries unless a case says otherwise: rule 9 reads
+# `datasets/` too, so a fixture with none would fail it before reaching what it tests.
+PERMISSIVE_LICENCE = [
+    {"name": "CC0-1.0", "path": "https://creativecommons.org/publicdomain/zero/1.0/", "title": "CC0 1.0 Universal"}
+]
 
 EXIT_OK = 0
 EXIT_VIOLATIONS = 1
@@ -112,6 +128,8 @@ def write_package(
     resource_path: str | None = None,
     resource_name: str | None = None,
     catalogue: str | bool = True,
+    licenses: Any = PERMISSIVE_LICENCE,
+    description: str | None = None,
 ) -> Path:
     """Lay down datasets/<slug>/{<slug>.parquet, datapackage.json} and return the descriptor.
 
@@ -119,7 +137,8 @@ def write_package(
     the count the fixture actually holds, a string states that figure verbatim, and
     False leaves the package out of the catalogue altogether. It defaults to True so
     every case in this file carries a catalogue that agrees with its data, and only
-    the cases about the catalogue have to think about it.
+    the cases about the catalogue have to think about it. `licenses` works the same
+    way for rule 9: a permissive one by default, and None leaves the key out.
     """
     package_dir = root / slug
     parquet = package_dir / f"{slug}.parquet"
@@ -139,13 +158,41 @@ def write_package(
     if declared_bytes is not None:
         resource["bytes"] = declared_bytes
 
+    document: dict[str, Any] = {"name": slug, "title": slug, "resources": [resource]}
+    if licenses is not None:
+        document["licenses"] = licenses
+    if description is not None:
+        document["description"] = description
     descriptor = package_dir / "datapackage.json"
-    descriptor.write_text(
-        json.dumps({"name": slug, "title": slug, "resources": [resource]}, indent=2) + "\n",
-        encoding="utf-8",
-    )
+    descriptor.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
     if catalogue is not False:
         write_catalogue_row(root, slug, f"{rows:,}" if catalogue is True else catalogue)
+    return descriptor
+
+
+def write_example(
+    examples: Path, slug: str, *, licenses: Any = PERMISSIVE_LICENCE, description: str | None = None
+) -> Path:
+    """Lay down examples/<slug>/datapackage.json and return it.
+
+    The resource points at a Parquet that is never written, as it is in the real
+    directory: a demo Protocol builds its object on the machine that runs it and
+    publishes nothing. A case that passes with this fixture has shown that the
+    licence rule does not go looking for bytes.
+    """
+    package_dir = examples / slug
+    package_dir.mkdir(parents=True, exist_ok=True)
+    document: dict[str, Any] = {
+        "name": slug,
+        "title": slug,
+        "resources": [{"name": slug, "format": "parquet", "path": f"{slug}.parquet"}],
+    }
+    if licenses is not None:
+        document["licenses"] = licenses
+    if description is not None:
+        document["description"] = description
+    descriptor = package_dir / "datapackage.json"
+    descriptor.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
     return descriptor
 
 
@@ -180,6 +227,9 @@ class DescriptorCheckSelfTest(unittest.TestCase):
         self.addCleanup(self._tmp.cleanup)
         self.datasets = Path(self._tmp.name) / "datasets"
         self.datasets.mkdir(parents=True)
+        # Not created here: the checker's default is `examples/` beside `datasets/`, and a
+        # case that wants none must find none. `write_example` creates it on first use.
+        self.examples = Path(self._tmp.name) / "examples"
 
     def assertOutcome(  # noqa: N802 - unittest naming
         self,
