@@ -373,6 +373,19 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           exit $status
 
+  one-writer-per-file:
+    name: a restructured Protocol declares each file it writes once
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: install pyyaml
+        run: python -m pip install --disable-pip-version-check "pyyaml==${PYYAML_VERSION}"
+      - name: the manifests, and a scratch one that shares a path
+        run: python scripts/test_manifest_one_writer.py
+
   protocol-readme-self-test:
     name: the step-list check can fail
     runs-on: ubuntu-latest

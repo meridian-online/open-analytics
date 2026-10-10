@@ -113,10 +113,11 @@ steps:
   # literal strings in this manifest, and the descriptor does not exist until describe
   # has read the very Parquet that would have to carry it.
   #
-  # The embedded copy omits the resource `bytes` and `hash`: a file cannot state its
-  # own size, because writing the value changes it. Those stay in datapackage.json,
-  # measured against the finished object; check_descriptors.py holds the two copies to
-  # each other.
+  # The embedded copy omits the resource `bytes` and `hash`, and the package's
+  # `created`: a file cannot state its own size, because writing the value changes it,
+  # and a write time moves on a publish that changed nothing else. Those stay in
+  # datapackage.json, measured against the finished object; check_descriptors.py holds
+  # the two copies to each other.
   #
   # Everything before the footer is compared byte for byte, so the order_by above still
   # decides the data bytes and a stamp that moved one is refused with the original left

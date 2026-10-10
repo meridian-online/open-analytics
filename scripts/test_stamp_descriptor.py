@@ -132,14 +132,20 @@ class ObjectServer(TCPServer):
 
 
 def build_dataset(
-    root: Path, *, rows: int = 4, row_group_size: int | None = None, compression: str = "zstd"
+    root: Path,
+    *,
+    rows: int = 4,
+    row_group_size: int | None = None,
+    compression: str = "zstd",
+    created: str | None = None,
 ) -> tuple[Path, Path]:
     """A scratch dataset: a real Parquet and the descriptor that describes it.
 
     `row_group_size` and `compression` exist because the Protocols do not all take
     DuckDB's defaults — `edgar_gleif` exports at `row_group_size: 50000` — and a
     fixture that only ever took the defaults could not tell a stamp that carries a
-    file's layout from one that imposes its own.
+    file's layout from one that imposes its own. `created` exists because `describe`
+    writes one from the wall clock and the cases about it need a fixture that has one.
     """
     import duckdb
 
@@ -179,6 +185,8 @@ def build_dataset(
             }
         ],
     }
+    if created is not None:
+        document["created"] = created
     descriptor = root / "datapackage.json"
     descriptor.write_text(json.dumps(document, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     return descriptor, parquet
@@ -381,6 +389,92 @@ class StampDescriptorSelfTest(unittest.TestCase):
             EXIT_OK,
         )
         self.assertEqual(descriptor.read_text(encoding="utf-8"), before)
+
+    # ────────────────────── 3b. the file does not state when it was written
+
+    def test_the_object_carries_no_created_and_the_repository_copy_keeps_it(self) -> None:
+        descriptor, parquet = build_dataset(self.root, created="2026-01-01T00:00:00Z")
+        self.assertOutcome(
+            run_cli("stamp", "--descriptor", str(descriptor), "--parquet", str(parquet)), EXIT_OK
+        )
+        carried = json.loads(run_cli("read", str(parquet)).stdout)
+        self.assertNotIn("created", carried, "the object states when it was written, inside itself")
+        beside = json.loads(descriptor.read_text(encoding="utf-8"))
+        self.assertEqual(beside["created"], "2026-01-01T00:00:00Z")
+
+    def test_two_publishes_that_differ_only_in_created_write_the_same_object(self) -> None:
+        """The analyst's pin: the hash out of datapackage.json must still hold after the next publish."""
+        first_descriptor, first = build_dataset(self.root / "first", created="2026-01-01T00:00:00Z")
+        second_descriptor, second = build_dataset(self.root / "second", created="2026-06-30T12:34:56Z")
+        second.write_bytes(first.read_bytes())  # the same data pages: only `created` differs
+        for descriptor, parquet in ((first_descriptor, first), (second_descriptor, second)):
+            self.assertOutcome(
+                run_cli("stamp", "--descriptor", str(descriptor), "--parquet", str(parquet)), EXIT_OK
+            )
+        self.assertEqual(first.read_bytes(), second.read_bytes(), "`created` moved the published object")
+        pinned = [
+            json.loads(path.read_text(encoding="utf-8"))["resources"][0]["hash"]
+            for path in (first_descriptor, second_descriptor)
+        ]
+        self.assertEqual(pinned[0], pinned[1], "the hash an analyst pins moved with `created`")
+
+    # ───────────── 3c. a stamp that writes beside its input does not rewrite it
+
+    def stage_and_publish(self, staged_created: str, *, rows: int = 4, carry: bool = True):
+        """One publish: a freshly described stage, stamped into `published/` beside it."""
+        stage = self.root / "stage"
+        descriptor, parquet = build_dataset(stage, rows=rows, created=staged_created)
+        published = self.root / "published"
+        published.mkdir(parents=True, exist_ok=True)
+        argv = [
+            "stamp",
+            "--descriptor", str(descriptor),
+            "--parquet", str(parquet),
+            "--out", str(published / "widgets.parquet"),
+            "--out-descriptor", str(published / "datapackage.json"),
+        ]
+        if carry:
+            argv.append("--carry-created")
+        result = run_cli(*argv)
+        self.assertOutcome(result, EXIT_OK)
+        return descriptor, parquet, published / "widgets.parquet", published / "datapackage.json"
+
+    def test_a_stamp_that_writes_elsewhere_leaves_what_it_read_untouched(self) -> None:
+        staged_descriptor = self.root / "stage" / "datapackage.json"
+        descriptor, parquet, _, _ = self.stage_and_publish("2026-01-01T00:00:00Z")
+        self.assertEqual(descriptor, staged_descriptor)
+        staged = json.loads(descriptor.read_text(encoding="utf-8"))["resources"][0]
+        self.assertEqual(staged["bytes"], 1, "the stamp rewrote the descriptor it was only meant to read")
+        self.assertIsNone(sd.read_self_description(sd.connect(), str(parquet)), "the stamp stamped its input")
+
+    def test_created_is_carried_forward_while_the_data_pages_are_unchanged(self) -> None:
+        _, _, parquet, descriptor = self.stage_and_publish("2026-01-01T00:00:00Z")
+        first_object, first_text = parquet.read_bytes(), descriptor.read_text(encoding="utf-8")
+        # A later describe over the same data stamps a later `created`.
+        _, _, parquet, descriptor = self.stage_and_publish("2026-06-30T12:34:56Z")
+        self.assertEqual(
+            json.loads(descriptor.read_text(encoding="utf-8"))["created"],
+            "2026-01-01T00:00:00Z",
+            "`created` moved although the data did not",
+        )
+        self.assertEqual(parquet.read_bytes(), first_object, "a republish of unchanged data moved the object")
+        self.assertEqual(descriptor.read_text(encoding="utf-8"), first_text)
+
+    def test_created_is_the_fresh_one_when_the_data_pages_changed(self) -> None:
+        self.stage_and_publish("2026-01-01T00:00:00Z", rows=4)
+        _, _, _, descriptor = self.stage_and_publish("2026-06-30T12:34:56Z", rows=5)
+        self.assertEqual(
+            json.loads(descriptor.read_text(encoding="utf-8"))["created"],
+            "2026-06-30T12:34:56Z",
+            "new data kept the old data's `created`",
+        )
+
+    def test_without_carry_created_the_fresh_created_wins(self) -> None:
+        self.stage_and_publish("2026-01-01T00:00:00Z")
+        _, _, _, descriptor = self.stage_and_publish("2026-06-30T12:34:56Z", carry=False)
+        self.assertEqual(
+            json.loads(descriptor.read_text(encoding="utf-8"))["created"], "2026-06-30T12:34:56Z"
+        )
 
     # ──────────────────────────────── 4. one URL, one ranged request, nothing else
 

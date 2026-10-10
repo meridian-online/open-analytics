@@ -27,7 +27,8 @@ What it asserts, per resource:
                    — when the Parquet carries its own descriptor in its footer (see
                      `stamp_descriptor.py`), that copy is read back out of the file and
                      held to the same rules: it must agree with this repository's copy
-                     apart from the two keys a file cannot state about itself, and its
+                     apart from what a file cannot state about itself (each resource's
+                     `bytes` and `hash`, the package's `created`), and its
                      field set, types and primary key must agree with the columns and
                      rows actually present.
                      An object that carries none is not a violation unless
@@ -87,7 +88,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 from typing import Any, Iterable
 
-from stamp_descriptor import DESCRIPTOR_KEY, SELF_REFERENTIAL, embedded_form, read_self_description
+from stamp_descriptor import DESCRIPTOR_KEY, SELF_REFERENTIAL, WRITTEN_AT, embedded_form, read_self_description
 
 EXIT_OK = 0
 EXIT_VIOLATIONS = 1
@@ -818,7 +819,13 @@ def check_self_description(
     except Exception as exc:  # noqa: BLE001 - a malformed repository copy is not checkable
         raise CheckError(f"{package}: cannot derive the embedded form: {exc}") from exc
 
-    differences = json_differences(expected, embedded)
+    # An object stamped before the stamp stopped embedding `created` still carries one,
+    # and stays published until its dataset is next republished. Holding it to the
+    # repository's `created` would redden every such object for a field no consumer
+    # pins and a republish drops; the stamp's own self-test is what proves new objects
+    # carry none.
+    embedded_compared = {key: value for key, value in embedded.items() if key not in WRITTEN_AT}
+    differences = json_differences(expected, embedded_compared)
     for difference in differences[:MAX_REPORTED_DIFFERENCES]:
         violations.append(
             Violation(

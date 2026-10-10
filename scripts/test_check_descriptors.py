@@ -970,6 +970,26 @@ class DescriptorCheckSelfTest(unittest.TestCase):
             "'CC-BY-4.0'",
         )
 
+    def test_object_published_before_created_left_the_footer_still_passes(self) -> None:
+        """A footer that still states `created` is an old object, not a lying one.
+
+        The stamp stopped embedding `created` because it moves on a publish that changed
+        nothing; objects stamped before that stay published until their dataset is next
+        republished, and the repository's `created` is no longer the footer's.
+        """
+        descriptor = write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT * FROM (VALUES ('AB')) t(code)",
+            fields=[{"name": "code", "type": "string"}],
+        )
+        document = json.loads(descriptor.read_text(encoding="utf-8"))
+        document["created"] = "2026-01-01T00:00:00Z"
+        stamp_package(descriptor, text=json.dumps(document, indent=2) + "\n")
+        document["created"] = "2026-06-30T12:34:56Z"
+        descriptor.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+        self.assertOutcome(run_check(self.datasets), EXIT_OK)
+
     def test_object_stating_its_own_size_fails(self) -> None:
         descriptor = write_package(
             self.datasets,

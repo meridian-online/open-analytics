@@ -380,6 +380,92 @@ class CrosswalkJoinSelfTest(unittest.TestCase):
             "--local expects NAME=PATH",
         )
 
+    # ------------------------------------------- measuring beside the file it read
+
+    def stage_left(self, **changes: Any) -> Path:
+        """A copy of the left descriptor somewhere other than where it is published."""
+        document = json.loads((self.datasets / "left" / "datapackage.json").read_text(encoding="utf-8"))
+        document.update(changes)
+        staged = self.datasets.parent / "stage" / "described.json"
+        staged.parent.mkdir(parents=True, exist_ok=True)
+        staged.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+        return staged
+
+    def test_write_with_out_leaves_the_descriptor_it_read_untouched(self) -> None:
+        """A measuring step that writes back into its input makes the step that produced
+        that input stale on every run, which is the re-run this option exists to end."""
+        self.lay_left(include_coverage=False)
+        published = self.datasets / "left" / "datapackage.json"
+        before = published.read_bytes()
+        measured = self.datasets.parent / "stage" / "measured.json"
+        measured.parent.mkdir(parents=True)
+        self.assertOutcome(
+            run_join(self.datasets, "--write", "--package", "left", "--out", str(measured)),
+            EXIT_OK,
+            "coverage written: rows 3  matched 2",
+            f"wrote {measured}",
+        )
+        self.assertEqual(published.read_bytes(), before, "--out still rewrote the descriptor it read")
+        written = json.loads(measured.read_text(encoding="utf-8"))
+        self.assertEqual(written["x-joins"]["joins"][0]["coverage"], {"rows": 3, "matched": 2})
+
+    def test_write_reads_the_staged_descriptor_in_place_of_the_published_one(self) -> None:
+        self.lay_left(coverage={"rows": 999, "matched": 999})
+        staged = self.stage_left(title="staged")
+        measured = self.datasets.parent / "stage" / "measured.json"
+        left_parquet = self.datasets / "left" / "left.parquet"
+        self.assertOutcome(
+            run_join(
+                self.datasets,
+                "--write",
+                "--package",
+                "left",
+                "--descriptor",
+                f"left={staged}",
+                "--local",
+                f"left={left_parquet}",
+                "--out",
+                str(measured),
+            ),
+            EXIT_OK,
+            "coverage written: rows 3  matched 2",
+        )
+        written = json.loads(measured.read_text(encoding="utf-8"))
+        self.assertEqual(written["title"], "staged", "the published descriptor was read, not the staged one")
+        self.assertEqual(written["x-joins"]["joins"][0]["coverage"], {"rows": 3, "matched": 2})
+        self.assertEqual(self.read_left_coverage(), {"rows": 999, "matched": 999})
+
+    def test_out_refuses_when_more_than_one_descriptor_would_be_written(self) -> None:
+        self.lay_left(include_coverage=False)
+        write_package(
+            self.datasets,
+            "left2",
+            select_sql=LEFT_SQL,
+            fields=LEFT_FIELDS,
+            joins=[join_declaration(include_coverage=False)],
+        )
+        self.assertOutcome(
+            run_join(self.datasets, "--write", "--out", str(self.datasets.parent / "measured.json")),
+            EXIT_ERROR,
+            "--out names one file but more than one descriptor declares joins",
+        )
+
+    def test_out_without_write_refuses(self) -> None:
+        self.lay_left()
+        self.assertOutcome(
+            run_join(self.datasets, "--out", str(self.datasets.parent / "measured.json")),
+            EXIT_ERROR,
+            "--out only means something with --write",
+        )
+
+    def test_descriptor_override_naming_no_dataset_refuses(self) -> None:
+        self.lay_left()
+        self.assertOutcome(
+            run_join(self.datasets, "--write", "--descriptor", "absent=/nowhere.json"),
+            EXIT_ERROR,
+            "--descriptor names no dataset 'absent'",
+        )
+
     # ----------------------------------------------------- the cardinality clause
 
     def read_left_cardinality(self) -> str:

@@ -7,7 +7,7 @@ orthogonal facets:
 | File | Facet | Answers |
 |---|---|---|
 | `arcform.yaml` (+ `models/`, `descriptor.overrides.json`, `scripts/test_ingest_lei.py`) | **Protocol** — how it's made | run `arc run` → produces the Dataset **and** its descriptor; the test runs the models against scratch sources and pins what they refuse |
-| `datapackage.json` | **Descriptor** — what it is | schema, finetype labels, `x-joins`/evidence — **emitted** by the `describe` step, no longer hand-authored |
+| `datapackage.json` | **Descriptor** — what it is | schema, finetype labels, `x-joins`/evidence — **emitted** by the `describe` step (staged) and published by the stamp step, no longer hand-authored |
 | `scripts/crosswalk_join.py` (+ `test_crosswalk_join.py`) | **Proof** — that the join runs | executes every declared `x-joins` against the published objects and checks the coverage each one claims |
 | `../registry.json` (this dataset's entry) | **Address** — how it's found | stable `uid`, `crosswalk.edgar_gleif`, manifest pointer |
 
@@ -77,25 +77,40 @@ What those steps do, in phases:
    edge always wins over a name match for the same key.
 6. **package** — enrich from the sources, stamp `as_of`, materialise the terminal edge
    table, and **gate it on the identifier** (see *The identifier*); the
-   `parquet_export` operator writes it to `build/edgar_gleif.parquet` (a
-   first-class produced asset, not an unparseable `COPY` graph-island). A **total**
+   `parquet_export` operator writes it to `build/stage/edgar_gleif.parquet` (a
+   first-class produced asset, not an unparseable `COPY` graph-island; the published
+   `build/edgar_gleif.parquet` is the stamped copy, written last). A **total**
    `order_by` (`company_name` is not unique — 6,906 ties) makes the bytes reproducible.
-7. **describe** — emit `datapackage.json` from the built Parquet (see Boundaries).
+7. **describe** — emit the descriptor, `build/stage/described.json`, from the built
+   Parquet (see Boundaries).
 8. **derive join coverage** — measure each declared `x-joins` relationship against this
-   build's own Parquet and write the `rows`/`matched` it finds into the descriptor, so
-   the published coverage is measured rather than typed. `op: uv@1` running
-   `scripts/crosswalk_join.py`: it names the six files it reads and the one it writes,
+   build's own Parquet and write the `rows`/`matched` it finds into
+   `build/stage/measured.json`, a copy of the staged descriptor, so the published
+   coverage is measured rather than typed. `op: uv@1` running
+   `scripts/crosswalk_join.py`: it names the files it reads and the one it writes,
    which is what puts the measurement inside the asset graph — before that it was a
    `command:` step declaring nothing, and its figures went four weeks stale while the
    Run reported nothing wrong.
 9. **validate** — gate the built Parquet against `schema.finetype.json` (check-only; it
    writes nothing and moves no row).
-10. **stamp the descriptor into the Parquet** — write the finished `datapackage.json`
-    into the file's own footer so the object answers for itself from its URL alone,
-    then write the stamped file's `bytes`/`hash` back into the descriptor. `op: uv@1`
-    running `../../scripts/stamp_descriptor.py`. It runs last because it embeds the
-    FINISHED descriptor, and everything before the footer is compared byte for byte —
-    a stamp that moved one data byte is refused with the original left in place.
+10. **stamp the descriptor into the Parquet** — write the finished descriptor into
+    the footer of a copy of the staged Parquet, so the object answers for itself from
+    its URL alone, and publish both: `build/edgar_gleif.parquet` and `datapackage.json`,
+    the latter carrying the stamped file's `bytes`/`hash`. `op: uv@1` running
+    `../../scripts/stamp_descriptor.py`. It runs last because it embeds the FINISHED
+    descriptor, and everything before the footer is compared byte for byte — a stamp
+    that moved one data byte is refused with the original left in place.
+
+    **Each file has one writer, so a warm `arc run` with nothing changed re-runs no
+    step.** The stamp is the only step that writes the two published files; the export,
+    `describe` and the coverage step write into `build/stage/`. When two steps declared
+    the same file, the later one rewrote the earlier one's output, arcform saw that
+    output no longer match what its step had written, and the run re-did the export,
+    `describe`, the coverage, the validation and the stamp on every invocation — and
+    wrote a different Parquet each time, because `describe` stamps `created` from the
+    wall clock. The footer no longer carries `created`, and in `datapackage.json` it
+    means *when this data first appeared*: a republish over the same data pages keeps
+    it. `scripts/test_manifest_one_writer.py` holds the manifest to one writer per file.
 
 ## The identifier
 
@@ -196,15 +211,19 @@ and expect few rows or none, because the values it removes are still in there.
 - **Publish** — the content-addressed R2 upload + `manifest.json` / catalog pointer
   flip — stays in the out-of-repo publish pipeline. It *reads* this Protocol's terminal output
   `build/edgar_gleif.parquet`; it is not an arcform step.
-- **Describe** — `datapackage.json` is **emitted** from the built Parquet by the
-  `describe` step, not hand-authored. The step splits the descriptor by authority:
-  - `finetype profile build/edgar_gleif.parquet -o datapackage` types every column
+- **Describe** — `datapackage.json` is **emitted**, not hand-authored. The `describe`
+  step reads the staged Parquet, `build/stage/edgar_gleif.parquet`, and writes
+  `build/stage/described.json`; the coverage step writes a copy of it carrying the
+  measured coverage to `build/stage/measured.json`; the stamp step alone writes
+  `datapackage.json`. The `describe` step splits the descriptor by authority:
+  - `finetype profile build/stage/edgar_gleif.parquet -o datapackage` types every column
     from its taxonomy — the *machine-decidable* half: per-field `type` / `format`,
     the `x-finetype-*` semantic labels + observed constraints, and the resource
-    `bytes` / `hash` / `format` (computed straight from the Parquet).
+    `bytes` / `hash` / `format` (computed straight from the staged Parquet; the stamp
+    step re-measures `bytes` and `hash` against the published file).
   - the `datapackage_describe` operator (which embeds the former `describe.py`) overlays
     **`descriptor.overrides.json`** — the *curated* half finetype cannot infer — and
-    writes `datapackage.json`. Overrides win; finetype fills the rest.
+    writes `build/stage/described.json`. Overrides win; finetype fills the rest.
   - **finetype gap (deliberate split, not a workaround).** finetype emits exactly
     one typed Data Resource and nothing above the field level: no package identity
     (`title` / `description` / `homepage` / `licenses` / `sources`), no published
