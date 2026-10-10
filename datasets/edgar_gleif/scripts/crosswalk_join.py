@@ -463,6 +463,21 @@ def main(argv: list[str] | None = None) -> int:
         help="CHECK mode: also exit 1 on a join whose `cardinality` does not open with the "
         "sentence its `coverage` states (reported either way)",
     )
+    parser.add_argument(
+        "--descriptor",
+        action="append",
+        metavar="SLUG=PATH",
+        help="read dataset SLUG's descriptor from PATH instead of <datasets-dir>/SLUG/datapackage.json "
+        "(repeatable); for a descriptor a step produced somewhere other than where it is published",
+    )
+    parser.add_argument(
+        "--out",
+        type=Path,
+        metavar="PATH",
+        help="with --write: write the measured descriptor here instead of over the one it was read from, "
+        "so a step that measures does not rewrite the file the step before it produced "
+        "(needs exactly one descriptor to write)",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -484,6 +499,24 @@ def main(argv: list[str] | None = None) -> int:
         print(f"crosswalk join: no datasets/*/datapackage.json under {args.datasets_dir}", file=sys.stderr)
         return EXIT_ERROR
 
+    descriptor_overrides: dict[str, Path] = {}
+    for item in args.descriptor or []:
+        slug, sep, raw_path = item.partition("=")
+        if not sep or not slug or not raw_path:
+            print(f"crosswalk join: --descriptor expects SLUG=PATH, got {item!r}", file=sys.stderr)
+            return EXIT_ERROR
+        if slug not in {path.parent.name for path in descriptor_paths}:
+            print(f"crosswalk join: --descriptor names no dataset {slug!r} under {args.datasets_dir}", file=sys.stderr)
+            return EXIT_ERROR
+        descriptor_overrides[slug] = Path(raw_path)
+    if args.out and not args.write:
+        print("crosswalk join: --out only means something with --write", file=sys.stderr)
+        return EXIT_ERROR
+
+    def read_from(path: Path) -> Path:
+        """Where a dataset's descriptor is actually read: its override, else the published path."""
+        return descriptor_overrides.get(path.parent.name, path)
+
     if args.package:
         wanted = set(args.package)
         selected = [path for path in descriptor_paths if path.parent.name in wanted]
@@ -500,9 +533,10 @@ def main(argv: list[str] | None = None) -> int:
     ran = 0
 
     try:
-        index = index_resources(descriptor_paths)
+        index = index_resources([read_from(path) for path in descriptor_paths])
         written: list[Path] = []
-        for descriptor_path in selected:
+        for selected_path in selected:
+            descriptor_path = read_from(selected_path)
             descriptor = load_descriptor(descriptor_path)
             declaration = descriptor.get("x-joins")
             if declaration is None:
@@ -526,8 +560,14 @@ def main(argv: list[str] | None = None) -> int:
                 clauses.extend(join_clauses)
                 ran += 1
             if args.write:
-                save_descriptor(descriptor_path, descriptor)
-                written.append(descriptor_path)
+                if args.out and written:
+                    raise JoinError(
+                        f"--out names one file but more than one descriptor declares joins "
+                        f"({written[0]}, {descriptor_path}); name one with --package"
+                    )
+                target = args.out or descriptor_path
+                save_descriptor(target, descriptor)
+                written.append(target)
     except JoinError as exc:
         print(f"crosswalk join: {exc}", file=sys.stderr)
         return EXIT_ERROR
