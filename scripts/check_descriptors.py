@@ -87,7 +87,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 from typing import Any, Iterable
 
-from stamp_descriptor import DESCRIPTOR_KEY, SELF_REFERENTIAL, embedded_form, read_self_description
+from stamp_descriptor import DESCRIPTOR_KEY, SELF_REFERENTIAL, WRITTEN_AT, embedded_form, read_self_description
 
 EXIT_OK = 0
 EXIT_VIOLATIONS = 1
@@ -818,7 +818,13 @@ def check_self_description(
     except Exception as exc:  # noqa: BLE001 - a malformed repository copy is not checkable
         raise CheckError(f"{package}: cannot derive the embedded form: {exc}") from exc
 
-    differences = json_differences(expected, embedded)
+    # An object stamped before the stamp stopped embedding `created` still carries one,
+    # and stays published until its dataset is next republished. Holding it to the
+    # repository's `created` would redden every such object for a field no consumer
+    # pins and a republish drops; the stamp's own self-test is what proves new objects
+    # carry none.
+    embedded_compared = {key: value for key, value in embedded.items() if key not in WRITTEN_AT}
+    differences = json_differences(expected, embedded_compared)
     for difference in differences[:MAX_REPORTED_DIFFERENCES]:
         violations.append(
             Violation(
