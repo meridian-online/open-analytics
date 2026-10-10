@@ -148,10 +148,12 @@ back into the descriptor. `verify` re-reads every published object in full and
 refuses when a descriptor and its endpoint disagree on either `bytes` or `hash`.
 `restamp` writes what the endpoint currently serves into the descriptor. Its
 `publish` subcommand makes uploading and declaring one act rather than two, and
-the publishing pipeline, which lives outside this repository, calls it for the
-objects it uploads. Before the upload, `publish` requires one finished Run to have
+the publishing pipeline, which lives outside this repository, calls it for every
+dataset a descriptor here describes. When a Protocol with arcform state governs
+the descriptor, `publish` requires, before the upload, one finished Run to have
 produced both the bytes and the descriptor, from the records `arc run` leaves
-under the Protocol's `build/.arcform/runs/`.
+under the Protocol's `build/.arcform/runs/`. With no such Protocol, no Run is
+required.
 
 **`publish --run-record PATH` writes that Run's record to `PATH` before the
 uploader runs**, so the pipeline can serve it beside the object. It is the record
