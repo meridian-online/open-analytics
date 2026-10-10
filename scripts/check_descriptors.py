@@ -1401,7 +1401,9 @@ RESTRICTION_WORD = re.compile(
     r"\bnot (?:be )?(?:permitted|allowed|used|for)\b",
     re.IGNORECASE,
 )
-SENTENCE_BREAK = re.compile(r"(?<=[.;!?])\s+|\n+")
+# A semicolon is not a break: "building it is not restricted; using the output
+# commercially is" is one thought, and the second clause is the restriction.
+SENTENCE_BREAK = re.compile(r"(?<=[.!?])\s+|\n+")
 
 
 def identifier_is_noncommercial(identifier: str) -> bool:

@@ -1639,5 +1639,206 @@ class DescriptorCheckSelfTest(unittest.TestCase):
         self.assertOutcome(run_check(self.datasets), EXIT_VIOLATIONS, "catalogue.rows", "states 99")
 
 
+    # ----------------------------------------------------------------- licence
+
+    NONCOMMERCIAL_LICENCE = [
+        {
+            "name": "CC-BY-NC-SA-4.0",
+            "path": "https://creativecommons.org/licenses/by-nc-sa/4.0/",
+            "title": "Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International",
+        }
+    ]
+    # Names the licence and states nothing: the licence's own name holds the word
+    # "commercial", so this is the description a lazy check would accept.
+    DESCRIPTION_NAMING_ONLY = (
+        "Questions about science. Published by its authors under CC BY-NC-SA 4.0 "
+        "(Attribution-NonCommercial-ShareAlike). Built locally from a pinned URL."
+    )
+    DESCRIPTION_STATING_IT = (
+        "Questions about science. Published by its authors under CC BY-NC-SA 4.0 "
+        "(Attribution-NonCommercial-ShareAlike). Building it locally is not restricted; "
+        "using the output commercially is. Built locally from a pinned URL."
+    )
+
+    def widgets(self, **kwargs: Any) -> Path:
+        """One conformant dataset, so a licence case has a dataset beside the example it tests."""
+        return write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT * FROM (VALUES ('AB'), ('CD')) t(code)",
+            fields=[{"name": "code", "type": "string"}],
+            **kwargs,
+        )
+
+    def test_licence_rule_reads_examples_as_well_as_datasets_and_says_so(self) -> None:
+        self.widgets()
+        write_example(self.examples, "gadgets")
+        result = run_check(self.datasets)
+        self.assertOutcome(
+            result,
+            EXIT_OK,
+            "licence rule read 2 descriptor(s)",
+            "datasets/ (widgets)",
+            "examples/ (gadgets)",
+            # The run says what it does not do.
+            "internal consistency only",
+            "compared against nothing upstream",
+        )
+        # The example's Parquet was never written. Rules 1 to 8 would have refused it.
+        self.assertNotIn("gadgets.parquet", result.stdout + result.stderr)
+
+    def test_licence_rule_names_nothing_when_there_is_no_examples_directory(self) -> None:
+        self.widgets()
+        self.assertOutcome(run_check(self.datasets), EXIT_OK, "examples/ (none)")
+
+    def test_example_with_no_licence_identifier_fails_naming_the_file(self) -> None:
+        self.widgets()
+        write_example(self.examples, "gadgets", licenses=None)
+        self.assertOutcome(
+            run_check(self.datasets),
+            EXIT_VIOLATIONS,
+            str(self.examples / "gadgets" / "datapackage.json"),
+            "licence.identifier",
+            "carries no licence identifier",
+        )
+
+    def test_dataset_with_no_licence_identifier_fails_naming_the_file(self) -> None:
+        descriptor = self.widgets(licenses=None)
+        self.assertOutcome(
+            run_check(self.datasets),
+            EXIT_VIOLATIONS,
+            str(descriptor),
+            "licence.identifier",
+        )
+
+    def test_a_licence_entry_with_no_usable_name_is_no_identifier(self) -> None:
+        self.widgets()
+        for label, licenses in {
+            "empty list": [],
+            "not a list": {"name": "CC0-1.0"},
+            "entry without a name": [{"path": "https://example.test/terms", "title": "Terms"}],
+            "blank name": [{"name": "   ", "title": "Terms"}],
+            "name that is not text": [{"name": 7}],
+        }.items():
+            with self.subTest(label):
+                write_example(self.examples, "gadgets", licenses=licenses)
+                self.assertOutcome(run_check(self.datasets), EXIT_VIOLATIONS, "licence.identifier", "gadgets")
+
+    def test_an_explicit_notspecified_is_an_identifier(self) -> None:
+        self.widgets()
+        write_example(
+            self.examples,
+            "gadgets",
+            licenses=[{"name": "notspecified", "title": "No licence declared at source"}],
+        )
+        self.assertOutcome(run_check(self.datasets), EXIT_OK, "examples/ (gadgets)")
+
+    def test_noncommercial_identifier_whose_description_only_names_it_fails(self) -> None:
+        self.widgets()
+        write_example(
+            self.examples, "gadgets", licenses=self.NONCOMMERCIAL_LICENCE, description=self.DESCRIPTION_NAMING_ONLY
+        )
+        self.assertOutcome(
+            run_check(self.datasets),
+            EXIT_VIOLATIONS,
+            str(self.examples / "gadgets" / "datapackage.json"),
+            "licence.restriction",
+            "'CC-BY-NC-SA-4.0'",
+            "Naming the licence is not stating its restriction",
+        )
+
+    def test_noncommercial_identifier_with_no_description_fails(self) -> None:
+        self.widgets()
+        write_example(self.examples, "gadgets", licenses=self.NONCOMMERCIAL_LICENCE)
+        self.assertOutcome(run_check(self.datasets), EXIT_VIOLATIONS, "licence.restriction")
+
+    def test_noncommercial_identifier_whose_description_states_it_passes(self) -> None:
+        self.widgets()
+        write_example(
+            self.examples, "gadgets", licenses=self.NONCOMMERCIAL_LICENCE, description=self.DESCRIPTION_STATING_IT
+        )
+        self.assertOutcome(run_check(self.datasets), EXIT_OK, "agree with their data")
+
+    def test_the_restriction_sentence_is_what_separates_pass_from_fail(self) -> None:
+        # The same descriptor twice, differing by the one sentence: the pair is what shows the
+        # rule reads the restriction and not the licence's name, which both texts carry.
+        self.widgets()
+        write_example(
+            self.examples, "gadgets", licenses=self.NONCOMMERCIAL_LICENCE, description=self.DESCRIPTION_STATING_IT
+        )
+        self.assertOutcome(run_check(self.datasets), EXIT_OK)
+        cut = self.DESCRIPTION_STATING_IT.replace(
+            "Building it locally is not restricted; using the output commercially is. ", ""
+        )
+        self.assertNotEqual(cut, self.DESCRIPTION_STATING_IT)
+        write_example(self.examples, "gadgets", licenses=self.NONCOMMERCIAL_LICENCE, description=cut)
+        self.assertOutcome(run_check(self.datasets), EXIT_VIOLATIONS, "licence.restriction")
+
+    def test_noncommercial_is_read_from_every_spelling_of_the_identifier(self) -> None:
+        self.widgets()
+        for identifier in ("CC-BY-NC-4.0", "CC-BY-NC-ND-4.0", "CC BY-NC-SA 4.0", "Non-Commercial", "NonCommercial", "cc-by-nc-sa"):
+            with self.subTest(identifier):
+                write_example(
+                    self.examples,
+                    "gadgets",
+                    licenses=[{"name": identifier}],
+                    description=self.DESCRIPTION_NAMING_ONLY,
+                )
+                self.assertOutcome(run_check(self.datasets), EXIT_VIOLATIONS, "licence.restriction", repr(identifier))
+
+    def test_an_identifier_without_a_noncommercial_clause_owes_no_sentence(self) -> None:
+        self.widgets()
+        # `NCSA` is a real licence and holds the letters `nc`; read as tokens it is not NonCommercial.
+        for identifier in ("CC-BY-SA-4.0", "CC0-1.0", "ODC-BY-1.0", "other-pd", "NCSA", "notspecified"):
+            with self.subTest(identifier):
+                write_example(self.examples, "gadgets", licenses=[{"name": identifier}])
+                self.assertOutcome(run_check(self.datasets), EXIT_OK, "agree with their data")
+
+    def test_a_licence_is_never_compared_against_anything_upstream(self) -> None:
+        # The licence path points at a port nothing listens on; a check that fetched it, or
+        # reconciled it with a mirror's tag, would exit 2 here rather than 0. The descriptor's
+        # own `sources` names a mirror, and the check reads past it.
+        self.widgets()
+        descriptor = write_example(
+            self.examples,
+            "gadgets",
+            licenses=[{"name": "CC-BY-SA-4.0", "path": "http://127.0.0.1:9/never-fetched"}],
+        )
+        document = json.loads(descriptor.read_text(encoding="utf-8"))
+        document["sources"] = [{"path": "http://127.0.0.1:9/mirror", "title": "a mirror whose tag reads CC0-1.0"}]
+        descriptor.write_text(json.dumps(document), encoding="utf-8")
+        self.assertOutcome(run_check(self.datasets), EXIT_OK, "compared against nothing upstream")
+
+    def test_an_examples_directory_named_on_the_command_line_must_exist_and_hold_descriptors(self) -> None:
+        self.widgets()
+        self.assertOutcome(
+            run_check(self.datasets, "--examples-dir", str(self.examples)), EXIT_ERROR, "no examples directory"
+        )
+        self.examples.mkdir()
+        self.assertOutcome(
+            run_check(self.datasets, "--examples-dir", str(self.examples)),
+            EXIT_ERROR,
+            "no examples/*/datapackage.json",
+        )
+        write_example(self.examples, "gadgets")
+        self.assertOutcome(run_check(self.datasets, "--examples-dir", str(self.examples)), EXIT_OK, "examples/ (gadgets)")
+
+    def test_only_narrows_the_licence_rule_to_the_slugs_it_names(self) -> None:
+        self.widgets()
+        write_example(self.examples, "gadgets", licenses=None)
+        self.assertOutcome(run_check(self.datasets, "--only", "widgets"), EXIT_OK, "examples/ (none)")
+        self.assertOutcome(run_check(self.datasets), EXIT_VIOLATIONS, "licence.identifier")
+
+    def test_the_json_findings_name_what_the_licence_rule_read(self) -> None:
+        self.widgets()
+        write_example(self.examples, "gadgets")
+        findings = Path(self._tmp.name) / "findings.json"
+        self.assertOutcome(run_check(self.datasets, "--json", str(findings)), EXIT_OK)
+        self.assertEqual(
+            json.loads(findings.read_text(encoding="utf-8"))["licence_read"],
+            {"datasets": ["widgets"], "examples": ["gadgets"]},
+        )
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -146,6 +146,19 @@ neighbouring cell, which agrees with a number no reader of the rendered table is
 shown. `--write-catalogue` corrects each figure from the
 measured count, in the form that cell was already written in.
 
+The same run holds the licence of every descriptor in `datasets/` **and in `examples/`**
+to one rule, and prints which of the two it read. A descriptor must carry a licence
+identifier (`licenses[].name`; a source that asserts none is recorded as `notspecified`),
+and one whose identifier carries a NonCommercial clause must have a sentence in its
+`description` that pairs a word about commercial use with a word of restriction — naming
+the licence does not count. `examples/` descriptors are held to this rule alone, since
+their Parquet is built on the machine that runs the Protocol and published nowhere. The
+rule asserts internal consistency and compares the identifier against nothing upstream:
+a mirror's metadata is not the licensor, and a mirror's tag can be wrong where the
+licensor's text is right. It does not read the other direction — a description that
+states a restriction its identifier lacks — because a vocabulary check cannot tell
+"restricted" from "not restricted".
+
 `scripts/publish_dataset.py` reads in the other direction — from the endpoint
 back into the descriptor. `verify` re-reads every published object in full and
 refuses when a descriptor and its endpoint disagree on either `bytes` or `hash`.
