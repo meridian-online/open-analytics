@@ -52,7 +52,21 @@ lengthens the file, so the figures `describe` measured off the unstamped build a
 stale the instant the stamp lands. Stamping and re-measuring are one act here for
 the same reason uploading and declaring are one act in `publish_dataset.py`.
 
+**The embedded copy carries no `created` either.** `describe` stamps `created` from
+the wall clock, so a file that embeds it is a different file on every publish even
+when its data pages are byte-identical, and an analyst who pinned the `hash` out of
+`datapackage.json` finds the pin stale for no reason the run can give. `created` is
+the third fact a file cannot state about itself without changing it, and the only one
+of the three that moves when nothing else does.
+
+In the repository copy, beside the object, `created` means *when this data first
+appeared*, not *when this run happened*. With `--carry-created`, a stamp that finds
+the same data pages already published at its output keeps the `created` that
+descriptor states; a stamp over different pages takes the fresh one `describe` wrote.
+
     stamp_descriptor.py stamp --descriptor datapackage.json --parquet build/x.parquet
+    stamp_descriptor.py stamp --descriptor stage/measured.json --parquet stage/x.parquet
+        --out build/x.parquet --out-descriptor datapackage.json --carry-created
     stamp_descriptor.py read  https://openlake.meridian.online/naics.parquet
 
 Exit codes are distinct on purpose, because a status alone cannot tell a refusal
@@ -89,6 +103,11 @@ DESCRIPTOR_KEY = "datapackage.json"
 # container rather than the contents and writing them changes what they measure.
 SELF_REFERENTIAL = ("bytes", "hash")
 
+# Package-level keys the embedded copy must not carry either: they state when the
+# descriptor was written, which changes on a publish that changed nothing else, and so
+# would change the file that states it. They stay in the repository copy.
+WRITTEN_AT = ("created",)
+
 CHUNK = 1 << 20
 PARQUET_MAGIC = b"PAR1"
 
@@ -101,10 +120,12 @@ class StampError(Exception):
 
 
 def embedded_form(document: dict[str, Any]) -> dict[str, Any]:
-    """The descriptor as it travels inside the file: every resource loses `bytes` and `hash`."""
+    """The descriptor as it travels inside the file: every resource loses `bytes` and `hash`, and the package loses `created`."""
     if not isinstance(document, dict):
         raise StampError("descriptor is not a JSON object")
     copy = json.loads(json.dumps(document))
+    for key in WRITTEN_AT:
+        copy.pop(key, None)
     resources = copy.get("resources")
     if not isinstance(resources, list) or not resources:
         raise StampError("descriptor declares no resources")
@@ -366,6 +387,25 @@ def pick_resource(document: dict[str, Any], path: Path, name: str | None) -> dic
     raise StampError(f"{path}: declares no resource named {name!r}")
 
 
+def carried_created(parquet: Path, descriptor: Path, digest: str) -> str | None:
+    """The `created` already published for these data pages, or None when it cannot be vouched for.
+
+    The previous output vouches for it only when its pages are byte-identical to
+    `digest` and its descriptor states a `created`. Anything else — no previous output,
+    an unreadable one, different pages — returns None, and the caller keeps the fresh
+    value, which is the truthful one: this data first appeared now.
+    """
+    if not parquet.exists() or not descriptor.exists():
+        return None
+    try:
+        if data_digest(parquet) != digest:
+            return None
+        created = load_descriptor(descriptor).get("created")
+    except StampError:
+        return None
+    return created if isinstance(created, str) and created else None
+
+
 # ──────────────────────────────────────────────────────────────── subcommands
 
 
@@ -377,11 +417,16 @@ def command_stamp(args: argparse.Namespace) -> int:
 
     document = load_descriptor(descriptor_path)
     resource = pick_resource(document, descriptor_path, args.resource)
-    text = embedded_text(document)
 
     before = data_digest(parquet)
     con = connect()
     destination = Path(args.out) if args.out else parquet
+    out_descriptor = Path(args.out_descriptor) if args.out_descriptor else descriptor_path
+    if args.carry_created:
+        carried = carried_created(destination, out_descriptor, before)
+        if carried is not None:
+            document["created"] = carried
+    text = embedded_text(document)
     with tempfile.TemporaryDirectory(prefix="stamp-descriptor-", dir=str(destination.parent)) as scratch:
         staged = Path(scratch) / (destination.name + ".stamped")
         stamp_parquet(con, parquet, staged, text)
@@ -406,11 +451,12 @@ def command_stamp(args: argparse.Namespace) -> int:
     if not args.keep_declared_bytes:
         resource["bytes"] = size
         resource["hash"] = digest
-        save_descriptor(descriptor_path, document)
+    if not args.keep_declared_bytes or args.out_descriptor:
+        save_descriptor(out_descriptor, document)
 
     print(
         f"stamp: {destination} carries {DESCRIPTOR_KEY} ({len(text.encode('utf-8')):,} bytes in the footer); "
-        f"{descriptor_path} declares {size:,} bytes, {digest}",
+        f"{out_descriptor} declares {size:,} bytes, {digest}",
         file=sys.stderr,
     )
     return EXIT_OK
@@ -449,6 +495,17 @@ def build_parser() -> argparse.ArgumentParser:
     stamp.add_argument("--parquet", required=True, help="the built Parquet to stamp")
     stamp.add_argument("--resource", help="which resource's bytes/hash to restamp (default: the only one)")
     stamp.add_argument("--out", help="write the stamped file here instead of in place")
+    stamp.add_argument(
+        "--out-descriptor",
+        help="write the descriptor, with its re-measured bytes/hash, here instead of over --descriptor; "
+        "a step that reads the descriptor and writes it back to the same path rewrites its own input",
+    )
+    stamp.add_argument(
+        "--carry-created",
+        action="store_true",
+        help="keep the `created` of the descriptor already at --out-descriptor when the Parquet already at "
+        "--out holds the same data pages: `created` then means when this data first appeared",
+    )
     stamp.add_argument(
         "--keep-declared-bytes",
         action="store_true",
