@@ -47,16 +47,29 @@ graph is a plan of what each step owns rather than a log of what happened. Only
 with a null `skip_reason` (a step that was skipped because its output was already
 current carries a reason). That distinction is the whole guard.
 
+The Run that check finds is the evidence a stranger needs too. Someone holding
+only an object URL cannot otherwise tell a deliberate publish from a write made by
+hand: both serve the same bytes and pass the same descriptor check. `publish
+--run-record PATH` writes that Run's record to PATH before the uploader runs, so
+the pipeline can serve it beside the object, and `trace` is the reader's half:
+given only the object's URL it finds the run that made it. The record written is
+the one `arc run` wrote, with one field changed. `run.protocol.dir`, which arcform
+fills with an absolute path on the machine that ran it, becomes the Protocol's
+directory relative to the repository root, `datasets/<slug>`. Any other machine
+path left in the record stops the publish; see `served_run_record`.
+
 The publishing pipeline that moves these objects lives outside this repository
 and calls `publish` for every dataset a descriptor here describes. Of the
 checked-in descriptors, only `edgar`'s `bytes` and `hash` were written by
 `restamp`; the rest were emitted when their descriptors were last regenerated.
 
-  publish     upload a local file, then declare what the endpoint serves back
+  publish     upload a local file, then declare what the endpoint serves back;
+              with --run-record, write the record of the Run it verified first
   provenance  refuse bytes and a descriptor that no one finished Run produced
   restamp     declare what the endpoint already serves, for an object published
               out of band before this seam existed
   verify      refuse when the descriptor and the endpoint disagree
+  trace       name the Run that made a served object, from its URL alone
 
 `bytes` and `hash` are measured from a single pass over one stream, so they
 cannot describe different bytes from each other. A short read is a refusal
@@ -75,27 +88,33 @@ and names no bucket. Pass a command carrying `{file}` and `{url}`:
 Exit codes are distinct on purpose, because a status alone cannot tell a refusal
 apart from a crash:
 
-  0  the descriptor declares what the endpoint serves
-  1  a disagreement
+  0  the descriptor declares what the endpoint serves; for `trace`, a Run's
+     record names the bytes served
+  1  a disagreement; for `trace`, the object cannot be traced to a Run, and the
+     message says which link is missing
   2  the operation could not be completed — unreachable endpoint, failed
-     uploader, malformed descriptor. Never a verdict about the data.
+     uploader, malformed descriptor, a run record that cannot be written. Never
+     a verdict about the data.
 """
 
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import http.client
 import json
 import os
+import re
 import shlex
 import subprocess
 import sys
 import tempfile
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, BinaryIO, Iterable
 
@@ -128,7 +147,15 @@ ARCFORM_STATE_SUBPATH = ("build", ".arcform")
 # happens to sit, and where this repository keeps its own: `datasets/<slug>/`,
 # resolved from this file so it holds however the caller set --datasets-dir.
 PROTOCOL_MARKER = "arcform.yaml"
-REPO_DATASETS = Path(__file__).resolve().parent.parent / "datasets"
+REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_DATASETS = REPO_ROOT / "datasets"
+
+# What `trace` reads at an object's origin. The pointer file lists each dataset's
+# current object under `datasets.<slug>` with a 16-hex prefix of its sha256, and
+# names the Run that made it under one key, `run`: `{"id": ..., "record": <URL>}`.
+MANIFEST_NAME = "manifest.json"
+MANIFEST_RUN_KEY = "run"
+MANIFEST_HASH_PREFIX = 16
 
 
 class PublishError(Exception):
@@ -335,6 +362,10 @@ class Run:
     started_at: str
     assets: tuple[dict[str, Any], ...]
     steps: dict[str, dict[str, Any]]
+    # The whole record as parsed, so the copy `publish --run-record` writes is the
+    # one this Run was judged on rather than a second read of a file that may
+    # have changed since.
+    document: dict[str, Any] = field(default_factory=dict, compare=False, repr=False)
 
     def file_asset(self, protocol_dir: Path, target: Path) -> dict[str, Any] | None:
         """The recorded file asset whose path is `target`, or None.
@@ -437,33 +468,41 @@ def load_runs(runs_dir: Path) -> list[Run]:
                 document = json.load(handle)
         except (OSError, json.JSONDecodeError) as exc:
             raise PublishError(f"{path}: cannot read the Run record: {exc}") from exc
-        if not isinstance(document, dict):
-            raise PublishError(f"{path}: Run record is not a JSON object")
-        version = document.get("contract_version")
-        if version != RUN_CONTRACT_VERSION:
-            raise PublishError(
-                f"{path}: Run record declares contract version {version!r}; this seam reads "
-                f"{RUN_CONTRACT_VERSION!r} and will not guess at another"
-            )
-        run = document.get("run")
-        if not isinstance(run, dict):
-            raise PublishError(f"{path}: Run record declares no run block")
-        steps = document.get("steps")
-        assets = document.get("assets")
-        if not isinstance(steps, list) or not isinstance(assets, list):
-            raise PublishError(f"{path}: Run record declares no steps/assets")
-        runs.append(
-            Run(
-                path=path,
-                run_id=str(run.get("run_id") or path.stem),
-                outcome=str(run.get("outcome")),
-                started_at=str(run.get("started_at") or ""),
-                assets=tuple(asset for asset in assets if isinstance(asset, dict)),
-                steps={str(step.get("name")): step for step in steps if isinstance(step, dict)},
-            )
-        )
+        runs.append(parse_run_record(document, str(path), path=path, default_id=path.stem))
     runs.sort(key=lambda run: (run.started_at, run.path.name), reverse=True)
     return runs
+
+
+def parse_run_record(document: Any, where: str, *, path: Path, default_id: str = "") -> Run:
+    """One b4/1 record as a Run, or a PublishError naming what is wrong with it.
+
+    Shared by the Runs on disk that `publish` judges and the served copy `trace`
+    fetches, so a record is read the same way at both ends.
+    """
+    if not isinstance(document, dict):
+        raise PublishError(f"{where}: Run record is not a JSON object")
+    version = document.get("contract_version")
+    if version != RUN_CONTRACT_VERSION:
+        raise PublishError(
+            f"{where}: Run record declares contract version {version!r}; this seam reads "
+            f"{RUN_CONTRACT_VERSION!r} and will not guess at another"
+        )
+    run = document.get("run")
+    if not isinstance(run, dict):
+        raise PublishError(f"{where}: Run record declares no run block")
+    steps = document.get("steps")
+    assets = document.get("assets")
+    if not isinstance(steps, list) or not isinstance(assets, list):
+        raise PublishError(f"{where}: Run record declares no steps/assets")
+    return Run(
+        path=path,
+        run_id=str(run.get("run_id") or default_id),
+        outcome=str(run.get("outcome")),
+        started_at=str(run.get("started_at") or ""),
+        assets=tuple(asset for asset in assets if isinstance(asset, dict)),
+        steps={str(step.get("name")): step for step in steps if isinstance(step, dict)},
+        document=document,
+    )
 
 
 def unpublishable_reason(run: Run, protocol_dir: Path, descriptor_path: Path, declared: Measurement) -> str | None:
@@ -538,6 +577,124 @@ def require_run_provenance(
     )
 
 
+# ------------------------------------------------- the record served beside it
+
+WINDOWS_ABSOLUTE = re.compile(r"^(?:[A-Za-z]:[\\/]|\\\\)")
+
+
+def protocol_dir_in_repository(protocol_dir: Path, datasets_dir: Path) -> str:
+    """The Protocol's directory relative to the repository root it sits in.
+
+    `datasets/<slug>` for this repository's own Protocols, which is where the
+    pipeline's relocated descriptors resolve to. A Protocol inside the descriptor
+    tree the caller passed is named relative to that tree's parent, the same
+    shape. One in neither has no name that is not a machine path, so its record
+    is not written.
+    """
+    target = protocol_dir.resolve()
+    for root in (REPO_ROOT, datasets_dir.resolve().parent):
+        try:
+            return target.relative_to(root).as_posix()
+        except ValueError:
+            continue
+    raise PublishError(
+        f"{protocol_dir} is inside neither {REPO_ROOT} nor {datasets_dir.resolve().parent}, so its Run "
+        f"record has no repository-relative directory to name; nothing was uploaded"
+    )
+
+
+def looks_absolute(value: str) -> bool:
+    """A whole value that is one rooted filesystem path, POSIX or Windows."""
+    if not value or any(ch.isspace() for ch in value):
+        return False
+    return value.startswith("/") or bool(WINDOWS_ABSOLUTE.match(value))
+
+
+def machine_paths(value: Any, roots: tuple[str, ...], pointer: str = "") -> list[str]:
+    """A JSON pointer to every key or string in `value` that names a place on this machine.
+
+    Two tests: the whole string is an absolute path, or it CONTAINS one of
+    `roots` — which catches a path embedded in a longer value, such as a command
+    line, that the first test cannot see.
+    """
+
+    def leaks(text: str) -> bool:
+        return looks_absolute(text) or any(root in text for root in roots)
+
+    if isinstance(value, dict):
+        found: list[str] = []
+        for key, item in value.items():
+            here = f"{pointer}/{key}"
+            if leaks(str(key)):
+                found.append(here)
+            found.extend(machine_paths(item, roots, here))
+        return found
+    if isinstance(value, list):
+        return [hit for index, item in enumerate(value) for hit in machine_paths(item, roots, f"{pointer}/{index}")]
+    if isinstance(value, str) and leaks(value):
+        return [pointer or "/"]
+    return []
+
+
+def served_run_record(run: Run, protocol_dir: Path, datasets_dir: Path) -> dict[str, Any]:
+    """The Run's record as a stranger may read it, or a PublishError.
+
+    One field changes: `run.protocol.dir`, which arcform fills with the absolute
+    path of the Protocol on the machine that ran it, becomes the Protocol's
+    directory relative to the repository root. Nothing else is reshaped, because
+    the served copy is the evidence this publish was judged on.
+
+    A machine path anywhere else stops the publish rather than being rewritten:
+    a field this seam does not know is not one it can safely edit, and serving
+    it is the leak. The four Protocols' records read on 2026-10-10 carry one in
+    `run.protocol.dir` and nowhere else, so this check is for the day a second
+    field starts to.
+    """
+    block = run.document.get("run")
+    if not isinstance(block, dict) or not block.get("run_id"):
+        raise PublishError(f"{run.path}: the Run record names no run_id, so a served copy could not name its Run")
+    if not isinstance(block.get("protocol"), dict):
+        raise PublishError(
+            f"{run.path}: the Run record names no Protocol, so a served copy could not say what made the bytes"
+        )
+
+    record = copy.deepcopy(run.document)
+    protocol = record["run"]["protocol"]
+    original = protocol.get("dir")
+    protocol["dir"] = protocol_dir_in_repository(protocol_dir, datasets_dir)
+
+    candidates = {str(REPO_ROOT), str(protocol_dir.resolve()), os.path.expanduser("~")}
+    if isinstance(original, str) and looks_absolute(original):
+        candidates.add(original)
+    # A root of fewer than three parts — `/`, `/tmp` — is in too many strings to mean anything.
+    roots = tuple(sorted(root for root in candidates if len(Path(root).parts) >= 3))
+    leaked = machine_paths(record, roots)
+    if leaked:
+        raise PublishError(
+            f"{run.path}: the Run record still names a path on this machine at {', '.join(leaked)} once "
+            f"run.protocol.dir is made relative; it was not written and nothing was uploaded"
+        )
+    return record
+
+
+def write_run_record(path: Path, record: dict[str, Any]) -> None:
+    """Write the served record at `path`, whole or not at all."""
+    body = json.dumps(record, indent=2, ensure_ascii=False) + "\n"
+    try:
+        handle = tempfile.NamedTemporaryFile(
+            "w", encoding="utf-8", dir=str(path.parent), prefix=path.name + ".", suffix=".tmp", delete=False
+        )
+    except OSError as exc:
+        raise PublishError(f"cannot write the Run record at {path}: {exc}; nothing was uploaded") from exc
+    try:
+        with handle:
+            handle.write(body)
+        os.replace(handle.name, path)
+    except OSError as exc:
+        Path(handle.name).unlink(missing_ok=True)
+        raise PublishError(f"cannot write the Run record at {path}: {exc}; nothing was uploaded") from exc
+
+
 def run_uploader(command: str, file: Path, url: str) -> None:
     try:
         tokens = shlex.split(command)
@@ -589,6 +746,7 @@ def command_publish(args: argparse.Namespace) -> int:
         raise PublishError(f"{local_file} is empty; refusing to publish it")
     print(f"publish: {local_file} is {local.describe()}")
 
+    run: Run | None = None
     protocol_dir = resolve_protocol_dir(args.dataset, descriptor_path, args.protocol_dir)
     if protocol_dir is None:
         # No Protocol governs this descriptor, so there is no Run to require and
@@ -605,17 +763,35 @@ def command_publish(args: argparse.Namespace) -> int:
         run = require_run_provenance(protocol_dir, descriptor_path, local_file, local)
         print(f"publish: Run {run.run_id} produced both {local_file} and {descriptor_path}")
 
-    run_uploader(args.uploader, local_file, url)
+    # The record is written BEFORE the upload, so a record that cannot be written
+    # stops the publish with the endpoint untouched, and it is removed again if
+    # anything after it fails: a record on disk means this whole act completed.
+    record_path: Path | None = args.run_record
+    if record_path is not None:
+        if run is None or protocol_dir is None:
+            raise PublishError(
+                f"--run-record asks for the record of the Run that produced {local_file}, and no Run "
+                f"governs these bytes; nothing was uploaded"
+            )
+        write_run_record(record_path, served_run_record(run, protocol_dir, args.datasets_dir))
+        print(f"publish: wrote Run {run.run_id}'s record to {record_path}")
 
-    served = readback(url, expect=local, attempts=args.readback_attempts, delay=args.readback_delay)
-    if served != local:
-        raise Refusal(
-            f"{url} serves {served.describe()} after uploading {local.describe()}; "
-            "the descriptor is unchanged"
-        )
+    try:
+        run_uploader(args.uploader, local_file, url)
 
-    stamp(resource, served)
-    save_descriptor(descriptor_path, document)
+        served = readback(url, expect=local, attempts=args.readback_attempts, delay=args.readback_delay)
+        if served != local:
+            raise Refusal(
+                f"{url} serves {served.describe()} after uploading {local.describe()}; "
+                "the descriptor is unchanged"
+            )
+
+        stamp(resource, served)
+        save_descriptor(descriptor_path, document)
+    except BaseException:
+        if record_path is not None:
+            record_path.unlink(missing_ok=True)
+        raise
     print(f"publish: {descriptor_path} declares {served.describe()}")
     return EXIT_OK
 
@@ -702,6 +878,139 @@ def command_verify(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+# ------------------------------------------------- which Run made a served object
+
+
+def fetch(url: str, *, timeout: float = 60.0) -> bytes:
+    """The whole body at `url`. For the small files `trace` reads, never an object."""
+    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return response.read()
+    except http.client.HTTPException as exc:
+        raise PublishError(f"{url} delivered an incomplete response: {exc!r}") from exc
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        raise PublishError(f"GET {url} failed: {exc}") from exc
+
+
+def object_origin(url: str) -> str:
+    parts = urllib.parse.urlsplit(url)
+    if parts.scheme not in ("http", "https") or not parts.netloc:
+        raise PublishError(f"{url!r} is not an http(s) URL, and trace reads a served object")
+    return f"{parts.scheme}://{parts.netloc}"
+
+
+def manifest_prefix(entry: dict[str, Any]) -> str | None:
+    """The entry's sha256 as lowercase hex, or None when it is too short to name anything.
+
+    The manifest keeps a 16-hex prefix. An empty or short value is refused rather
+    than matched, because every digest starts with the empty string.
+    """
+    raw = str(entry.get("sha256") or "").strip().lower().removeprefix("sha256:")
+    if not MANIFEST_HASH_PREFIX <= len(raw) <= 64 or any(ch not in "0123456789abcdef" for ch in raw):
+        return None
+    return raw
+
+
+def trace_entry(slug: str, entry: dict[str, Any], url: str, served: Measurement, manifest_url: str) -> tuple[Run, str, dict[str, Any]]:
+    """The Run whose record, as this manifest entry names it, produced the bytes served.
+
+    Each Refusal names the link that is missing, so a reader learns which of the
+    manifest, the record or the object is the one out of step.
+    """
+    pointer = entry.get(MANIFEST_RUN_KEY)
+    pointer = pointer if isinstance(pointer, dict) else {}
+    reference = pointer.get("record")
+    if not isinstance(reference, str) or not reference.strip():
+        raise Refusal(
+            f"the {MANIFEST_NAME} entry for {slug} names no run record: it carries no "
+            f"`{MANIFEST_RUN_KEY}.record`, so nothing served says which Run made these bytes"
+        )
+    record_url = urllib.parse.urljoin(manifest_url, reference.strip())
+    try:
+        body = fetch(record_url)
+    except PublishError as exc:
+        raise Refusal(f"the run record the {MANIFEST_NAME} entry for {slug} names cannot be fetched: {exc}") from exc
+    try:
+        run = parse_run_record(json.loads(body), record_url, path=Path(urllib.parse.urlsplit(record_url).path))
+    except (PublishError, ValueError) as exc:  # JSONDecodeError and UnicodeDecodeError are both ValueErrors
+        raise Refusal(f"the run record at {record_url} cannot be read as a Run record: {exc}") from exc
+    if not run.run_id:
+        raise Refusal(f"the run record at {record_url} cannot be read as a Run record: it names no run_id")
+
+    named = pointer.get("id")
+    if named and str(named) != run.run_id:
+        raise Refusal(
+            f"the {MANIFEST_NAME} entry for {slug} names Run {named}, but the record it points to at "
+            f"{record_url} is Run {run.run_id}"
+        )
+
+    asset = run.produced_asset(served.digest)
+    if asset is None:
+        produced = [
+            item
+            for item in run.assets
+            if item.get("kind") == "file" and item.get("produced_by") and step_reached(run.steps.get(str(item["produced_by"])))
+        ]
+        suffix = Path(urllib.parse.urlsplit(url).path).suffix
+        alike = [item for item in produced if suffix and str(item.get("path") or "").endswith(suffix)] or produced
+        listed = "; ".join(f"{item.get('path')} {recorded_digest(item) or 'with no recorded hash'}" for item in alike)
+        raise Refusal(
+            f"the run record's content hash for the artefact differs from the bytes served: {url} hashes to "
+            f"{served.digest}, and Run {run.run_id}'s record at {record_url} names {listed or 'no file it produced'}"
+        )
+    return run, record_url, asset
+
+
+def command_trace(args: argparse.Namespace) -> int:
+    url = str(args.url)
+    manifest_url = f"{object_origin(url)}/{MANIFEST_NAME}"
+    served = measure_url(url)
+    print(f"trace: {url} serves {served.describe()}")
+
+    try:
+        manifest = json.loads(fetch(manifest_url))
+    except ValueError as exc:
+        raise PublishError(f"{manifest_url} is not JSON: {exc}") from exc
+    datasets = manifest.get("datasets") if isinstance(manifest, dict) else None
+    if not isinstance(datasets, dict):
+        raise PublishError(f"{manifest_url} lists no datasets")
+
+    entries = [(str(slug), entry) for slug, entry in sorted(datasets.items()) if isinstance(entry, dict)]
+    served_hex = served.digest.removeprefix("sha256:")
+    matches = [(slug, entry) for slug, entry in entries if (prefix := manifest_prefix(entry)) and served_hex.startswith(prefix)]
+    if not matches:
+        listed = ", ".join(f"{slug} {manifest_prefix(entry) or '(no usable sha256)'}" for slug, entry in entries)
+        raise Refusal(
+            f"no {MANIFEST_NAME} entry matches the bytes served: {url} hashes to {served.digest}, and "
+            f"{manifest_url} lists {listed or 'no datasets'}. These bytes were not published through the "
+            f"manifest, or were replaced after the last publish"
+        )
+
+    refusals: list[str] = []
+    for slug, entry in matches:
+        try:
+            run, record_url, asset = trace_entry(slug, entry, url, served, manifest_url)
+        except Refusal as exc:
+            refusals.append(str(exc))
+            continue
+        block = run.document.get("run") or {}
+        protocol, engine = block.get("protocol"), block.get("engine")
+        protocol = protocol if isinstance(protocol, dict) else {}
+        engine = engine if isinstance(engine, dict) else {}
+        print(f"trace: {manifest_url} lists these bytes as {slug}, published {entry.get('published') or 'at no stated time'}")
+        print(f"trace: Run {run.run_id} made them; its record is {record_url}")
+        print(f"  protocol         {protocol.get('name') or 'not recorded'} ({protocol.get('dir') or 'no directory recorded'})")
+        print(f"  manifest_sha256  {protocol.get('manifest_sha256') or 'not recorded'}")
+        print(f"  engine           {', '.join(f'{name} {version}' for name, version in engine.items()) or 'not recorded'}")
+        print(f"  started_at       {block.get('started_at') or 'not recorded'}")
+        print(f"  finished_at      {block.get('finished_at') or 'not recorded'}")
+        print(f"  outcome          {block.get('outcome') or 'not recorded'}")
+        print(f"trace: the record's {asset.get('path')} is {recorded_digest(asset)}, the sha256 of the bytes served")
+        return EXIT_OK
+    raise Refusal("\n    ".join(refusals))
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--datasets-dir", default=Path("datasets"), type=Path)
@@ -726,6 +1035,13 @@ def build_parser() -> argparse.ArgumentParser:
         default=os.environ.get("DATASET_UPLOAD_CMD"),
         metavar="CMD",
         help="command carrying {file} and {url}; defaults to $DATASET_UPLOAD_CMD",
+    )
+    publish.add_argument(
+        "--run-record",
+        type=Path,
+        metavar="PATH",
+        help="before uploading, write the record of the Run these bytes were verified against to PATH, "
+        "with run.protocol.dir made relative to the repository root",
     )
     publish.add_argument("--readback-attempts", type=int, default=READBACK_ATTEMPTS)
     publish.add_argument("--readback-delay", type=float, default=READBACK_DELAY)
@@ -752,6 +1068,10 @@ def build_parser() -> argparse.ArgumentParser:
     verify.add_argument("--dataset", action="append", metavar="SLUG", help="restrict to one dataset (repeatable)")
     verify.set_defaults(handler=command_verify, resource=None)
 
+    trace = subparsers.add_parser("trace", help="name the Run that made a served object, from its URL alone")
+    trace.add_argument("url", metavar="URL", help=f"the served object; {MANIFEST_NAME} is read from its origin")
+    trace.set_defaults(handler=command_trace, resource=None)
+
     return parser
 
 
@@ -763,7 +1083,8 @@ def main(argv: Iterable[str] | None = None) -> int:
     try:
         return int(args.handler(args))
     except Refusal as exc:
-        print(f"{args.command}: REFUSED — {exc}", file=sys.stderr)
+        verdict = "NOT TRACED" if args.command == "trace" else "REFUSED"
+        print(f"{args.command}: {verdict} — {exc}", file=sys.stderr)
         return EXIT_DISAGREEMENT
     except PublishError as exc:
         print(f"{args.command}: could not complete — {exc}", file=sys.stderr)
