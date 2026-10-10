@@ -1612,10 +1612,15 @@ def main(argv: list[str] | None = None) -> int:
 
     # Rule 9 reads the descriptor alone, so it reads `examples/` too: those Protocols
     # publish no object, and rules 1 to 8 have nothing of theirs to read.
-    for package, descriptor in [*packages.items(), *example_packages.items()]:
+    # The list the rule runs over is the list the run reports having read.
+    licence_targets = [
+        *(("datasets", package, descriptor) for package, descriptor in packages.items()),
+        *(("examples", package, descriptor) for package, descriptor in example_packages.items()),
+    ]
+    for _, package, descriptor in licence_targets:
         violations.extend(check_licence(package, descriptor))
-    licence_read_datasets = [Path(package).parent.name for package in packages]
-    licence_read_examples = [Path(package).parent.name for package in example_packages]
+    licence_read_datasets = [Path(package).parent.name for kind, package, _ in licence_targets if kind == "datasets"]
+    licence_read_examples = [Path(package).parent.name for kind, package, _ in licence_targets if kind == "examples"]
 
     readme_path = args.readme if args.readme is not None else args.datasets_dir.parent / "README.md"
     try:
