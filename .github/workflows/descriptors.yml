@@ -55,14 +55,39 @@
 # still reachable, so a demonstration that quietly ran unblocked cannot pass.
 #
 # `protocol-readme-self-test` and `protocol-readme` are the first jobs here that read
-# `arcform.yaml` at all. Nothing in this workflow runs `arc`, so a Protocol change has
-# always been invisible to CI — and the visible half of that, a README describing a step
-# list the manifest no longer has, went wrong and stayed wrong for months. The pair has
-# the same order and the same reason as every pair above: the self-test builds scratch
-# manifests with deliberate disagreements and asserts the exit status and the message,
-# then the check runs against the shipped datasets. The manifest is PARSED, never
-# grepped: `grep -c 'command:' datasets/edgar_gleif/arcform.yaml` is 4 with no
-# `command:` step in the file.
+# `arcform.yaml` at all. They read it as YAML, and a YAML parse accepts every document
+# `arc` refuses for its content; before the `arc-manifest-load` pair below, nothing in
+# this workflow asked `arc`, so a Protocol change was invisible to CI — and the visible
+# half of that, a README describing a step list the manifest no longer has, went wrong
+# and stayed wrong for months. The pair has the same order and the same reason as every
+# pair above: the self-test builds scratch manifests with deliberate disagreements and
+# asserts the exit status and the message, then the check runs against the shipped
+# datasets. The manifest is PARSED, never grepped: `grep -c 'command:'
+# datasets/edgar_gleif/arcform.yaml` is 4 with no `command:` step in the file.
+#
+# `arc-manifest-load-self-test` and `arc-manifest-load` ask `arc` itself.
+# `scripts/arc_manifest_load` links `arc`'s published spec loader,
+# `arc::spec::Manifest::load`, at `ARC_REV` below, hands it every `arcform.yaml` under
+# `datasets/` and `examples/`, and fails on a refusal with the loader's own message,
+# unedited. A precondition `arc` has no variant for, an operator version its catalog
+# cannot satisfy, a `with:` block an operator's schema rejects: each loads as YAML and
+# is refused here. The job needs `arc`'s toolchain and libduckdb and nothing else — it
+# runs no step, opens no connection and needs no `build/`. The walk prints how many
+# manifests it loaded and refuses fewer than four under `datasets/`, six under
+# `examples/` or ten in all, because a walk over an emptied or moved subtree otherwise
+# reads exactly like full coverage. The self-test runs the built gate against scratch
+# trees and asserts the exit status and the message; each refusal it holds differs by
+# one manifest from a tree it accepts.
+#
+# WHAT `arc-manifest-load` DOES NOT COVER. `Manifest::load` judges one document in
+# isolation, and three things a Protocol depends on are outside it. The step graph: a
+# `depends_on:` naming a step that does not exist loads, and the `arc` binary runs it,
+# resolving the name as an external file source and exiting 0. The SQL a `sql:` step
+# points at: the loader never opens the file, so a missing or broken model passes. And
+# whether the pipeline runs at all, which nothing on this page attempts. The self-test
+# pins the first two as accepted, so the day `arc`'s loader starts refusing either, a
+# test reddens and this paragraph is due for an edit. Three real gaps, stated rather
+# than papered over.
 #
 # `label-agreement-self-test` and `label-agreement` are the first jobs here that read
 # more than one package at a time. Every other check on this page judges one package
@@ -194,6 +219,20 @@ env:
   # exits 2 and names both versions. Two literals, and the one that decides is the
   # runtime.
   FRICTIONLESS_VERSION: "5.19.0"
+  # The `arc` revision `arc-manifest-load` links, by git rev because `arc` has no
+  # release channel. It is brightfield's pin: brightfield loads these same manifests
+  # through its own `arc`, and two pins that drift give two answers to whether a manifest
+  # is valid. scripts/arc_manifest_load/Cargo.toml carries the rev twice and says how to
+  # move all four literals together; `arc-manifest-load` refuses a Cargo.lock whose
+  # arcform sources are not all at this rev, and `--locked` refuses a Cargo.toml the lock
+  # does not match.
+  ARC_REV: "f0561cd255e010e12a6ae82edc0b70785c3d19fc"
+  # The toolchain and the DuckDB C library arcform's own CI builds `arc` with at
+  # `ARC_REV`, and they move with it. The loader calls no DuckDB function; it links the
+  # library because `arc` does. This is a separate literal from `DUCKDB_VERSION`, which
+  # is the Python reader's pin, so bumping one does not move the other.
+  ARC_RUST_TOOLCHAIN: "1.94"
+  ARC_LIBDUCKDB_VERSION: "v1.5.4"
 
 jobs:
   self-test:
@@ -435,6 +474,101 @@ jobs:
             echo
             echo '```'
             cat protocol-readme.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $status
+
+  arc-manifest-load-self-test:
+    name: the manifest-load check can fail
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.ARC_RUST_TOOLCHAIN }}
+      # One cache for both jobs: the self-test's `cargo test` builds the gate binary in
+      # the same profile the gate job runs it from.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: scripts/arc_manifest_load
+          shared-key: arc-manifest-load
+      # `arc` links a system DuckDB, so the C library is fetched as arcform's own CI
+      # fetches it and the linker, the bindings build script and the runtime are pointed
+      # at it.
+      - name: install libduckdb
+        run: |
+          set -euo pipefail
+          curl -fsSL -o "$RUNNER_TEMP/libduckdb.zip" \
+            "https://github.com/duckdb/duckdb/releases/download/${ARC_LIBDUCKDB_VERSION}/libduckdb-linux-amd64.zip"
+          mkdir -p "$HOME/libduckdb"
+          unzip -o "$RUNNER_TEMP/libduckdb.zip" -d "$HOME/libduckdb"
+          {
+            echo "DUCKDB_LIB_DIR=$HOME/libduckdb"
+            echo "DUCKDB_INCLUDE_DIR=$HOME/libduckdb"
+            echo "LD_LIBRARY_PATH=$HOME/libduckdb${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+          } >> "$GITHUB_ENV"
+      - name: scratch trees, exit status and message
+        working-directory: scripts/arc_manifest_load
+        run: cargo test --locked
+
+  arc-manifest-load:
+    name: every manifest loads through arc's own loader
+    needs: arc-manifest-load-self-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cargo.lock links arcform at ARC_REV and nowhere else
+        shell: bash
+        run: |
+          set -euo pipefail
+          lock=scripts/arc_manifest_load/Cargo.lock
+          sources=$(grep -E '^source = "git\+https://github\.com/meridian-online/arcform' "$lock" || true)
+          if [ -z "$sources" ]; then
+            echo "::error::$lock names no arcform source, so no arc revision is linked"
+            exit 1
+          fi
+          stray=$(grep -vF "?rev=${ARC_REV}#${ARC_REV}\"" <<<"$sources" || true)
+          if [ -n "$stray" ]; then
+            echo "::error::$lock links arcform at a revision other than ARC_REV=${ARC_REV}"
+            echo "$stray"
+            exit 1
+          fi
+          echo "every arcform source in $lock is at ${ARC_REV}"
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.ARC_RUST_TOOLCHAIN }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: scripts/arc_manifest_load
+          shared-key: arc-manifest-load
+      - name: install libduckdb
+        run: |
+          set -euo pipefail
+          curl -fsSL -o "$RUNNER_TEMP/libduckdb.zip" \
+            "https://github.com/duckdb/duckdb/releases/download/${ARC_LIBDUCKDB_VERSION}/libduckdb-linux-amd64.zip"
+          mkdir -p "$HOME/libduckdb"
+          unzip -o "$RUNNER_TEMP/libduckdb.zip" -d "$HOME/libduckdb"
+          {
+            echo "DUCKDB_LIB_DIR=$HOME/libduckdb"
+            echo "DUCKDB_INCLUDE_DIR=$HOME/libduckdb"
+            echo "LD_LIBRARY_PATH=$HOME/libduckdb${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+          } >> "$GITHUB_ENV"
+      - name: build the loader
+        working-directory: scripts/arc_manifest_load
+        run: cargo build --locked
+      - name: every datasets/ and examples/ manifest through Manifest::load
+        shell: bash
+        run: |
+          set +e
+          scripts/arc_manifest_load/target/debug/arc-manifest-load "$GITHUB_WORKSPACE" > arc-manifest-load.log 2>&1
+          status=$?
+          set -e
+          cat arc-manifest-load.log
+          {
+            echo "### Every manifest through arc's loader at \`${ARC_REV}\`"
+            echo
+            echo '```'
+            cat arc-manifest-load.log
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           exit $status
