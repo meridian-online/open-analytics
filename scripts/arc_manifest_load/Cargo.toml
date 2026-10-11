@@ -1,0 +1,41 @@
+# Loads every shipped `arcform.yaml` through `arc`'s own published loader and exits
+# non-zero with the loader's message when one is refused. The descriptors workflow runs
+# it as `arc-manifest-load`, after `arc-manifest-load-self-test` runs `cargo test` here.
+#
+# `arc` is linked as a library at a pinned git revision because it has no release
+# channel and its crates.io name belongs to an unrelated crate; `arc`'s own stability
+# note tells a consumer inside the organisation to pin a git revision. The pin is
+# brightfield's: brightfield loads these same manifests through its own pinned `arc`,
+# and two pins that drift give two answers to "is this manifest valid".
+#
+# BUMPING: move four literals together, the `arc` rev below, the `sqlparser` patch rev
+# below it, `ARC_REV` in .github/workflows/descriptors.yml, and Cargo.lock
+# (`cargo update -p arc`). The workflow's `arc-manifest-load` job refuses a Cargo.lock
+# whose arcform sources are not all at `ARC_REV`.
+[package]
+name = "arc-manifest-load"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+# A workspace of its own: nothing above this directory is a Cargo workspace, and this
+# keeps it that way if one ever appears.
+[workspace]
+
+[dependencies]
+# `default-features = false` drops `arc`'s CLI. `http-fetch` stays on, and not for
+# the network: `arc`'s operator CATALOG is feature-gated, and `http_fetch` and
+# `html_link_discover` exist in it only under `http-fetch`. The `arc` binary carries
+# that feature (its `cli` feature enables it), so a loader built without it refuses
+# every manifest that fetches with `unknown operator 'http_fetch'` while `arc run`
+# accepts the same file. Loading still opens no connection. `opendal` stays off,
+# because the `arc` binary leaves it off too. This is brightfield's feature set.
+# `arc` links DuckDB as well, which is why the workflow installs libduckdb.
+arc = { git = "https://github.com/meridian-online/arcform", rev = "f0561cd255e010e12a6ae82edc0b70785c3d19fc", default-features = false, features = ["http-fetch"] }
+
+# `arc` parses SQL with a vendored sqlparser fork wired through its own
+# `[patch.crates-io]`, and patch tables do not propagate through dependencies, so this
+# crate carries the same patch or `arc` does not compile. Same repository and rev as
+# the `arc` pin: Cargo finds `vendor/sqlparser-0.55.0` in that checkout.
+[patch.crates-io]
+sqlparser = { git = "https://github.com/meridian-online/arcform", rev = "f0561cd255e010e12a6ae82edc0b70785c3d19fc" }
