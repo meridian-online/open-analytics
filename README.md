@@ -207,7 +207,9 @@ into the README beside it. Each `datasets/*/README.md` carries its step list in 
 generated block, and the check regenerates that block from the parsed
 `arcform.yaml` and compares it byte for byte. The sentence about shell steps is
 generated too, so it cannot be true when written and false a commit later: adding
-a `command:` step rewrites it into one that names the step. The manifest is parsed
+a `command:` step rewrites it into one that names the step, and editing a `command:`
+step's command line changes the fingerprint printed in its row — the line is never
+printed — so the README is regenerated in the same commit. The manifest is parsed
 as YAML rather than scanned — `grep -c 'command:' datasets/edgar_gleif/arcform.yaml`
 returns 4 for a file with no `command:` step in it.
 

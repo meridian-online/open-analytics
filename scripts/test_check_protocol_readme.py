@@ -22,6 +22,11 @@ the check is written at:
     nothing;
   * an operator VERSION bumped `@1` → `@2` with the name and kind unchanged — a
     different step wearing the same name;
+  * a `command:` step's command line EDITED by one character, on its first line and on
+    a later line of a multi-line one, with the step name and kind unchanged — the line is
+    never printed in the README, so the row's fingerprint is the only thing that moves.
+    The cases assert WHICH row moved and what its fingerprint became, computed here from
+    the command string rather than read back from the checker;
   * a manifest whose only `command:` is inside a COMMENT — the check must NOT report a
     shell step, which is what separates parsing the document from grepping the file.
     `grep -c 'command:' datasets/edgar_gleif/arcform.yaml` is 4 with no `command:` step
@@ -40,6 +45,7 @@ Nothing here touches the network or the real `datasets/` tree.
 
 from __future__ import annotations
 
+import hashlib
 import subprocess
 import sys
 import tempfile
@@ -80,6 +86,29 @@ ALL_OPS = textwrap.dedent(
           out: datapackage.json
     """
 )
+
+
+FETCH_COMMAND = "curl -o build/beta.zip https://example.invalid/beta.zip"
+# A YAML `|` block scalar: the string is these lines joined by newlines plus a trailing one.
+STAMP_LINES = ("python3 stamp.py --descriptor datapackage.json", "echo done")
+STAMP_COMMAND = "\n".join(STAMP_LINES) + "\n"
+
+TWO_SHELLS = (
+    "# The command lines below are long on purpose; the README must not print them.\n"
+    "name: beta\n"
+    "steps:\n"
+    "  - name: fetch\n"
+    f'    command: "{FETCH_COMMAND}"\n'
+    "  - name: load\n"
+    "    sql: models/load.sql\n"
+    "  - name: stamp\n"
+    "    command: |\n" + "".join(f"      {line}\n" for line in STAMP_LINES)
+)
+
+
+def fingerprint(command: str) -> str:
+    """The cell the checker should print for `command`, worked out here from the string."""
+    return f"`command:` (shell, sha256 `{hashlib.sha256(command.encode()).hexdigest()[:12]}`)"
 
 
 def write_dataset(root: Path, slug: str, manifest: str, *, block: str | None) -> Path:
@@ -194,7 +223,9 @@ class TheShellStepClaim(ScratchTree):
         self.assertIn("This Protocol runs no opaque", result.stderr)
         self.assertIn("+3 steps, of which 1 runs through an opaque", result.stderr)
         self.assertIn("`describe`", result.stderr)
-        self.assertIn("+| 3 | `describe` | `command:` (shell) |", result.stderr)
+        self.assertIn(
+            f"+| 3 | `describe` | {fingerprint('python3 describe.py')} |", result.stderr
+        )
 
     def test_command_in_a_comment_is_not_a_shell_step(self) -> None:
         """The check parses the document; it does not grep the file.
@@ -206,7 +237,8 @@ class TheShellStepClaim(ScratchTree):
         self.assertIn("`command:` step", ALL_OPS)
         block = self.settled()
         self.assertIn("This Protocol runs no opaque `command:`/shell step.", block)
-        self.assertNotIn("(shell)", block)
+        self.assertNotIn("(shell", block)
+        self.assertNotIn("fingerprint", block)
 
     def test_the_sentence_names_every_shell_step_not_just_the_first(self) -> None:
         two_shells = textwrap.dedent(
@@ -227,6 +259,78 @@ class TheShellStepClaim(ScratchTree):
             "`fetch_beta`, `stamp`.",
             block,
         )
+
+
+class TheCommandLineIsHeldToo(ScratchTree):
+    """An edit to what a shell step runs reddens the check, though the line is never printed."""
+
+    def edit(self, old: str, new: str) -> subprocess.CompletedProcess[str]:
+        path = self.datasets / "beta" / "arcform.yaml"
+        text = path.read_text(encoding="utf-8")
+        self.assertEqual(text.count(old), 1, old)
+        path.write_text(text.replace(old, new), encoding="utf-8")
+        return run_check(self.datasets)
+
+    def test_one_character_of_a_command_line_reddens_and_regenerating_clears_it(self) -> None:
+        block = self.settled(slug="beta", manifest=TWO_SHELLS)
+        self.assertIn(fingerprint(FETCH_COMMAND), block)
+        # The reason the line is not rendered, and the thing the fingerprint replaces.
+        self.assertNotIn("curl", block)
+        self.assertNotIn(FETCH_COMMAND, block)
+
+        edited = FETCH_COMMAND.replace("beta.zip https", "beta.zap https")
+        self.assertNotEqual(edited, FETCH_COMMAND)
+        result = self.edit(FETCH_COMMAND, edited)
+        self.assertEqual(result.returncode, EXIT_DISAGREEMENT, result.stdout + result.stderr)
+        self.assertIn(f"-| 1 | `fetch` | {fingerprint(FETCH_COMMAND)} |", result.stderr)
+        self.assertIn(f"+| 1 | `fetch` | {fingerprint(edited)} |", result.stderr)
+        self.assertNotIn("curl", result.stderr)
+
+        repaired = run_check(self.datasets, "--write")
+        self.assertEqual(repaired.returncode, EXIT_OK, repaired.stderr)
+        self.assertIn("rewrote 1 block(s)", repaired.stdout)
+        self.assertEqual(run_check(self.datasets).returncode, EXIT_OK)
+        readme = (self.datasets / "beta" / "README.md").read_text(encoding="utf-8")
+        self.assertIn(fingerprint(edited), readme)
+        self.assertNotIn("curl", readme)
+
+    def test_only_the_edited_steps_row_moves(self) -> None:
+        """Two shell steps, one edit: the fingerprint is per step, not one for the manifest."""
+        self.settled(slug="beta", manifest=TWO_SHELLS)
+        result = self.edit("echo done", "echo dune")
+        self.assertEqual(result.returncode, EXIT_DISAGREEMENT, result.stdout + result.stderr)
+        self.assertIn(f"+| 3 | `stamp` | {fingerprint(STAMP_COMMAND.replace('done', 'dune'))} |", result.stderr)
+        self.assertNotIn("-| 1 | `fetch`", result.stderr)
+        self.assertNotIn("+| 1 | `fetch`", result.stderr)
+
+    def test_an_edit_on_a_later_line_of_a_multi_line_command_reddens(self) -> None:
+        """The whole string is fingerprinted, not its first line."""
+        self.settled(slug="beta", manifest=TWO_SHELLS)
+        result = self.edit("echo done", "echo dune")
+        self.assertEqual(result.returncode, EXIT_DISAGREEMENT, result.stdout + result.stderr)
+        self.assertIn(f"-| 3 | `stamp` | {fingerprint(STAMP_COMMAND)} |", result.stderr)
+
+    def test_requoting_or_commenting_a_command_does_not_redden(self) -> None:
+        """The command is read as the string YAML decodes it to, so only a changed string counts."""
+        self.settled(slug="beta", manifest=TWO_SHELLS)
+        result = self.edit(
+            f'    command: "{FETCH_COMMAND}"\n',
+            f"    # requoted, and commented\n    command: '{FETCH_COMMAND}'\n",
+        )
+        self.assertEqual(result.returncode, EXIT_OK, result.stdout + result.stderr)
+
+    def test_a_command_with_no_string_to_fingerprint_is_refused(self) -> None:
+        for label, value in (("empty", '""'), ("a list", "[python3, stamp.py]")):
+            with self.subTest(label):
+                write_dataset(
+                    self.datasets,
+                    "alpha",
+                    f"name: alpha\nsteps:\n  - name: stamp\n    command: {value}\n",
+                    block=None,
+                )
+                result = run_check(self.datasets, "--write")
+                self.assertEqual(result.returncode, EXIT_ERROR, result.stdout + result.stderr)
+                self.assertIn("declares `command:` with no value", result.stderr)
 
 
 class TheCheckRefusesRatherThanSkips(ScratchTree):
