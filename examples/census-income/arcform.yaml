@@ -4,9 +4,13 @@
 # local Parquet. Meridian hosts none of it, and no step writes to openlake. See
 # ../README.md for why `examples/` and `datasets/` are different things.
 #
-# The URL carries a 40-char commit sha, so the revision is pinned as well as the
-# bytes: the `resolve/<sha>/` form addresses one commit of the Hugging Face
-# repository rather than whatever its default branch says today.
+# THE SOURCE IS UCI, WHICH PUBLISHES THE DATA AND LICENSES IT CC BY 4.0. The UCI
+# Machine Learning Repository serves `adult.data` on its own at a stable URL, so the
+# recipe fetches that file rather than the zip its dataset page links. A CC0 tag on a
+# Hugging Face re-upload, which this Protocol used to fetch, is not UCI's grant. The
+# re-upload's 32,561 rows and these are the same rows, compared when the source was
+# changed. UCI has no revisions to pin, so the `sha256:` below is the only statement
+# of which bytes this recipe was written against.
 #
 # Produces: build/census_income.parquet + datapackage.json
 name: census-income
@@ -23,15 +27,15 @@ steps:
   - name: fetch_adult
     op: http_fetch@1
     with:
-      url: https://huggingface.co/datasets/scikit-learn/adult-census-income/resolve/fbeef6ec0e6fd88a5028b94683144000a6b380d5/adult.csv
-      out: build/adult.csv
-      sha256: 250e154ed75714ae57a564926d66c6319cd6aac1bcd32774cc76841a88d74e53
+      url: https://archive.ics.uci.edu/ml/machine-learning-databases/adult/adult.data
+      out: build/adult.data
+      sha256: 5b00264637dbfec36bdeaab5676b0b309ff9eb788d63554ca0a249491c86603d
       headers:
         User-Agent: "Meridian Protocol (open-analytics demo; research@meridian.online)"
 
   - name: load
     sql: models/load.sql
-    depends_on: [build/adult.csv]
+    depends_on: [build/adult.data]
     produces: [census_income]
 
   # ORDER BY ALL, and this table is the reason the comment in ../movies/arcform.yaml

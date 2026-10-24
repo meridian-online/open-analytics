@@ -6,8 +6,10 @@
 --     become real NULLs here, because '?' would otherwise arrive as a category and be
 --     drawn as one: a count-plot would show a fourth-largest "occupation" that is not
 --     an occupation.
---   • The source column names are dot-separated ('education.num'), which every
---     downstream reader has to quote. Renamed to snake_case.
+--   • `adult.data` has no header row and separates its values with ', '. The column
+--     names are UCI's, from `adult.names`, spelled as the re-upload this Protocol
+--     used to fetch spelled them ('education.num'), and renamed to snake_case below
+--     because every downstream reader would otherwise have to quote them.
 --
 -- `income` is kept as the source's '<=50K' / '>50K' strings rather than being folded
 -- to a boolean: it is the label this dataset is famous for, and a reader recognising
@@ -29,4 +31,12 @@ SELECT
   "hours.per.week"                   AS hours_per_week,
   nullif("native.country", '?')      AS native_country,
   income
-FROM read_csv_auto('build/adult.csv');
+FROM read_csv('build/adult.data', header = false, delim = ', ', quote = '', escape = '',
+              columns = {
+                'age': 'BIGINT', 'workclass': 'VARCHAR', 'fnlwgt': 'BIGINT',
+                'education': 'VARCHAR', 'education.num': 'BIGINT',
+                'marital.status': 'VARCHAR', 'occupation': 'VARCHAR',
+                'relationship': 'VARCHAR', 'race': 'VARCHAR', 'sex': 'VARCHAR',
+                'capital.gain': 'BIGINT', 'capital.loss': 'BIGINT',
+                'hours.per.week': 'BIGINT', 'native.country': 'VARCHAR',
+                'income': 'VARCHAR'});

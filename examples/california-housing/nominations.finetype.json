@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "resources": {
+    "california_housing": {
+      "avg_bedrooms": {
+        "label": "representation.numeric.decimal_number",
+        "why": "Total bedrooms divided by households, computed in models/load.sql as a DOUBLE. On StatLib's full 20,640 districts finetype infers `unknown` for it and the descriptor declares a string; on the 16,640-row re-upload it inferred a decimal number. It is a ratio of two counts, so a decimal number is what it is."
+      }
+    }
+  }
+}
