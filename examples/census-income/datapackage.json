@@ -1,6 +1,6 @@
 {
   "$schema": "https://datapackage.org/profiles/2.0/datapackage.json",
-  "created": "2026-10-24T05:56:03Z",
+  "created": "2026-10-24T06:04:57Z",
   "description": "32,561 person records from the 1994 US Census, the standard 'Adult' benchmark extract, with demographic and employment attributes and a binary income label. LICENCE: CC BY 4.0, as UCI publishes it; credit Becker and Kohavi (1996), https://doi.org/10.24432/C5XW20. Changes from the source: the '?' placeholder is NULL in three columns, the columns are renamed to snake_case, and the rows are sorted. Demo data: referenced by URL and built locally. Meridian does not host or publish this dataset. It describes individuals recorded in 1994 and is used here as a shape of data, not as a source of fact about anyone.",
   "licenses": [
     {
@@ -12,9 +12,9 @@
   "name": "census-income",
   "resources": [
     {
-      "bytes": 189234,
+      "bytes": 199137,
       "format": "parquet",
-      "hash": "sha256:6f1e996418f63ecdbce505bcc89e945a8c7d1fc37a02f5d0d33f5256f49abf24",
+      "hash": "sha256:5d04522387127270ad12c429991c2c0d45bbd224e1b5c695d446d830da1192b5",
       "mediatype": "application/vnd.apache.parquet",
       "name": "census_income",
       "path": "census_income.parquet",

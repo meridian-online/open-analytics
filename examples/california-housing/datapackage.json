@@ -1,6 +1,6 @@
 {
   "$schema": "https://datapackage.org/profiles/2.0/datapackage.json",
-  "created": "2026-10-24T05:56:05Z",
+  "created": "2026-10-24T06:04:56Z",
   "description": "20,640 California census-block-group districts from the 1990 Census, with median income, housing age, room and occupancy averages, population, position and median house value. LICENCE: StatLib, where the authors published the data, declares no licence for it, so none is asserted here; the MIT and other tags on re-uploads elsewhere are not the authors' terms. Demo data: referenced by URL and built locally. Meridian does not host or publish this dataset.",
   "licenses": [
     {
@@ -12,9 +12,9 @@
   "name": "california-housing",
   "resources": [
     {
-      "bytes": 586532,
+      "bytes": 586342,
       "format": "parquet",
-      "hash": "sha256:1bd2be12ed55536ee6fc7ac871785329f736f6c933e1587503a8712f60385183",
+      "hash": "sha256:d840cba2a1c2e774844d1f4908b24bacb8071a9add16327df6adf9f10fb49eb9",
       "mediatype": "application/vnd.apache.parquet",
       "name": "california_housing",
       "path": "california_housing.parquet",
@@ -53,9 +53,12 @@
           {
             "description": "Mean bedrooms per household, on the same district-average basis.",
             "name": "avg_bedrooms",
-            "type": "string",
-            "x-finetype-confidence": 0.5,
-            "x-finetype-label": "unknown"
+            "type": "number",
+            "x-finetype-label": "representation.numeric.decimal_number",
+            "x-finetype-nominated": true,
+            "x-finetype-unsupported-constraints": {
+              "pattern": "^-?[0-9]+(\\.[0-9]+)?([eE][+-]?[0-9]+)?$"
+            }
           },
           {
             "description": "Number of people resident in the district.",

@@ -61,4 +61,5 @@ steps:
     with:
       parquet: build/california_housing.parquet
       overrides: descriptor.overrides.json
+      nominations: nominations.finetype.json
       out: datapackage.json
