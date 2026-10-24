@@ -1,18 +1,18 @@
 {
   "name": "census-income",
   "title": "Adult Census Income (1994 US Census extract)",
-  "description": "32,561 person records from the 1994 US Census, the standard 'Adult' benchmark extract, with demographic and employment attributes and a binary income label. Demo data: referenced by pinned URL and revision and built locally. Meridian does not host or publish this dataset. It describes individuals recorded in 1994 and is used here as a shape of data, not as a source of fact about anyone.",
+  "description": "32,561 person records from the 1994 US Census, the standard 'Adult' benchmark extract, with demographic and employment attributes and a binary income label. LICENCE: CC BY 4.0, as UCI publishes it; credit Becker and Kohavi (1996), https://doi.org/10.24432/C5XW20. Changes from the source: the '?' placeholder is NULL in three columns, the columns are renamed to snake_case, and the rows are sorted. Demo data: referenced by URL and built locally. Meridian does not host or publish this dataset. It describes individuals recorded in 1994 and is used here as a shape of data, not as a source of fact about anyone.",
   "licenses": [
     {
-      "name": "CC0-1.0",
-      "title": "Creative Commons Zero v1.0 Universal",
-      "path": "https://creativecommons.org/publicdomain/zero/1.0/"
+      "name": "CC-BY-4.0",
+      "title": "Creative Commons Attribution 4.0 International",
+      "path": "https://creativecommons.org/licenses/by/4.0/"
     }
   ],
   "sources": [
     {
-      "title": "scikit-learn/adult-census-income on Hugging Face, revision fbeef6ec",
-      "path": "https://huggingface.co/datasets/scikit-learn/adult-census-income"
+      "title": "Becker, Barry and Ronny Kohavi (1996). Adult [Dataset]. UCI Machine Learning Repository. https://doi.org/10.24432/C5XW20",
+      "path": "https://archive.ics.uci.edu/dataset/2/adult"
     }
   ],
   "fields": {

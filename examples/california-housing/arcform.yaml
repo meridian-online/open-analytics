@@ -1,4 +1,4 @@
-# The `california-housing` demo Protocol — 16,640 districts, as a recipe.
+# The `california-housing` demo Protocol — 20,640 districts, as a recipe.
 #
 # NOTHING HERE IS PUBLISHED. This Protocol references a third-party URL and builds a
 # local Parquet. Meridian hosts none of it, and no step writes to openlake. See
@@ -7,6 +7,13 @@
 # WHY THIS ONE IS WORTH HAVING even though it is the smallest and plainest of the
 # three: latitude and longitude are two numeric columns, and two numeric columns are
 # a map. It is the example that shows a point map needs no embedding behind it.
+#
+# THE SOURCE IS STATLIB, WHERE THE AUTHORS PUT IT. Pace and Barry (1997) published
+# `houses.zip` there; the scikit-learn and Hugging Face copies are re-uploads of it, and
+# a re-upload's licence tag is not a grant from the authors. StatLib declares no licence
+# for the file, so the descriptor records `notspecified`. StatLib has no revisions to
+# pin, so the `sha256:` below is the only statement of which bytes this recipe was
+# written against.
 #
 # Produces: build/california_housing.parquet + datapackage.json
 name: california-housing
@@ -23,15 +30,22 @@ steps:
   - name: fetch_housing
     op: http_fetch@1
     with:
-      url: https://huggingface.co/datasets/gvlassis/california_housing/resolve/17110e600427385a20e8358b00adc9b032d185ff/data/train-00000-of-00001.parquet
-      out: build/california_housing.parquet.src
-      sha256: af9def52e328b6d6b661fe2ce6b2b2090094dfff9a4b2a7650adbe37cb29c3bd
+      url: https://lib.stat.cmu.edu/datasets/houses.zip
+      out: build/houses.zip
+      sha256: 8b18f0a01cf9c99a65174d18fa582aa31971dfe55a26ad794f3299937c3708d7
       headers:
         User-Agent: "Meridian Protocol (open-analytics demo; research@meridian.online)"
 
+  - name: extract_housing
+    op: archive_extract@1
+    with:
+      archive: build/houses.zip
+      members: [cadata.txt]
+      dest: build/statlib
+
   - name: load
     sql: models/load.sql
-    depends_on: [build/california_housing.parquet.src]
+    depends_on: [build/statlib/cadata.txt]
     produces: [california_housing]
 
   - name: export_california_housing

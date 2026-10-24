@@ -1,18 +1,18 @@
 {
   "name": "california-housing",
   "title": "California Housing — district-level census aggregates",
-  "description": "16,640 California census-block-group districts with median income, housing age, room and occupancy averages, population, position and median house value. This is the source's train split; the full dataset has 20,640 districts. Demo data: referenced by pinned URL and revision and built locally. Meridian does not host or publish this dataset.",
+  "description": "20,640 California census-block-group districts from the 1990 Census, with median income, housing age, room and occupancy averages, population, position and median house value. LICENCE: StatLib, where the authors published the data, declares no licence for it, so none is asserted here; the MIT and other tags on re-uploads elsewhere are not the authors' terms. Demo data: referenced by URL and built locally. Meridian does not host or publish this dataset.",
   "licenses": [
     {
-      "name": "MIT",
-      "title": "MIT License",
-      "path": "https://huggingface.co/datasets/gvlassis/california_housing"
+      "name": "notspecified",
+      "title": "No licence declared at source",
+      "path": "https://lib.stat.cmu.edu/datasets/"
     }
   ],
   "sources": [
     {
-      "title": "gvlassis/california_housing on Hugging Face, revision 17110e60",
-      "path": "https://huggingface.co/datasets/gvlassis/california_housing"
+      "title": "Pace, R. Kelley and Ronald Barry, \"Sparse Spatial Autoregressions\", Statistics and Probability Letters 33 (1997) 291–297; houses.zip on StatLib",
+      "path": "https://lib.stat.cmu.edu/datasets/houses.zip"
     }
   ],
   "fields": {
