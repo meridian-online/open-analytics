@@ -6,6 +6,11 @@
 -- when it is earlier than anything on the second. InvoiceDate is an Excel serial date,
 -- days since 1899-12-30, rounded to the second.
 --
+-- Only sales and their cancellations are kept: an invoice is six digits, with a C in
+-- front for a cancellation. The workbook also holds six bad-debt adjustments numbered
+-- with an A, which are bookkeeping rather than anybody's purchase, and one of them
+-- (A563185, about £11,062) would otherwise count as the largest order of its month.
+--
 -- The Customer ID is read here and nowhere else. It becomes `customer_id_recorded`,
 -- `customer_first_month` (the month of the customer's first order that is not a
 -- cancellation) and `customer_order_number` (the order's place in that customer's
@@ -35,8 +40,9 @@ typed AS (
 ),
 once AS (
   SELECT * FROM typed
-  WHERE sheet = 'Year 2010-2011'
-     OR invoice_time < (SELECT min(invoice_time) FROM typed WHERE sheet = 'Year 2010-2011')
+  WHERE (sheet = 'Year 2010-2011'
+         OR invoice_time < (SELECT min(invoice_time) FROM typed WHERE sheet = 'Year 2010-2011'))
+    AND regexp_full_match(invoice, 'C?[0-9]{6}')
 )
 SELECT
   invoice,

@@ -1,7 +1,7 @@
 {
   "$schema": "https://datapackage.org/profiles/2.0/datapackage.json",
-  "created": "2026-10-26T10:08:04Z",
-  "description": "One row per purchase invoice of a UK-based online retailer of giftware, many of whose customers are wholesalers, from 1 December 2009 to 9 December 2011: its month, country, number of lines and value, and whether its customer was new that month or returning. Cancellations and invoices of no positive value are left out, and the two workbook sheets' shared days are counted once. The Customer ID is read only to derive each customer's first month and order numbers; no table the Protocol makes holds it. LICENCE: CC BY 4.0, as the UCI Machine Learning Repository publishes the dataset; credit Chen (2012). Demo data: referenced by pinned URL and built locally. Meridian does not host or publish this dataset.",
+  "created": "2026-10-26T10:17:50Z",
+  "description": "One row per purchase invoice of a UK-based online retailer of giftware, many of whose customers are wholesalers, from 1 December 2009 to 9 December 2011: its month, country, number of lines and value, and whether its customer was new that month or returning. Cancellations, the workbook's six bad-debt adjustments and invoices of no positive value are left out, and the two workbook sheets' shared days are counted once. The Customer ID is read only to derive each customer's first month and order numbers; no table the Protocol makes holds it. LICENCE: CC BY 4.0, as the UCI Machine Learning Repository publishes the dataset; credit Chen (2012). Demo data: referenced by pinned URL and built locally. Meridian does not host or publish this dataset.",
   "licenses": [
     {
       "name": "CC-BY-4.0",
@@ -12,9 +12,9 @@
   "name": "online-retail-ii",
   "resources": [
     {
-      "bytes": 419142,
+      "bytes": 419437,
       "format": "parquet",
-      "hash": "sha256:8faa83f35a9af16219be8347d020eeeca2a5dbad0404504a93d66bc25bacf595",
+      "hash": "sha256:d9de1ca3bec70d0ce73a2375bfb3f47ee20b86f1f3d5c3109182ab5535f063d4",
       "mediatype": "application/vnd.apache.parquet",
       "name": "retail_orders",
       "path": "retail_orders.parquet",
@@ -26,12 +26,8 @@
             "type": "integer",
             "x-finetype-confidence": 0.6,
             "x-finetype-label": "representation.numeric.integer_number",
-            "x-finetype-pattern-fit": {
-              "canonical": "^-?[0-9]+$",
-              "outcome": "widened"
-            },
             "x-finetype-unsupported-constraints": {
-              "pattern": "^-?[0-9]+$|^[A-Z0-9]{7}$"
+              "pattern": "^-?[0-9]+$"
             }
           },
           {
@@ -39,7 +35,7 @@
             "format": "%Y-%m-%d %H:%M:%S",
             "name": "invoice_time",
             "type": "datetime",
-            "x-finetype-confidence": 0.9996,
+            "x-finetype-confidence": 0.9995,
             "x-finetype-label": "datetime.timestamp.sql_standard",
             "x-finetype-unsupported-constraints": {
               "maxLength": 19,
@@ -85,7 +81,7 @@
             "description": "The number of lines on the invoice.",
             "name": "lines",
             "type": "integer",
-            "x-finetype-confidence": 0.8491,
+            "x-finetype-confidence": 0.8348,
             "x-finetype-label": "representation.numeric.integer_number",
             "x-finetype-unsupported-constraints": {
               "pattern": "^-?[0-9]+$"
@@ -95,7 +91,7 @@
             "description": "The sum of quantity times unit price over the invoice's lines, in pounds sterling, to the penny.",
             "name": "order_value",
             "type": "number",
-            "x-finetype-confidence": 1.0,
+            "x-finetype-confidence": 0.9999,
             "x-finetype-label": "representation.numeric.decimal_number",
             "x-finetype-unsupported-constraints": {
               "pattern": "^-?[0-9]+(\\.[0-9]+)?([eE][+-]?[0-9]+)?$"
@@ -110,7 +106,7 @@
             "description": "new this month when the invoice falls in the month of the customer's first order, returning when it is later, and no customer ID where none was recorded.",
             "name": "customer",
             "type": "string",
-            "x-finetype-confidence": 0.4755,
+            "x-finetype-confidence": 0.4698,
             "x-finetype-enum-domain": {
               "cohesion": 0.3330000042915344,
               "distinct": 3,
@@ -120,7 +116,7 @@
                 "returning"
               ],
               "open": true,
-              "rows": 40077
+              "rows": 40076
             },
             "x-finetype-label": "representation.text.word",
             "x-finetype-pattern-fit": {
@@ -146,7 +142,7 @@
             "description": "How much of the customer's history the data can see when the invoice was made: under a year, a year or more, or no customer ID. In the first year a returning customer can be labelled new, because the data does not reach back to their earlier orders.",
             "name": "customer_record",
             "type": "string",
-            "x-finetype-confidence": 0.9972,
+            "x-finetype-confidence": 0.9971,
             "x-finetype-enum-domain": {
               "cohesion": 0.3330000042915344,
               "distinct": 3,
@@ -156,7 +152,7 @@
                 "no customer ID"
               ],
               "open": true,
-              "rows": 40077
+              "rows": 40076
             },
             "x-finetype-label": "representation.text.plain_text"
           }

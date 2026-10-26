@@ -39,14 +39,14 @@ steps:
     depends_on: [fetch]
 ";
 
-/// The census the floors were cut against: four under `datasets/`, six under
+/// The census the floors were cut against: four under `datasets/`, eleven under
 /// `examples/`. `examples/e1` fetches, so the operator catalog is exercised.
 fn census(root: &Path) {
     for i in 1..=4 {
         write(root, &format!("datasets/d{i}"), &plain(&format!("d{i}")));
     }
     write(root, "examples/e1", FETCHES);
-    for i in 2..=6 {
+    for i in 2..=11 {
         write(root, &format!("examples/e{i}"), &plain(&format!("e{i}")));
     }
 }
@@ -104,8 +104,8 @@ fn accepts_the_census() {
     assert_eq!(run.code, 0, "stdout:\n{}\nstderr:\n{}", run.stdout, run.stderr);
     assert!(
         run.stdout.contains(
-            "10 of 10 manifest(s) loaded through arc's loader, 0 refused; \
-             datasets/ 4 (floor 4), examples/ 6 (floor 6); total floor 10"
+            "15 of 15 manifest(s) loaded through arc's loader, 0 refused; \
+             datasets/ 4 (floor 4), examples/ 11 (floor 11); total floor 15"
         ),
         "{}",
         run.stdout
@@ -132,7 +132,7 @@ fn refuses_an_unknown_precondition_with_arcs_own_message() {
         "{}",
         run.stderr
     );
-    assert!(run.stdout.contains("9 of 10 manifest(s) loaded through arc's loader, 1 refused"), "{}", run.stdout);
+    assert!(run.stdout.contains("14 of 15 manifest(s) loaded through arc's loader, 1 refused"), "{}", run.stdout);
     assert_no_build_dir(&root);
 }
 
@@ -194,7 +194,7 @@ fn refuses_datasets_alone() {
     let root = scratch("refuses_datasets_alone");
     census(&root);
     fs::remove_dir_all(root.join("examples")).unwrap();
-    for i in 5..=10 {
+    for i in 5..=15 {
         write(&root, &format!("datasets/d{i}"), &plain(&format!("d{i}")));
     }
     let run = gate(&root);
@@ -207,7 +207,7 @@ fn refuses_a_subtree_under_its_floor_even_when_the_total_is_met() {
     let root = scratch("refuses_a_subtree_under_its_floor");
     census(&root);
     fs::remove_dir_all(root.join("datasets/d4")).unwrap();
-    write(&root, "examples/e7", &plain("e7"));
+    write(&root, "examples/e12", &plain("e12"));
     let run = gate(&root);
     assert_eq!(run.code, 2, "{}", run.stderr);
     assert!(

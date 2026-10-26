@@ -1,7 +1,7 @@
 {
   "name": "online-retail-ii",
   "title": "Online Retail II — a UK online retailer's orders, December 2009 to December 2011",
-  "description": "One row per purchase invoice of a UK-based online retailer of giftware, many of whose customers are wholesalers, from 1 December 2009 to 9 December 2011: its month, country, number of lines and value, and whether its customer was new that month or returning. Cancellations and invoices of no positive value are left out, and the two workbook sheets' shared days are counted once. The Customer ID is read only to derive each customer's first month and order numbers; no table the Protocol makes holds it. LICENCE: CC BY 4.0, as the UCI Machine Learning Repository publishes the dataset; credit Chen (2012). Demo data: referenced by pinned URL and built locally. Meridian does not host or publish this dataset.",
+  "description": "One row per purchase invoice of a UK-based online retailer of giftware, many of whose customers are wholesalers, from 1 December 2009 to 9 December 2011: its month, country, number of lines and value, and whether its customer was new that month or returning. Cancellations, the workbook's six bad-debt adjustments and invoices of no positive value are left out, and the two workbook sheets' shared days are counted once. The Customer ID is read only to derive each customer's first month and order numbers; no table the Protocol makes holds it. LICENCE: CC BY 4.0, as the UCI Machine Learning Repository publishes the dataset; credit Chen (2012). Demo data: referenced by pinned URL and built locally. Meridian does not host or publish this dataset.",
   "licenses": [
     {
       "name": "CC-BY-4.0",

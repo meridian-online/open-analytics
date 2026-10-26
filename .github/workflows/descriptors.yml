@@ -73,8 +73,8 @@
 # cannot satisfy, a `with:` block an operator's schema rejects: each loads as YAML and
 # is refused here. The job needs `arc`'s toolchain and libduckdb and nothing else — it
 # runs no step, opens no connection and needs no `build/`. The walk prints how many
-# manifests it loaded and refuses fewer than four under `datasets/`, six under
-# `examples/` or ten in all, because a walk over an emptied or moved subtree otherwise
+# manifests it loaded and refuses fewer than four under `datasets/`, eleven under
+# `examples/` or fifteen in all, because a walk over an emptied or moved subtree otherwise
 # reads exactly like full coverage. The self-test runs the built gate against scratch
 # trees and asserts the exit status and the message; each refusal it holds differs by
 # one manifest from a tree it accepts.
