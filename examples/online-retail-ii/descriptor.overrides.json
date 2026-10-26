@@ -1,0 +1,50 @@
+{
+  "name": "online-retail-ii",
+  "title": "Online Retail II — a UK online retailer's orders, December 2009 to December 2011",
+  "description": "One row per purchase invoice of a UK-based online retailer of giftware, many of whose customers are wholesalers, from 1 December 2009 to 9 December 2011: its month, country, number of lines and value, and whether its customer was new that month or returning. Cancellations, the workbook's six bad-debt adjustments and invoices of no positive value are left out, and the two workbook sheets' shared days are counted once. The Customer ID is read only to derive each customer's first month and order numbers; no table the Protocol makes holds it. LICENCE: CC BY 4.0, as the UCI Machine Learning Repository publishes the dataset; credit Chen (2012). Demo data: referenced by pinned URL and built locally. Meridian does not host or publish this dataset.",
+  "licenses": [
+    {
+      "name": "CC-BY-4.0",
+      "title": "Creative Commons Attribution 4.0 International, as the UCI Machine Learning Repository publishes the dataset",
+      "path": "https://creativecommons.org/licenses/by/4.0/"
+    }
+  ],
+  "sources": [
+    {
+      "title": "Chen, D. (2012). Online Retail II [Dataset]. UCI Machine Learning Repository. https://doi.org/10.24432/C5CG6D",
+      "path": "https://archive.ics.uci.edu/dataset/502/online+retail+ii"
+    }
+  ],
+  "fields": {
+    "invoice": {
+      "description": "The six-digit invoice number."
+    },
+    "invoice_time": {
+      "description": "When the invoice was made, from the workbook's Excel serial date, to the second."
+    },
+    "month": {
+      "description": "The first day of the invoice's month."
+    },
+    "month_number": {
+      "description": "Months since December 2009, the first month in the data, which is 0."
+    },
+    "country": {
+      "description": "The customer's country."
+    },
+    "lines": {
+      "description": "The number of lines on the invoice."
+    },
+    "order_value": {
+      "description": "The sum of quantity times unit price over the invoice's lines, in pounds sterling, to the penny."
+    },
+    "customer": {
+      "description": "new this month when the invoice falls in the month of the customer's first order, returning when it is later, and no customer ID where none was recorded."
+    },
+    "customer_order_number": {
+      "description": "The invoice's place in its customer's sequence of orders, from 1; empty where no customer ID was recorded."
+    },
+    "customer_record": {
+      "description": "How much of the customer's history the data can see when the invoice was made: under a year, a year or more, or no customer ID. In the first year a returning customer can be labelled new, because the data does not reach back to their earlier orders."
+    }
+  }
+}

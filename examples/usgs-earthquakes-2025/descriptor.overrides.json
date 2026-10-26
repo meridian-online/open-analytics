@@ -1,0 +1,47 @@
+{
+  "name": "usgs-earthquakes-2025",
+  "title": "USGS earthquakes of magnitude 4.5 and up, 2025",
+  "description": "The earthquakes of magnitude 4.5 and up in 2025 that the US Geological Survey's own network (net = us) reported, from the USGS's earthquake catalogue: when and where each struck, its depth, its magnitude and the scale that magnitude was measured on, and the USGS's description of the place. Events located by the other networks that contribute to the catalogue, and events of other types such as quarry blasts, are left out. The USGS revises events after the fact, so the recipe reads the catalogue as it stands on the day it runs and pins no hash; 8,502 earthquakes were kept on 2026-10-26. LICENCE: public domain, as a work of the US federal government; the USGS asks to be credited as the source. Demo data: referenced by URL and built locally. Meridian does not host or publish this dataset.",
+  "licenses": [
+    {
+      "name": "other-pd",
+      "title": "Public domain (U.S. federal government work). The USGS asks that it be credited as the source.",
+      "path": "https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits"
+    }
+  ],
+  "sources": [
+    {
+      "title": "U.S. Geological Survey, Earthquake Hazards Program, ANSS Comprehensive Earthquake Catalog (ComCat), queried through the USGS FDSN event service",
+      "path": "https://earthquake.usgs.gov/fdsnws/event/1/query?format=csv&starttime=2025-01-01&endtime=2026-01-01&minmagnitude=4.5"
+    }
+  ],
+  "fields": {
+    "time": {
+      "description": "When the earthquake struck, in UTC."
+    },
+    "week": {
+      "description": "The Monday of the week it struck, in UTC."
+    },
+    "latitude": {
+      "description": "Epicentre latitude, in decimal degrees."
+    },
+    "longitude": {
+      "description": "Epicentre longitude, in decimal degrees."
+    },
+    "depth": {
+      "description": "Depth of the event, in kilometres."
+    },
+    "mag": {
+      "description": "Magnitude, on the scale named in magType."
+    },
+    "magType": {
+      "description": "The USGS's code for the method or algorithm the magnitude was computed with, such as mb or mww."
+    },
+    "magnitude_scale": {
+      "description": "magType grouped into the scale it belongs to: body wave (mb), moment (Mw), local (ML) or surface wave (Ms). A code that belongs to none of those, which a later run of the live catalogue can bring, is kept as the USGS's own code rather than guessed at."
+    },
+    "place": {
+      "description": "The USGS's description of where it struck, relative to the nearest named place."
+    }
+  }
+}

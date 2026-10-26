@@ -1,0 +1,172 @@
+{
+  "$schema": "https://datapackage.org/profiles/2.0/datapackage.json",
+  "created": "2026-10-26T10:31:48Z",
+  "description": "The earthquakes of magnitude 4.5 and up in 2025 that the US Geological Survey's own network (net = us) reported, from the USGS's earthquake catalogue: when and where each struck, its depth, its magnitude and the scale that magnitude was measured on, and the USGS's description of the place. Events located by the other networks that contribute to the catalogue, and events of other types such as quarry blasts, are left out. The USGS revises events after the fact, so the recipe reads the catalogue as it stands on the day it runs and pins no hash; 8,502 earthquakes were kept on 2026-10-26. LICENCE: public domain, as a work of the US federal government; the USGS asks to be credited as the source. Demo data: referenced by URL and built locally. Meridian does not host or publish this dataset.",
+  "licenses": [
+    {
+      "name": "other-pd",
+      "path": "https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits",
+      "title": "Public domain (U.S. federal government work). The USGS asks that it be credited as the source."
+    }
+  ],
+  "name": "usgs-earthquakes-2025",
+  "resources": [
+    {
+      "bytes": 211933,
+      "format": "parquet",
+      "hash": "sha256:3f4771aa60a254e5bd28fb4e672ac794fd01a2248630733c36610d82d4268d83",
+      "mediatype": "application/vnd.apache.parquet",
+      "name": "earthquakes",
+      "path": "earthquakes.parquet",
+      "schema": {
+        "fields": [
+          {
+            "description": "When the earthquake struck, in UTC.",
+            "format": "any",
+            "name": "time",
+            "type": "datetime",
+            "x-finetype-confidence": 1.0,
+            "x-finetype-label": "datetime.timestamp.sql_milliseconds",
+            "x-finetype-pattern-fit": {
+              "canonical": "^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}\\.\\d{3}$",
+              "outcome": "widened"
+            },
+            "x-finetype-unsupported-constraints": {
+              "maxLength": 23,
+              "minLength": 23,
+              "pattern": "^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}\\.\\d{3}$|^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}$|^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]$|^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{2}$"
+            }
+          },
+          {
+            "description": "The Monday of the week it struck, in UTC.",
+            "format": "%Y-%m-%d",
+            "name": "week",
+            "type": "date",
+            "x-finetype-confidence": 1.0,
+            "x-finetype-label": "datetime.date.iso",
+            "x-finetype-unsupported-constraints": {
+              "maxLength": 10,
+              "minLength": 10,
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            }
+          },
+          {
+            "constraints": {
+              "maximum": 90.0,
+              "minimum": -90.0
+            },
+            "description": "Epicentre latitude, in decimal degrees.",
+            "name": "latitude",
+            "type": "number",
+            "x-finetype-confidence": 1.0,
+            "x-finetype-label": "geography.coordinate.latitude",
+            "x-finetype-unsupported-constraints": {
+              "pattern": "^-?([0-8]?\\d(\\.\\d+)?|90(\\.0+)?)$"
+            }
+          },
+          {
+            "constraints": {
+              "maximum": 180.0,
+              "minimum": -180.0
+            },
+            "description": "Epicentre longitude, in decimal degrees.",
+            "name": "longitude",
+            "type": "number",
+            "x-finetype-confidence": 1.0,
+            "x-finetype-label": "geography.coordinate.longitude"
+          },
+          {
+            "description": "Depth of the event, in kilometres.",
+            "name": "depth",
+            "type": "number",
+            "x-finetype-confidence": 0.924,
+            "x-finetype-label": "representation.numeric.decimal_number",
+            "x-finetype-unsupported-constraints": {
+              "pattern": "^-?[0-9]+(\\.[0-9]+)?([eE][+-]?[0-9]+)?$"
+            }
+          },
+          {
+            "description": "Magnitude, on the scale named in magType.",
+            "name": "mag",
+            "type": "number",
+            "x-finetype-confidence": 1.0,
+            "x-finetype-label": "representation.numeric.decimal_number",
+            "x-finetype-unsupported-constraints": {
+              "pattern": "^-?[0-9]+(\\.[0-9]+)?([eE][+-]?[0-9]+)?$"
+            }
+          },
+          {
+            "constraints": {
+              "maxLength": 100,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$"
+            },
+            "description": "The USGS's code for the method or algorithm the magnitude was computed with, such as mb or mww.",
+            "name": "magType",
+            "type": "string",
+            "x-finetype-confidence": 0.6,
+            "x-finetype-enum-domain": {
+              "cohesion": 1.0,
+              "distinct": 5,
+              "domain": [
+                "mb",
+                "ml",
+                "mwb",
+                "mwr",
+                "mww"
+              ],
+              "open": true,
+              "rows": 8502
+            },
+            "x-finetype-label": "representation.text.word"
+          },
+          {
+            "constraints": {
+              "pattern": "^-?[0-9]+(\\.[0-9]+)?\\s?(bps|bp)$|^[a-z]{4} [a-z]{4} \\([a-z]{2}\\)$|^[a-z]{5} \\([A-Z]{2}\\)$|^[a-z]{6} \\([A-Za-z]{2}\\)$"
+            },
+            "description": "magType grouped into the scale it belongs to: body wave (mb), moment (Mw), local (ML) or surface wave (Ms). A code that belongs to none of those, which a later run of the live catalogue can bring, is kept as the USGS's own code rather than guessed at.",
+            "name": "magnitude_scale",
+            "type": "string",
+            "x-finetype-confidence": 0.5616,
+            "x-finetype-enum-domain": {
+              "cohesion": 0.3330000042915344,
+              "distinct": 3,
+              "domain": [
+                "body wave (mb)",
+                "local (ML)",
+                "moment (Mw)"
+              ],
+              "open": true,
+              "rows": 8502
+            },
+            "x-finetype-label": "finance.rate.basis_points",
+            "x-finetype-pattern-fit": {
+              "canonical": "^-?[0-9]+(\\.[0-9]+)?\\s?(bps|bp)$",
+              "outcome": "widened"
+            }
+          },
+          {
+            "constraints": {
+              "maxLength": 500,
+              "minLength": 10
+            },
+            "description": "The USGS's description of where it struck, relative to the nearest named place.",
+            "name": "place",
+            "type": "string",
+            "x-finetype-confidence": 0.5836,
+            "x-finetype-label": "geography.address.full_address",
+            "x-finetype-pii": true
+          }
+        ]
+      }
+    }
+  ],
+  "sources": [
+    {
+      "path": "https://earthquake.usgs.gov/fdsnws/event/1/query?format=csv&starttime=2025-01-01&endtime=2026-01-01&minmagnitude=4.5",
+      "title": "U.S. Geological Survey, Earthquake Hazards Program, ANSS Comprehensive Earthquake Catalog (ComCat), queried through the USGS FDSN event service"
+    }
+  ],
+  "title": "USGS earthquakes of magnitude 4.5 and up, 2025",
+  "x-finetype-version": "0.6.63"
+}

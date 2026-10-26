@@ -33,17 +33,18 @@ const MANIFEST: &str = "arcform.yaml";
 
 /// Subtrees that must be present, and how many manifests each must hold at minimum.
 ///
-/// Per subtree, not only in total: one total floor of ten stays green when
-/// `datasets/` disappears and `examples/` grows by four, which is the arrangement that
+/// Per subtree, not only in total: one total floor stays green when `datasets/`
+/// disappears and `examples/` grows by as many, which is the arrangement that
 /// would quietly stop checking the published packages. The numbers are the census on
-/// `main` when this was written, four datasets and six examples, and they are the
-/// same floors brightfield holds its own walk of this repository to. They are floors:
+/// `main` when they were last raised, four datasets and eleven examples. Brightfield
+/// holds its own walk of this repository to floors of its own, which can lag these
+/// without either walk passing wrongly. They are floors:
 /// a new Protocol in either subtree does not trip them. What they catch is a subtree
 /// shrinking or vanishing, which a walk would otherwise report as success.
-const SUBTREE_FLOORS: &[(&str, usize)] = &[("datasets", 4), ("examples", 6)];
+const SUBTREE_FLOORS: &[(&str, usize)] = &[("datasets", 4), ("examples", 11)];
 
 /// The sum of the subtree floors, stated once so the log shows what the walk expected.
-const TOTAL_FLOOR: usize = 10;
+const TOTAL_FLOOR: usize = 15;
 
 fn main() -> ExitCode {
     let root = std::env::args_os()

@@ -1,0 +1,62 @@
+# The `epoch-ai-models` demo Protocol — Epoch AI's notable AI models, as a recipe.
+#
+# NOTHING HERE IS PUBLISHED. This Protocol references a third-party URL and builds a
+# local Parquet. Meridian hosts none of it, and no step writes to openlake. See
+# ../README.md.
+#
+# THE SOURCE IS EPOCH AI, WHICH PUBLISHES THE DATA AND LICENSES IT CC BY 4.0.
+#
+# THIS FETCH CARRIES NO `sha256:`, AND THAT IS DELIBERATE. Epoch AI adds models to this
+# file as they are released and publishes no dated snapshot of it: its data page links
+# the live CSVs and a zip of them, nothing else. The file grew from 1,079 to 1,082 rows
+# between 2026-10-25 and 2026-10-26, so a pin would refuse every cold run within days,
+# and keeping a snapshot here would be the redistribution this directory exists to
+# refuse. Without a pin arc revalidates a cached copy against Epoch AI on each run, so a
+# run reads the file as Epoch AI publishes it that day. On 2026-10-26 it was 1,082 rows
+# and 2.2 MB with sha256 dcd97028735d9d985b3ffab6bb19e0e711b400c5c513a4c8dc4acf7fe6a728f5;
+# that is a record of what the recipe was written against, not a check. What the recipe
+# does check is in `models/01_raw_models.sql`.
+#
+# Produces: build/models.parquet + datapackage.json
+name: epoch-ai-models
+engine: duckdb
+engine_version: ">=1.2"
+db: build/models.db
+
+defaults:
+  retry:
+    max_attempts: 3
+    backoff_sec: 2.0
+
+steps:
+  - name: fetch_models
+    op: http_fetch@1
+    with:
+      url: https://epoch.ai/data/notable_ai_models.csv
+      out: build/notable_ai_models.csv
+      headers:
+        User-Agent: "Meridian Protocol (open-analytics demo; research@meridian.online)"
+
+  - name: raw_models
+    sql: models/01_raw_models.sql
+    depends_on: [build/notable_ai_models.csv]
+    produces: [raw_models]
+
+  - name: models
+    sql: models/02_models.sql
+    produces: [models]
+
+  - name: export_models
+    op: parquet_export@1
+    with:
+      input: models
+      dest: build/models.parquet
+      compression: zstd
+      order_by: "ALL"
+
+  - name: describe
+    op: datapackage_describe@1
+    with:
+      parquet: build/models.parquet
+      overrides: descriptor.overrides.json
+      out: datapackage.json

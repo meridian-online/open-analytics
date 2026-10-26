@@ -1,0 +1,50 @@
+{
+  "name": "epoch-ai-models",
+  "title": "Epoch AI — notable AI models",
+  "description": "Epoch AI's database of notable AI models: when each was published, by whom, its first-listed domain, its training compute and how that compute is known, the kind of organisation behind it, and how the model can be reached. The file grows as models are released, and Epoch AI publishes no dated snapshot of it, so the recipe reads it from Epoch AI's own URL each run and pins no hash; it held 1,082 models on 2026-10-26. The Authors and Abstract columns are left out of every table the Protocol makes. LICENCE: CC BY 4.0, as Epoch AI publishes its data; credit Epoch AI as the source. Demo data: referenced by URL and built locally. Meridian does not host or publish this dataset.",
+  "licenses": [
+    {
+      "name": "CC-BY-4.0",
+      "title": "Creative Commons Attribution 4.0 International, as Epoch AI publishes its data",
+      "path": "https://creativecommons.org/licenses/by/4.0/"
+    }
+  ],
+  "sources": [
+    {
+      "title": "Epoch AI, 'Data on AI models'. Published online at epoch.ai. Retrieved from https://epoch.ai/data/ai-models",
+      "path": "https://epoch.ai/data/notable_ai_models.csv"
+    }
+  ],
+  "fields": {
+    "model": {
+      "description": "The model's name, as Epoch AI records it."
+    },
+    "organization": {
+      "description": "The organisation or organisations behind the model, comma-separated as the source gives them."
+    },
+    "publication_date": {
+      "description": "The date the model was first published or announced."
+    },
+    "publication_year": {
+      "description": "publication_date as a fractional year, so it can be drawn on a continuous axis."
+    },
+    "training_compute_flop": {
+      "description": "The compute used to train the model, in floating-point operations, where Epoch AI has recorded or estimated it."
+    },
+    "training_compute_log10": {
+      "description": "The base-10 logarithm of training_compute_flop: training compute spans many orders of magnitude, and this is the scale it is drawn on."
+    },
+    "domain": {
+      "description": "The first domain the source lists for the model, such as Language or Vision, or not given."
+    },
+    "organization_type": {
+      "description": "industry, academia, industry and academia, government or collective, or not given, from the source's organisation categorisation."
+    },
+    "access": {
+      "description": "open weights, API or hosted only, unreleased, or not given, from the source's model accessibility."
+    },
+    "compute_record": {
+      "description": "Whether training compute is recorded, and if so the confidence Epoch AI gives the figure: confident, likely or speculative."
+    }
+  }
+}

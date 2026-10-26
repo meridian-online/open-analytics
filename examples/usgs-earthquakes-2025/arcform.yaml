@@ -1,0 +1,67 @@
+# The `usgs-earthquakes-2025` demo Protocol — a year of the USGS's own earthquakes of
+# magnitude 4.5 and up, as a recipe.
+#
+# NOTHING HERE IS PUBLISHED. This Protocol references a third-party URL and builds a
+# local Parquet. Meridian hosts none of it, and no step writes to openlake. See
+# ../README.md.
+#
+# THE SOURCE IS THE USGS'S OWN EVENT SERVICE, QUERIED FOR 2025. The query returns every
+# event the catalogue holds, including those located by the other networks that
+# contribute to it, whose terms are their own. `models/01_raw_earthquakes.sql` keeps
+# only the USGS's own network (`net = 'us'`) and only events of type `earthquake`, so
+# the public-domain claim in the descriptor is exact.
+#
+# THIS FETCH CARRIES NO `sha256:`, AND THAT IS DELIBERATE. Every row of the response
+# carries an `updated` time, and the USGS revises events after the fact: on 2026-10-26
+# the latest revision to a 2025 event was a day old. The bytes at this URL therefore
+# change without notice, and a pin would refuse every cold run after the next
+# revision. Without a pin arc revalidates a cached copy against the USGS on each run,
+# so a run reads the catalogue as it stands. On 2026-10-26 the response was 8,560
+# events and 1.6 MB with sha256 e0cf2c0d7d77a1245195b638d7dab98e494d16543bb81fe050655f84ef586b4f,
+# of which 8,502 were kept; that is a record of what the recipe was written against,
+# not a check. What the recipe does check is in its models: the bounds the query asked
+# for, and a row count far enough from 8,502 to mean something other than revisions.
+#
+# Produces: build/earthquakes.parquet + datapackage.json
+name: usgs-earthquakes-2025
+engine: duckdb
+engine_version: ">=1.2"
+db: build/earthquakes.db
+
+defaults:
+  retry:
+    max_attempts: 3
+    backoff_sec: 2.0
+
+steps:
+  - name: fetch_earthquakes
+    op: http_fetch@1
+    with:
+      url: https://earthquake.usgs.gov/fdsnws/event/1/query?format=csv&starttime=2025-01-01&endtime=2026-01-01&minmagnitude=4.5
+      out: build/earthquakes_2025.csv
+      headers:
+        User-Agent: "Meridian Protocol (open-analytics demo; research@meridian.online)"
+
+  - name: raw_earthquakes
+    sql: models/01_raw_earthquakes.sql
+    depends_on: [build/earthquakes_2025.csv]
+    produces: [raw_earthquakes]
+
+  - name: earthquakes
+    sql: models/02_earthquakes.sql
+    produces: [earthquakes]
+
+  - name: export_earthquakes
+    op: parquet_export@1
+    with:
+      input: earthquakes
+      dest: build/earthquakes.parquet
+      compression: zstd
+      order_by: "ALL"
+
+  - name: describe
+    op: datapackage_describe@1
+    with:
+      parquet: build/earthquakes.parquet
+      overrides: descriptor.overrides.json
+      out: datapackage.json

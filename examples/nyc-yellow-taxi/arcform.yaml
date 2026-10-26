@@ -1,0 +1,56 @@
+# The `nyc-yellow-taxi` demo Protocol — January 2026's yellow taxi trips, as a recipe.
+#
+# NOTHING HERE IS PUBLISHED. This Protocol references a third-party URL and builds a
+# local Parquet. Meridian hosts none of it, and no step writes to openlake. See
+# ../README.md.
+#
+# THE SOURCE IS THE TLC'S OWN MONTHLY FILE. The NYC Taxi and Limousine Commission
+# publishes one Parquet per month at the URL below. Its data page declares no licence
+# for the files, so the descriptor records `notspecified`. The file is about 64 MB, and
+# the TLC has no revisions to pin, so the `sha256:` below is the only statement of
+# which bytes this recipe was written against.
+#
+# Produces: build/trips.parquet + datapackage.json
+name: nyc-yellow-taxi
+engine: duckdb
+engine_version: ">=1.2"
+db: build/trips.db
+
+defaults:
+  retry:
+    max_attempts: 3
+    backoff_sec: 2.0
+
+steps:
+  - name: fetch_trips
+    op: http_fetch@1
+    with:
+      url: https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2026-01.parquet
+      out: build/yellow_tripdata_2026-01.parquet
+      sha256: 8b3933fe6f0d7b6d8826613c0dd724edc680ff7c49e2bd4c7635c05102728637
+      headers:
+        User-Agent: "Meridian Protocol (open-analytics demo; research@meridian.online)"
+
+  - name: raw_trips
+    sql: models/01_raw_trips.sql
+    depends_on: [build/yellow_tripdata_2026-01.parquet]
+    produces: [raw_trips]
+
+  - name: trips
+    sql: models/02_trips.sql
+    produces: [trips]
+
+  - name: export_trips
+    op: parquet_export@1
+    with:
+      input: trips
+      dest: build/trips.parquet
+      compression: zstd
+      order_by: "ALL"
+
+  - name: describe
+    op: datapackage_describe@1
+    with:
+      parquet: build/trips.parquet
+      overrides: descriptor.overrides.json
+      out: datapackage.json

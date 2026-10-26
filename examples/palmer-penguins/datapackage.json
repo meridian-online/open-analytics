@@ -1,0 +1,183 @@
+{
+  "$schema": "https://datapackage.org/profiles/2.0/datapackage.json",
+  "created": "2026-10-26T10:07:25Z",
+  "description": "Bill length and depth, flipper length, body mass and sex for 344 Adélie, Chinstrap and Gentoo penguins on three islands near Palmer Station, Antarctica, collected by Dr. Kristen Gorman with the Palmer Station Long Term Ecological Research program and published in the palmerpenguins R package by Allison Horst, Alison Hill and Kristen Gorman. The source writes a missing value as NA; here it is read as missing. LICENCE: CC0 1.0, as the package declares it. Demo data: referenced by pinned URL and built locally. Meridian does not host or publish this dataset.",
+  "licenses": [
+    {
+      "name": "CC0-1.0",
+      "path": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "title": "CC0 1.0 Universal, as the palmerpenguins package declares it"
+    }
+  ],
+  "name": "palmer-penguins",
+  "resources": [
+    {
+      "bytes": 4624,
+      "format": "parquet",
+      "hash": "sha256:6cc7737de403eaca6c422c93405dfc05723c61da853fb16ce1f7f4620d317a5c",
+      "mediatype": "application/vnd.apache.parquet",
+      "name": "penguins",
+      "path": "penguins.parquet",
+      "schema": {
+        "fields": [
+          {
+            "constraints": {
+              "maxLength": 100,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$"
+            },
+            "description": "Adelie, Chinstrap or Gentoo.",
+            "name": "species",
+            "type": "string",
+            "x-finetype-confidence": 1.0,
+            "x-finetype-enum-domain": {
+              "cohesion": 1.0,
+              "distinct": 3,
+              "domain": [
+                "Adelie",
+                "Chinstrap",
+                "Gentoo"
+              ],
+              "open": true,
+              "rows": 344
+            },
+            "x-finetype-label": "representation.text.word"
+          },
+          {
+            "constraints": {
+              "maxLength": 100,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$"
+            },
+            "description": "Biscoe, Dream or Torgersen, in the Palmer Archipelago.",
+            "name": "island",
+            "type": "string",
+            "x-finetype-confidence": 0.6,
+            "x-finetype-enum-domain": {
+              "cohesion": 1.0,
+              "distinct": 3,
+              "domain": [
+                "Biscoe",
+                "Dream",
+                "Torgersen"
+              ],
+              "open": true,
+              "rows": 344
+            },
+            "x-finetype-label": "representation.text.word"
+          },
+          {
+            "description": "Bill (culmen) length, in millimetres. Missing for two penguins whose bill was not measured.",
+            "name": "bill_length_mm",
+            "type": "number",
+            "x-finetype-confidence": 1.0,
+            "x-finetype-label": "representation.numeric.decimal_number",
+            "x-finetype-unsupported-constraints": {
+              "pattern": "^-?[0-9]+(\\.[0-9]+)?([eE][+-]?[0-9]+)?$"
+            }
+          },
+          {
+            "description": "Bill (culmen) depth, in millimetres.",
+            "name": "bill_depth_mm",
+            "type": "number",
+            "x-finetype-confidence": 0.6,
+            "x-finetype-label": "representation.numeric.decimal_number",
+            "x-finetype-unsupported-constraints": {
+              "pattern": "^-?[0-9]+(\\.[0-9]+)?([eE][+-]?[0-9]+)?$"
+            }
+          },
+          {
+            "description": "Flipper length, in millimetres.",
+            "name": "flipper_length_mm",
+            "type": "integer",
+            "x-finetype-confidence": 0.6,
+            "x-finetype-label": "representation.numeric.integer_number",
+            "x-finetype-unsupported-constraints": {
+              "pattern": "^-?[0-9]+$"
+            }
+          },
+          {
+            "description": "Body mass, in grams.",
+            "name": "body_mass_g",
+            "type": "integer",
+            "x-finetype-confidence": 0.6,
+            "x-finetype-label": "representation.numeric.integer_number",
+            "x-finetype-unsupported-constraints": {
+              "pattern": "^-?[0-9]+$"
+            }
+          },
+          {
+            "description": "female or male, as recorded; missing where the source has NA.",
+            "name": "sex",
+            "type": "string",
+            "x-finetype-confidence": 1.0,
+            "x-finetype-enum-domain": {
+              "cohesion": 1.0,
+              "distinct": 2,
+              "domain": [
+                "female",
+                "male"
+              ],
+              "open": true,
+              "rows": 333
+            },
+            "x-finetype-label": "identity.person.gender"
+          },
+          {
+            "constraints": {
+              "maximum": 2100.0,
+              "minimum": 1000.0
+            },
+            "description": "The year the penguin was studied, 2007 to 2009.",
+            "name": "year",
+            "type": "year",
+            "x-finetype-confidence": 1.0,
+            "x-finetype-label": "datetime.component.year",
+            "x-finetype-unsupported-constraints": {
+              "pattern": "^\\d{4}(\\.0+)?$"
+            }
+          },
+          {
+            "constraints": {
+              "maxLength": 100,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$|^[a-z]{3} [a-z]{3} [a-z]{8}$|^[a-z]{4} [a-z]{3} [a-z]{8}$"
+            },
+            "description": "complete, bill not measured, or sex not recorded: which part of the record, if any, the source left as NA.",
+            "name": "record_status",
+            "type": "string",
+            "x-finetype-confidence": 0.9677,
+            "x-finetype-enum-domain": {
+              "cohesion": 0.6669999957084656,
+              "distinct": 3,
+              "domain": [
+                "bill not measured",
+                "complete",
+                "sex not recorded"
+              ],
+              "open": true,
+              "rows": 344
+            },
+            "x-finetype-label": "representation.text.word",
+            "x-finetype-pattern-fit": {
+              "canonical": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$",
+              "outcome": "widened"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "sources": [
+    {
+      "path": "https://github.com/allisonhorst/palmerpenguins/blob/8957207b78d6ccd1b4654a9dd9c9041b657478ab/inst/extdata/penguins.csv",
+      "title": "inst/extdata/penguins.csv in the palmerpenguins R package (Horst, Hill and Gorman), at commit 8957207b"
+    },
+    {
+      "path": "https://doi.org/10.1371/journal.pone.0090081",
+      "title": "Gorman, K. B., Williams, T. D. and Fraser, W. R. (2014). Ecological sexual dimorphism and environmental variability within a community of Antarctic penguins (genus Pygoscelis). PLoS ONE 9(3): e90081"
+    }
+  ],
+  "title": "Palmer Penguins — 344 penguins of three species, Palmer Archipelago, Antarctica, 2007 to 2009",
+  "x-finetype-version": "0.6.63"
+}

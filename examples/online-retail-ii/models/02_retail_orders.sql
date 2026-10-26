@@ -1,0 +1,42 @@
+-- The purchases a dashboard reads, one row per invoice that is not a cancellation and
+-- has a positive value: its month, country and value, whether its customer was new
+-- that month or returning, and how much history that label rests on. A customer's
+-- first year in the data cannot tell a new customer from one who bought before the
+-- data starts, which is what `customer_record` says.
+CREATE OR REPLACE TABLE retail_orders AS
+WITH orders AS (
+  SELECT
+    invoice,
+    min(invoice_time) AS invoice_time,
+    any_value(country) AS country,
+    count(*) AS lines,
+    sum(quantity * price) AS order_value,
+    bool_or(customer_id_recorded) AS customer_id_recorded,
+    any_value(customer_first_month) AS customer_first_month,
+    any_value(customer_order_number) AS customer_order_number
+  FROM retail_lines
+  WHERE is_order
+  GROUP BY invoice
+)
+SELECT
+  invoice,
+  invoice_time,
+  CAST(date_trunc('month', invoice_time) AS DATE) AS month,
+  CAST(date_diff('month', min(date_trunc('month', invoice_time)) OVER (),
+                 date_trunc('month', invoice_time)) AS INTEGER) AS month_number,
+  country,
+  lines,
+  round(order_value, 2) AS order_value,
+  CASE
+    WHEN NOT customer_id_recorded THEN 'no customer ID'
+    WHEN customer_first_month = date_trunc('month', invoice_time) THEN 'new this month'
+    ELSE 'returning'
+  END AS customer,
+  customer_order_number,
+  CASE
+    WHEN NOT customer_id_recorded THEN 'no customer ID'
+    WHEN invoice_time < (SELECT min(invoice_time) FROM retail_lines) + INTERVAL 1 YEAR
+      THEN 'ID, under a year of history'
+    ELSE 'ID, a year or more of history'
+  END AS customer_record
+FROM orders;
