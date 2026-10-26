@@ -14,8 +14,9 @@
 -- The Customer ID is read here and nowhere else. It becomes `customer_id_recorded`,
 -- `customer_first_month` (the month of the customer's first order) and
 -- `customer_order_number` (the order's place in that customer's sequence), and the ID
--- itself is not kept. An order here is what the next model keeps: an invoice that is
--- not a cancellation and has a positive value. Counting the few of no positive value
+-- itself is not kept. An order is an invoice that is not a cancellation and has a
+-- positive value, and `is_order` is kept so the next model selects the same invoices
+-- these columns count. Counting the few of no positive value
 -- would start some customers' sequences at 2. The value is compared to the penny: a
 -- sum of doubles is added in no fixed order, so an invoice whose lines cancel out comes
 -- to exactly 0 on one run and a few billionths either side of it on another. Orders
@@ -61,6 +62,7 @@ SELECT
   invoice_time,
   price,
   country,
+  is_order,
   customer IS NOT NULL AS customer_id_recorded,
   CASE WHEN customer IS NOT NULL THEN CAST(
     min(CASE WHEN is_order THEN date_trunc('month', invoice_time) END)

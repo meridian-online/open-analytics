@@ -15,9 +15,8 @@ WITH orders AS (
     any_value(customer_first_month) AS customer_first_month,
     any_value(customer_order_number) AS customer_order_number
   FROM retail_lines
-  WHERE invoice NOT LIKE 'C%'
+  WHERE is_order
   GROUP BY invoice
-  HAVING round(sum(quantity * price), 2) > 0
 )
 SELECT
   invoice,
