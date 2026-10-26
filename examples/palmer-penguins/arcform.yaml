@@ -1,0 +1,56 @@
+# The `palmer-penguins` demo Protocol — 344 penguins, as a recipe.
+#
+# NOTHING HERE IS PUBLISHED. This Protocol references a third-party URL and builds a
+# local Parquet. Meridian hosts none of it, and no step writes to openlake. See
+# ../README.md.
+#
+# THE SOURCE IS THE PALMERPENGUINS PACKAGE ITSELF. Horst, Hill and Gorman publish
+# `inst/extdata/penguins.csv` in the package's own repository, which declares the data
+# CC0 1.0. The URL addresses a 40-character commit, so the revision is pinned as well as
+# the content. These are the same bytes Brightfield's gallery ships beside its copy of
+# this recipe, compared when the recipe was written.
+#
+# Produces: build/penguins.parquet + datapackage.json
+name: palmer-penguins
+engine: duckdb
+engine_version: ">=1.2"
+db: build/penguins.db
+
+defaults:
+  retry:
+    max_attempts: 3
+    backoff_sec: 2.0
+
+steps:
+  - name: fetch_penguins
+    op: http_fetch@1
+    with:
+      url: https://raw.githubusercontent.com/allisonhorst/palmerpenguins/8957207b78d6ccd1b4654a9dd9c9041b657478ab/inst/extdata/penguins.csv
+      out: build/penguins.csv
+      sha256: f204db2c753b0937caac3cb35258562c14f073e4bbc76be24b4c51ce22767a93
+      headers:
+        User-Agent: "Meridian Protocol (open-analytics demo; research@meridian.online)"
+
+  - name: raw_penguins
+    sql: models/01_raw_penguins.sql
+    depends_on: [build/penguins.csv]
+    produces: [raw_penguins]
+
+  - name: penguins
+    sql: models/02_penguins.sql
+    produces: [penguins]
+
+  - name: export_penguins
+    op: parquet_export@1
+    with:
+      input: penguins
+      dest: build/penguins.parquet
+      compression: zstd
+      order_by: "ALL"
+
+  - name: describe
+    op: datapackage_describe@1
+    with:
+      parquet: build/penguins.parquet
+      overrides: descriptor.overrides.json
+      out: datapackage.json

@@ -1,0 +1,175 @@
+{
+  "$schema": "https://datapackage.org/profiles/2.0/datapackage.json",
+  "created": "2026-10-26T10:08:04Z",
+  "description": "One row per purchase invoice of a UK-based online retailer of giftware, many of whose customers are wholesalers, from 1 December 2009 to 9 December 2011: its month, country, number of lines and value, and whether its customer was new that month or returning. Cancellations and invoices of no positive value are left out, and the two workbook sheets' shared days are counted once. The Customer ID is read only to derive each customer's first month and order numbers; no table the Protocol makes holds it. LICENCE: CC BY 4.0, as the UCI Machine Learning Repository publishes the dataset; credit Chen (2012). Demo data: referenced by pinned URL and built locally. Meridian does not host or publish this dataset.",
+  "licenses": [
+    {
+      "name": "CC-BY-4.0",
+      "path": "https://creativecommons.org/licenses/by/4.0/",
+      "title": "Creative Commons Attribution 4.0 International, as the UCI Machine Learning Repository publishes the dataset"
+    }
+  ],
+  "name": "online-retail-ii",
+  "resources": [
+    {
+      "bytes": 419142,
+      "format": "parquet",
+      "hash": "sha256:8faa83f35a9af16219be8347d020eeeca2a5dbad0404504a93d66bc25bacf595",
+      "mediatype": "application/vnd.apache.parquet",
+      "name": "retail_orders",
+      "path": "retail_orders.parquet",
+      "schema": {
+        "fields": [
+          {
+            "description": "The six-digit invoice number.",
+            "name": "invoice",
+            "type": "integer",
+            "x-finetype-confidence": 0.6,
+            "x-finetype-label": "representation.numeric.integer_number",
+            "x-finetype-pattern-fit": {
+              "canonical": "^-?[0-9]+$",
+              "outcome": "widened"
+            },
+            "x-finetype-unsupported-constraints": {
+              "pattern": "^-?[0-9]+$|^[A-Z0-9]{7}$"
+            }
+          },
+          {
+            "description": "When the invoice was made, from the workbook's Excel serial date, to the second.",
+            "format": "%Y-%m-%d %H:%M:%S",
+            "name": "invoice_time",
+            "type": "datetime",
+            "x-finetype-confidence": 0.9996,
+            "x-finetype-label": "datetime.timestamp.sql_standard",
+            "x-finetype-unsupported-constraints": {
+              "maxLength": 19,
+              "minLength": 19,
+              "pattern": "^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}$"
+            }
+          },
+          {
+            "description": "The first day of the invoice's month.",
+            "format": "%Y-%m-%d",
+            "name": "month",
+            "type": "date",
+            "x-finetype-confidence": 1.0,
+            "x-finetype-label": "datetime.date.iso",
+            "x-finetype-unsupported-constraints": {
+              "maxLength": 10,
+              "minLength": 10,
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            }
+          },
+          {
+            "description": "Months since December 2009, the first month in the data, which is 0.",
+            "name": "month_number",
+            "type": "integer",
+            "x-finetype-confidence": 0.6,
+            "x-finetype-label": "representation.numeric.integer_number",
+            "x-finetype-unsupported-constraints": {
+              "pattern": "^-?[0-9]+$"
+            }
+          },
+          {
+            "constraints": {
+              "maxLength": 100,
+              "minLength": 2
+            },
+            "description": "The customer's country.",
+            "name": "country",
+            "type": "string",
+            "x-finetype-confidence": 1.0,
+            "x-finetype-label": "geography.location.country"
+          },
+          {
+            "description": "The number of lines on the invoice.",
+            "name": "lines",
+            "type": "integer",
+            "x-finetype-confidence": 0.8491,
+            "x-finetype-label": "representation.numeric.integer_number",
+            "x-finetype-unsupported-constraints": {
+              "pattern": "^-?[0-9]+$"
+            }
+          },
+          {
+            "description": "The sum of quantity times unit price over the invoice's lines, in pounds sterling, to the penny.",
+            "name": "order_value",
+            "type": "number",
+            "x-finetype-confidence": 1.0,
+            "x-finetype-label": "representation.numeric.decimal_number",
+            "x-finetype-unsupported-constraints": {
+              "pattern": "^-?[0-9]+(\\.[0-9]+)?([eE][+-]?[0-9]+)?$"
+            }
+          },
+          {
+            "constraints": {
+              "maxLength": 100,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$|^[a-z]{2} [a-z]{8} [A-Z]{2}$|^[a-z]{3} [a-z]{4} [a-z]{5}$"
+            },
+            "description": "new this month when the invoice falls in the month of the customer's first order, returning when it is later, and no customer ID where none was recorded.",
+            "name": "customer",
+            "type": "string",
+            "x-finetype-confidence": 0.4755,
+            "x-finetype-enum-domain": {
+              "cohesion": 0.3330000042915344,
+              "distinct": 3,
+              "domain": [
+                "new this month",
+                "no customer ID",
+                "returning"
+              ],
+              "open": true,
+              "rows": 40077
+            },
+            "x-finetype-label": "representation.text.word",
+            "x-finetype-pattern-fit": {
+              "canonical": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$",
+              "outcome": "widened"
+            }
+          },
+          {
+            "description": "The invoice's place in its customer's sequence of orders, from 1; empty where no customer ID was recorded.",
+            "name": "customer_order_number",
+            "type": "integer",
+            "x-finetype-confidence": 0.6439,
+            "x-finetype-label": "representation.numeric.integer_number",
+            "x-finetype-unsupported-constraints": {
+              "pattern": "^-?[0-9]+$"
+            }
+          },
+          {
+            "constraints": {
+              "maxLength": 65536,
+              "minLength": 1
+            },
+            "description": "How much of the customer's history the data can see when the invoice was made: under a year, a year or more, or no customer ID. In the first year a returning customer can be labelled new, because the data does not reach back to their earlier orders.",
+            "name": "customer_record",
+            "type": "string",
+            "x-finetype-confidence": 0.9972,
+            "x-finetype-enum-domain": {
+              "cohesion": 0.3330000042915344,
+              "distinct": 3,
+              "domain": [
+                "ID, a year or more of history",
+                "ID, under a year of history",
+                "no customer ID"
+              ],
+              "open": true,
+              "rows": 40077
+            },
+            "x-finetype-label": "representation.text.plain_text"
+          }
+        ]
+      }
+    }
+  ],
+  "sources": [
+    {
+      "path": "https://archive.ics.uci.edu/dataset/502/online+retail+ii",
+      "title": "Chen, D. (2012). Online Retail II [Dataset]. UCI Machine Learning Repository. https://doi.org/10.24432/C5CG6D"
+    }
+  ],
+  "title": "Online Retail II — a UK online retailer's orders, December 2009 to December 2011",
+  "x-finetype-version": "0.6.63"
+}

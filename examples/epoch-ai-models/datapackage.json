@@ -1,0 +1,218 @@
+{
+  "$schema": "https://datapackage.org/profiles/2.0/datapackage.json",
+  "created": "2026-10-26T10:08:08Z",
+  "description": "Epoch AI's database of notable AI models: when each was published, by whom, its first-listed domain, its training compute and how that compute is known, the kind of organisation behind it, and how the model can be reached. The file grows as models are released, and Epoch AI publishes no dated snapshot of it, so the recipe reads it from Epoch AI's own URL each run and pins no hash; it held 1,082 models on 2026-10-26. The Authors and Abstract columns are left out of every table the Protocol makes. LICENCE: CC BY 4.0, as Epoch AI publishes its data; credit Epoch AI as the source. Demo data: referenced by URL and built locally. Meridian does not host or publish this dataset.",
+  "licenses": [
+    {
+      "name": "CC-BY-4.0",
+      "path": "https://creativecommons.org/licenses/by/4.0/",
+      "title": "Creative Commons Attribution 4.0 International, as Epoch AI publishes its data"
+    }
+  ],
+  "name": "epoch-ai-models",
+  "resources": [
+    {
+      "bytes": 35717,
+      "format": "parquet",
+      "hash": "sha256:f0016863ae316bf6c23d61b5337e9fa4e4340f9cb9752ade674a801d3f6fecd6",
+      "mediatype": "application/vnd.apache.parquet",
+      "name": "models",
+      "path": "models.parquet",
+      "schema": {
+        "fields": [
+          {
+            "constraints": {
+              "maxLength": 100,
+              "minLength": 1
+            },
+            "description": "The model's name, as Epoch AI records it.",
+            "name": "model",
+            "type": "string",
+            "x-finetype-confidence": 0.9991,
+            "x-finetype-label": "representation.file.excel_format",
+            "x-finetype-pattern-fit": {
+              "canonical": "^[#0.,;\\[\\]$€£¥%EeAaPpMm/dDyYhHsS ?:\"\\-+()<>=@*!\\w]*$",
+              "outcome": "omitted"
+            }
+          },
+          {
+            "constraints": {
+              "maxLength": 200,
+              "minLength": 2
+            },
+            "description": "The organisation or organisations behind the model, comma-separated as the source gives them.",
+            "name": "organization",
+            "type": "string",
+            "x-finetype-confidence": 1.0,
+            "x-finetype-label": "representation.text.entity_name"
+          },
+          {
+            "description": "The date the model was first published or announced.",
+            "format": "%Y-%m-%d",
+            "name": "publication_date",
+            "type": "date",
+            "x-finetype-confidence": 1.0,
+            "x-finetype-label": "datetime.date.iso",
+            "x-finetype-unsupported-constraints": {
+              "maxLength": 10,
+              "minLength": 10,
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            }
+          },
+          {
+            "description": "publication_date as a fractional year, so it can be drawn on a continuous axis.",
+            "name": "publication_year",
+            "type": "number",
+            "x-finetype-confidence": 1.0,
+            "x-finetype-label": "representation.numeric.decimal_number",
+            "x-finetype-unsupported-constraints": {
+              "pattern": "^-?[0-9]+(\\.[0-9]+)?([eE][+-]?[0-9]+)?$"
+            }
+          },
+          {
+            "description": "The compute used to train the model, in floating-point operations, where Epoch AI has recorded or estimated it.",
+            "name": "training_compute_flop",
+            "type": "number",
+            "x-finetype-confidence": 0.9975,
+            "x-finetype-label": "representation.numeric.scientific_notation",
+            "x-finetype-pattern-fit": {
+              "canonical": "^-?[0-9]+(\\.[0-9]+)?[eE][+-]?[0-9]+$",
+              "outcome": "omitted"
+            }
+          },
+          {
+            "description": "The base-10 logarithm of training_compute_flop: training compute spans many orders of magnitude, and this is the scale it is drawn on.",
+            "name": "training_compute_log10",
+            "type": "number",
+            "x-finetype-confidence": 0.5336,
+            "x-finetype-label": "representation.numeric.decimal_number",
+            "x-finetype-unsupported-constraints": {
+              "pattern": "^-?[0-9]+(\\.[0-9]+)?([eE][+-]?[0-9]+)?$"
+            }
+          },
+          {
+            "constraints": {
+              "maxLength": 200,
+              "minLength": 2
+            },
+            "description": "The first domain the source lists for the model, such as Language or Vision, or not given.",
+            "name": "domain",
+            "type": "string",
+            "x-finetype-confidence": 0.6777,
+            "x-finetype-enum-domain": {
+              "cohesion": 0.7620000243186951,
+              "distinct": 21,
+              "domain": [
+                "3D modeling",
+                "Audio",
+                "Biology",
+                "Cybersecurity",
+                "Driving",
+                "Earth science",
+                "Games",
+                "Image generation",
+                "Language",
+                "Materials science",
+                "Mathematics",
+                "Medicine",
+                "Multimodal",
+                "Other",
+                "Recommendation",
+                "Robotics",
+                "Search",
+                "Speech",
+                "Video",
+                "Vision",
+                "not given"
+              ],
+              "open": true,
+              "rows": 1082
+            },
+            "x-finetype-label": "representation.text.entity_name"
+          },
+          {
+            "constraints": {
+              "maxLength": 100,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$|^[a-z]{10} [a-z]{2} [a-z]{10}$|^[a-z]{3} [a-z]{5}$|^[a-z]{8} [a-z]{3} [a-z]{8}$"
+            },
+            "description": "industry, academia, industry and academia, government or collective, or not given, from the source's organisation categorisation.",
+            "name": "organization_type",
+            "type": "string",
+            "x-finetype-confidence": 0.6,
+            "x-finetype-enum-domain": {
+              "cohesion": 0.4000000059604645,
+              "distinct": 5,
+              "domain": [
+                "academia",
+                "government or collective",
+                "industry",
+                "industry and academia",
+                "not given"
+              ],
+              "open": true,
+              "rows": 1082
+            },
+            "x-finetype-label": "representation.text.word",
+            "x-finetype-pattern-fit": {
+              "canonical": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$",
+              "outcome": "widened"
+            }
+          },
+          {
+            "constraints": {
+              "pattern": "^[^\\s]+(\\s+[^\\s]+)*$"
+            },
+            "description": "open weights, API or hosted only, unreleased, or not given, from the source's model accessibility.",
+            "name": "access",
+            "type": "string",
+            "x-finetype-confidence": 0.9991,
+            "x-finetype-enum-domain": {
+              "cohesion": 0.5,
+              "distinct": 4,
+              "domain": [
+                "API or hosted only",
+                "not given",
+                "open weights",
+                "unreleased"
+              ],
+              "open": true,
+              "rows": 1082
+            },
+            "x-finetype-label": "container.array.whitespace_separated"
+          },
+          {
+            "constraints": {
+              "pattern": "^[^\\s]+(\\s+[^\\s]+)*$"
+            },
+            "description": "Whether training compute is recorded, and if so the confidence Epoch AI gives the figure: confident, likely or speculative.",
+            "name": "compute_record",
+            "type": "string",
+            "x-finetype-confidence": 0.9971,
+            "x-finetype-enum-domain": {
+              "cohesion": 0.75,
+              "distinct": 4,
+              "domain": [
+                "compute not recorded",
+                "estimated, likely",
+                "estimated, speculative",
+                "recorded, confident"
+              ],
+              "open": true,
+              "rows": 1082
+            },
+            "x-finetype-label": "container.array.whitespace_separated"
+          }
+        ]
+      }
+    }
+  ],
+  "sources": [
+    {
+      "path": "https://epoch.ai/data/notable_ai_models.csv",
+      "title": "Epoch AI, 'Data on AI models'. Published online at epoch.ai. Retrieved from https://epoch.ai/data/ai-models"
+    }
+  ],
+  "title": "Epoch AI — notable AI models",
+  "x-finetype-version": "0.6.63"
+}

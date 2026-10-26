@@ -1,0 +1,69 @@
+# The `online-retail-ii` demo Protocol — two years of a UK online retailer's invoices,
+# as a recipe.
+#
+# NOTHING HERE IS PUBLISHED. This Protocol references a third-party URL and builds a
+# local Parquet. Meridian hosts none of it, and no step writes to openlake. See
+# ../README.md.
+#
+# THE SOURCE IS UCI, WHICH PUBLISHES THE DATA AND LICENSES IT CC BY 4.0. The UCI Machine
+# Learning Repository serves the dataset as a zip holding one workbook. UCI has no
+# revisions to pin, so the `sha256:` below is the only statement of which bytes this
+# recipe was written against.
+#
+# THE CUSTOMER ID NEVER LEAVES THE FIRST MODEL. `models/01_retail_lines.sql` reads it
+# only to derive each customer's first month and the number of each of their orders,
+# and keeps neither the ID nor anything that maps back to it. The workbook is read with
+# DuckDB's `excel` extension, which DuckDB downloads from extensions.duckdb.org on the
+# first run when it is not installed, so that run reaches a second host besides UCI.
+#
+# Produces: build/retail_orders.parquet + datapackage.json
+name: online-retail-ii
+engine: duckdb
+engine_version: ">=1.2"
+db: build/retail.db
+
+defaults:
+  retry:
+    max_attempts: 3
+    backoff_sec: 2.0
+
+steps:
+  - name: fetch_archive
+    op: http_fetch@1
+    with:
+      url: https://archive.ics.uci.edu/static/public/502/online+retail+ii.zip
+      out: build/online_retail_ii.zip
+      sha256: 572e36277c2390fbfde10664750731e0a86f55e33470d91919085f0408e67bfb
+      headers:
+        User-Agent: "Meridian Protocol (open-analytics demo; research@meridian.online)"
+
+  - name: extract_workbook
+    op: archive_extract@1
+    with:
+      archive: build/online_retail_ii.zip
+      members: [online_retail_II.xlsx]
+      dest: build/uci
+
+  - name: retail_lines
+    sql: models/01_retail_lines.sql
+    depends_on: [build/uci/online_retail_II.xlsx]
+    produces: [retail_lines]
+
+  - name: retail_orders
+    sql: models/02_retail_orders.sql
+    produces: [retail_orders]
+
+  - name: export_retail_orders
+    op: parquet_export@1
+    with:
+      input: retail_orders
+      dest: build/retail_orders.parquet
+      compression: zstd
+      order_by: "ALL"
+
+  - name: describe
+    op: datapackage_describe@1
+    with:
+      parquet: build/retail_orders.parquet
+      overrides: descriptor.overrides.json
+      out: datapackage.json

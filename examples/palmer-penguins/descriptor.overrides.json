@@ -1,0 +1,51 @@
+{
+  "name": "palmer-penguins",
+  "title": "Palmer Penguins — 344 penguins of three species, Palmer Archipelago, Antarctica, 2007 to 2009",
+  "description": "Bill length and depth, flipper length, body mass and sex for 344 Adélie, Chinstrap and Gentoo penguins on three islands near Palmer Station, Antarctica, collected by Dr. Kristen Gorman with the Palmer Station Long Term Ecological Research program and published in the palmerpenguins R package by Allison Horst, Alison Hill and Kristen Gorman. The source writes a missing value as NA; here it is read as missing. LICENCE: CC0 1.0, as the package declares it. Demo data: referenced by pinned URL and built locally. Meridian does not host or publish this dataset.",
+  "licenses": [
+    {
+      "name": "CC0-1.0",
+      "title": "CC0 1.0 Universal, as the palmerpenguins package declares it",
+      "path": "https://creativecommons.org/publicdomain/zero/1.0/"
+    }
+  ],
+  "sources": [
+    {
+      "title": "inst/extdata/penguins.csv in the palmerpenguins R package (Horst, Hill and Gorman), at commit 8957207b",
+      "path": "https://github.com/allisonhorst/palmerpenguins/blob/8957207b78d6ccd1b4654a9dd9c9041b657478ab/inst/extdata/penguins.csv"
+    },
+    {
+      "title": "Gorman, K. B., Williams, T. D. and Fraser, W. R. (2014). Ecological sexual dimorphism and environmental variability within a community of Antarctic penguins (genus Pygoscelis). PLoS ONE 9(3): e90081",
+      "path": "https://doi.org/10.1371/journal.pone.0090081"
+    }
+  ],
+  "fields": {
+    "species": {
+      "description": "Adelie, Chinstrap or Gentoo."
+    },
+    "island": {
+      "description": "Biscoe, Dream or Torgersen, in the Palmer Archipelago."
+    },
+    "bill_length_mm": {
+      "description": "Bill (culmen) length, in millimetres. Missing for two penguins whose bill was not measured."
+    },
+    "bill_depth_mm": {
+      "description": "Bill (culmen) depth, in millimetres."
+    },
+    "flipper_length_mm": {
+      "description": "Flipper length, in millimetres."
+    },
+    "body_mass_g": {
+      "description": "Body mass, in grams."
+    },
+    "sex": {
+      "description": "female or male, as recorded; missing where the source has NA."
+    },
+    "year": {
+      "description": "The year the penguin was studied, 2007 to 2009."
+    },
+    "record_status": {
+      "description": "complete, bill not measured, or sex not recorded: which part of the record, if any, the source left as NA."
+    }
+  }
+}

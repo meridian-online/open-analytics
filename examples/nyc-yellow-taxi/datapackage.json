@@ -1,0 +1,163 @@
+{
+  "$schema": "https://datapackage.org/profiles/2.0/datapackage.json",
+  "created": "2026-10-26T10:07:39Z",
+  "description": "Every yellow taxi trip the New York City Taxi and Limousine Commission recorded as picked up in January 2026, from the TLC's own monthly file: when each trip began, its hour and day of the week, its distance, whether it began at one of the three airports, and whether its record is complete. LICENCE: the TLC publishes the files as open data and its data page declares no licence for them, so none is asserted here. Demo data: referenced by pinned URL and built locally. Meridian does not host or publish this dataset.",
+  "licenses": [
+    {
+      "name": "notspecified",
+      "path": "https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page",
+      "title": "No licence declared at source"
+    }
+  ],
+  "name": "nyc-yellow-taxi",
+  "resources": [
+    {
+      "bytes": 11983978,
+      "format": "parquet",
+      "hash": "sha256:7b95c69814cfbe885ae4d5cc6a7caf0b4ed23f52d89a09f43607817dad2ef1fd",
+      "mediatype": "application/vnd.apache.parquet",
+      "name": "trips",
+      "path": "trips.parquet",
+      "schema": {
+        "fields": [
+          {
+            "description": "When the meter was engaged, in New York local time as the TLC records it.",
+            "format": "%Y-%m-%d %H:%M:%S",
+            "name": "pickup_time",
+            "type": "datetime",
+            "x-finetype-confidence": 1.0,
+            "x-finetype-label": "datetime.timestamp.sql_standard",
+            "x-finetype-unsupported-constraints": {
+              "maxLength": 19,
+              "minLength": 19,
+              "pattern": "^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}$"
+            }
+          },
+          {
+            "description": "The date of pickup_time.",
+            "format": "%Y-%m-%d",
+            "name": "pickup_date",
+            "type": "date",
+            "x-finetype-confidence": 1.0,
+            "x-finetype-label": "datetime.date.iso",
+            "x-finetype-unsupported-constraints": {
+              "maxLength": 10,
+              "minLength": 10,
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            }
+          },
+          {
+            "description": "The hour of pickup_time, 0 to 23.",
+            "name": "pickup_hour",
+            "type": "integer",
+            "x-finetype-confidence": 0.6,
+            "x-finetype-label": "representation.numeric.integer_number",
+            "x-finetype-unsupported-constraints": {
+              "pattern": "^-?[0-9]+$"
+            }
+          },
+          {
+            "constraints": {
+              "maxLength": 65536,
+              "minLength": 1
+            },
+            "description": "The day of the week of pickup_time, as its ISO number and short name, so '1 Mon' sorts before '7 Sun'.",
+            "name": "weekday",
+            "type": "string",
+            "x-finetype-confidence": 0.703,
+            "x-finetype-enum-domain": {
+              "cohesion": 1.0,
+              "distinct": 7,
+              "domain": [
+                "1 Mon",
+                "2 Tue",
+                "3 Wed",
+                "4 Thu",
+                "5 Fri",
+                "6 Sat",
+                "7 Sun"
+              ],
+              "open": true,
+              "rows": 3724882
+            },
+            "x-finetype-label": "representation.text.plain_text"
+          },
+          {
+            "description": "The trip's distance as the taximeter reported it, in miles, capped at 30 so a few implausible distances do not set a chart's scale.",
+            "name": "trip_miles",
+            "type": "number",
+            "x-finetype-confidence": 1.0,
+            "x-finetype-label": "representation.numeric.decimal_number",
+            "x-finetype-unsupported-constraints": {
+              "pattern": "^-?[0-9]+(\\.[0-9]+)?([eE][+-]?[0-9]+)?$"
+            }
+          },
+          {
+            "constraints": {
+              "maxLength": 100,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$|^[A-Z]{3} [A-Za-z]{7}$|^[A-Za-z]{6} [A-Za-z]{7}$|^[A-Za-z]{9} [A-Za-z]{7}$"
+            },
+            "description": "JFK Airport, LaGuardia Airport or Newark Airport when the trip began in that taxi zone, and elsewhere otherwise.",
+            "name": "pickup_place",
+            "type": "string",
+            "x-finetype-confidence": 0.7644,
+            "x-finetype-enum-domain": {
+              "cohesion": 0.25,
+              "distinct": 4,
+              "domain": [
+                "JFK Airport",
+                "LaGuardia Airport",
+                "Newark Airport",
+                "elsewhere"
+              ],
+              "open": true,
+              "rows": 3724882
+            },
+            "x-finetype-label": "representation.text.word",
+            "x-finetype-pattern-fit": {
+              "canonical": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$",
+              "outcome": "widened"
+            }
+          },
+          {
+            "constraints": {
+              "maxLength": 100,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$|^[a-z]{2} [a-z]{9} [a-z]{5}$|^[a-z]{4} [a-z]{8}$|^[a-z]{8} [a-z]{4}$"
+            },
+            "description": "complete, or the first of negative fare, zero distance and no passenger count that applies to the record.",
+            "name": "trip_record",
+            "type": "string",
+            "x-finetype-confidence": 0.9312,
+            "x-finetype-enum-domain": {
+              "cohesion": 0.5,
+              "distinct": 4,
+              "domain": [
+                "complete",
+                "negative fare",
+                "no passenger count",
+                "zero distance"
+              ],
+              "open": true,
+              "rows": 3724882
+            },
+            "x-finetype-label": "representation.text.word",
+            "x-finetype-pattern-fit": {
+              "canonical": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$",
+              "outcome": "widened"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "sources": [
+    {
+      "path": "https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2026-01.parquet",
+      "title": "NYC Taxi and Limousine Commission, TLC Trip Record Data, yellow taxi trips, January 2026"
+    }
+  ],
+  "title": "NYC TLC yellow taxi trips, January 2026",
+  "x-finetype-version": "0.6.63"
+}

@@ -1,0 +1,41 @@
+{
+  "name": "nyc-yellow-taxi",
+  "title": "NYC TLC yellow taxi trips, January 2026",
+  "description": "Every yellow taxi trip the New York City Taxi and Limousine Commission recorded as picked up in January 2026, from the TLC's own monthly file: when each trip began, its hour and day of the week, its distance, whether it began at one of the three airports, and whether its record is complete. LICENCE: the TLC publishes the files as open data and its data page declares no licence for them, so none is asserted here. Demo data: referenced by pinned URL and built locally. Meridian does not host or publish this dataset.",
+  "licenses": [
+    {
+      "name": "notspecified",
+      "title": "No licence declared at source",
+      "path": "https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page"
+    }
+  ],
+  "sources": [
+    {
+      "title": "NYC Taxi and Limousine Commission, TLC Trip Record Data, yellow taxi trips, January 2026",
+      "path": "https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2026-01.parquet"
+    }
+  ],
+  "fields": {
+    "pickup_time": {
+      "description": "When the meter was engaged, in New York local time as the TLC records it."
+    },
+    "pickup_date": {
+      "description": "The date of pickup_time."
+    },
+    "pickup_hour": {
+      "description": "The hour of pickup_time, 0 to 23."
+    },
+    "weekday": {
+      "description": "The day of the week of pickup_time, as its ISO number and short name, so '1 Mon' sorts before '7 Sun'."
+    },
+    "trip_miles": {
+      "description": "The trip's distance as the taximeter reported it, in miles, capped at 30 so a few implausible distances do not set a chart's scale."
+    },
+    "pickup_place": {
+      "description": "JFK Airport, LaGuardia Airport or Newark Airport when the trip began in that taxi zone, and elsewhere otherwise."
+    },
+    "trip_record": {
+      "description": "complete, or the first of negative fare, zero distance and no passenger count that applies to the record."
+    }
+  }
+}
