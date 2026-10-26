@@ -1,6 +1,6 @@
 {
   "$schema": "https://datapackage.org/profiles/2.0/datapackage.json",
-  "created": "2026-10-26T10:07:30Z",
+  "created": "2026-10-26T10:31:48Z",
   "description": "The earthquakes of magnitude 4.5 and up in 2025 that the US Geological Survey's own network (net = us) reported, from the USGS's earthquake catalogue: when and where each struck, its depth, its magnitude and the scale that magnitude was measured on, and the USGS's description of the place. Events located by the other networks that contribute to the catalogue, and events of other types such as quarry blasts, are left out. The USGS revises events after the fact, so the recipe reads the catalogue as it stands on the day it runs and pins no hash; 8,502 earthquakes were kept on 2026-10-26. LICENCE: public domain, as a work of the US federal government; the USGS asks to be credited as the source. Demo data: referenced by URL and built locally. Meridian does not host or publish this dataset.",
   "licenses": [
     {
@@ -124,7 +124,7 @@
             "constraints": {
               "pattern": "^-?[0-9]+(\\.[0-9]+)?\\s?(bps|bp)$|^[a-z]{4} [a-z]{4} \\([a-z]{2}\\)$|^[a-z]{5} \\([A-Z]{2}\\)$|^[a-z]{6} \\([A-Za-z]{2}\\)$"
             },
-            "description": "magType grouped into the scale it belongs to: body wave, moment, local or surface wave.",
+            "description": "magType grouped into the scale it belongs to: body wave (mb), moment (Mw), local (ML) or surface wave (Ms). A code that belongs to none of those, which a later run of the live catalogue can bring, is kept as the USGS's own code rather than guessed at.",
             "name": "magnitude_scale",
             "type": "string",
             "x-finetype-confidence": 0.5616,

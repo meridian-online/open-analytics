@@ -38,7 +38,7 @@
       "description": "The USGS's code for the method or algorithm the magnitude was computed with, such as mb or mww."
     },
     "magnitude_scale": {
-      "description": "magType grouped into the scale it belongs to: body wave, moment, local or surface wave."
+      "description": "magType grouped into the scale it belongs to: body wave (mb), moment (Mw), local (ML) or surface wave (Ms). A code that belongs to none of those, which a later run of the live catalogue can bring, is kept as the USGS's own code rather than guessed at."
     },
     "place": {
       "description": "The USGS's description of where it struck, relative to the nearest named place."
