@@ -12,9 +12,15 @@
 -- (A563185, about £11,062) would otherwise count as the largest order of its month.
 --
 -- The Customer ID is read here and nowhere else. It becomes `customer_id_recorded`,
--- `customer_first_month` (the month of the customer's first order that is not a
--- cancellation) and `customer_order_number` (the order's place in that customer's
--- sequence), and the ID itself is not kept.
+-- `customer_first_month` (the month of the customer's first order) and
+-- `customer_order_number` (the order's place in that customer's sequence), and the ID
+-- itself is not kept. An order here is what the next model keeps: an invoice that is
+-- not a cancellation and has a positive value. Counting the few of no positive value
+-- would start some customers' sequences at 2. The value is compared to the penny: a
+-- sum of doubles is added in no fixed order, so an invoice whose lines cancel out comes
+-- to exactly 0 on one run and a few billionths either side of it on another. Orders
+-- are ranked by their earliest line, because 83 invoices have lines stamped a minute or
+-- more apart, and ranking lines would give one invoice two numbers.
 CREATE OR REPLACE TABLE retail_lines AS
 WITH sheets AS (
   SELECT 'Year 2009-2010' AS sheet, *
@@ -39,7 +45,10 @@ typed AS (
   FROM sheets
 ),
 once AS (
-  SELECT * FROM typed
+  SELECT *,
+         invoice NOT LIKE 'C%' AND round(sum(quantity * price) OVER (PARTITION BY invoice), 2) > 0 AS is_order,
+         min(invoice_time) OVER (PARTITION BY invoice) AS invoice_start
+  FROM typed
   WHERE (sheet = 'Year 2010-2011'
          OR invoice_time < (SELECT min(invoice_time) FROM typed WHERE sheet = 'Year 2010-2011'))
     AND regexp_full_match(invoice, 'C?[0-9]{6}')
@@ -54,9 +63,9 @@ SELECT
   country,
   customer IS NOT NULL AS customer_id_recorded,
   CASE WHEN customer IS NOT NULL THEN CAST(
-    min(CASE WHEN invoice NOT LIKE 'C%' THEN date_trunc('month', invoice_time) END)
+    min(CASE WHEN is_order THEN date_trunc('month', invoice_time) END)
       OVER (PARTITION BY customer) AS DATE) END AS customer_first_month,
-  CASE WHEN customer IS NOT NULL AND invoice NOT LIKE 'C%' THEN
-    dense_rank() OVER (PARTITION BY customer, invoice LIKE 'C%' ORDER BY invoice_time, invoice)
+  CASE WHEN customer IS NOT NULL AND is_order THEN
+    dense_rank() OVER (PARTITION BY customer, is_order ORDER BY invoice_start, invoice)
   END AS customer_order_number
 FROM once;

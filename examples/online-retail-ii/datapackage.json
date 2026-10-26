@@ -1,6 +1,6 @@
 {
   "$schema": "https://datapackage.org/profiles/2.0/datapackage.json",
-  "created": "2026-10-26T10:17:50Z",
+  "created": "2026-10-26T10:25:46Z",
   "description": "One row per purchase invoice of a UK-based online retailer of giftware, many of whose customers are wholesalers, from 1 December 2009 to 9 December 2011: its month, country, number of lines and value, and whether its customer was new that month or returning. Cancellations, the workbook's six bad-debt adjustments and invoices of no positive value are left out, and the two workbook sheets' shared days are counted once. The Customer ID is read only to derive each customer's first month and order numbers; no table the Protocol makes holds it. LICENCE: CC BY 4.0, as the UCI Machine Learning Repository publishes the dataset; credit Chen (2012). Demo data: referenced by pinned URL and built locally. Meridian does not host or publish this dataset.",
   "licenses": [
     {
@@ -12,9 +12,9 @@
   "name": "online-retail-ii",
   "resources": [
     {
-      "bytes": 419437,
+      "bytes": 419432,
       "format": "parquet",
-      "hash": "sha256:d9de1ca3bec70d0ce73a2375bfb3f47ee20b86f1f3d5c3109182ab5535f063d4",
+      "hash": "sha256:678dd5bc34a801ac5df83371823dd153456cde99ec3903859a11ec9174d450b4",
       "mediatype": "application/vnd.apache.parquet",
       "name": "retail_orders",
       "path": "retail_orders.parquet",
@@ -128,7 +128,7 @@
             "description": "The invoice's place in its customer's sequence of orders, from 1; empty where no customer ID was recorded.",
             "name": "customer_order_number",
             "type": "integer",
-            "x-finetype-confidence": 0.6439,
+            "x-finetype-confidence": 0.6462,
             "x-finetype-label": "representation.numeric.integer_number",
             "x-finetype-unsupported-constraints": {
               "pattern": "^-?[0-9]+$"

@@ -17,7 +17,7 @@ WITH orders AS (
   FROM retail_lines
   WHERE invoice NOT LIKE 'C%'
   GROUP BY invoice
-  HAVING sum(quantity * price) > 0
+  HAVING round(sum(quantity * price), 2) > 0
 )
 SELECT
   invoice,
