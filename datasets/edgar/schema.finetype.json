@@ -21,7 +21,7 @@
     },
     "exchange": {
       "type": "string",
-      "enum": ["CBOE", "NYSE", "Nasdaq", "OTC"]
+      "enum": ["CBOE", "NYSE", "Nasdaq", "OTC", "TXSE"]
     },
     "ticker": {
       "type": "string",
