@@ -18,7 +18,7 @@
     }
   ],
   "created": "2026-09-17T00:17:39Z",
-  "description": "Every company with securities registered with the U.S. Securities and Exchange Commission — its Central Index Key (CIK), ticker symbol, exchange and legal name, from the SEC's EDGAR system.",
+  "description": "The U.S. Securities and Exchange Commission's company-tickers file from its EDGAR system: one row per ticker symbol, with the Central Index Key (CIK), EDGAR conformed company name and exchange it is associated with. A company with several listed securities has several rows — 1RT Acquisition Corp. (CIK 2054272) has ONCH, ONCHU and ONCHW — so CIK alone is not a key. The SEC updates the file to support EDGAR searches and does not guarantee its accuracy or scope: it is a ticker list, not a register of every company with securities registered with the SEC.",
   "homepage": "https://meridian.online/datasets/edgar",
   "licenses": [
     {
