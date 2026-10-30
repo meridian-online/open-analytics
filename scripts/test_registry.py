@@ -13,9 +13,10 @@ namespace the registry does not list, or two entries moving to one address would
 other job on this page. `problems()` reads those rules back out of the document and names
 each one that fails.
 
-It asserts structure and not today's values. An entry's `schema` and `name` are its live
-address and change at the cutover, when the entry takes its `moves_to` address, so no
-`schema`/`name` pair is written down here.
+It asserts structure and not today's values. An entry's address is its `moves_to` while it
+has one and its `schema`/`name` once the cutover has been made, and the rules hold either way,
+so no address is written down here. An alias names an old schema and name; its name must be
+reserved unless it is the namespace of the entry's own address (`source.gleif` for `gleif/lei`).
 
 The public-repo rule is held too: the registry names no planning reference and no local
 path. The words are written as one-letter character classes so that this file does not
@@ -46,16 +47,25 @@ LEAKS = re.compile(r"bearin[g]|j6d[m]|kat[a]|/Volume[s]/|/User[s]/", re.IGNORECA
 # a copy of it, so that a failure names that rule alone and not whatever the shipped registry
 # happens to hold.
 GOOD: dict[str, Any] = {
+    "schemas": {"library": "Meridian's curated set.", "main": "Held for compatibility views."},
     "namespaces": {
         "acme": {"kind": "held", "issuer": "Acme Institute", "claimed": False},
         "library": {"kind": "library"},
     },
-    "reserved": ["library", "meridian", "acme", "new"],
+    "reserved": ["library", "meridian", "acme", "main", "new"],
     "datasets": [
         {"uid": "u-1", "schema": "source", "name": "alpha", "aliases": [], "moves_to": "acme/alpha_2022"},
         {"uid": "u-2", "schema": "crosswalk", "name": "beta", "aliases": [], "moves_to": "library/beta"},
+        {"uid": "u-3", "schema": "library", "name": "gamma", "aliases": []},
     ],
 }
+
+
+def address_of(entry: dict[str, Any]) -> Any:
+    """Where an entry is addressed: its `moves_to` before the cutover, `<schema>/<name>` after it."""
+    if "moves_to" in entry:
+        return entry["moves_to"]
+    return f"{entry.get('schema')}/{entry.get('name')}"
 
 
 def problems(registry: dict[str, Any], text: str | None = None) -> list[str]:
@@ -76,21 +86,31 @@ def problems(registry: dict[str, Any], text: str | None = None) -> list[str]:
     for uid in sorted({str(u) for u in uids if uids.count(u) > 1}):
         found.append(f"uid {uid} belongs to more than one entry")
 
-    targets = [entry.get("moves_to") for entry in datasets]
+    targets = [address_of(entry) for entry in datasets]
     for entry in datasets:
         label = f"{entry.get('schema')}.{entry.get('name')}"
-        target = entry.get("moves_to")
+        target = address_of(entry)
+        field = "moves_to" if "moves_to" in entry else "address"
         if not isinstance(target, str) or not ADDRESS.match(target):
-            found.append(f"{label}: moves_to {target!r} is not `<namespace>/<name>`")
+            found.append(f"{label}: {field} {target!r} is not `<namespace>/<name>`")
             continue
         namespace = target.split("/")[0]
         if namespace not in namespaces:
-            found.append(f"{label}: moves_to namespace {namespace!r} is not a key of `namespaces`")
+            found.append(f"{label}: {field} namespace {namespace!r} is not a key of `namespaces`")
         if targets.count(target) > 1:
-            found.append(f"{label}: moves_to {target!r} is claimed by more than one entry")
+            found.append(f"{label}: {field} {target!r} is claimed by more than one entry")
         for alias in entry.get("aliases") or []:
             if not isinstance(alias, str) or not ALIAS.match(alias):
                 found.append(f"{label}: alias {alias!r} is not `<schema>.<name>`")
+                continue
+            old_name = alias.split(".")[1]
+            if old_name not in reserved and old_name != namespace:
+                found.append(f"{label}: alias {alias!r} names {old_name!r}, which is not in `reserved`")
+
+    schemas = registry.get("schemas")
+    for schema in sorted(schemas) if isinstance(schemas, dict) else []:
+        if schema not in reserved:
+            found.append(f"schema {schema!r} is not in `reserved`")
 
     for name in sorted({n for n in reserved if reserved.count(n) > 1}):
         found.append(f"reserved lists {name!r} more than once")
@@ -187,9 +207,40 @@ class RegistryAgreesWithItself(unittest.TestCase):
 
     def test_an_alias_that_is_not_an_old_address_is_named(self) -> None:
         registry = self.good()
-        registry["datasets"][0]["aliases"] = ["source.alpha", "alpha"]
+        registry["datasets"][0]["aliases"] = ["source.acme", "alpha"]
         self.assertEqual(len(problems(registry)), 1)
         self.assertIn("alias 'alpha' is not `<schema>.<name>`", problems(registry)[0])
+
+    def test_a_schema_that_is_not_reserved_is_named(self) -> None:
+        registry = self.good()
+        registry["schemas"]["loose"] = "A schema nobody reserved."
+        self.assertEqual(problems(registry), ["schema 'loose' is not in `reserved`"])
+
+    def test_an_alias_whose_old_name_is_not_reserved_is_named(self) -> None:
+        registry = self.good()
+        registry["datasets"][0]["aliases"] = ["source.gamma"]
+        self.assertEqual(len(problems(registry)), 1)
+        self.assertIn("'gamma'", problems(registry)[0])
+        self.assertIn("reserved", problems(registry)[0])
+
+    def test_an_alias_naming_its_own_namespace_needs_no_reservation(self) -> None:
+        registry = self.good()
+        registry["namespaces"]["alpha"] = {"kind": "held", "issuer": "Alpha Agency", "claimed": False}
+        registry["datasets"].append(
+            {"uid": "u-4", "schema": "alpha", "name": "lei", "aliases": ["source.alpha"]}
+        )
+        self.assertEqual(problems(registry), ["namespace 'alpha' is not in `reserved`"])
+
+    def test_an_entry_at_its_address_is_held_to_the_address_rules(self) -> None:
+        registry = self.good()
+        registry["datasets"][2]["schema"] = "nowhere"
+        self.assertEqual(len(problems(registry)), 1)
+        self.assertIn("'nowhere' is not a key of `namespaces`", problems(registry)[0])
+
+        registry = self.good()
+        registry["datasets"].append({**registry["datasets"][2], "uid": "u-5"})
+        self.assertEqual(len(problems(registry)), 2)
+        self.assertTrue(all("claimed by more than one entry" in line for line in problems(registry)))
 
     def test_a_planning_reference_or_local_path_is_named(self) -> None:
         for leak in ("see bear" + "ing", "j6" + "dm", "Ka" + "ta", "/Vol" + "umes/Dev", "/Us" + "ers/me"):
