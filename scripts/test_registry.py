@@ -92,9 +92,8 @@ def problems(registry: dict[str, Any], text: str | None = None) -> list[str]:
             if not isinstance(alias, str) or not ALIAS.match(alias):
                 found.append(f"{label}: alias {alias!r} is not `<schema>.<name>`")
 
-    for name in sorted(reserved):
-        if reserved.count(name) > 1:
-            found.append(f"reserved lists {name!r} more than once")
+    for name in sorted({n for n in reserved if reserved.count(n) > 1}):
+        found.append(f"reserved lists {name!r} more than once")
     for name, space in namespaces.items():
         if name not in reserved:
             found.append(f"namespace {name!r} is not in `reserved`")
@@ -158,6 +157,14 @@ class RegistryAgreesWithItself(unittest.TestCase):
         registry = self.good()
         registry["reserved"].remove("acme")
         self.assertEqual(problems(registry), ["namespace 'acme' is not in `reserved`"])
+
+    def test_a_reserved_name_repeated_is_named_once(self) -> None:
+        registry = self.good()
+        registry["reserved"] += ["acme", "acme", "new"]
+        self.assertEqual(
+            problems(registry),
+            ["reserved lists 'acme' more than once", "reserved lists 'new' more than once"],
+        )
 
     def test_a_held_namespace_without_a_claim_state_or_issuer_is_named(self) -> None:
         for field in ("claimed", "issuer"):
