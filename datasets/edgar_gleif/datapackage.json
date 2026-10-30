@@ -29,7 +29,7 @@
       "hash": "sha256:7ca2419d2cf168def3dffed89e394a4219f3232965fddc53f57e4fa18ab2dad0",
       "mediatype": "application/vnd.apache.parquet",
       "name": "edgar_gleif",
-      "path": "https://openlake.meridian.online/edgar_gleif.parquet",
+      "path": "https://openlake.meridian.online/library/edgar_lei.parquet",
       "schema": {
         "fields": [
           {

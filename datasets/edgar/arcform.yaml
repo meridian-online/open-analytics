@@ -1,4 +1,4 @@
-# The `source.edgar` Protocol — the reproducible *definition* of how the SEC EDGAR
+# The `sec.company_tickers_exchange` Protocol — the reproducible *definition* of how the SEC EDGAR
 # company-tickers Dataset is ingested from the official SEC file. `arc run` executes
 # this manifest; one Run → one Dataset version (the freshness lever). See ./README.md.
 #
@@ -17,10 +17,10 @@
 #     build/edgar.parquet + the emitted datapackage.json. It is not an arcform step.
 #
 # INFORMATION RETRIEVAL ONLY — this is a clean IR dataset. The EDGAR ↔ GLEIF
-# entity-resolution "join" is NOT done here; it lives in the crosswalk.edgar_gleif
+# entity-resolution "join" is NOT done here; it lives in the library.edgar_lei
 # Protocol (probabilistic name resolution, published back as a Dataset).
 #
-# Produces: build/edgar.parquet  →  published as source.edgar
+# Produces: build/edgar.parquet  →  published as sec.company_tickers_exchange
 name: edgar
 engine: duckdb
 engine_version: ">=1.2"
@@ -97,7 +97,7 @@ steps:
       parquet: build/edgar.parquet
       schema: schema.finetype.json
   # ── Self-describe: put the descriptor INSIDE the Parquet it describes ───────────
-  # Someone holding https://openlake.meridian.online/edgar.parquet
+  # Someone holding https://openlake.meridian.online/sec/company_tickers_exchange.parquet
   # cannot find the datapackage.json that describes it: it is a second file, in a
   # source repository they have no reason to know exists, and behind an authenticating
   # edge there is no repository to find. This step writes the finished descriptor into

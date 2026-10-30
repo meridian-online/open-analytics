@@ -34,7 +34,7 @@
     }
   ],
   "resource": {
-    "path": "https://openlake.meridian.online/gleif.parquet"
+    "path": "https://openlake.meridian.online/gleif/lei.parquet"
   },
   "fields": {
     "lei": {

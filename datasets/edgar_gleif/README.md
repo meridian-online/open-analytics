@@ -1,4 +1,4 @@
-# `crosswalk.edgar_gleif` — the EDGAR ↔ GLEIF crosswalk
+# `library.edgar_lei` — the EDGAR ↔ GLEIF crosswalk
 
 The resolved link between SEC EDGAR registrants (CIK / ticker / fund series) and
 their GLEIF Legal Entity Identifier (LEI). This directory holds the dataset's three
@@ -57,7 +57,7 @@ All 23 steps are `sql:` models or typed `op:` operators from the arcform catalog
 
 What those steps do, in phases:
 
-1. **fetch** the source Datasets (`source.edgar`, `source.gleif`) from the openlake.
+1. **fetch** the source Datasets (`sec.company_tickers_exchange`, `gleif.lei`) from the openlake.
 2. **fetch** the deterministic backbone (no guessing) — **official sources only
    (SEC + GLEIF)**: GLEIF SEC registrations (RA000665 → `CIK/series ↔ LEI` +
    `entity.category`) and **SEC Form N-CEN** (the annual fund filing → registrant
@@ -189,7 +189,7 @@ WITH ncen AS (
 SELECT n.key_type, n.key
 FROM ncen n
 WHERE NOT EXISTS (
-  SELECT 1 FROM read_parquet('https://openlake.meridian.online/edgar_gleif.parquet') x
+  SELECT 1 FROM read_parquet('https://openlake.meridian.online/library/edgar_lei.parquet') x
   WHERE x.key_type = n.key_type AND x.key = n.key
 );
 ```

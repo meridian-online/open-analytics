@@ -35,7 +35,7 @@
       "hash": "sha256:b6729caf734ac6aeaf2b5ebb97a45cb8caac791be140680645a1c812d8c82cb1",
       "mediatype": "application/vnd.apache.parquet",
       "name": "gleif",
-      "path": "https://openlake.meridian.online/gleif.parquet",
+      "path": "https://openlake.meridian.online/gleif/lei.parquet",
       "schema": {
         "fields": [
           {

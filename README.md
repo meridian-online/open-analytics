@@ -9,13 +9,15 @@ Query them from anywhere — no account, no key:
 ```sql
 INSTALL ducklake; INSTALL httpfs;
 ATTACH 'ducklake:https://openlake.meridian.online/catalog/open.ducklake' AS meridian (READ_ONLY);
-SELECT * FROM meridian.gleif LIMIT 10;
+SELECT * FROM meridian.gleif.lei LIMIT 10;
 ```
+
+A dataset's address is `<namespace>/<name>`: `gleif/lei`, `sec/company_tickers_exchange`, `census/naics_2022` and `library/edgar_lei`, which are the SQL names `meridian.gleif.lei` and so on and the file URLs `https://openlake.meridian.online/<namespace>/<name>.parquet`. The old SQL names (`source.gleif`, `source.edgar`, `source.naics`, `crosswalk.edgar_gleif`) and the old flat file URLs (`/gleif.parquet`, `/edgar.parquet`, `/naics.parquet`, `/edgar_gleif.parquet`) keep working for a window after the move, then retire.
 
 Or read a single file directly:
 
 ```sql
-SELECT * FROM read_parquet('https://openlake.meridian.online/naics.parquet');
+SELECT * FROM read_parquet('https://openlake.meridian.online/census/naics_2022.parquet');
 ```
 
 ## Ask a dataset what it is
@@ -37,7 +39,7 @@ registry, and no knowledge that this repository exists:
 
 ```sql
 SELECT decode(value)
-FROM parquet_kv_metadata('https://openlake.meridian.online/naics.parquet')
+FROM parquet_kv_metadata('https://openlake.meridian.online/census/naics_2022.parquet')
 WHERE decode(key) = 'datapackage.json';
 ```
 
@@ -50,7 +52,7 @@ kilobytes and stops.
 The same descriptor, without the SQL:
 
 ```sh
-python scripts/stamp_descriptor.py read https://openlake.meridian.online/naics.parquet
+python scripts/stamp_descriptor.py read https://openlake.meridian.online/census/naics_2022.parquet
 ```
 
 The embedded copy omits the resource's `bytes` and `hash` and the package's

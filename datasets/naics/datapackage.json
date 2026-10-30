@@ -35,7 +35,7 @@
       "hash": "sha256:fbb6b9b26b2295447cb557e835d844c6a8c90392da85097b0955dd93ab617747",
       "mediatype": "application/vnd.apache.parquet",
       "name": "naics",
-      "path": "https://openlake.meridian.online/naics.parquet",
+      "path": "https://openlake.meridian.online/census/naics_2022.parquet",
       "schema": {
         "fields": [
           {

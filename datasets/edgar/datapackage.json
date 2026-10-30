@@ -35,7 +35,7 @@
       "hash": "sha256:3dc65776711ebb9a5f824b206b6f214adb573d4e97b86e8851909005cfd592e6",
       "mediatype": "application/vnd.apache.parquet",
       "name": "edgar",
-      "path": "https://openlake.meridian.online/edgar.parquet",
+      "path": "https://openlake.meridian.online/sec/company_tickers_exchange.parquet",
       "schema": {
         "fields": [
           {

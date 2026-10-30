@@ -1,4 +1,4 @@
-# The `source.gleif` Protocol — the reproducible *definition* of how the GLEIF Legal
+# The `gleif.lei` Protocol — the reproducible *definition* of how the GLEIF Legal
 # Entity Identifier Dataset is ingested from the official GLEIF golden copy. `arc run`
 # executes this manifest; one Run → one Dataset version (the freshness lever). See
 # ./README.md (the Protocol primitive).
@@ -20,7 +20,7 @@
 #     the out-of-repo publish pipeline and READS this Protocol's terminal output,
 #     build/gleif.parquet + the emitted datapackage.json. It is not an arcform step.
 #
-# Produces: build/gleif.parquet  →  published as source.gleif
+# Produces: build/gleif.parquet  →  published as gleif.lei
 name: gleif
 engine: duckdb
 engine_version: ">=1.2"
@@ -91,7 +91,7 @@ steps:
   - name: stamp_version
     command: "python3 ../../scripts/stamp_finetype_version.py --descriptor datapackage.json"
   # ── Self-describe: put the descriptor INSIDE the Parquet it describes ───────────
-  # Someone holding https://openlake.meridian.online/gleif.parquet
+  # Someone holding https://openlake.meridian.online/gleif/lei.parquet
   # cannot find the datapackage.json that describes it: it is a second file, in a
   # source repository they have no reason to know exists, and behind an authenticating
   # edge there is no repository to find. This step writes the finished descriptor into

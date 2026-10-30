@@ -1,4 +1,4 @@
-# `source.naics` — NAICS Industry Classification (2022)
+# `census.naics_2022` — NAICS Industry Classification (2022)
 
 The 2022 North American Industry Classification System — the standard taxonomy for
 classifying business establishments by industry, from broad sectors down to specific

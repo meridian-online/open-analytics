@@ -1,4 +1,4 @@
-# `source.edgar` — SEC EDGAR company tickers
+# `sec.company_tickers_exchange` — SEC EDGAR company tickers
 
 The U.S. Securities and Exchange Commission's company-tickers file from its EDGAR
 system: one row per ticker symbol, with the Central Index Key (CIK), EDGAR conformed
@@ -9,7 +9,7 @@ EDGAR searches and [does not guarantee its accuracy or
 scope](https://www.sec.gov/search-filings/edgar-search-assistance/accessing-edgar-data):
 it is a ticker list, not a register of every company with securities registered with
 the SEC. A clean **information-retrieval** dataset: the EDGAR ↔ GLEIF
-entity-resolution join is *not* done here — it lives in the `crosswalk.edgar_gleif`
+entity-resolution join is *not* done here — it lives in the `library.edgar_lei`
 Protocol. This directory holds the dataset's three orthogonal facets:
 
 | File | Facet | Answers |
@@ -38,7 +38,7 @@ Produces `build/edgar.parquet`.
 ### `cik` is an integer, in the build and in the served object
 
 **`cik` is a Parquet integer (`INT64`, DuckDB `BIGINT`) in what this Protocol builds,
-in the object served at `openlake.meridian.online/edgar.parquet`, and in
+in the object served at `openlake.meridian.online/sec/company_tickers_exchange.parquet`, and in
 `datapackage.json` and `descriptor.overrides.json`.** Step 2 once ended
 `CAST(… AS BIGINT)::VARCHAR` — a cast to integer thrown away immediately — so it built
 text while the descriptor declared an integer, and the served object carried that text

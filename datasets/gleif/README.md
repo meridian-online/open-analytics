@@ -1,4 +1,4 @@
-# `source.gleif` — GLEIF Legal Entity Identifiers
+# `gleif.lei` — GLEIF Legal Entity Identifiers
 
 The Global Legal Entity Identifier Foundation's public register of legal entities —
 every entity with its 20-character LEI, legal name, country, jurisdiction and

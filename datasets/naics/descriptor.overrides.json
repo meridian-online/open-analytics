@@ -34,7 +34,7 @@
     }
   ],
   "resource": {
-    "path": "https://openlake.meridian.online/naics.parquet"
+    "path": "https://openlake.meridian.online/census/naics_2022.parquet"
   },
   "fields": {
     "code": {

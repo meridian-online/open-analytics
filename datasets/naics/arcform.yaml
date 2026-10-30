@@ -1,4 +1,4 @@
-# The `source.naics` Protocol — the reproducible *definition* of how the NAICS 2022
+# The `census.naics_2022` Protocol — the reproducible *definition* of how the NAICS 2022
 # industry-classification Dataset is ingested from the official U.S. Census file.
 # `arc run` executes this manifest; one Run → one Dataset version. See ./README.md.
 #
@@ -16,7 +16,7 @@
 #     the out-of-repo publish pipeline and READS this Protocol's terminal output,
 #     build/naics.parquet + the emitted datapackage.json. It is not an arcform step.
 #
-# Produces: build/naics.parquet  →  published as source.naics
+# Produces: build/naics.parquet  →  published as census.naics_2022
 name: naics
 engine: duckdb
 engine_version: ">=1.2"
@@ -88,7 +88,7 @@ steps:
       parquet: build/naics.parquet
       schema: schema.finetype.json
   # ── Self-describe: put the descriptor INSIDE the Parquet it describes ───────────
-  # Someone holding https://openlake.meridian.online/naics.parquet
+  # Someone holding https://openlake.meridian.online/census/naics_2022.parquet
   # cannot find the datapackage.json that describes it: it is a second file, in a
   # source repository they have no reason to know exists, and behind an authenticating
   # edge there is no repository to find. This step writes the finished descriptor into

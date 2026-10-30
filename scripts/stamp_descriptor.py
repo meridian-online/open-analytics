@@ -67,7 +67,7 @@ descriptor states; a stamp over different pages takes the fresh one `describe` w
     stamp_descriptor.py stamp --descriptor datapackage.json --parquet build/x.parquet
     stamp_descriptor.py stamp --descriptor stage/measured.json --parquet stage/x.parquet
         --out build/x.parquet --out-descriptor datapackage.json --carry-created
-    stamp_descriptor.py read  https://openlake.meridian.online/naics.parquet
+    stamp_descriptor.py read  https://openlake.meridian.online/census/naics_2022.parquet
 
 Exit codes are distinct on purpose, because a status alone cannot tell a refusal
 apart from a crash:

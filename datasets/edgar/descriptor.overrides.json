@@ -34,7 +34,7 @@
     }
   ],
   "resource": {
-    "path": "https://openlake.meridian.online/edgar.parquet"
+    "path": "https://openlake.meridian.online/sec/company_tickers_exchange.parquet"
   },
   "fields": {
     "cik": {
