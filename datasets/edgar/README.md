@@ -16,7 +16,7 @@ Protocol. This directory holds the dataset's three orthogonal facets:
 |---|---|---|
 | `arcform.yaml` (+ `models/`) | **Protocol** — how it's made | run `arc run` → produces the Dataset |
 | `datapackage.json` | **Descriptor** — what it is | schema, finetype labels |
-| `../registry.json` (this dataset's entry) | **Address** — how it's found | stable `uid`, `source.edgar`, manifest pointer |
+| `../registry.json` (this dataset's entry) | **Address** — how it's found | stable `uid`, `sec.company_tickers_exchange` (alias `source.edgar`), manifest pointer |
 
 ## The Protocol
 

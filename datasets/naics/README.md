@@ -8,7 +8,7 @@ national industries. This directory holds the dataset's three orthogonal facets:
 |---|---|---|
 | `arcform.yaml` (+ `models/`) | **Protocol** — how it's made | run `arc run` → produces the Dataset |
 | `datapackage.json` | **Descriptor** — what it is | schema, finetype labels |
-| `../registry.json` (this dataset's entry) | **Address** — how it's found | stable `uid`, `source.naics`, manifest pointer |
+| `../registry.json` (this dataset's entry) | **Address** — how it's found | stable `uid`, `census.naics_2022` (alias `source.naics`), manifest pointer |
 
 ## The Protocol
 

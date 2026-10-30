@@ -440,8 +440,9 @@ jobs:
   registry-agrees-with-itself:
     name: the registry's addresses, namespaces and reserved names agree
     # `datasets/registry.json` states its address rules in prose and carries the same rules
-    # as data. Nothing else on this page reads it, so a `moves_to` into a namespace the
-    # registry does not list, or a namespace that is not reserved, would pass every job here.
+    # as data. Nothing else on this page reads it, so an address (an entry's `moves_to`, or its
+    # `schema` and `name`) in a namespace the registry does not list, or a
+    # namespace that is not reserved, would pass every job here.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

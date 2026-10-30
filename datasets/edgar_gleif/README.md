@@ -9,7 +9,7 @@ orthogonal facets:
 | `arcform.yaml` (+ `models/`, `descriptor.overrides.json`, `scripts/test_ingest_lei.py`) | **Protocol** — how it's made | run `arc run` → produces the Dataset **and** its descriptor; the test runs the models against scratch sources and pins what they refuse |
 | `datapackage.json` | **Descriptor** — what it is | schema, finetype labels, `x-joins`/evidence — **emitted** by the `describe` step (staged) and published by the stamp step, no longer hand-authored |
 | `scripts/crosswalk_join.py` (+ `test_crosswalk_join.py`) | **Proof** — that the join runs | executes every declared `x-joins` against the published objects and checks the coverage each one claims |
-| `../registry.json` (this dataset's entry) | **Address** — how it's found | stable `uid`, `crosswalk.edgar_gleif`, manifest pointer |
+| `../registry.json` (this dataset's entry) | **Address** — how it's found | stable `uid`, `library.edgar_lei` (alias `crosswalk.edgar_gleif`), manifest pointer |
 
 ## The Protocol
 

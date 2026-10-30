@@ -8,7 +8,7 @@ registration status. This directory holds the dataset's three orthogonal facets:
 |---|---|---|
 | `arcform.yaml` (+ `models/`, `scripts/`) | **Protocol** — how it's made | run `arc run` → produces the Dataset |
 | `datapackage.json` | **Descriptor** — what it is | schema, finetype labels |
-| `../registry.json` (this dataset's entry) | **Address** — how it's found | stable `uid`, `source.gleif`, manifest pointer |
+| `../registry.json` (this dataset's entry) | **Address** — how it's found | stable `uid`, `gleif.lei` (alias `source.gleif`), manifest pointer |
 
 ## The Protocol
 

@@ -6,9 +6,9 @@
 """The registry's fields agree with each other, and the check can fail.
 
 `datasets/registry.json` says in prose how a dataset is addressed, and it carries the same
-rules as data: each entry's `moves_to` names a namespace, `namespaces` lists the namespaces,
+rules as data: each entry's address (its `moves_to`, or its `schema` and `name`) names a namespace, `namespaces` lists the namespaces,
 and `reserved` lists the names no one can register. Prose cannot be held to the data it
-describes, so a namespace added without being reserved, a `moves_to` that points at a
+describes, so a namespace added without being reserved, an address that points at a
 namespace the registry does not list, or two entries moving to one address would pass every
 other job on this page. `problems()` reads those rules back out of the document and names
 each one that fails.
@@ -65,7 +65,9 @@ def address_of(entry: dict[str, Any]) -> Any:
     """Where an entry is addressed: its `moves_to` before the cutover, `<schema>/<name>` after it."""
     if "moves_to" in entry:
         return entry["moves_to"]
-    return f"{entry.get('schema')}/{entry.get('name')}"
+    if entry.get("schema") and entry.get("name"):
+        return f"{entry['schema']}/{entry['name']}"
+    return None
 
 
 def problems(registry: dict[str, Any], text: str | None = None) -> list[str]:
@@ -90,6 +92,9 @@ def problems(registry: dict[str, Any], text: str | None = None) -> list[str]:
     for entry in datasets:
         label = f"{entry.get('schema')}.{entry.get('name')}"
         target = address_of(entry)
+        if target is None:
+            found.append(f"{label}: has no address (`moves_to`, or `schema` and `name`)")
+            continue
         field = "moves_to" if "moves_to" in entry else "address"
         if not isinstance(target, str) or not ADDRESS.match(target):
             found.append(f"{label}: {field} {target!r} is not `<namespace>/<name>`")
@@ -241,6 +246,14 @@ class RegistryAgreesWithItself(unittest.TestCase):
         registry["datasets"].append({**registry["datasets"][2], "uid": "u-5"})
         self.assertEqual(len(problems(registry)), 2)
         self.assertTrue(all("claimed by more than one entry" in line for line in problems(registry)))
+
+    def test_an_entry_with_no_address_is_named(self) -> None:
+        registry = self.good()
+        del registry["datasets"][2]["schema"]
+        self.assertEqual(
+            problems(registry),
+            ["None.gamma: has no address (`moves_to`, or `schema` and `name`)"],
+        )
 
     def test_a_planning_reference_or_local_path_is_named(self) -> None:
         for leak in ("see bear" + "ing", "j6" + "dm", "Ka" + "ta", "/Vol" + "umes/Dev", "/Us" + "ers/me"):
