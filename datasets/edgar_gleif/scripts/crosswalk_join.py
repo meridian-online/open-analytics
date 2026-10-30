@@ -34,6 +34,7 @@ The declaration it reads, at the root of a `datapackage.json`:
           "compareAs":   "text" | "exact"     how to compare the two sides
           "where":       {"field": col, "equals": value}      optional row filter
           "coverage":    {"rows": int, "matched": int}
+          "measuredAgainst": "sha256:<hex>"   the referenced object coverage was measured on
           "cardinality": "<clause>. <explanation>"             optional
         }
       ]
@@ -44,6 +45,22 @@ The declaration it reads, at the root of a `datapackage.json`:
 the exact objects named in `resources[].path`, so they move when those objects are
 republished — the same property `bytes` and `hash` already have, and the reason the
 workflow runs this on a schedule rather than only on merge.
+
+`measuredAgainst` says which referenced object that was: the SHA-256 of the bytes
+WRITE mode read for the referenced resource. It makes `coverage` a statement about
+one pair of objects, which stays true when the referenced package is republished
+and this one is not. Without it, every republish of `edgar` or `gleif` falsified the
+crosswalk's coverage until the crosswalk itself was rebuilt — a four-hour Splink run
+— and the check reddened whichever pull request came next. CHECK reads it against
+the `hash` the referenced package now declares:
+
+  - the same hash: the object coverage was measured on is still the one served, so
+    coverage is measured again and a disagreement fails, exactly as without it;
+  - a different hash: the referenced object has been republished since this build.
+    The join is reported as due a rebuild and not measured, and does not fail — the
+    figures describe the object they name, which a newer object cannot contradict;
+  - no `measuredAgainst`, or a referenced package that declares no `hash`: measured
+    against what is served, and a disagreement fails.
 
 `cardinality` is prose for a reader, and its first sentence restates `coverage`:
 `complete — all N rows match.` or `partial — M of N rows match.` That sentence
@@ -65,8 +82,10 @@ Two modes, one measurement:
   reported for it.
 
   WRITE (`--write`): `coverage` is optional on input and is unconditionally
-  overwritten with what gets measured, and so is the first sentence of
-  `cardinality`; the descriptor is rewritten in place. Pass
+  overwritten with what gets measured, and so are `measuredAgainst` and the first
+  sentence of `cardinality`; the descriptor is rewritten in place. A referenced
+  resource whose bytes are remote is downloaded once and both hashed and measured
+  from that copy, so the hash names exactly the bytes the figures came from. Pass
   `--local NAME=PATH` (repeatable) to read resource NAME from a local file instead
   of its declared `path` — a build has not published yet, so the declared `path`
   for its own not-yet-uploaded resource still names the OLD object. This is what
@@ -87,9 +106,13 @@ Exit codes, distinct because a status alone cannot tell a refusal from a crash:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
+import shutil
 import sys
+import tempfile
+import urllib.request
 from pathlib import Path
 from typing import Any
 
@@ -105,6 +128,9 @@ EXIT_ERROR = 2
 SUPPORTED_COMPARISONS = {"text", "exact"}
 SUPPORTED_WHERE_KEYS = {"field", "equals"}
 REQUIRED_COVERAGE_KEYS = {"rows", "matched"}
+MEASURED_AGAINST = re.compile(r"^sha256:[0-9a-f]{64}$")
+# Seconds a stalled read of a referenced object may wait before WRITE gives up on it.
+DOWNLOAD_TIMEOUT = 300
 
 
 class JoinError(Exception):
@@ -139,6 +165,27 @@ def derive_cardinality(text: str | None, coverage: dict[str, int]) -> str:
     _, explanation = split_cardinality(text or "")
     clause = coverage_clause(coverage)
     return f"{clause} {explanation}" if explanation else clause
+
+
+def file_sha256(path: str) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(chunk)
+    return f"sha256:{digest.hexdigest()}"
+
+
+def download(url: str, directory: str) -> str:
+    """Copy a remote object to a local file, so it is hashed and measured as one set of bytes."""
+    if not re.match(r"^https?://", url, re.IGNORECASE):
+        raise JoinError(f"cannot download {url} to hash it: only http(s) objects are downloaded")
+    target = Path(directory) / (url.rstrip("/").rsplit("/", 1)[-1] or "object.parquet")
+    try:
+        with urllib.request.urlopen(url, timeout=DOWNLOAD_TIMEOUT) as response, target.open("wb") as out:  # noqa: S310
+            shutil.copyfileobj(response, out)
+    except OSError as exc:
+        raise JoinError(f"could not download {url}: {exc}") from exc
+    return str(target)
 
 
 def quote_ident(name: str) -> str:
@@ -266,6 +313,14 @@ def validate(
             f"join {label!r}: `coverage` must declare exactly {sorted(REQUIRED_COVERAGE_KEYS)}; "
             f"got {sorted(coverage) if isinstance(coverage, dict) else type(coverage).__name__}"
         )
+    measured_against = join.get("measuredAgainst")
+    if measured_against is not None and not (
+        isinstance(measured_against, str) and MEASURED_AGAINST.match(measured_against)
+    ):
+        raise JoinError(
+            f"join {label!r}: `measuredAgainst` must be 'sha256:' and 64 lowercase hex digits; "
+            f"got {measured_against!r}"
+        )
     for key in sorted(REQUIRED_COVERAGE_KEYS):
         if not isinstance(coverage[key], int) or isinstance(coverage[key], bool) or coverage[key] < 0:
             raise JoinError(f"join {label!r}: coverage.{key} is not a row count: {coverage[key]!r}")
@@ -307,10 +362,12 @@ def run_join(
     *,
     write: bool = False,
     local_overrides: dict[str, str] | None = None,
-) -> tuple[list[str], list[str]]:
-    """Run one join: (coverage disagreements, cardinality clauses its coverage does not state).
+    scratch: str | None = None,
+) -> tuple[list[str], list[str], list[str]]:
+    """Run one join: (coverage disagreements, cardinality clauses its coverage does not
+    state, joins due a rebuild because the object they were measured on was republished).
 
-    WRITE mode returns two empty lists — it replaces both claims with what it measured.
+    WRITE mode returns three empty lists — it replaces every claim with what it measured.
     """
     local_overrides = local_overrides or {}
     label = str(join.get("name") or (join.get("reference") or {}).get("resource") or "<unnamed>")
@@ -336,8 +393,34 @@ def run_join(
                 f"join {label!r}: references {target_name}.{column}, which that package does not declare"
             )
 
+    clauses: list[str] = []
+    cardinality = join.get("cardinality")
+    if not write and cardinality is not None:
+        assert coverage is not None  # require_coverage=True guarantees this in CHECK mode
+        opening, _ = split_cardinality(cardinality)
+        derived = coverage_clause(coverage)
+        if opening != derived:
+            clauses.append(
+                f"{label}: cardinality opens {opening!r}; its coverage of {coverage['matched']:,} "
+                f"of {coverage['rows']:,} row(s) states {derived!r}"
+            )
+
+    measured_against = join.get("measuredAgainst")
+    served_hash = right_resource.get("hash")
+    if not write and measured_against and served_hash and served_hash != measured_against:
+        print(f"  {label}: not measured")
+        print(f"    coverage was measured against {target_name} {measured_against}")
+        print(f"    {target_name} now declares {served_hash}")
+        return [], clauses, [
+            f"{label}: measured against {target_name} {measured_against}; {target_name} has since been "
+            f"republished as {served_hash}"
+        ]
+
     left_path = resource_source(local_overrides, left_resource.get("name"), descriptor_path, left_resource)
     right_path = resource_source(local_overrides, target_name, target_descriptor_path, right_resource)
+    if write and is_remote(right_path):
+        assert scratch is not None
+        right_path = download(right_path, scratch)
     for path in (left_path, right_path):
         if is_remote(path):
             con.execute("INSTALL httpfs")
@@ -400,25 +483,18 @@ def run_join(
         # to. Mutate the join in place; `descriptor` (and this dict inside it) is
         # what the caller re-serialises once every join in it has been measured.
         join["coverage"] = {"rows": rows, "matched": matched}
+        join["measuredAgainst"] = file_sha256(right_path)
         print(f"    coverage written: rows {rows:,}  matched {matched:,}")
+        print(f"    measured against {target_name} {join['measuredAgainst']}")
         # The sentence that states the coverage is rewritten from the same measurement,
         # in the same pass, so the two cannot be written at different times.
         join["cardinality"] = derive_cardinality(join.get("cardinality"), join["coverage"])
         print(f"    cardinality written: {join['cardinality']}")
-        return [], []
+        return [], [], []
 
     assert coverage is not None  # require_coverage=True guarantees this in CHECK mode
-    clauses: list[str] = []
-    cardinality = join.get("cardinality")
     if cardinality is not None:
-        opening, _ = split_cardinality(cardinality)
-        derived = coverage_clause(coverage)
-        print(f"    cardinality opens  {opening}")
-        if opening != derived:
-            clauses.append(
-                f"{label}: cardinality opens {opening!r}; its coverage of {coverage['matched']:,} "
-                f"of {coverage['rows']:,} row(s) states {derived!r}"
-            )
+        print(f"    cardinality opens  {split_cardinality(cardinality)[0]}")
 
     problems: list[str] = []
     if rows != coverage["rows"]:
@@ -429,7 +505,7 @@ def run_join(
         problems.append(
             f"{label}: descriptor declares {coverage['matched']:,} matched row(s); the join finds {matched:,}"
         )
-    return problems, clauses
+    return problems, clauses, []
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -530,7 +606,9 @@ def main(argv: list[str] | None = None) -> int:
     con = duckdb.connect()
     problems: list[str] = []
     clauses: list[str] = []
+    due: list[str] = []
     ran = 0
+    scratch = tempfile.TemporaryDirectory(prefix="crosswalk-join-")
 
     try:
         index = index_resources([read_from(path) for path in descriptor_paths])
@@ -546,7 +624,7 @@ def main(argv: list[str] | None = None) -> int:
                 raise JoinError(f"{descriptor_path}: `x-joins` declares no joins")
             print(f"{descriptor_path}")
             for join in joins:
-                join_problems, join_clauses = run_join(
+                join_problems, join_clauses, join_due = run_join(
                     con,
                     descriptor_path,
                     descriptor,
@@ -555,9 +633,11 @@ def main(argv: list[str] | None = None) -> int:
                     args.sample,
                     write=args.write,
                     local_overrides=local_overrides,
+                    scratch=scratch.name,
                 )
                 problems.extend(join_problems)
                 clauses.extend(join_clauses)
+                due.extend(join_due)
                 ran += 1
             if args.write:
                 if args.out and written:
@@ -571,6 +651,8 @@ def main(argv: list[str] | None = None) -> int:
     except JoinError as exc:
         print(f"crosswalk join: {exc}", file=sys.stderr)
         return EXIT_ERROR
+    finally:
+        scratch.cleanup()
 
     if not ran:
         packages = ", ".join(path.parent.name for path in selected)
@@ -585,6 +667,14 @@ def main(argv: list[str] | None = None) -> int:
         for path in written:
             print(f"  wrote {path}")
         return EXIT_OK
+
+    if due:
+        print(
+            f"\ncrosswalk join: {len(due)} join(s) due a rebuild — the object each was measured "
+            f"against has been republished, so its coverage was not re-measured and is not failed on\n"
+        )
+        for item in due:
+            print(f"  {item}")
 
     # Reported before the coverage verdict and whatever that verdict is: a clause that
     # disagrees with its coverage is a second defect, not a consequence of the first.
@@ -610,7 +700,11 @@ def main(argv: list[str] | None = None) -> int:
         )
         return EXIT_VIOLATIONS
 
-    print(f"\ncrosswalk join: {ran} declared join(s) ran against the published bytes and covered what they claim")
+    measured = ran - len(due)
+    print(
+        f"\ncrosswalk join: {measured} declared join(s) ran against the published bytes and covered what they claim"
+        + (f"; {len(due)} due a rebuild, not measured" if due else "")
+    )
     if clauses:
         print(
             f"crosswalk join: {len(clauses)} cardinality clause(s) reported above, "

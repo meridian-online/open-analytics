@@ -264,8 +264,17 @@ and `edgar.cik` is an integer — the two SEC identifier schemes share one colum
 no arithmetic type describes it — and the declaration says so by naming the
 rendering (`compareAs: text`) rather than leaving a consumer to guess.
 
-`coverage` is measured against the exact objects in `resources[].path` and moves
-when they are republished, exactly as `bytes` and `hash` do.
+`coverage` is measured against the exact objects in `resources[].path`, and each
+join records which referenced object that was, as `measuredAgainst`: the SHA-256 of
+the `edgar` or `gleif` bytes the build read. The figures are a statement about that
+pair of objects. When `edgar` or `gleif` is republished and this crosswalk is not,
+the referenced package declares a different `hash`, and the check reports the join
+as due a rebuild instead of failing it: the crosswalk is still true of the inputs it
+was built from, and re-measuring it against newer ones would only be satisfied by
+the four-hour `resolve` run. While the referenced package still declares the
+recorded hash, the join is measured and a disagreement fails, as before. A
+descriptor written before `measuredAgainst` existed carries none, and is measured
+against what is served until its next build writes one.
 `scripts/crosswalk_join.py` runs the declarations and fails when the data disagrees;
 it takes every column, path, filter and rendering out of the descriptors, because a
 join that can only be run by a program which already knows the answer was never
