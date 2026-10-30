@@ -878,7 +878,8 @@ def check_self_description(
     # carry none.
     embedded_compared = {key: value for key, value in embedded.items() if key not in WRITTEN_AT}
     found = json_differences(expected, embedded_compared)
-    for _, difference in [item for item in found if is_prose(item[0])][:MAX_REPORTED_DIFFERENCES]:
+    prose = [difference for pointer, difference in found if is_prose(pointer)]
+    for difference in prose[:MAX_REPORTED_DIFFERENCES]:
         violations.append(
             Violation(
                 package,
@@ -887,6 +888,18 @@ def check_self_description(
                 "self-description.pending",
                 f"this repository's prose differs from the object's at {difference}; "
                 "the object carries it once it is republished",
+                blocking=False,
+            )
+        )
+    if len(prose) > MAX_REPORTED_DIFFERENCES:
+        violations.append(
+            Violation(
+                package,
+                resource_name,
+                "",
+                "self-description.pending",
+                f"{len(prose)} prose difference(s) in total between the two copies; "
+                f"the first {MAX_REPORTED_DIFFERENCES} are named above",
                 blocking=False,
             )
         )

@@ -129,6 +129,8 @@ SUPPORTED_COMPARISONS = {"text", "exact"}
 SUPPORTED_WHERE_KEYS = {"field", "equals"}
 REQUIRED_COVERAGE_KEYS = {"rows", "matched"}
 MEASURED_AGAINST = re.compile(r"^sha256:[0-9a-f]{64}$")
+# Seconds a stalled read of a referenced object may wait before WRITE gives up on it.
+DOWNLOAD_TIMEOUT = 300
 
 
 class JoinError(Exception):
@@ -175,9 +177,11 @@ def file_sha256(path: str) -> str:
 
 def download(url: str, directory: str) -> str:
     """Copy a remote object to a local file, so it is hashed and measured as one set of bytes."""
+    if not re.match(r"^https?://", url, re.IGNORECASE):
+        raise JoinError(f"cannot download {url} to hash it: only http(s) objects are downloaded")
     target = Path(directory) / (url.rstrip("/").rsplit("/", 1)[-1] or "object.parquet")
     try:
-        with urllib.request.urlopen(url) as response, target.open("wb") as out:  # noqa: S310
+        with urllib.request.urlopen(url, timeout=DOWNLOAD_TIMEOUT) as response, target.open("wb") as out:  # noqa: S310
             shutil.copyfileobj(response, out)
     except OSError as exc:
         raise JoinError(f"could not download {url}: {exc}") from exc
