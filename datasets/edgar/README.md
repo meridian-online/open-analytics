@@ -1,8 +1,14 @@
 # `source.edgar` — SEC EDGAR company tickers
 
-Every company with securities registered with the U.S. Securities and Exchange
-Commission — its Central Index Key (CIK), ticker symbol, exchange and legal name, from
-the SEC's EDGAR system. A clean **information-retrieval** dataset: the EDGAR ↔ GLEIF
+The U.S. Securities and Exchange Commission's company-tickers file from its EDGAR
+system: one row per ticker symbol, with the Central Index Key (CIK), EDGAR conformed
+company name and exchange it is associated with. A company with several listed
+securities has several rows — 1RT Acquisition Corp. (CIK 2054272) has ONCH, ONCHU and
+ONCHW — so the key is (`cik`, `ticker`), not `cik`. The SEC updates the file to support
+EDGAR searches and [does not guarantee its accuracy or
+scope](https://www.sec.gov/search-filings/edgar-search-assistance/accessing-edgar-data):
+it is a ticker list, not a register of every company with securities registered with
+the SEC. A clean **information-retrieval** dataset: the EDGAR ↔ GLEIF
 entity-resolution join is *not* done here — it lives in the `crosswalk.edgar_gleif`
 Protocol. This directory holds the dataset's three orthogonal facets:
 
@@ -29,26 +35,16 @@ freshness lever. The step DAG:
 
 Produces `build/edgar.parquet`.
 
-### `cik` is an integer, and the served object is one republish behind
+### `cik` is an integer, in the build and in the served object
 
-**This Protocol now builds `cik` as a Parquet integer, which is what
-`datapackage.json` and `descriptor.overrides.json` have declared since 2026-08-12.**
-Step 2 used to end `CAST(… AS BIGINT)::VARCHAR` — a cast to integer thrown away
-immediately — so it built text while the descriptor declared an integer.
-
-The section this replaces predicted the failure that then happened, and it is worth
-keeping the sentence: *"If a future run publishes the text column this Protocol
-builds, that pin becomes wrong and `descriptors match their data` will say so."* A
-run did, and it does. `scripts/check_descriptors.py` reports two disagreements on
-`edgar.cik`, one for this repo's descriptor and one for the copy the object carries
-about itself in its own footer — which is why editing the descriptor alone cannot fix
-it and would take the count from 2 to 3.
-
-**The object at `openlake.meridian.online/edgar.parquet` still carries the text
-column, so both disagreements stand until it is republished from this Protocol.**
-Nothing in CI rebuilds a dataset and diffs it against what is served, so no job here
-sees this change; it is verified by running the model, which emits `BIGINT` (Parquet
-`INT64`).
+**`cik` is a Parquet integer (`INT64`, DuckDB `BIGINT`) in what this Protocol builds,
+in the object served at `openlake.meridian.online/edgar.parquet`, and in
+`datapackage.json` and `descriptor.overrides.json`.** Step 2 once ended
+`CAST(… AS BIGINT)::VARCHAR` — a cast to integer thrown away immediately — so it built
+text while the descriptor declared an integer, and the served object carried that text
+column until it was republished from the corrected Protocol. `scripts/check_descriptors.py`
+holds both this repo's descriptor and the copy the object carries in its own footer to
+the served column type, so a regression to text shows up there.
 
 Republishing has a second step that is not optional. `datasets/edgar_gleif`'s
 `x-joins` declares its `coverage` measured against *the exact object* this package
