@@ -17,7 +17,7 @@
       "title": "Meridian"
     }
   ],
-  "created": "2026-09-17T00:17:29Z",
+  "created": "2026-10-30T23:53:04Z",
   "description": "The 2022 North American Industry Classification System — the standard taxonomy for classifying business establishments by industry, from broad sectors down to specific national industries.",
   "homepage": "https://meridian.online/datasets/naics",
   "licenses": [
@@ -30,9 +30,9 @@
   "name": "naics",
   "resources": [
     {
-      "bytes": 349888,
+      "bytes": 349871,
       "format": "parquet",
-      "hash": "sha256:fbb6b9b26b2295447cb557e835d844c6a8c90392da85097b0955dd93ab617747",
+      "hash": "sha256:8c091c158138215269dd607e72872fa221431636ab82c101c39eff7eb537d4d5",
       "mediatype": "application/vnd.apache.parquet",
       "name": "naics",
       "path": "https://openlake.meridian.online/census/naics_2022.parquet",
@@ -40,7 +40,7 @@
         "fields": [
           {
             "constraints": {
-              "pattern": "^(11|2[1-3]|3[1-3]|42|4[4-5]|4[8-9]|5[1-6]|6[1-2]|7[1-2]|8[1-2]|92)[0-9]{0,4}$|^(31-33|44-45|48-49)$"
+              "pattern": "^(11|2[1-3]|3[1-3]|4[1-2]|4[4-5]|4[8-9]|5[1-6]|6[1-2]|7[1-2]|8[1-2]|9[1-2])[0-9]{0,4}$|^(31-33|44-45|48-49)$"
             },
             "description": "NAICS 2022 code — 2 digits (or a hyphenated sector range) down to a 6-digit national industry; the hierarchy is read from the code length.",
             "name": "code",
@@ -120,5 +120,5 @@
     }
   ],
   "title": "NAICS — Industry Classification (2022)",
-  "x-finetype-version": "0.6.60"
+  "x-finetype-version": "0.6.67"
 }
