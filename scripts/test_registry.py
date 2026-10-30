@@ -47,12 +47,16 @@ LEAKS = re.compile(r"bearin[g]|j6d[m]|kat[a]|/Volume[s]/|/User[s]/", re.IGNORECA
 # a copy of it, so that a failure names that rule alone and not whatever the shipped registry
 # happens to hold.
 GOOD: dict[str, Any] = {
-    "schemas": {"library": "Meridian's curated set.", "main": "Held for compatibility views."},
+    "schemas": {
+        "library": "Meridian's curated set.",
+        "main": "Held for compatibility views.",
+        "source": "Held for compatibility views.",
+    },
     "namespaces": {
         "acme": {"kind": "held", "issuer": "Acme Institute", "claimed": False},
         "library": {"kind": "library"},
     },
-    "reserved": ["library", "meridian", "acme", "main", "new"],
+    "reserved": ["library", "meridian", "acme", "main", "source", "new"],
     "datasets": [
         {"uid": "u-1", "schema": "source", "name": "alpha", "aliases": [], "moves_to": "acme/alpha_2022"},
         {"uid": "u-2", "schema": "crosswalk", "name": "beta", "aliases": [], "moves_to": "library/beta"},
@@ -108,7 +112,9 @@ def problems(registry: dict[str, Any], text: str | None = None) -> list[str]:
             if not isinstance(alias, str) or not ALIAS.match(alias):
                 found.append(f"{label}: alias {alias!r} is not `<schema>.<name>`")
                 continue
-            old_name = alias.split(".")[1]
+            old_schema, old_name = alias.split(".")
+            if isinstance(registry.get("schemas"), dict) and old_schema not in registry["schemas"]:
+                found.append(f"{label}: alias {alias!r} is in schema {old_schema!r}, which `schemas` does not hold")
             if old_name not in reserved and old_name != namespace:
                 found.append(f"{label}: alias {alias!r} names {old_name!r}, which is not in `reserved`")
 
@@ -246,6 +252,12 @@ class RegistryAgreesWithItself(unittest.TestCase):
         registry["datasets"].append({**registry["datasets"][2], "uid": "u-5"})
         self.assertEqual(len(problems(registry)), 2)
         self.assertTrue(all("claimed by more than one entry" in line for line in problems(registry)))
+
+    def test_an_alias_in_a_schema_nobody_holds_is_named(self) -> None:
+        registry = self.good()
+        registry["datasets"][0]["aliases"] = ["legacy.acme"]
+        self.assertEqual(len(problems(registry)), 1)
+        self.assertIn("schema 'legacy', which `schemas` does not hold", problems(registry)[0])
 
     def test_an_entry_with_no_address_is_named(self) -> None:
         registry = self.good()
