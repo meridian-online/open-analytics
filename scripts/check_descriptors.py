@@ -31,6 +31,11 @@ What it asserts, per resource:
                      `bytes` and `hash`, the package's `created`), and its
                      field set, types and primary key must agree with the columns and
                      rows actually present.
+                     A difference in prose alone — a `description`, `title` or
+                     `$comment` — is reported as pending and does not fail the run:
+                     the copy in the footer only changes when the object is
+                     republished, and a wording fix in this repository is not a false
+                     claim about the bytes. Every other difference fails.
                      An object that carries none is not a violation unless
                      `--require-self-description` is passed — nothing publishes a
                      stamped object yet, and a check that demanded one would refuse
@@ -170,6 +175,9 @@ class Violation:
     field: str
     rule: str
     detail: str
+    # False for a finding reported but not failed on: prose this repository has changed
+    # and the object will carry once it is republished. See PROSE_KEYS.
+    blocking: bool = True
 
     def line(self) -> str:
         where = f"{self.package} :: {self.resource}"
@@ -717,9 +725,22 @@ def check_resource(
 # is reported either way, so nothing is hidden by the cut-off.
 MAX_REPORTED_DIFFERENCES = 12
 
+# Keys whose value is prose for a reader. A difference at one of these between this
+# repository's copy and the object's is pending, not failing: the footer only changes
+# when the object is republished, and a crosswalk republish is a four-hour Splink run,
+# so failing on a reworded sentence turned every wording fix into a red check on
+# whichever pull request came next. Nothing a consumer computes with is prose — the
+# schema, types, constraints, keys, licences and joins all stay blocking.
+PROSE_KEYS = {"description", "title", "$comment"}
 
-def json_differences(expected: Any, actual: Any, pointer: str = "") -> list[str]:
-    """Every place two JSON documents disagree, as `<pointer>: expected … got …`.
+
+def is_prose(pointer: str) -> bool:
+    """Whether a JSON pointer names a prose value, by its last segment."""
+    return pointer.rsplit("/", 1)[-1] in PROSE_KEYS
+
+
+def json_differences(expected: Any, actual: Any, pointer: str = "") -> list[tuple[str, str]]:
+    """Every place two JSON documents disagree, as (pointer, `<pointer>: expected … got …`).
 
     Structural rather than textual on purpose: the two copies are written by
     different code paths, so indentation and key order are not disagreements and
@@ -732,26 +753,28 @@ def json_differences(expected: Any, actual: Any, pointer: str = "") -> list[str]
         and not isinstance(expected, bool)
         and not isinstance(actual, bool)
     ):
-        return [f"{at}: this repository has {type(expected).__name__}, the object has {type(actual).__name__}"]
+        return [(at, f"{at}: this repository has {type(expected).__name__}, the object has {type(actual).__name__}")]
     if isinstance(expected, dict):
-        differences: list[str] = []
+        differences: list[tuple[str, str]] = []
         for key in sorted(set(expected) | set(actual)):
             if key not in actual:
-                differences.append(f"{at.rstrip('/')}/{key}: absent from the object's own description")
+                child = f"{at.rstrip('/')}/{key}"
+                differences.append((child, f"{child}: absent from the object's own description"))
             elif key not in expected:
-                differences.append(f"{at.rstrip('/')}/{key}: present in the object but not in this repository")
+                child = f"{at.rstrip('/')}/{key}"
+                differences.append((child, f"{child}: present in the object but not in this repository"))
             else:
                 differences.extend(json_differences(expected[key], actual[key], f"{pointer}/{key}"))
         return differences
     if isinstance(expected, list):
         if len(expected) != len(actual):
-            return [f"{at}: this repository has {len(expected)} item(s), the object has {len(actual)}"]
+            return [(at, f"{at}: this repository has {len(expected)} item(s), the object has {len(actual)}")]
         differences = []
         for index, (left, right) in enumerate(zip(expected, actual)):
             differences.extend(json_differences(left, right, f"{pointer}/{index}"))
         return differences
     if expected != actual:
-        return [f"{at}: this repository has {expected!r}, the object has {actual!r}"]
+        return [(at, f"{at}: this repository has {expected!r}, the object has {actual!r}")]
     return []
 
 
@@ -854,7 +877,33 @@ def check_self_description(
     # pins and a republish drops; the stamp's own self-test is what proves new objects
     # carry none.
     embedded_compared = {key: value for key, value in embedded.items() if key not in WRITTEN_AT}
-    differences = json_differences(expected, embedded_compared)
+    found = json_differences(expected, embedded_compared)
+    prose = [difference for pointer, difference in found if is_prose(pointer)]
+    for difference in prose[:MAX_REPORTED_DIFFERENCES]:
+        violations.append(
+            Violation(
+                package,
+                resource_name,
+                "",
+                "self-description.pending",
+                f"this repository's prose differs from the object's at {difference}; "
+                "the object carries it once it is republished",
+                blocking=False,
+            )
+        )
+    if len(prose) > MAX_REPORTED_DIFFERENCES:
+        violations.append(
+            Violation(
+                package,
+                resource_name,
+                "",
+                "self-description.pending",
+                f"{len(prose)} prose difference(s) in total between the two copies; "
+                f"the first {MAX_REPORTED_DIFFERENCES} are named above",
+                blocking=False,
+            )
+        )
+    differences = [difference for pointer, difference in found if not is_prose(pointer)]
     for difference in differences[:MAX_REPORTED_DIFFERENCES]:
         violations.append(
             Violation(
@@ -1656,7 +1705,8 @@ def main(argv: list[str] | None = None) -> int:
                         "datasets": licence_read_datasets,
                         "examples": licence_read_examples,
                     },
-                    "violations": [asdict(v) for v in violations],
+                    "violations": [asdict(v) for v in violations if v.blocking],
+                    "pending": [asdict(v) for v in violations if not v.blocking],
                 },
                 indent=2,
             )
@@ -1670,6 +1720,13 @@ def main(argv: list[str] | None = None) -> int:
         + f"; {catalogue_rows} catalogue row count(s) measured against the objects they link to"
         + f"; {licence_read}"
     )
+    pending = [v for v in violations if not v.blocking]
+    violations = [v for v in violations if v.blocking]
+    if pending:
+        print(f"descriptor check: {len(pending)} prose difference(s) pending a republish, not failed on\n")
+        for finding in pending:
+            print(finding.line())
+        print()
     if not violations:
         print(
             f"descriptor check: {len(descriptor_paths)} descriptor(s) agree with their data ({checked}); "
