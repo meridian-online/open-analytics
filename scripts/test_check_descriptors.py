@@ -1052,6 +1052,29 @@ class DescriptorCheckSelfTest(unittest.TestCase):
         self.assertEqual(document["violations"], [])
         self.assertEqual([v["rule"] for v in document["pending"]], ["self-description.pending"] * 2)
 
+    def test_pending_prose_past_the_cap_is_counted_not_dropped(self) -> None:
+        columns = [f"c{i}" for i in range(13)]
+        descriptor = write_package(
+            self.datasets,
+            "widgets",
+            select_sql=f"SELECT {', '.join(f"'x' AS {c}" for c in columns)}",
+            fields=[{"name": c, "type": "string", "description": "Old."} for c in columns],
+        )
+        stamp_package(descriptor)
+        document = json.loads(descriptor.read_text(encoding="utf-8"))
+        for field in document["resources"][0]["schema"]["fields"]:
+            field["description"] = "New."
+        descriptor.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+        report = Path(self._tmp.name) / "report.json"
+        self.assertOutcome(
+            run_check(self.datasets, "--json", str(report)),
+            EXIT_OK,
+            "13 prose difference(s) in total between the two copies; the first 12 are named above",
+        )
+        pending = json.loads(report.read_text(encoding="utf-8"))["pending"]
+        self.assertEqual(len(pending), 13)
+        self.assertTrue(all(not v["blocking"] for v in pending))
+
     def test_object_with_older_prose_still_fails_on_a_structural_difference(self) -> None:
         """Pending prose does not excuse anything else the two copies disagree on."""
         descriptor = write_package(

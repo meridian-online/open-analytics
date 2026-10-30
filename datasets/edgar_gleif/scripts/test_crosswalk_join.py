@@ -624,6 +624,19 @@ class CrosswalkJoinSelfTest(unittest.TestCase):
         self.lay_left(coverage={"rows": 3, "matched": 3}, measuredAgainst="sha256:" + "0" * 64)
         self.assertOutcome(run_join(self.datasets), EXIT_VIOLATIONS, "declares 3 matched row(s); the join finds 2")
 
+    def test_write_refuses_to_download_a_scheme_it_cannot_fetch(self) -> None:
+        """Refused before any read, so this case touches no network."""
+        path = self.datasets / "right" / "datapackage.json"
+        descriptor = json.loads(path.read_text(encoding="utf-8"))
+        descriptor["resources"][0]["path"] = "s3://bucket/right.parquet"
+        path.write_text(json.dumps(descriptor, indent=2) + "\n", encoding="utf-8")
+        self.lay_left(include_coverage=False)
+        self.assertOutcome(
+            run_join(self.datasets, "--write"),
+            EXIT_ERROR,
+            "cannot download s3://bucket/right.parquet to hash it: only http(s) objects are downloaded",
+        )
+
     def test_malformed_measured_against_refuses(self) -> None:
         self.lay_left(measuredAgainst="3dc65776711ebb9a")
         self.assertOutcome(run_join(self.datasets), EXIT_ERROR, "`measuredAgainst` must be 'sha256:'")
