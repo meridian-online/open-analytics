@@ -50,12 +50,14 @@ Nothing in CI rebuilds a dataset and diffs it against what is served, so no job 
 sees this change; it is verified by running the model, which emits `BIGINT` (Parquet
 `INT64`).
 
-Republishing has a second step that is not optional. `datasets/edgar_gleif`'s
-`x-joins` declares its `coverage` measured against *the exact object* this package
-names, and says so: it "moves when they are republished, exactly as `bytes` and
-`hash` do". So a run that republishes `edgar` leaves `declared joins run against the
-published bytes` red until the crosswalk's coverage is re-derived and republished
-too. That is a second slug and a second review, not a larger single act.
+Republishing this package does not have to republish the crosswalk.
+`datasets/edgar_gleif`'s `x-joins` records, as `measuredAgainst`, the hash of the
+`edgar` object its `coverage` was measured on. Once `edgar` declares a different
+hash, `declared joins run against the published bytes` reports that join as due a
+rebuild rather than failing it, and the crosswalk catches up at its own next run.
+A crosswalk descriptor that records no `measuredAgainst` is still measured against
+the served `edgar`, so until the crosswalk's next build writes one, republishing
+`edgar` reddens that check as it did before.
 
 Neither representation loses information — no published CIK carries a leading zero
 and the text/integer round trip is exact, measured in `datasets/edgar_gleif` — so the

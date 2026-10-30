@@ -35,6 +35,7 @@ to do with the runner.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 import sys
@@ -572,6 +573,60 @@ class CrosswalkJoinSelfTest(unittest.TestCase):
         self.lay_left(cardinality=["partial"])
         self.assertOutcome(run_join(self.datasets), EXIT_ERROR, "`cardinality` must be a string; got list")
 
+
+    # ------------------------------------------- what coverage was measured on
+
+    def right_hash(self) -> str:
+        return "sha256:" + hashlib.sha256((self.datasets / "right" / "right.parquet").read_bytes()).hexdigest()
+
+    def declare_right_hash(self, value: str) -> None:
+        path = self.datasets / "right" / "datapackage.json"
+        descriptor = json.loads(path.read_text(encoding="utf-8"))
+        descriptor["resources"][0]["hash"] = value
+        path.write_text(json.dumps(descriptor, indent=2) + "\n", encoding="utf-8")
+
+    def test_write_records_the_hash_of_the_referenced_bytes(self) -> None:
+        """The hash is of the file measured, computed independently here."""
+        self.lay_left(include_coverage=False)
+        self.assertOutcome(run_join(self.datasets, "--write"), EXIT_OK, f"measured against right {self.right_hash()}")
+        descriptor = json.loads((self.datasets / "left" / "datapackage.json").read_text(encoding="utf-8"))
+        self.assertEqual(descriptor["x-joins"]["joins"][0]["measuredAgainst"], self.right_hash())
+
+    def test_coverage_measured_on_the_served_object_is_still_held_to_it(self) -> None:
+        """Pinned and unchanged: the referenced object is the one measured, so drift fails."""
+        self.declare_right_hash(self.right_hash())
+        self.lay_left(coverage={"rows": 3, "matched": 3}, measuredAgainst=self.right_hash())
+        self.assertOutcome(run_join(self.datasets), EXIT_VIOLATIONS, "declares 3 matched row(s); the join finds 2")
+
+    def test_coverage_measured_on_a_republished_object_is_due_not_failed(self) -> None:
+        """The referenced package now declares another object: report, do not measure."""
+        older = "sha256:" + "0" * 64
+        self.declare_right_hash(self.right_hash())
+        self.lay_left(coverage={"rows": 3, "matched": 3}, measuredAgainst=older)
+        result = run_join(self.datasets)
+        self.assertOutcome(
+            result,
+            EXIT_OK,
+            "1 join(s) due a rebuild",
+            f"right: measured against right {older}; right has since been republished as {self.right_hash()}",
+            "0 declared join(s) ran against the published bytes and covered what they claim; 1 due a rebuild",
+        )
+        self.assertNotIn("measured  rows", result.stdout)
+
+    def test_a_republished_object_still_reports_a_misstated_clause(self) -> None:
+        """Not measuring the join does not excuse a clause its own coverage contradicts."""
+        self.declare_right_hash(self.right_hash())
+        self.lay_left(measuredAgainst="sha256:" + "0" * 64, cardinality="complete — all 3 rows match.")
+        self.assertOutcome(run_join(self.datasets, "--strict"), EXIT_VIOLATIONS, "cardinality opens 'complete")
+
+    def test_without_a_referenced_hash_the_join_is_measured(self) -> None:
+        """No declared hash to compare against: fall back to measuring what is served."""
+        self.lay_left(coverage={"rows": 3, "matched": 3}, measuredAgainst="sha256:" + "0" * 64)
+        self.assertOutcome(run_join(self.datasets), EXIT_VIOLATIONS, "declares 3 matched row(s); the join finds 2")
+
+    def test_malformed_measured_against_refuses(self) -> None:
+        self.lay_left(measuredAgainst="3dc65776711ebb9a")
+        self.assertOutcome(run_join(self.datasets), EXIT_ERROR, "`measuredAgainst` must be 'sha256:'")
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

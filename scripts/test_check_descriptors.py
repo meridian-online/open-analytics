@@ -1020,6 +1020,61 @@ class DescriptorCheckSelfTest(unittest.TestCase):
             "'CC-BY-4.0'",
         )
 
+    def test_object_carrying_older_prose_is_pending_not_failing(self) -> None:
+        """A reworded description is not a false claim about the bytes.
+
+        The footer copy only changes when the object is republished, so prose this
+        repository has corrected is reported as pending and the run still passes.
+        """
+        descriptor = write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT * FROM (VALUES ('AB')) t(code)",
+            fields=[{"name": "code", "type": "string", "description": "Old wording."}],
+        )
+        document = json.loads(descriptor.read_text(encoding="utf-8"))
+        document["description"] = "Old package wording."
+        stamp_package(descriptor, text=json.dumps(document, indent=2) + "\n")
+        document["description"] = "Corrected package wording."
+        document["resources"][0]["schema"]["fields"][0]["description"] = "Corrected wording."
+        descriptor.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+        report = Path(self._tmp.name) / "report.json"
+        self.assertOutcome(
+            run_check(self.datasets, "--json", str(report)),
+            EXIT_OK,
+            "2 prose difference(s) pending a republish, not failed on",
+            "self-description.pending",
+            "/description: this repository has 'Corrected package wording.'",
+            "/resources/0/schema/fields/0/description",
+            "agree with their data",
+        )
+        document = json.loads(report.read_text(encoding="utf-8"))
+        self.assertEqual(document["violations"], [])
+        self.assertEqual([v["rule"] for v in document["pending"]], ["self-description.pending"] * 2)
+
+    def test_object_with_older_prose_still_fails_on_a_structural_difference(self) -> None:
+        """Pending prose does not excuse anything else the two copies disagree on."""
+        descriptor = write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT * FROM (VALUES ('AB')) t(code)",
+            fields=[{"name": "code", "type": "string"}],
+        )
+        document = json.loads(descriptor.read_text(encoding="utf-8"))
+        document["description"] = "Old package wording."
+        document["licenses"] = [{"name": "CC-BY-4.0"}]
+        stamp_package(descriptor, text=json.dumps(document, indent=2) + "\n")
+        document["description"] = "Corrected package wording."
+        document["licenses"] = [{"name": "CC0-1.0"}]
+        descriptor.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+        self.assertOutcome(
+            run_check(self.datasets),
+            EXIT_VIOLATIONS,
+            "1 prose difference(s) pending a republish",
+            "differs from this repository's at /licenses/0/name",
+            "FAILED — 1 disagreement(s)",
+        )
+
     def test_object_published_before_created_left_the_footer_still_passes(self) -> None:
         """A footer that still states `created` is an old object, not a lying one.
 
