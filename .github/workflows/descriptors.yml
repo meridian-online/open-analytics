@@ -437,6 +437,20 @@ jobs:
       - name: the manifests, and a scratch one that shares a path
         run: python scripts/test_manifest_one_writer.py
 
+  registry-agrees-with-itself:
+    name: the registry's addresses, namespaces and reserved names agree
+    # `datasets/registry.json` states its address rules in prose and carries the same rules
+    # as data. Nothing else on this page reads it, so a `moves_to` into a namespace the
+    # registry does not list, or a namespace that is not reserved, would pass every job here.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: the shipped registry, and scratch ones that each break a rule
+        run: python scripts/test_registry.py
+
   protocol-readme-self-test:
     name: the step-list check can fail
     runs-on: ubuntu-latest
