@@ -15,8 +15,8 @@
       "concept": "finance.securities.ticker",
       "property": "constraints.pattern",
       "values": {
-        "edgar.ticker": "^[A-Z]{1,7}([./-][A-Z]{1,4})?$|^[A-Z]{4}\\.$",
-        "edgar_gleif.ticker": "^[A-Z]{1,7}([./-][A-Z]{1,4})?$"
+        "edgar.ticker": "^(?:[A-Z]{1,7}(?:[./-][A-Z]{1,4})?|[0-9]{1,6})$|^[A-Z]{4}\\.$",
+        "edgar_gleif.ticker": "^(?:[A-Z]{1,7}(?:[./-][A-Z]{1,4})?|[0-9]{1,6})$"
       },
       "reason": "The populations differ and the patterns are each true of their own. `edgar` carries a ticker for every security in the SEC company-tickers file; `edgar_gleif` carries only the subset that resolved to an LEI. The four-letter-plus-period form occurs in the EDGAR column and `edgar.ticker` is widened to admit it — its `x-finetype-pattern-fit` records the widening against finetype's canonical pattern — while the crosswalk snapshot contains no such value and declares the canonical pattern unwidened. So `edgar`'s pattern is the union of the two: a validation routine written against it passes both datasets, and one written against `edgar_gleif`'s narrower pattern fails on EDGAR rows. That asymmetry is the thing worth knowing, and it is why this is recorded rather than closed by widening `edgar_gleif` — a pattern wider than its own column would be less true of the bytes it describes, and changing it would need a republish of the object whose footer carries this descriptor."
     },

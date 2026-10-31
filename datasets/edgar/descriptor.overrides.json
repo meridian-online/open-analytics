@@ -34,7 +34,7 @@
     }
   ],
   "resource": {
-    "path": "https://openlake.meridian.online/edgar.parquet"
+    "path": "https://openlake.meridian.online/sec/company_tickers_exchange.parquet"
   },
   "fields": {
     "cik": {
@@ -52,7 +52,7 @@
       "description": "Exchange ticker symbol for the registrant's security."
     },
     "exchange": {
-      "description": "Listing venue for the ticker (e.g. NYSE, Nasdaq, CBOE, OTC)."
+      "description": "Listing venue for the ticker (e.g. NYSE, Nasdaq, CBOE, OTC, TXSE — the Texas Stock Exchange)."
     },
     "corpus": {
       "description": "Lowercased, accent-stripped concatenation of name + ticker + exchange \u2014 a derived free-text search field, not a source attribute. The type on this field is declared, not inferred: `nominations.finetype.json` beside this descriptor nominates `representation.text.plain_text` and says why, so the field carries `x-finetype-nominated` and no confidence. Inferred, the label is a draw: finetype returned it on 484 of 600 independent 100-value samples of this column, `unknown` on 97 and one of seven other types on the rest."

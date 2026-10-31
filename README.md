@@ -9,13 +9,15 @@ Query them from anywhere — no account, no key:
 ```sql
 INSTALL ducklake; INSTALL httpfs;
 ATTACH 'ducklake:https://openlake.meridian.online/catalog/open.ducklake' AS meridian (READ_ONLY);
-SELECT * FROM meridian.gleif LIMIT 10;
+SELECT * FROM meridian.gleif.lei LIMIT 10;
 ```
+
+A dataset's address is `<namespace>/<name>`: `gleif/lei`, `sec/company_tickers_exchange`, `census/naics_2022` and `library/edgar_lei`, which are the SQL names `meridian.gleif.lei` and so on and the file URLs `https://openlake.meridian.online/<namespace>/<name>.parquet`. The old flat files stay readable but are frozen at the move and no longer refreshed, so read current data from the new URLs. The old SQL names (`source.gleif`, `source.edgar`, `source.naics`, `crosswalk.edgar_gleif`) keep working as views for a window after the move, then retire along with the old flat files.
 
 Or read a single file directly:
 
 ```sql
-SELECT * FROM read_parquet('https://openlake.meridian.online/naics.parquet');
+SELECT * FROM read_parquet('https://openlake.meridian.online/census/naics_2022.parquet');
 ```
 
 ## Ask a dataset what it is
@@ -37,7 +39,7 @@ registry, and no knowledge that this repository exists:
 
 ```sql
 SELECT decode(value)
-FROM parquet_kv_metadata('https://openlake.meridian.online/naics.parquet')
+FROM parquet_kv_metadata('https://openlake.meridian.online/census/naics_2022.parquet')
 WHERE decode(key) = 'datapackage.json';
 ```
 
@@ -50,7 +52,7 @@ kilobytes and stops.
 The same descriptor, without the SQL:
 
 ```sh
-python scripts/stamp_descriptor.py read https://openlake.meridian.online/naics.parquet
+python scripts/stamp_descriptor.py read https://openlake.meridian.online/census/naics_2022.parquet
 ```
 
 The embedded copy omits the resource's `bytes` and `hash` and the package's
@@ -67,10 +69,10 @@ copies to each other.
 
 | Dataset | Rows | License | Source | Descriptor |
 |---|---|---|---|---|
-| GLEIF — Legal Entity Identifiers | 3.41M | CC0-1.0 | [GLEIF](https://www.gleif.org/) | [datapackage.json](datasets/gleif/datapackage.json) |
-| SEC EDGAR — Company Tickers | 10,391 | Public domain | [SEC](https://www.sec.gov/) | [datapackage.json](datasets/edgar/datapackage.json) |
+| GLEIF — Legal Entity Identifiers | 3.48M | CC0-1.0 | [GLEIF](https://www.gleif.org/) | [datapackage.json](datasets/gleif/datapackage.json) |
+| SEC EDGAR — Company Tickers | 10,430 | Public domain | [SEC](https://www.sec.gov/) | [datapackage.json](datasets/edgar/datapackage.json) |
 | NAICS — Industry Classification (2022) | 2,125 | Public domain | [U.S. Census Bureau](https://www.census.gov/naics/) | [datapackage.json](datasets/naics/datapackage.json) |
-| EDGAR ↔ GLEIF — company-to-LEI crosswalk | 209,413 | CC0-1.0 | SEC + GLEIF | [datapackage.json](datasets/edgar_gleif/datapackage.json) |
+| EDGAR ↔ GLEIF — company-to-LEI crosswalk | 212,319 | CC0-1.0 | SEC + GLEIF | [datapackage.json](datasets/edgar_gleif/datapackage.json) |
 
 The **Rows** figures are counted from the published objects themselves on every
 run of the checks below, not maintained by hand.

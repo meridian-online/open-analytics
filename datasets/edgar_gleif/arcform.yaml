@@ -1,5 +1,5 @@
 # The EDGAR ↔ GLEIF crosswalk Protocol — the reproducible *definition* of how the
-# `crosswalk.edgar_gleif` Dataset is made. `arc run` executes this manifest; one Run
+# `library.edgar_lei` Dataset is made. `arc run` executes this manifest; one Run
 # → one Dataset version (the freshness lever). See ./README.md (the Protocol primitive).
 #
 # ALL-CONFIG. Every step is a first-class `sql:` model or a typed `op:` operator from
@@ -21,7 +21,7 @@
 # out-of-repo publish pipeline and READS this Protocol's terminal output,
 # build/edgar_gleif.parquet + the emitted datapackage.json. It is not an arc step.
 #
-# Produces: build/edgar_gleif.parquet  →  published as crosswalk.edgar_gleif
+# Produces: build/edgar_gleif.parquet  →  published as library.edgar_lei
 name: edgar_gleif
 engine: duckdb
 engine_version: ">=1.2"
@@ -55,13 +55,13 @@ steps:
   - name: fetch_edgar
     op: http_fetch@1
     with:
-      url: https://openlake.meridian.online/edgar.parquet
+      url: https://openlake.meridian.online/sec/company_tickers_exchange.parquet
       out: build/edgar.parquet
 
   - name: fetch_gleif
     op: http_fetch@1
     with:
-      url: https://openlake.meridian.online/gleif.parquet
+      url: https://openlake.meridian.online/gleif/lei.parquet
       out: build/gleif.parquet
 
   # ── SEC entity universe (crosswalk LEFT side): fetch the raw cik-lookup list, then
@@ -375,7 +375,7 @@ steps:
       parquet: build/stage/edgar_gleif.parquet
       schema: schema.finetype.json
   # ── Self-describe: put the descriptor INSIDE the Parquet it describes ───────────
-  # Someone holding https://openlake.meridian.online/edgar_gleif.parquet
+  # Someone holding https://openlake.meridian.online/library/edgar_lei.parquet
   # cannot find the datapackage.json that describes it: it is a second file, in a
   # source repository they have no reason to know exists, and behind an authenticating
   # edge there is no repository to find. This step writes the finished descriptor into

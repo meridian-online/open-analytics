@@ -31,7 +31,7 @@
     }
   ],
   "resource": {
-    "path": "https://openlake.meridian.online/edgar_gleif.parquet"
+    "path": "https://openlake.meridian.online/library/edgar_lei.parquet"
   },
   "fields": {
     "key_type": {
