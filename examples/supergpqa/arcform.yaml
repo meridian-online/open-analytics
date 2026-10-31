@@ -41,9 +41,9 @@
 #
 # THE EMBEDDING EXTENSION IS NOT FETCHED, and it is the one input here that does not
 # arrive from a URL. `text_embed@1` names a loadable DuckDB extension the Protocol
-# puts on disk; it never downloads or installs one, and there is no published URL for
-# that artifact today, so `vendor/staticembed.duckdb_extension` is git-ignored and
-# README.md says how to build and place it. Absent, the step refuses in milliseconds
+# puts on disk; it never downloads or installs one, and this manifest pins no URL for
+# that artifact today, so `vendor/subtoken.duckdb_extension` is git-ignored and
+# README.md says how to install and place it. Absent, the step refuses in milliseconds
 # naming the file it looked for. When the artifact has a URL this becomes an
 # `http_fetch@1` step and nothing else here moves.
 #
@@ -55,7 +55,7 @@
 # Produces: build/supergpqa.parquet + datapackage.json
 name: supergpqa
 engine: duckdb
-engine_version: ">=1.2"
+engine_version: ">=2.0"
 db: build/supergpqa.db
 
 defaults:
@@ -101,7 +101,7 @@ steps:
     with:
       input: build/supergpqa.corpus.parquet
       text_column: question
-      extension: vendor/staticembed.duckdb_extension
+      extension: vendor/subtoken.duckdb_extension
       out: build/supergpqa.embedded.parquet
       vector_column: embedding
 

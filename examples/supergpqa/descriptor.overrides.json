@@ -19,7 +19,7 @@
       "path": "https://arxiv.org/abs/2502.14739"
     },
     {
-      "title": "minishlab/potion-base-8M — the static embedding model whose vectors projection_x and projection_y are a UMAP reduction of, embedded in and applied by the staticembed DuckDB extension",
+      "title": "minishlab/potion-base-8M — the static embedding model whose vectors projection_x and projection_y are a UMAP reduction of, embedded in and applied by the subtoken DuckDB extension",
       "path": "https://huggingface.co/minishlab/potion-base-8M"
     },
     {

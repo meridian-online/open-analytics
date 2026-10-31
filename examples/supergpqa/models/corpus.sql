@@ -69,7 +69,7 @@ FROM (
     format = 'newline_delimited',
     columns = {uuid: 'VARCHAR', options: 'VARCHAR[]'}
   )
-  WHERE list_bool_or(list_transform(options, x -> contains(x, option_delimiter())))
+  WHERE list_bool_or(list_transform(options, lambda x: contains(x, option_delimiter())))
 ) v;
 
 -- GATE 2 — `answer_letter` INDEXES `answer_options`. The source records the correct

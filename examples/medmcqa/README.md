@@ -36,18 +36,20 @@ A repository tag is not the licensor speaking, which is the finding [`../science
 
 ## Before it will run: the embedding extension
 
-`text_embed@1` names a loadable DuckDB extension the Protocol puts on disk. It never downloads or installs one — an artifact fetched invisibly would be a graph edge that does not appear in the graph — and there is no published URL for this one today, so it is the one input here that does not arrive from a URL. Build it and place it:
+`text_embed@1` names a loadable DuckDB extension the Protocol puts on disk. It never downloads or installs one — an artifact fetched invisibly would be a graph edge that does not appear in the graph — so it is the one input here that does not arrive from a URL. The extension is `subtoken`, published in DuckDB's community repository. A build loads only on the DuckDB release it was built for, so install it with the same `duckdb` CLI arc runs, which needs arc v0.2.2 or later and DuckDB 2.0, and copy the file DuckDB reports it installed:
 
 ```sh
-git clone https://github.com/meridian-online/staticembed && cd staticembed && make release
-cp build/release/staticembed.duckdb_extension <this directory>/vendor/
+mkdir -p vendor
+duckdb -noheader -list -c "INSTALL subtoken FROM community; SELECT install_path FROM duckdb_extensions() WHERE extension_name = 'subtoken'" | xargs -I{} cp {} vendor/
 ```
+
+Keep the file name `subtoken.duckdb_extension`: DuckDB derives the extension's entry point from it, so a renamed copy does not load. [meridian-online/subtoken](https://github.com/meridian-online/subtoken) says how to build it yourself.
 
 `vendor/` is git-ignored. Absent, the run stops in milliseconds naming the file it looked for, before `uv` is spawned. When that artifact has a URL, step 2 below becomes an `http_fetch@1` like step 1 and nothing else in the manifest moves.
 
 ## Reproducibility
 
-Two cold runs — `rm -rf build && arc run` — produce a byte-identical export, sha256 `b008a789aa14db7819d7ab8c90226127427674e747b5dcfb529f627d1853082b`, the same comparison the other Protocols in this directory hold themselves to. Three things make the projection land in the same place twice: the seed is frozen in the operator's script rather than exposed in `arcform.yaml`, the thread count is pinned to one before numpy and numba load, and row order is pinned by reading each Parquet single-threaded with insertion order preserved. `ORDER BY ALL` on the export is a **total** order here — `id` is the source's UUID and all 182,822 are distinct — so this Protocol does not need the weaker tie-between-identical-rows argument [`../scienceqa/arcform.yaml`](../scienceqa/arcform.yaml) makes, and `models/load.sql` gates on that premise rather than asserting it.
+Two cold runs — `rm -rf build && arc run` — produce a byte-identical export, sha256 `f820a057ca5b1df449fa5bfb08f697da6acdc9eb0f36133aea942e7abf1a2640`, the same comparison the other Protocols in this directory hold themselves to. Three things make the projection land in the same place twice: the seed is frozen in the operator's script rather than exposed in `arcform.yaml`, the thread count is pinned to one before numpy and numba load, and row order is pinned by reading each Parquet single-threaded with insertion order preserved. `ORDER BY ALL` on the export is a **total** order here — `id` is the source's UUID and all 182,822 are distinct — so this Protocol does not need the weaker tie-between-identical-rows argument [`../scienceqa/arcform.yaml`](../scienceqa/arcform.yaml) makes, and `models/load.sql` gates on that premise rather than asserting it.
 
 ## The step list
 
