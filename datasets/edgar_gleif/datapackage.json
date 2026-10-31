@@ -11,7 +11,7 @@
       "title": "Meridian"
     }
   ],
-  "created": "2026-09-17T00:18:31Z",
+  "created": "2026-10-31T00:12:24Z",
   "description": "A resolved crosswalk linking SEC EDGAR registrants (CIK / ticker / fund series) to their GLEIF Legal Entity Identifier (LEI) — one row per link between an EDGAR identifier and an LEI, each carrying its provenance tier, method and confidence. Authoritative edges come from official SEC/GLEIF registration (no guessing); the operating-company tail is linked by probabilistic name resolution (Fellegi-Sunter / Splink): exact normalized-name matches are confirmed (~95% precision), while name-only fuzzy matches are surfaced as candidates rather than auto-confirmed. A point-in-time snapshot, with an as-of date on every row.",
   "homepage": "https://meridian.online/datasets/edgar_gleif",
   "licenses": [
@@ -24,9 +24,9 @@
   "name": "edgar_gleif",
   "resources": [
     {
-      "bytes": 10485583,
+      "bytes": 10629144,
       "format": "parquet",
-      "hash": "sha256:7ca2419d2cf168def3dffed89e394a4219f3232965fddc53f57e4fa18ab2dad0",
+      "hash": "sha256:813f94923bd9ab4a151840e0914eb0644d4ba8f733c5f16a4c5e4312b1145277",
       "mediatype": "application/vnd.apache.parquet",
       "name": "edgar_gleif",
       "path": "https://openlake.meridian.online/library/edgar_lei.parquet",
@@ -50,7 +50,7 @@
                 "series"
               ],
               "open": true,
-              "rows": 209413
+              "rows": 212319
             },
             "x-finetype-label": "representation.text.word"
           },
@@ -63,7 +63,10 @@
             "description": "The SEC-side identifier this edge is keyed on, read according to `key_type`: for cik rows an EDGAR Central Index Key in decimal digits with no leading zeros; for series rows an SEC fund identifier — an uppercase letter prefix followed by digits (S…, CEF…). Text, not a number: the two schemes share one column, so the pattern above is their union and no arithmetic type describes it. To join it to `edgar.cik`, render that integer column as text — see `x-joins`.",
             "name": "key",
             "type": "string",
-            "x-finetype-confidence": 0.5464,
+            "x-finetype-confidence": 0.7,
+            "x-finetype-display": {
+              "number": ",d"
+            },
             "x-finetype-label": "representation.numeric.integer_number",
             "x-finetype-pattern-fit": {
               "canonical": "^-?[0-9]+$",
@@ -75,7 +78,7 @@
           },
           {
             "constraints": {
-              "pattern": "^[A-Z]{1,7}([./-][A-Z]{1,4})?$"
+              "pattern": "^(?:[A-Z]{1,7}(?:[./-][A-Z]{1,4})?|[0-9]{1,6})$"
             },
             "name": "ticker",
             "type": "string",
@@ -111,7 +114,7 @@
             "description": "The entity's official legal name — GLEIF's own `legal_name` column, carried through the join unchanged (`models/package.sql` selects `g.legal_name`), so it is the same register element `gleif.legal_name` describes and takes the same bounds. LEI-CDF v3.1 types this element NameType, a complexType whose simpleContent extends Tokenized500Type, restricting the text to between 1 and 500 characters — the value space `gleif.legal_name`'s own description names for the same element, not a bound measured off one build. A snapshot narrower than the register at either end would be true of today's rows and false of the element a consumer is validating against.",
             "name": "legal_name",
             "type": "string",
-            "x-finetype-confidence": 0.5562,
+            "x-finetype-confidence": 0.9923,
             "x-finetype-label": "representation.text.entity_name"
           },
           {
@@ -123,7 +126,7 @@
             "description": "GLEIF's authoritative entity category (e.g. GENERAL, FUND, BRANCH); GENERAL when unknown.",
             "name": "category",
             "type": "string",
-            "x-finetype-confidence": 0.8063,
+            "x-finetype-confidence": 0.8966,
             "x-finetype-enum-domain": {
               "cohesion": 0.5,
               "distinct": 4,
@@ -134,7 +137,7 @@
                 "SOLE_PROPRIETOR"
               ],
               "open": true,
-              "rows": 209413
+              "rows": 212319
             },
             "x-finetype-label": "representation.text.word"
           },
@@ -162,19 +165,18 @@
             "name": "reg_status",
             "type": "string",
             "x-finetype-enum-domain": {
-              "cohesion": 0.7139999866485596,
-              "distinct": 7,
+              "cohesion": 0.8330000042915344,
+              "distinct": 6,
               "domain": [
                 "ANNULLED",
                 "DUPLICATE",
                 "ISSUED",
                 "LAPSED",
                 "PENDING_ARCHIVAL",
-                "PENDING_TRANSFER",
                 "RETIRED"
               ],
               "open": true,
-              "rows": 209413
+              "rows": 212319
             },
             "x-finetype-label": "representation.text.word",
             "x-finetype-nominated": true
@@ -188,7 +190,7 @@
             "description": "How the edge was established. Authoritative: sec-registration (GLEIF RA000665) or sec-ncen (SEC Form N-CEN). Probabilistic: exact_name (identical normalized company name) or jaro_winkler (fuzzy name).",
             "name": "method",
             "type": "string",
-            "x-finetype-confidence": 0.7909,
+            "x-finetype-confidence": 0.5295,
             "x-finetype-enum-domain": {
               "cohesion": 0.5,
               "distinct": 4,
@@ -199,7 +201,7 @@
                 "sec-registration"
               ],
               "open": true,
-              "rows": 209413
+              "rows": 212319
             },
             "x-finetype-label": "representation.text.word"
           },
@@ -222,7 +224,7 @@
                 "confirmed"
               ],
               "open": true,
-              "rows": 209413
+              "rows": 212319
             },
             "x-finetype-label": "representation.text.word",
             "x-finetype-nominated": true
@@ -231,7 +233,10 @@
             "description": "Edge confidence in [0, 1]: 1.0 for authoritative edges; the Fellegi-Sunter posterior match probability under the frozen resolution model for probabilistic edges.",
             "name": "confidence",
             "type": "number",
-            "x-finetype-confidence": 0.9978,
+            "x-finetype-confidence": 0.9998,
+            "x-finetype-display": {
+              "number": ","
+            },
             "x-finetype-label": "representation.numeric.decimal_number",
             "x-finetype-unsupported-constraints": {
               "pattern": "^-?[0-9]+(\\.[0-9]+)?([eE][+-]?[0-9]+)?$"
@@ -243,6 +248,9 @@
             "name": "as_of",
             "type": "date",
             "x-finetype-confidence": 1.0,
+            "x-finetype-display": {
+              "time": "%Y-%m-%d"
+            },
             "x-finetype-label": "datetime.date.iso",
             "x-finetype-unsupported-constraints": {
               "maxLength": 10,
@@ -281,22 +289,23 @@
     }
   ],
   "title": "EDGAR ↔ GLEIF — company-to-LEI crosswalk",
-  "x-finetype-version": "0.6.60",
+  "x-finetype-version": "0.6.67",
   "x-joins": {
     "$comment": "How to join this crosswalk to the packages it references, and how far each join reaches. These are NOT `schema.foreignKeys`: a Data Package foreign key asserts that every value on the left exists on the right, and neither of these joins satisfies that against the published bytes — see each `cardinality` and (in the built descriptor) `coverage`. Declaring them as foreign keys would advertise a guarantee the data does not keep, so the guarantee is dropped and the reachable part is stated instead. `coverage` does NOT live in this file: a hand-typed row count decays as soon as an upstream source grows, which is exactly what happened here (four weeks stale on 2026-08-13). `crosswalk_join.py --write` measures it from the build and writes it into the generated `datapackage.json` instead.",
     "joins": [
       {
-        "cardinality": "partial — most left rows have no match, and the referenced side also holds keys this crosswalk does not carry. Neither side contains the other.",
+        "cardinality": "partial — 6,384 of 188,547 rows match. Neither side contains the other.",
         "compareAs": "text",
         "coverage": {
-          "matched": 6350,
-          "rows": 186223
+          "matched": 6384,
+          "rows": 188547
         },
         "description": "SEC-side identity: a cik-typed edge to the EDGAR company-ticker table. `edgar` is a ticker/exchange listing, not the CIK universe, so it covers a small part of the registrants this crosswalk keys on; the direction of containment runs neither way. Join by rendering `edgar.cik` (an integer) as text and comparing it to `key` (text) — the rendering is exact, because no published CIK carries a leading zero.",
         "evidence": "For key_type='cik' rows, `key` is the EDGAR Central Index Key as reported to SEC EDGAR. Where both sides hold the same registrant the values agree exactly; the shortfall is coverage, not disagreement — `edgar` is built from the SEC's company-tickers file, so its reach follows that file rather than the registrant population.",
         "fields": [
           "key"
         ],
+        "measuredAgainst": "sha256:d87b01fa7fbc160b45fe2ddfc54692d4dcd62c1e458b067969c8e62ab257213f",
         "name": "edgar",
         "package": "https://github.com/meridian-online/open-analytics/blob/main/datasets/edgar/datapackage.json",
         "reference": {
@@ -311,11 +320,11 @@
         }
       },
       {
-        "cardinality": "partial — most left rows match; the remainder carry an LEI that is not in the GLEIF object this descriptor names. `coverage` is written into the built descriptor, not into this file — see `verifiedBy` below.",
+        "cardinality": "complete — all 212,319 rows match. `coverage` is written into the built descriptor, not into this file — see `verifiedBy` below.",
         "compareAs": "exact",
         "coverage": {
-          "matched": 209413,
-          "rows": 209413
+          "matched": 212319,
+          "rows": 212319
         },
         "description": "GLEIF-side identity: the LEI each edge resolved to. Join `lei` to `gleif.lei` directly — both sides are text and no rendering is involved.",
         "evidence": {
@@ -338,6 +347,7 @@
         "fields": [
           "lei"
         ],
+        "measuredAgainst": "sha256:765b13fecf2309d741f70ed4cdba093019b9f212ddc884e66e0ab8e3624519f5",
         "name": "gleif",
         "package": "https://github.com/meridian-online/open-analytics/blob/main/datasets/gleif/datapackage.json",
         "reference": {
