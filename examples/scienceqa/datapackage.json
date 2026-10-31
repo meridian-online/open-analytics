@@ -1,12 +1,12 @@
 {
   "$schema": "https://datapackage.org/profiles/2.0/datapackage.json",
   "created": "2026-08-24T01:29:32Z",
-  "description": "4,241 multiple-choice science questions (the source's `test` split, out of 12,726 train + 4,241 validation + 4,241 test), spanning natural, social and language science across grades 1-12, each with its choices, the correct answer, a hint, the lecture text it is drawn from, and a worked solution. 2,017 of the 4,241 also ship with a figure in the source; this Protocol keeps only whether one was present (`has_image`), not the picture itself. NON-COMMERCIAL RESTRICTION: the licensor (Pan Lu et al., NeurIPS 2022) publishes ScienceQA under CC BY-NC-SA 4.0 (Attribution-NonCommercial-ShareAlike), stated on the project site, the source repository and the mirror's own dataset-card body — not its YAML licence tag, which reads plain CC BY-SA and disagrees with its own card. Referencing this dataset's URL and building it locally is not redistribution and is not restricted; using the OUTPUT commercially is. No chart, figure or number built from this Protocol's output may appear on the Meridian site, in launch material, or on a pricing page. Demo data: referenced by pinned URL and revision and built locally. Meridian does not host, publish or redistribute this dataset.",
+  "description": "4,241 multiple-choice science questions (the authors' `test` split, out of 12,726 train + 4,241 validation + 4,241 test), spanning natural, social and language science across grades 1-12, each with its choices, the correct answer, a hint, the lecture text it is drawn from, and a worked solution. 2,017 of the 4,241 also ship with a figure in the source; this Protocol keeps only whether one was present (`has_image`), not the picture itself. NON-COMMERCIAL RESTRICTION: the licensor (Pan Lu et al., NeurIPS 2022) publishes ScienceQA under CC BY-NC-SA 4.0 (Attribution-NonCommercial-ShareAlike), stated on the project site and in the README of the authors' repository, whose `problems.json` this Protocol reads — not that repository's MIT label, which covers its code, and not the YAML licence tag of the Hugging Face mirror this Protocol used to read, which reads plain CC BY-SA. Referencing this dataset's URL and building it locally is not redistribution and is not restricted; using the OUTPUT commercially is. No chart, figure or number built from this Protocol's output may appear on the Meridian site, in launch material, or on a pricing page. Demo data: referenced by pinned URL and revision and built locally. Meridian does not host, publish or redistribute this dataset.",
   "licenses": [
     {
       "name": "CC-BY-NC-SA-4.0",
       "path": "https://creativecommons.org/licenses/by-nc-sa/4.0/",
-      "title": "Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International — NonCommercial: the licensor restricts commercial use of the output, not the act of building it. Verified against the licensor's project site and source repository, not the mirror's YAML tag, which reads plain CC BY-SA and disagrees with its own card body."
+      "title": "Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International — NonCommercial: the licensor restricts commercial use of the output, not the act of building it. Verified against the licensor's project site and the README of the authors' repository, not the repository's MIT label, which covers its code, and not a Hugging Face mirror's YAML tag, which reads plain CC BY-SA."
     }
   ],
   "name": "scienceqa",
@@ -251,8 +251,8 @@
   ],
   "sources": [
     {
-      "path": "https://huggingface.co/datasets/derek-thomas/ScienceQA",
-      "title": "derek-thomas/ScienceQA on Hugging Face, revision f18b0a70 (test split)"
+      "path": "https://github.com/lupantech/ScienceQA",
+      "title": "lupantech/ScienceQA on GitHub, commit 2cbf8318, data/scienceqa/problems.json (test split) — the authors' repository"
     },
     {
       "path": "https://scienceqa.github.io",
