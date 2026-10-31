@@ -36,14 +36,14 @@ A repository tag is not the licensor speaking, which is the finding [`../science
 
 ## Before it will run: the embedding extension
 
-`text_embed@1` names a loadable DuckDB extension the Protocol puts on disk. It never downloads or installs one — an artifact fetched invisibly would be a graph edge that does not appear in the graph — so it is the one input here that does not arrive from a URL. The extension is `subtoken`, published in DuckDB's community repository. arc v0.2.2 and later run `text_embed` on DuckDB 2.0, so install it with the DuckDB 2.0 CLI and place it:
+`text_embed@1` names a loadable DuckDB extension the Protocol puts on disk. It never downloads or installs one — an artifact fetched invisibly would be a graph edge that does not appear in the graph — so it is the one input here that does not arrive from a URL. The extension is `subtoken`, published in DuckDB's community repository. A build loads only on the DuckDB release it was built for, so install it with the same `duckdb` CLI arc runs, which needs arc v0.2.2 or later and DuckDB 2.0, and copy the file DuckDB reports it installed:
 
 ```sh
-duckdb -c "INSTALL subtoken FROM community"
-mkdir -p vendor && cp ~/.duckdb/extensions/v2.0.0/<platform>/subtoken.duckdb_extension vendor/
+mkdir -p vendor
+duckdb -noheader -list -c "INSTALL subtoken FROM community; SELECT install_path FROM duckdb_extensions() WHERE extension_name = 'subtoken'" | xargs -I{} cp {} vendor/
 ```
 
-Keep the file name `subtoken.duckdb_extension`: DuckDB derives the extension's entry point from it, so a renamed copy does not load. A build loads only on the DuckDB release it was built for; [meridian-online/subtoken](https://github.com/meridian-online/subtoken) says how to build it yourself.
+Keep the file name `subtoken.duckdb_extension`: DuckDB derives the extension's entry point from it, so a renamed copy does not load. [meridian-online/subtoken](https://github.com/meridian-online/subtoken) says how to build it yourself.
 
 `vendor/` is git-ignored. Absent, the run stops in milliseconds naming the file it looked for, before `uv` is spawned. When that artifact has a URL, step 2 below becomes an `http_fetch@1` like step 1 and nothing else in the manifest moves.
 
