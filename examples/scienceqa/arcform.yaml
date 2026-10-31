@@ -8,48 +8,60 @@
 # The licensor (Pan Lu et al., "Learn to Explain: Multimodal Reasoning via Thought
 # Chains for Science Question Answering", NeurIPS 2022) publishes ScienceQA under
 # CC BY-NC-SA 4.0 — Attribution-NonCommercial-ShareAlike — stated on the project site
-# (scienceqa.github.io), the source repository (github.com/lupantech/ScienceQA) and
-# the mirror's own dataset-card body. That licence does NOT block this Protocol
-# existing or running: referencing a URL someone may lawfully fetch is not
-# redistribution, which is the whole basis on which every Protocol in this directory
-# stands. It DOES block one thing downstream — running this and looking at the
-# result are different acts, and only the second is restricted:
+# (scienceqa.github.io) and in the README of the authors' repository
+# (github.com/lupantech/ScienceQA), whose files this Protocol reads. That licence
+# does NOT block this Protocol existing or running: referencing a URL someone may
+# lawfully fetch is not redistribution, which is the whole basis on which every
+# Protocol in this directory stands. It DOES block one thing downstream — running
+# this and looking at the result are different acts, and only the second is
+# restricted:
 #   the output of this Protocol — the Parquet, any chart or figure built from it, any
 #   number pulled out of it — MUST NOT appear anywhere Meridian sells, markets or
 #   prices: not the site, not launch material, not a pricing page. Non-commercial
 #   means Meridian's own commercial use of the OUTPUT, not the act of building it.
 #
-# THE MIRROR'S OWN METADATA TAG DISAGREES WITH ITS OWN CARD BODY, AND WITH THE
-# LICENSOR. huggingface.co/datasets/derek-thomas/ScienceQA declares `license:
-# cc-by-sa-4.0` (no NonCommercial) in its YAML frontmatter, and a third-party
-# gallery that read only that tag has recorded this dataset as plain CC BY-SA. The
-# same mirror's own card body, three headings down, says "Attribution-NonCommercial-
-# ShareAlike 4.0 International (CC BY-NC-SA 4.0)" under Licensing Information — and
-# the licensor's own site and repository agree with the body, not the tag. A
-# mirror's YAML tag is not the licensor; verify against the licensor's own words,
-# every time, and this dataset is the recorded instance of why.
+# WHY IT READS THE AUTHORS' FILE AND NOT A MIRROR. This Protocol first fetched the
+# test split from a third party's Hugging Face mirror, derek-thomas/ScienceQA. A
+# Protocol Meridian maintains reads the authors' own files: a mirror can change,
+# vanish or carry a different licence from the authors', and this one already did
+# the last. Its YAML frontmatter tags the dataset `cc-by-sa-4.0`, with no
+# NonCommercial clause, and a third-party gallery that read only that tag has
+# recorded the dataset as plain CC BY-SA. The mirror's own card body says CC BY-NC-SA
+# 4.0, and so do the licensor's site and repository. A mirror's tag is not the
+# licensor; verify against the licensor's own words, every time, and this dataset is
+# the recorded instance of why. The authors' test split is the mirror's, row for row:
+# the 4,241 rows this recipe builds from each are the same multiset on every column
+# it keeps, and with the same arc and DuckDB the two recipes export a byte-identical
+# Parquet.
+#
+# THE AUTHORS' REPOSITORY CARRIES TWO LICENCES. GitHub labels it MIT, which its
+# README gives for the code; the same README licenses "the ScienceQA dataset" under
+# CC BY-NC-SA 4.0. The data's licence is the second, for the same reason a mirror's
+# tag is not the licensor: a code repository's licence is not a grant over the data
+# it holds.
 #
 # WHY THIS PROTOCOL NEEDS NOTHING NEW. It declares no precomputed projection or
 # embedding columns, so `http_fetch`, `parquet_export` and `datapackage_describe`
 # are the whole of it — the same three operators the other three demo Protocols
 # already exercise.
 #
-# WHICH SPLIT, AND WHY. The source publishes three files — train (12,726 rows),
-# validation (4,241) and test (4,241). This Protocol fetches only `test`: it is the
-# split the dataset's own leaderboard scores against, so it is the most standard
-# slice to point at, and it is tied for the smallest of the three, which keeps this
-# the cheapest of the four demo Protocols to fetch and rebuild.
+# WHICH SPLIT, AND WHY. The authors publish all three splits in one file,
+# `data/scienceqa/problems.json` (31.5 MB), each question tagged `train` (12,726),
+# `val` (4,241) or `test` (4,241). This Protocol keeps only `test`: it is the split
+# the dataset's own leaderboard scores against, so it is the most standard slice to
+# point at, and it is tied for the smallest of the three. The fetch still carries the
+# other two splits, because the authors publish no file of the test split alone.
 #
-# WHY THE `image` COLUMN IS NOT IN THE OUTPUT. The source embeds each question's
-# image as raw bytes in a STRUCT(bytes BLOB, path VARCHAR) column — present for
-# 2,017 of these 4,241 rows, absent (both fields NULL) for the rest. Carrying that
-# blob into the export would multiply this Protocol's output size for a column no
-# chart in the analysis surface renders. `load.sql` reduces it to a boolean
-# `has_image` instead, which is the fact a dashboard can use.
+# WHY THE `image` COLUMN IS NOT IN THE OUTPUT. The source names each question's
+# figure — always `image.png`, present for 2,017 of these 4,241 rows and NULL for
+# the rest — and ships the pictures themselves as separate image downloads, which
+# this Protocol does not fetch: no chart in the analysis surface renders them.
+# `load.sql` reduces the field to a boolean `has_image` instead, which is the fact a
+# dashboard can use.
 #
 # WHY THE URL IS PINNED BY REVISION AND BY HASH. The URL addresses a 40-character
-# commit revision of the Hugging Face repository rather than its default branch, so
-# the revision is pinned as well as the bytes. On a real transfer `http_fetch`'s
+# commit of the authors' GitHub repository rather than its default branch, so the
+# revision is pinned as well as the bytes. On a real transfer `http_fetch`'s
 # `sha256:` fails closed — corrupt a pin against an empty cache and the run stops,
 # naming both hashes, checked here the same way ../movies/arcform.yaml documents.
 # On a shared-cache HIT it is not consulted at all: the cache is keyed by URL, so a
@@ -71,15 +83,15 @@ steps:
   - name: fetch_scienceqa
     op: http_fetch@1
     with:
-      url: https://huggingface.co/datasets/derek-thomas/ScienceQA/resolve/f18b0a70359ebfb41f658fd564208d0355b013f4/data/test-00000-of-00001-f0e719df791966ff.parquet
-      out: build/scienceqa.src.parquet
-      sha256: 235e92d1f30155266df76bc9f28fc6e4fcb6bec2c6a8c7d67f9086ea6b392a84
+      url: https://raw.githubusercontent.com/lupantech/ScienceQA/2cbf8318e07b9ece895bb2ae605e71e38d623264/data/scienceqa/problems.json
+      out: build/scienceqa.src.json
+      sha256: 4d9b598da966d9736dd79e430a97da861a2216aeb7483a5092350e823ab20ce7
       headers:
         User-Agent: "Meridian Protocol (open-analytics demo; research@meridian.online)"
 
   - name: load
     sql: models/load.sql
-    depends_on: [build/scienceqa.src.parquet]
+    depends_on: [build/scienceqa.src.json]
     produces: [scienceqa]
 
   # ORDER BY ALL is what makes the bytes reproduce, for the same reason
