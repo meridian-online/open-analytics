@@ -60,9 +60,9 @@
 #
 # THE EMBEDDING EXTENSION IS NOT FETCHED, AND THAT IS THE ONE THING THIS PROTOCOL DOES
 # NOT DO FROM A URL. `text_embed@1` names a loadable DuckDB extension the Protocol
-# puts on disk; it never downloads or installs one. There is no published URL for that
-# artifact today, so `vendor/staticembed.duckdb_extension` is git-ignored and README.md
-# says how to build and place it. The step refuses in milliseconds, naming the file it
+# puts on disk; it never downloads or installs one. This manifest pins no URL for that
+# artifact today, so `vendor/subtoken.duckdb_extension` is git-ignored and README.md
+# says how to install and place it. The step refuses in milliseconds, naming the file it
 # looked for, when it is absent — it does not reach for one. When the extension has a
 # URL, this becomes an `http_fetch@1` step like the one above it and nothing else here
 # moves.
@@ -103,7 +103,7 @@ steps:
     with:
       input: build/medmcqa.src.parquet
       text_column: question
-      extension: vendor/staticembed.duckdb_extension
+      extension: vendor/subtoken.duckdb_extension
       out: build/medmcqa.embedded.parquet
       vector_column: embedding
 
