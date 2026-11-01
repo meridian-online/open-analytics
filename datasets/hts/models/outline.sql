@@ -126,15 +126,17 @@ common AS (
   GROUP BY prefix
 ),
 leaks AS (
-  -- Prefixes whose common row is above a numbered row outside the prefix. The common
-  -- row itself does not count: a printed heading over its only subheading's lines is
-  -- that subheading's node, though its own code is shorter.
+  -- Prefixes whose common row is, or is above, a numbered row outside the prefix. The
+  -- common row itself is excused only when its code is a prefix of the level's: a
+  -- printed heading over its only subheading's lines is that subheading's node (3407
+  -- for 340700), but a line from another prefix is not (9824.01.01 for 982402).
   SELECT DISTINCT p.prefix
   FROM prefixes p
   JOIN common c USING (prefix)
-  JOIN hts_chain l ON l.anc_seq = c.ca_seq
+  JOIN lineage l ON l.anc_seq = c.ca_seq
   JOIN hts_rows r ON r.seq = l.seq
   WHERE r.code IS NOT NULL AND left(r.code, p.len) <> p.prefix
+    AND NOT (l.seq = c.ca_seq AND starts_with(p.prefix, r.code))
 ),
 kinds AS (
   SELECT

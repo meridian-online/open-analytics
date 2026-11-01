@@ -15,9 +15,11 @@ ELEMENTS", "II. INORGANIC ACIDS ...") each with the heading and line after it, h
 3407 and its two lines (its only subheading), heading 8424 with "Other appliances:"
 over 8424.82.00 and the two 8424.89 lines, the
 chains above `9823.01.01` and `9823.52.07`/`.08` (one with indent "03"), and two chapter
-99 rows that sit side by side at indent 0. Two rows are made up, to cover a shape the
-real export has nowhere in chapters 01-05: an unnumbered row "Of fish:" at indent 0,
-directly under chapter 03, with heading 0301 moved to indent 1 beneath it.
+99 rows that sit side by side at indent 0. Five rows are made up, for shapes the real
+export does not have where a small fixture can reach them: an unnumbered row "Of fish:"
+at indent 0, directly under chapter 03, with heading 0301 moved to indent 1 beneath it;
+and a provision 9824.01.01 with two 9824.02 lines indented beneath it, a layout chapter
+98 uses (9823.03.02 and onward sit under 9823.03.01).
 
 Needs duckdb==1.5.5 in the running Python:
 
@@ -307,6 +309,14 @@ class LadderTest(unittest.TestCase):
         self.assertEqual(r["description"], heading)
         level = self.con.execute("SELECT text, text_source FROM hts_levels WHERE prefix = '340700'").fetchone()
         self.assertEqual(level, (heading, "usitc_derived"))
+
+    def test_rows_under_another_prefixs_line_are_labelled(self):
+        # 9824.02.01 and .02 sit under the line 9824.01.01, which is no prefix of
+        # 982402: that line's text must not stand for subheading 9824.02.
+        r = self.row("982402")
+        self.assertEqual(r["text_source"], "meridian_label")
+        self.assertEqual(r["description"], "Subheading 9824.02")
+        self.assertEqual(self.row("9824")["description"], "Made-up provision A")
 
     def test_below_a_label_the_text_reads_from_the_chapter_top(self):
         # 8424.89's two lines sit under "Other appliances:", which 8424.82.00 sits under
