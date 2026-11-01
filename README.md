@@ -79,6 +79,8 @@ copies to each other.
 The **Rows** figures are counted from the published objects themselves on every
 run of the checks below, not maintained by hand.
 
+HTS and Schedule B are code lists: every level of their hierarchy is a row with its parent, and both lead with the same ten core columns, which `scripts/check_code_list.py` holds them to. [`docs/code-lists.md`](docs/code-lists.md) is the guide for building the next one: the contract, how a code-list Protocol is laid out, how its release is recorded, and the decisions behind both lists.
+
 Each dataset carries a [Data Package](https://datapackage.org/) descriptor
 (`datasets/<name>/datapackage.json`) with the canonical download URL, byte
 size, SHA-256 hash, and a Table Schema. Column types and constraints come from
