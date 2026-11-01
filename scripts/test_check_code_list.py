@@ -188,6 +188,15 @@ class Case(unittest.TestCase):
             "--resolve-root", f"https://openlake.meridian.online/={served}/")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    def test_resolve_root_prefix_without_trailing_slash(self):
+        served = self.dir / "served"
+        (served / "x").mkdir(parents=True)
+        self.write(ladder(), name="x.parquet").rename(served / "x" / "y.parquet")
+        result = self.run_check(
+            "--parquet", "https://openlake.meridian.online/x/y.parquet", "--levels", LEVELS,
+            "--resolve-root", f"https://openlake.meridian.online={served}")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_url_path_mapped_but_absent_exit_2(self):
         self.descriptor({"levels": LEVELS.split(",")},
                         resource_path="https://openlake.meridian.online/usitc/hts.parquet")

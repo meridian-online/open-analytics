@@ -182,7 +182,7 @@ def locate(path: str, base: Path, roots: list[tuple[str, Path]]) -> str:
     if is_url(path):
         for prefix, directory in roots:
             if path.startswith(prefix):
-                return str(directory / path[len(prefix):])
+                return str(directory / path[len(prefix):].lstrip("/"))
         return path
     return str(base / path)
 
@@ -240,7 +240,7 @@ def main(argv: list[str] | None = None) -> int:
             levels = [x.strip() for x in args.levels.split(",") if x.strip()]
             if not levels:
                 raise RuntimeError("--levels names no level")
-            work = [(args.parquet.rsplit("/", 1)[-1], args.parquet, Path("."), levels)]
+            work = [(args.parquet.rsplit("/", 1)[-1] or args.parquet, args.parquet, Path("."), levels)]
         else:
             work = targets(args.datasets_dir)
         roots = []
@@ -272,7 +272,11 @@ def main(argv: list[str] | None = None) -> int:
             print(f"code-list: {name}: ok")
         broken = broken or bool(findings)
     if args.json_out:
-        args.json_out.write_text(json.dumps({"findings": [f for v in report.values() for f in v], "files": report}, indent=2) + "\n")
+        payload = {
+            "findings": [f for found in report.values() for f in found],
+            "files": report,
+        }
+        args.json_out.write_text(json.dumps(payload, indent=2) + "\n")
     return EXIT_BROKEN if broken else EXIT_OK
 
 
