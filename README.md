@@ -22,16 +22,7 @@ SELECT * FROM read_parquet('https://openlake.meridian.online/census/naics_2022.p
 
 ## Ask a dataset what it is
 
-**Not live yet — the mechanism is in place and no published object carries it.**
-Each Protocol's last step stamps the descriptor into the Parquet it just built,
-but every object on the endpoint was published before that step existed, so the
-query below returns nothing today. It returns the descriptor for a dataset
-rebuilt and republished from now on — verified for all four by stamping the
-bytes the endpoint currently serves. The stamp's own behaviour is covered on
-every pull request; what nothing here covers is a Protocol run end to end,
-because no workflow runs `arc run`. `check_descriptors.py` prints how many of the
-published resources carry their own description on every run, so this paragraph
-stops being true visibly rather than silently.
+Every hosted object carries its own description. Each Protocol's last step stamps the descriptor into the Parquet it just built, and all six objects on the endpoint were published through that step; on 2026-11-01 the query below returned the descriptor for each. `check_descriptors.py` prints how many of the published resources carry their own description on every run, and the stamp's own behaviour is covered on every pull request. What nothing here covers is a Protocol run end to end, because no workflow runs `arc run`.
 
 A stamped dataset carries its description **inside the file**, in the Parquet
 footer, so a URL is the only thing you need to know about it — no second file, no
@@ -331,14 +322,6 @@ corrections are published in place.
 - Descriptors generated as part of the publish pipeline. Today the schema half
   is produced with finetype and checked in by hand, and `bytes` and `hash` are
   written by a hand-run `publish_dataset.py restamp` against the endpoint.
-- **A published object that carries its own description.** The stamping step is
-  wired into all four Protocols and nothing has been rebuilt and republished
-  through it yet, so `parquet_kv_metadata` on a live URL still returns nothing.
-  See *Ask a dataset what it is* above.
-- **A served object's run record.** `publish --run-record` and `trace` are
-  written and tested here, but the publishing pipeline does not yet pass
-  `--run-record` or name the run in `manifest.json`. Until it does, `trace` on a
-  live URL exits 1 with *names no run record*.
 
 ## License
 
