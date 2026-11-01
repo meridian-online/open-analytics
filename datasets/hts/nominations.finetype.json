@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "resources": {
+    "hts": {
+      "code": {
+        "label": "geography.transportation.hs_code",
+        "why": "Digits-only HTS codes of 2, 4, 6, 8 and 10 digits. Inferred from the values finetype labels this column `unknown` at 0.49 confidence, because a two-digit chapter and a ten-digit statistical line share no shape. The label's canonical pattern, `^\\d{4}\\.?\\d{2}(\\.?\\d{2}){0,2}$`, admits 6, 8 and 10 digits with or without dots but not the 2-digit chapter or 4-digit heading forms; describe widens it for them (recorded as pattern-fit `widened`), and descriptor.overrides.json then states the shape the column holds: the five digits-only lengths, bounded 2 to 10."
+      },
+      "rate_from_code": {
+        "label": "geography.transportation.hs_code",
+        "why": "The code of the line whose rates a row carries, digits only and 6, 8 or 10 digits, since only a subheading, tariff line or statistical line prints rates. Inferred it is `unknown`, which publishes no bounds; the hs_code label is what the column holds, and descriptor.overrides.json states those three lengths, bounded 6 to 10."
+      },
+      "level": {
+        "label": "representation.text.word",
+        "why": "A closed set of five level names (chapter, heading, subheading, tariff_line, statistical_line). Inferred, finetype reads the underscores as a semicolon-separated array; each value is one word-like token."
+      },
+      "release": {
+        "label": "representation.identifier.alphanumeric_id",
+        "why": "USITC's revision name, such as 2026HTSRev22. Inferred, finetype reads it as an ISO week and types the column as a date, which it is not; it is an identifier."
+      },
+      "section": {
+        "label": "representation.text.word",
+        "why": "A Roman numeral naming the schedule section. Inferred it is `unknown`; the value is one short token."
+      },
+      "description": {
+        "label": "representation.text.plain_text",
+        "why": "USITC's own prose for each code, with labels for levels USITC does not name. Inferred, finetype labels this column `unknown`, and an `unknown` field publishes no length bounds at all; the column is prose, so plain text is what it is."
+      },
+      "description_full": {
+        "label": "representation.text.plain_text",
+        "why": "The chapter title, subchapter and outline rows above a code, joined with ' › '. Free text by construction; inferred it is `unknown` and publishes no length bounds."
+      },
+      "corpus": {
+        "label": "representation.text.plain_text",
+        "why": "A derived search field: description_full lowercased and accent-stripped. Free text by construction, not a source attribute. Inferred, finetype labels it `unknown` and it publishes no length bounds."
+      },
+      "general_rate": {
+        "label": "representation.text.plain_text",
+        "why": "A duty rate exactly as USITC prints it ('Free', '6.8%', '1¢/kg'), so it is text, not a number. Inferred, finetype labels it plain text at 0.47 confidence from a mix of shapes."
+      },
+      "special_rate": {
+        "label": "representation.text.plain_text",
+        "why": "Rates with programme codes, as USITC prints them ('Free (A+,AU,BH,CA...)'). Inferred, finetype labels it an entity name, which it is not."
+      },
+      "column2_rate": {
+        "label": "representation.text.plain_text",
+        "why": "A duty rate exactly as USITC prints it. Inferred, finetype labels it an Excel number format string because of the percent signs, which it is not."
+      },
+      "quota_quantity": {
+        "label": "representation.text.plain_text",
+        "why": "USITC's quota quantity field, as printed. USITC fills it on no row of the current revision, so the column holds only NULLs and no value has been seen. Inferred it is `unknown`, which publishes no bounds; it is declared plain text until USITC fills it, and the nomination is to be revisited then."
+      }
+    }
+  }
+}

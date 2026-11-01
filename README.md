@@ -12,7 +12,7 @@ ATTACH 'ducklake:https://openlake.meridian.online/catalog/open.ducklake' AS meri
 SELECT * FROM meridian.gleif.lei LIMIT 10;
 ```
 
-A dataset's address is `<namespace>/<name>`: `gleif/lei`, `sec/company_tickers_exchange`, `census/naics_2022` and `library/edgar_lei`, which are the SQL names `meridian.gleif.lei` and so on and the file URLs `https://openlake.meridian.online/<namespace>/<name>.parquet`. The old flat files stay readable but are frozen at the move and no longer refreshed, so read current data from the new URLs. The old SQL names (`source.gleif`, `source.edgar`, `source.naics`, `crosswalk.edgar_gleif`) keep working as views for a window after the move, then retire along with the old flat files.
+A dataset's address is `<namespace>/<name>`: `gleif/lei`, `sec/company_tickers_exchange`, `census/naics_2022`, `census/schedule_b`, `usitc/hts` and `library/edgar_lei`, which are the SQL names `meridian.gleif.lei` and so on and the file URLs `https://openlake.meridian.online/<namespace>/<name>.parquet`. The old flat files stay readable but are frozen at the move and no longer refreshed, so read current data from the new URLs. The old SQL names (`source.gleif`, `source.edgar`, `source.naics`, `crosswalk.edgar_gleif`) keep working as views for a window after the move, then retire along with the old flat files.
 
 Or read a single file directly:
 
@@ -22,16 +22,7 @@ SELECT * FROM read_parquet('https://openlake.meridian.online/census/naics_2022.p
 
 ## Ask a dataset what it is
 
-**Not live yet — the mechanism is in place and no published object carries it.**
-Each Protocol's last step stamps the descriptor into the Parquet it just built,
-but every object on the endpoint was published before that step existed, so the
-query below returns nothing today. It returns the descriptor for a dataset
-rebuilt and republished from now on — verified for all four by stamping the
-bytes the endpoint currently serves. The stamp's own behaviour is covered on
-every pull request; what nothing here covers is a Protocol run end to end,
-because no workflow runs `arc run`. `check_descriptors.py` prints how many of the
-published resources carry their own description on every run, so this paragraph
-stops being true visibly rather than silently.
+Every dataset at its current address carries its own description; the frozen flat files from before the move do not. Each Protocol's last step stamps the descriptor into the Parquet it just built, and all six current objects were published through that step; on 2026-11-01 the query below returned the descriptor for each. `check_descriptors.py` prints how many of the published resources carry their own description on every run, and the stamp's own behaviour is covered on every pull request. What nothing here covers is a Protocol run end to end, because no workflow runs `arc run`.
 
 A stamped dataset carries its description **inside the file**, in the Parquet
 footer, so a URL is the only thing you need to know about it — no second file, no
@@ -73,9 +64,13 @@ copies to each other.
 | SEC EDGAR — Company Tickers | 10,430 | Public domain | [SEC](https://www.sec.gov/) | [datapackage.json](datasets/edgar/datapackage.json) |
 | NAICS — Industry Classification (2022) | 2,125 | Public domain | [U.S. Census Bureau](https://www.census.gov/naics/) | [datapackage.json](datasets/naics/datapackage.json) |
 | EDGAR ↔ GLEIF — company-to-LEI crosswalk | 212,319 | CC0-1.0 | SEC + GLEIF | [datapackage.json](datasets/edgar_gleif/datapackage.json) |
+| HTS — Harmonized Tariff Schedule of the United States | 42,036 | Public domain | [USITC](https://hts.usitc.gov/) | [datapackage.json](datasets/hts/datapackage.json) |
+| Schedule B — U.S. Export Classification Codes | 16,727 | Public domain | [U.S. Census Bureau](https://www.census.gov/foreign-trade/schedules/b/index.html) | [datapackage.json](datasets/schedule_b/datapackage.json) |
 
 The **Rows** figures are counted from the published objects themselves on every
 run of the checks below, not maintained by hand.
+
+HTS and Schedule B are code lists: every level of their hierarchy is a row with its parent, and both lead with the same ten core columns, which `scripts/check_code_list.py` holds them to. [`docs/code-lists.md`](docs/code-lists.md) is the guide for building the next one: the contract, how a code-list Protocol is laid out, how its release is recorded, and the decisions behind both lists.
 
 Each dataset carries a [Data Package](https://datapackage.org/) descriptor
 (`datasets/<name>/datapackage.json`) with the canonical download URL, byte
@@ -124,10 +119,10 @@ declares a type its column contradicts, declares a primary key its rows do not
 honour, or states the file's own `bytes`, is a disagreement. A difference in prose
 alone (a `description`, `title` or `$comment`) is reported as pending and does not
 fail: the footer only changes when the object is republished, and a corrected
-sentence in this repository is not a false claim about the bytes. An object carrying
-no description is not — nothing published carries one yet, and a check that
-demanded one would report every correct object as wrong. `--require-self-description` turns that into a refusal for the publish
-path, once a stamped object is what gets published.
+sentence in this repository is not a false claim about the bytes. An object at a
+dataset's current address that carries no description is a refusal too: CI runs
+the check with `--require-self-description`, because every dataset at its current
+address is published through the stamp step.
 
 The same run reads the catalogue table above back against the bytes. Each row's
 **Rows** figure is held to `count(*)` over the Parquet that row's descriptor
@@ -251,7 +246,7 @@ the reference implementation whether these packages load at all. Data Package v2
 Table Schema field object is a fifteen-branch `oneOf`, one branch per type, each giving
 `constraints` its own properties set, so a keyword beside the wrong `type` is a
 whole-package refusal rather than surplus a reader skips — which is why the reference-implementation
-job exists and is strict with an empty rejections list. All four descriptors shipped here are now
+job exists and is strict with an empty rejections list. All six descriptors shipped here are now
 accepted by `frictionless==5.19.0`, validating the engine correction. It attributes
 each refusal to the field that drew it by re-offering that field on its own, because
 `frictionless` names no field in its note and raises the same sentence for every `date`
@@ -327,14 +322,6 @@ corrections are published in place.
 - Descriptors generated as part of the publish pipeline. Today the schema half
   is produced with finetype and checked in by hand, and `bytes` and `hash` are
   written by a hand-run `publish_dataset.py restamp` against the endpoint.
-- **A published object that carries its own description.** The stamping step is
-  wired into all four Protocols and nothing has been rebuilt and republished
-  through it yet, so `parquet_kv_metadata` on a live URL still returns nothing.
-  See *Ask a dataset what it is* above.
-- **A served object's run record.** `publish --run-record` and `trace` are
-  written and tested here, but the publishing pipeline does not yet pass
-  `--run-record` or name the run in `manifest.json`. Until it does, `trace` on a
-  live URL exits 1 with *names no run record*.
 
 ## License
 

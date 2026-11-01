@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "resources": {
+    "schedule_b": {
+      "code": {
+        "label": "geography.transportation.hs_code",
+        "why": "Digits-only Schedule B codes of 2, 4, 6 and 10 digits, HS-based like the HTS. Inferred from the values finetype labels this column `unknown`, because a two-digit chapter and a ten-digit commodity share no shape. The label's canonical pattern, `^\\d{4}\\.?\\d{2}(\\.?\\d{2}){0,2}$`, admits the 6 and 10-digit forms but not the 2-digit chapter or 4-digit heading; describe widens it for them (pattern-fit `widened`), and descriptor.overrides.json then states the shape the column holds: the four digits-only lengths, bounded 2 to 10."
+      },
+      "code_display": {
+        "label": "geography.transportation.hs_code",
+        "why": "The code as Census prints it, with dots (0101.21.0000), which the label's canonical pattern admits, as it does the dotted subheading (0101.21). Inferred it is `unknown`, for the same reason as `code`."
+      },
+      "release": {
+        "label": "representation.identifier.alphanumeric_id",
+        "why": "The year folder and the file's date, such as 2026/2026-07-27: an identifier for the snapshot. Inferred it is `unknown`; it is not a date, since the year in front is Census's folder."
+      },
+      "hts_release": {
+        "label": "representation.identifier.alphanumeric_id",
+        "why": "USITC's revision name, such as 2026HTSRev22, as on usitc/hts. Inferred, finetype reads it as an ISO week and types the column as a date, which it is not; it is an identifier."
+      },
+      "description_short": {
+        "label": "representation.text.plain_text",
+        "why": "Census's short description of a commodity ('HORSES, PUREBRED BREEDING, LIVE'). Inferred, finetype labels it an entity name, which it is not; it is prose."
+      },
+      "unit_1": {
+        "label": "representation.identifier.alphanumeric_id",
+        "why": "Census's unit-of-quantity abbreviations (KG, NO, M2, DOZ, X). Inferred, finetype labels them country codes, which they are not; they are short codes."
+      },
+      "unit_2": {
+        "label": "representation.identifier.alphanumeric_id",
+        "why": "Census's second unit-of-quantity abbreviations (KG, NO, M2, CTN). Inferred, finetype labels them country codes, which they are not."
+      },
+      "sitc": {
+        "label": "representation.identifier.alphanumeric_id",
+        "why": "SITC Revision 4 codes as Census prints them, five characters, some with X for unspecified digits (792XX). Inferred, finetype labels the column a postal code, which it is not."
+      },
+      "end_use": {
+        "label": "representation.identifier.numeric_code",
+        "why": "Census's five-digit end-use codes, stored as text. Inferred, finetype labels them integers and the descriptor would type the column as a number, which would drop the leading zeros of codes such as 00300."
+      },
+      "hitech": {
+        "label": "representation.identifier.numeric_code",
+        "why": "Census's two-digit high-technology codes ('00' to '10'), stored as text. Inferred, finetype labels them integers, which would turn '00' and '01' into 0 and 1."
+      },
+      "section": {
+        "label": "representation.text.word",
+        "why": "A Roman numeral naming the schedule section. Inferred it is `unknown`; the value is one short token."
+      }
+    }
+  }
+}

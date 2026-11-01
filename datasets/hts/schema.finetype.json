@@ -1,0 +1,118 @@
+{
+  "$comment": "Self-derived finetype drift contract for usitc/hts, checked by the in-engine finetype_validate@1 gate (the model-free `ft_validate` DuckDB table macro). ft_validate MELTS every column to VARCHAR, so this contract uses ONLY the string-surviving JSON-Schema keywords. ENFORCED: the closed `enum` domains on level and text_source; the `pattern` on code: digits only at 2, 4, 6, 8 or 10 digits, length 2 to 10, the shape descriptor.overrides.json publishes; on code_display, which is dotted: finetype's canonical `geography.transportation.hs_code` validation pattern (`^\\d{4}\\.?\\d{2}(\\.?\\d{2}){0,2}$`, which admits 6, 8 and 10 digits with or without dots but lacks the 2-digit chapter and 4-digit heading forms) widened by `|^[0-9]{2}$|^[0-9]{4}$`, as describe widens it in the descriptor; on rate_from_code, 6, 8 or 10 digits and nothing else, length 6 to 10, since only a subheading, tariff line or statistical line prints the rates it points at; `^[0-9]+$` on parent_code; and `minLength`/`maxLength` envelopes elsewhere. NOT ENFORCED, by design: numeric ranges (a numeric `type` BACKFIRES to 100% reject once melted to VARCHAR); NULLs (invisible to ft_validate); object-level `required` (documentation only); and the arrays `units` and `footnotes`, which do not melt to a string shape. Free-text fields (description, description_full, corpus, the rates) carry LOOSE length envelopes with generous headroom, not tight formats. Derived from build/hts.parquet: a pass-through on today's 42,036 rows, a fail-closed tripwire for future drift (an unknown level or text_source, a malformed code).",
+  "$id": "finetype://hts.parquet",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "code": {
+      "type": "string",
+      "pattern": "^[0-9]{2}$|^[0-9]{4}$|^[0-9]{6}$|^[0-9]{8}$|^[0-9]{10}$",
+      "minLength": 2,
+      "maxLength": 10
+    },
+    "code_display": {
+      "type": "string",
+      "pattern": "^\\d{4}\\.?\\d{2}(\\.?\\d{2}){0,2}$|^[0-9]{2}$|^[0-9]{4}$",
+      "minLength": 2,
+      "maxLength": 13
+    },
+    "corpus": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 8192
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "description_full": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 8192
+    },
+    "level": {
+      "type": "string",
+      "enum": [
+        "chapter",
+        "heading",
+        "statistical_line",
+        "subheading",
+        "tariff_line"
+      ]
+    },
+    "parent_code": {
+      "type": "string",
+      "pattern": "^[0-9]+$",
+      "minLength": 2,
+      "maxLength": 8
+    },
+    "rate_from_code": {
+      "type": "string",
+      "pattern": "^[0-9]{6}$|^[0-9]{8}$|^[0-9]{10}$",
+      "minLength": 6,
+      "maxLength": 10
+    },
+    "release": {
+      "type": "string",
+      "minLength": 4,
+      "maxLength": 32
+    },
+    "section": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 8
+    },
+    "section_title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "general_rate": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024
+    },
+    "special_rate": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024
+    },
+    "column2_rate": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024
+    },
+    "additional_duties": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "quota_quantity": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "text_source": {
+      "type": "string",
+      "enum": [
+        "meridian_label",
+        "usitc",
+        "usitc_derived",
+        "usitc_toc"
+      ]
+    }
+  },
+  "required": [
+    "code",
+    "code_display",
+    "level",
+    "depth",
+    "description",
+    "description_full",
+    "release",
+    "text_source",
+    "corpus"
+  ],
+  "title": "hts",
+  "type": "object"
+}

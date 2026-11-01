@@ -302,7 +302,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          python scripts/check_descriptors.py --examples-dir examples --json descriptor-check.json > check.log 2>&1
+          python scripts/check_descriptors.py --examples-dir examples --require-self-description --json descriptor-check.json > check.log 2>&1
           status=$?
           set -e
           cat check.log
@@ -630,6 +630,102 @@ jobs:
         with:
           name: label-agreement-check
           path: label-agreement-check.json
+          if-no-files-found: ignore
+
+  code-list-self-test:
+    name: the code-list contract can fail
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: install duckdb
+        run: python -m pip install --disable-pip-version-check "duckdb==${DUCKDB_VERSION}"
+      - name: scratch Parquet files, exit status and rule
+        run: python scripts/test_check_code_list.py
+
+  # The HTS Protocol's SQL models, run over a reduced USITC export: the ladder they
+  # build, its text and rates, the two refusals, and the code-list check on the result.
+  hts-models:
+    name: the HTS models build the ladder
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: install duckdb
+        run: python -m pip install --disable-pip-version-check "duckdb==${DUCKDB_VERSION}"
+      - name: the shipped models, against a scratch build directory
+        run: python scripts/test_hts_models.py
+
+  # The Schedule B Protocol's SQL models, with the shared HTS outline, run over reduced
+  # Census and USITC files: the ladder, whose text it takes, the edition guard's three
+  # refusals, and the code-list check on the result.
+  schedule-b-models:
+    name: the Schedule B models build the ladder
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: install duckdb
+        run: python -m pip install --disable-pip-version-check "duckdb==${DUCKDB_VERSION}"
+      - name: the shipped models, against a scratch build directory
+        run: python scripts/test_schedule_b_models.py
+
+  schedule-b-protocol-scripts:
+    name: the Schedule B release date and year folder hold
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: install pyyaml
+        run: python -m pip install --disable-pip-version-check "pyyaml==${PYYAML_VERSION}"
+      - name: scratch archives, exit status and the date written
+        run: python datasets/schedule_b/scripts/test_member_date.py
+      - name: the year in the param, both Census URLs and the descriptor's source
+        run: python datasets/schedule_b/scripts/test_protocol_year.py
+
+  # Exit 2 is NOT tolerated here: a check that found no code list to examine has not
+  # passed, so this job is red until a descriptor carrying `x-meridian-code-list` exists.
+  code-list-contract:
+    name: every hosted code list carries the core columns
+    needs: [code-list-self-test, descriptors-match-their-data]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: install duckdb
+        run: python -m pip install --disable-pip-version-check "duckdb==${DUCKDB_VERSION}"
+      - name: every datasets/*/datapackage.json that declares a code list
+        shell: bash
+        run: |
+          set +e
+          python scripts/check_code_list.py --json code-list-check.json > code-list.log 2>&1
+          status=$?
+          set -e
+          cat code-list.log
+          {
+            echo '### Code-list contract'
+            echo
+            echo '```'
+            cat code-list.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $status
+      - name: upload the findings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: code-list-check
+          path: code-list-check.json
           if-no-files-found: ignore
 
   constraint-ratchet-self-test:

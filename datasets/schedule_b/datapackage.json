@@ -1,0 +1,505 @@
+{
+  "$schema": "https://datapackage.org/profiles/2.0/datapackage.json",
+  "contributors": [
+    {
+      "path": "https://www.census.gov/foreign-trade/",
+      "roles": [
+        "author"
+      ],
+      "title": "U.S. Census Bureau"
+    },
+    {
+      "path": "https://www.usitc.gov/",
+      "roles": [
+        "contributor"
+      ],
+      "title": "U.S. International Trade Commission"
+    },
+    {
+      "path": "https://meridian.online",
+      "roles": [
+        "publisher",
+        "wrangler"
+      ],
+      "title": "Meridian"
+    }
+  ],
+  "created": "2026-11-01T11:48:51Z",
+  "description": "Schedule B, the U.S. Census Bureau's classification of exported goods: every ten-digit commodity Census publishes, with a row for each chapter, heading and subheading its codes imply and a parent for every row. Each commodity carries Census's units of quantity, SITC, end-use, agricultural, NAICS and high-technology codes. Chapter titles and commodity text are Census's; heading and subheading text is the U.S. International Trade Commission's, from the HTS revision named in hts_release. The data is credited to the U.S. Census Bureau; Census's bulk file carries no endorsement notice.",
+  "homepage": "https://meridian.online/datasets/census/schedule_b",
+  "licenses": [
+    {
+      "name": "other-pd",
+      "path": "https://www.census.gov/about/policies/open-gov/open-data.html",
+      "title": "Public domain (U.S. Census Bureau)"
+    }
+  ],
+  "name": "schedule_b",
+  "resources": [
+    {
+      "bytes": 1319421,
+      "format": "parquet",
+      "hash": "sha256:79a1505b1ecb77ed33348048e591236fb9df5ae154da505ceb27b08e3a6dfa42",
+      "mediatype": "application/vnd.apache.parquet",
+      "name": "schedule_b",
+      "path": "https://openlake.meridian.online/census/schedule_b.parquet",
+      "schema": {
+        "fields": [
+          {
+            "constraints": {
+              "maxLength": 10,
+              "minLength": 2,
+              "pattern": "^[0-9]{2}$|^[0-9]{4}$|^[0-9]{6}$|^[0-9]{10}$"
+            },
+            "description": "Schedule B code, digits only: 2 (chapter), 4 (heading), 6 (subheading) or 10 (commodity) digits. Join other data on this column.",
+            "name": "code",
+            "type": "string",
+            "x-finetype-label": "geography.transportation.hs_code",
+            "x-finetype-nominated": true,
+            "x-finetype-pattern-fit": {
+              "canonical": "^\\d{4}\\.?\\d{2}(\\.?\\d{2}){0,2}$",
+              "outcome": "widened"
+            }
+          },
+          {
+            "constraints": {
+              "pattern": "^\\d{4}\\.?\\d{2}(\\.?\\d{2}){0,2}$|^[0-9]{2}$|^[0-9]{4}$"
+            },
+            "description": "The code as Census prints it, with dots (0101.21.0000). For a chapter or heading, its digits; for a subheading, 0101.21.",
+            "name": "code_display",
+            "type": "string",
+            "x-finetype-label": "geography.transportation.hs_code",
+            "x-finetype-nominated": true,
+            "x-finetype-pattern-fit": {
+              "canonical": "^\\d{4}\\.?\\d{2}(\\.?\\d{2}){0,2}$",
+              "outcome": "widened"
+            }
+          },
+          {
+            "constraints": {
+              "maxLength": 100,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$"
+            },
+            "description": "Hierarchy level: chapter, heading, subheading or commodity (the ten-digit Schedule B number). Schedule B has no eight-digit level.",
+            "name": "level",
+            "type": "string",
+            "x-finetype-confidence": 0.6,
+            "x-finetype-enum-domain": {
+              "cohesion": 1.0,
+              "distinct": 4,
+              "domain": [
+                "chapter",
+                "commodity",
+                "heading",
+                "subheading"
+              ],
+              "open": true,
+              "rows": 16727
+            },
+            "x-finetype-label": "representation.text.word"
+          },
+          {
+            "description": "The level's position in the ladder, from 0 for a chapter to 3 for a commodity.",
+            "name": "depth",
+            "type": "integer",
+            "x-finetype-confidence": 0.6,
+            "x-finetype-display": {
+              "number": ",d"
+            },
+            "x-finetype-label": "representation.numeric.integer_number",
+            "x-finetype-unsupported-constraints": {
+              "pattern": "^-?[0-9]+$"
+            }
+          },
+          {
+            "constraints": {
+              "maxLength": 6,
+              "minLength": 2,
+              "pattern": "^[0-9]+$"
+            },
+            "description": "The code one level up, always the code's own prefix; NULL for a chapter.",
+            "name": "parent_code",
+            "type": "string",
+            "x-finetype-confidence": 0.9929,
+            "x-finetype-label": "representation.identifier.numeric_code"
+          },
+          {
+            "constraints": {
+              "maxLength": 65536,
+              "minLength": 1
+            },
+            "description": "The row's text. A commodity's is Census's long description and a chapter's is Census's title from the year's index page. A heading's or subheading's is USITC's text for that prefix in the HTS, except in chapter 98, where USITC's provisions are import ones, and where USITC gives the prefix no text: there it is the text of the one Census line under it, or, with several lines under it, a label such as 'Heading 9802'. text_source says which.",
+            "name": "description",
+            "type": "string",
+            "x-finetype-confidence": 0.8688,
+            "x-finetype-label": "representation.text.plain_text"
+          },
+          {
+            "constraints": {
+              "maxLength": 65536,
+              "minLength": 1
+            },
+            "description": "The chapter title and the text of each level above the row, then its own, joined with ' › '. Where levels take their text from the same source line, the text appears once, at the lowest of them.",
+            "name": "description_full",
+            "type": "string",
+            "x-finetype-confidence": 0.9988,
+            "x-finetype-label": "representation.text.plain_text"
+          },
+          {
+            "constraints": {
+              "pattern": "^[A-Za-z][A-Za-z0-9 /_.#-]*[0-9][A-Za-z0-9 /_.#-]*$|^[0-9][A-Za-z0-9 /_.#-]*[A-Za-z][A-Za-z0-9 /_.#-]*$|^[0-9]{4}/[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+            },
+            "description": "Census's year folder and the date the bulk file records for its export codes file, econcord.txt, joined by '/', for example 2026/2026-07-27.",
+            "name": "release",
+            "type": "string",
+            "x-finetype-label": "representation.identifier.alphanumeric_id",
+            "x-finetype-nominated": true,
+            "x-finetype-pattern-fit": {
+              "canonical": "^[A-Za-z][A-Za-z0-9 /_.#-]*[0-9][A-Za-z0-9 /_.#-]*$|^[0-9][A-Za-z0-9 /_.#-]*[A-Za-z][A-Za-z0-9 /_.#-]*$",
+              "outcome": "widened"
+            }
+          },
+          {
+            "constraints": {
+              "maxLength": 100,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$"
+            },
+            "description": "Whose text description is: census (a commodity's description, or a chapter title from Census's index page), usitc (USITC's HTS text for the heading or subheading, from the revision in hts_release), census_derived (a heading or subheading with exactly one Census line under it, taking that line's text, in chapter 98 or where USITC gives the prefix no text) or meridian_label (such a level with several Census lines under it, labelled by its level and code).",
+            "name": "text_source",
+            "type": "string",
+            "x-finetype-confidence": 0.6,
+            "x-finetype-enum-domain": {
+              "cohesion": 0.5,
+              "distinct": 4,
+              "domain": [
+                "census",
+                "census_derived",
+                "meridian_label",
+                "usitc"
+              ],
+              "open": true,
+              "rows": 16727
+            },
+            "x-finetype-label": "representation.text.word"
+          },
+          {
+            "constraints": {
+              "maxLength": 65536,
+              "minLength": 1
+            },
+            "description": "Lowercased, accent-stripped description_full: a derived free-text search field, not a source attribute.",
+            "name": "corpus",
+            "type": "string",
+            "x-finetype-confidence": 0.9999,
+            "x-finetype-label": "representation.text.plain_text"
+          },
+          {
+            "constraints": {
+              "maxLength": 65536,
+              "minLength": 1
+            },
+            "description": "Census's short description of the commodity, at most 50 characters. NULL on chapter, heading and subheading rows.",
+            "name": "description_short",
+            "type": "string",
+            "x-finetype-label": "representation.text.plain_text",
+            "x-finetype-nominated": true
+          },
+          {
+            "constraints": {
+              "maxLength": 3,
+              "minLength": 1,
+              "pattern": "^[A-Z0-9]{1,3}$"
+            },
+            "description": "Census's abbreviation for the commodity's first unit of quantity (for example KG or NO), as printed. NULL where Census prints none, and on chapter, heading and subheading rows.",
+            "name": "unit_1",
+            "type": "string",
+            "x-finetype-label": "representation.identifier.alphanumeric_id",
+            "x-finetype-nominated": true,
+            "x-finetype-pattern-fit": {
+              "canonical": "^[A-Za-z][A-Za-z0-9 /_.#-]*[0-9][A-Za-z0-9 /_.#-]*$|^[0-9][A-Za-z0-9 /_.#-]*[A-Za-z][A-Za-z0-9 /_.#-]*$",
+              "outcome": "widened"
+            }
+          },
+          {
+            "constraints": {
+              "maxLength": 3,
+              "minLength": 1,
+              "pattern": "^[A-Z0-9]{1,3}$"
+            },
+            "description": "Census's abbreviation for the commodity's second unit of quantity, as printed. NULL where Census prints none, and on chapter, heading and subheading rows.",
+            "name": "unit_2",
+            "type": "string",
+            "x-finetype-label": "representation.identifier.alphanumeric_id",
+            "x-finetype-nominated": true,
+            "x-finetype-pattern-fit": {
+              "canonical": "^[A-Za-z][A-Za-z0-9 /_.#-]*[0-9][A-Za-z0-9 /_.#-]*$|^[0-9][A-Za-z0-9 /_.#-]*[A-Za-z][A-Za-z0-9 /_.#-]*$",
+              "outcome": "widened"
+            }
+          },
+          {
+            "constraints": {
+              "maxLength": 5,
+              "minLength": 5,
+              "pattern": "^[0-9]{3}[0-9X]{2}$"
+            },
+            "description": "The commodity's Standard International Trade Classification, Revision 4, code, as Census prints it, five characters. A few codes end in X (792XX); Census's layout does not define X, and its reading as digits left unspecified is inferred from the codes' shape. NULL on chapter, heading and subheading rows.",
+            "name": "sitc",
+            "type": "string",
+            "x-finetype-label": "representation.identifier.alphanumeric_id",
+            "x-finetype-locale": "HR",
+            "x-finetype-nominated": true,
+            "x-finetype-pattern-fit": {
+              "canonical": "^[A-Za-z][A-Za-z0-9 /_.#-]*[0-9][A-Za-z0-9 /_.#-]*$|^[0-9][A-Za-z0-9 /_.#-]*[A-Za-z][A-Za-z0-9 /_.#-]*$",
+              "outcome": "widened"
+            }
+          },
+          {
+            "constraints": {
+              "maxLength": 5,
+              "minLength": 5,
+              "pattern": "^[0-9]{5}$"
+            },
+            "description": "Census's end-use classification code for the commodity, five digits, as printed. NULL on chapter, heading and subheading rows.",
+            "name": "end_use",
+            "type": "string",
+            "x-finetype-label": "representation.identifier.numeric_code",
+            "x-finetype-nominated": true
+          },
+          {
+            "description": "Whether the commodity is an agricultural product, read from Census's one-character flag, which its layout calls 'Agriculture or non-agriculture product code' and prints as '0' or '1'. true is '0'. Census's layout does not say which value is which; the reading is from the data: every line of chapters 1, 2 and 4 is '0', and every line of chapter 3, fish, which USDA's definition of agricultural products leaves out, is '1'. NULL on chapter, heading and subheading rows.",
+            "falseValues": [
+              "false",
+              "no",
+              "off",
+              "False",
+              "No",
+              "Off",
+              "FALSE",
+              "NO",
+              "OFF",
+              "disabled",
+              "Disabled",
+              "DISABLED",
+              "inactive",
+              "Inactive",
+              "INACTIVE"
+            ],
+            "name": "agricultural",
+            "trueValues": [
+              "true",
+              "yes",
+              "on",
+              "True",
+              "Yes",
+              "On",
+              "TRUE",
+              "YES",
+              "ON",
+              "enabled",
+              "Enabled",
+              "ENABLED",
+              "active",
+              "Active",
+              "ACTIVE"
+            ],
+            "type": "boolean",
+            "x-finetype-confidence": 0.8977,
+            "x-finetype-enum-domain": {
+              "cohesion": 1.0,
+              "distinct": 2,
+              "domain": [
+                "false",
+                "true"
+              ],
+              "open": true,
+              "rows": 9779
+            },
+            "x-finetype-label": "representation.boolean.terms"
+          },
+          {
+            "constraints": {
+              "maxLength": 6,
+              "minLength": 6,
+              "pattern": "^[0-9]{4}[0-9X]{2}$"
+            },
+            "description": "The NAICS industry Census assigns to the commodity, six characters, as printed. Joins to census/naics_2022's code; the descriptor's x-joins states how many commodity lines match. Some codes are not 2022 NAICS codes: some end in X (33641X, 1121XX), which Census's layout does not define and which reads, from the codes' shape, as digits left unspecified; and 910000, 930000 and 990000 are Census's own. NULL on chapter, heading and subheading rows.",
+            "name": "naics",
+            "type": "string",
+            "x-finetype-confidence": 1.0,
+            "x-finetype-label": "identity.industry.naics",
+            "x-finetype-pattern-fit": {
+              "canonical": "^(11|2[1-3]|3[1-3]|4[1-2]|4[4-5]|4[8-9]|5[1-6]|6[1-2]|7[1-2]|8[1-2]|9[1-2])[0-9]{0,4}$|^(31-33|44-45|48-49)$",
+              "outcome": "widened"
+            }
+          },
+          {
+            "constraints": {
+              "maxLength": 2,
+              "minLength": 2,
+              "pattern": "^[0-9]{2}$"
+            },
+            "description": "Census's high-technology classification for the commodity, two digits, '00' to '10', as printed. Census's layout calls the field 'HiTech classification' and does not define its values; '00', on most lines, is read from the data as a line outside the classification and the others as the group it falls in. NULL on chapter, heading and subheading rows.",
+            "name": "hitech",
+            "type": "string",
+            "x-finetype-label": "representation.identifier.numeric_code",
+            "x-finetype-nominated": true
+          },
+          {
+            "constraints": {
+              "maxLength": 100,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$"
+            },
+            "description": "The section of the schedule the row's chapter belongs to, as a Roman numeral, from Census's index page.",
+            "name": "section",
+            "type": "string",
+            "x-finetype-enum-domain": {
+              "cohesion": 1.0,
+              "distinct": 22,
+              "domain": [
+                "I",
+                "II",
+                "III",
+                "IV",
+                "IX",
+                "V",
+                "VI",
+                "VII",
+                "VIII",
+                "X",
+                "XI",
+                "XII",
+                "XIII",
+                "XIV",
+                "XIX",
+                "XV",
+                "XVI",
+                "XVII",
+                "XVIII",
+                "XX",
+                "XXI",
+                "XXII"
+              ],
+              "open": true,
+              "rows": 16727
+            },
+            "x-finetype-label": "representation.text.word",
+            "x-finetype-nominated": true
+          },
+          {
+            "constraints": {
+              "maxLength": 65536,
+              "minLength": 1
+            },
+            "description": "The title of that section.",
+            "name": "section_title",
+            "type": "string",
+            "x-finetype-confidence": 0.9705,
+            "x-finetype-enum-domain": {
+              "cohesion": 0.090999998152256,
+              "distinct": 22,
+              "domain": [
+                "Animal of Vegetable Fats and Oils and their Cleavage Products; Prepared Edible Fats; Animal or Vegetable Waxes",
+                "Arms and Ammunition; Parts and Accessories Thereof",
+                "Articles of Stone, Plaster, Cement, Asbestos, Mica or Similar Materials; Ceramic Products; Glass and Glassware",
+                "Base Metals and Articles of Base Metal",
+                "Footware, Headgear, Umbrellas, Sun Umbrellas, Walking-sticks, Seat-sticks, Whips, Riding-crops and Parts Thereof; Prepared Feathers and Articles Made Therewith; Artificial Flowers; Articles of Human Hair",
+                "Live Animals; Animal Products",
+                "Machinery and Mechanical Appliances; Electrical Equipment; Parts Thereof; Sound Recorders and Reproducers, Television Image and Sound Recorders and Reproducers, and Parts and Accessories of Such Articles",
+                "Mineral Products",
+                "Miscellaneous Manufactured Articles",
+                "Natural of Cultured Pearls, Precious or Semiprecious Stones, Precious Metals, Metals Clad with Precious Metal, and Articles Thereof; Imitation Jewlry; Coin",
+                "Optical, Photographic, Cinematographic, Measuring, Checking, Precision, Medical or Surgical Instruments and Apparatus; Clocks and Watches; Musical Instruments; Parts and Accessories Thereof",
+                "Plastics and Articles Thereof; Rubber and Articles Thereof",
+                "Prepared Foodstuffs; Beverages, Spirits and Vinegar; Tobacco and Manufactured Tobacco Substitutes",
+                "Products of the Chemical or Allied Industries",
+                "Pulp of Wood or of Other Fibrous Cellulosic Material; Recovered (Waste and Scrap) Paper or Paperboard; Paper and Paperboard Articles Thereof",
+                "Raw Hides and Skins, Leather, Furskins and Articles Thereof; Saddlery and Harness; Travel Goods, Handbags and Similar Containers; Articles of Animal Gut (Other Than Silkworm Gut)",
+                "Special Classification Provisions",
+                "Textiles and Textile Articles",
+                "Vegetable Products",
+                "Vehicles, Aircraft, Vessels and Associated Transport Equipment",
+                "Wood and Articles of Wood; Wood Charcoal; Cork and Articles of Cork; Manufactures of Straw, of Esparto or of Other Plainting Materials; Basketware and Wickerwork",
+                "Works of Art, Collectors' Pieces and Antiques"
+              ],
+              "open": true,
+              "rows": 16727
+            },
+            "x-finetype-label": "representation.text.plain_text"
+          },
+          {
+            "constraints": {
+              "pattern": "^[A-Za-z][A-Za-z0-9 /_.#-]*[0-9][A-Za-z0-9 /_.#-]*$|^[0-9][A-Za-z0-9 /_.#-]*[A-Za-z][A-Za-z0-9 /_.#-]*$"
+            },
+            "description": "The USITC HTS revision whose heading and subheading text this snapshot carries (the usitc rows), for example 2026HTSRev22. The run fails if the revision's year is not the Schedule B year.",
+            "name": "hts_release",
+            "type": "string",
+            "x-finetype-label": "representation.identifier.alphanumeric_id",
+            "x-finetype-nominated": true
+          }
+        ],
+        "primaryKey": [
+          "code"
+        ]
+      }
+    }
+  ],
+  "sources": [
+    {
+      "path": "https://www.census.gov/foreign-trade/schedules/b/index.html",
+      "title": "Schedule B — U.S. Census Bureau"
+    },
+    {
+      "path": "https://www.census.gov/foreign-trade/schedules/b/2026/index.html",
+      "title": "Schedule B 2026 — index and bulk file"
+    },
+    {
+      "path": "https://hts.usitc.gov/reststop/exportList?from=0100&to=9999&format=JSON&styles=false",
+      "title": "HTS export — U.S. International Trade Commission (heading and subheading text)"
+    }
+  ],
+  "title": "Schedule B — U.S. Export Classification Codes",
+  "x-finetype-version": "0.6.67",
+  "x-joins": {
+    "$comment": "How to join Schedule B's NAICS codes to census/naics_2022, and how far the join reaches. It is NOT a `schema.foreignKeys` entry: a foreign key asserts that every value on the left exists on the right, and some of Census's NAICS codes on Schedule B lines are not codes of the 2022 edition. `coverage` does not live in this file: `crosswalk_join.py --write` measures it from the build and writes it into the generated `datapackage.json`.",
+    "joins": [
+      {
+        "cardinality": "partial — 9,464 of 9,779 rows match. The unmatched lines carry a code that is not a 2022 NAICS code: an industry code ending in X (33641X, 1121XX), which Census's layout does not define and which reads, from the codes' shape, as digits left unspecified, or one of the codes 910000, 930000 and 990000, which Census gives to lines such as waste and scrap, used goods and chapter 98's special provisions.",
+        "compareAs": "exact",
+        "coverage": {
+          "matched": 9464,
+          "rows": 9779
+        },
+        "description": "The NAICS industry Census assigns to each ten-digit commodity. Join `naics` to `naics.code` on commodity rows; both sides are text. Chapter, heading and subheading rows carry no NAICS code.",
+        "evidence": "Census's Schedule B export file (econcord.txt) prints a six-character NAICS code on every ten-digit line, at characters 266 to 271 of the layout Census publishes with it (exp-stru.txt, `NAICS classification`). Where the code is a 2022 national industry, it names that industry in census/naics_2022.",
+        "fields": [
+          "naics"
+        ],
+        "measuredAgainst": "sha256:8c091c158138215269dd607e72872fa221431636ab82c101c39eff7eb537d4d5",
+        "name": "naics",
+        "package": "https://github.com/meridian-online/open-analytics/blob/main/datasets/naics/datapackage.json",
+        "reference": {
+          "fields": [
+            "code"
+          ],
+          "resource": "naics"
+        },
+        "where": {
+          "equals": "commodity",
+          "field": "level"
+        }
+      }
+    ],
+    "verifiedBy": "datasets/edgar_gleif/scripts/crosswalk_join.py — the same script both writes and checks `coverage`. Run with `--write`, right after `describe`, it measures the join above against this build's own Parquet and writes `coverage` into datapackage.json (arcform.yaml step `derive_join_coverage`). Run with no flags, it re-measures against the published objects instead and fails if the committed `coverage` disagrees."
+  },
+  "x-meridian-code-list": {
+    "levels": [
+      "chapter",
+      "heading",
+      "subheading",
+      "commodity"
+    ]
+  }
+}

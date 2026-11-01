@@ -1,0 +1,136 @@
+{
+  "name": "hts",
+  "title": "HTS — Harmonized Tariff Schedule of the United States",
+  "description": "The Harmonized Tariff Schedule of the United States, issued by the U.S. International Trade Commission: every chapter, heading, subheading, tariff line and statistical line as a row with its parent, with each line's duty rates, units and footnotes as USITC prints them.",
+  "homepage": "https://meridian.online/datasets/usitc/hts",
+  "licenses": [
+    {
+      "name": "other-pd",
+      "title": "Public domain (U.S. International Trade Commission)",
+      "path": "https://www.usitc.gov/tariff_affairs/about_hts.htm"
+    }
+  ],
+  "sources": [
+    {
+      "title": "HTS — Harmonized Tariff Schedule of the United States",
+      "path": "https://hts.usitc.gov/"
+    },
+    {
+      "title": "HTS downloads",
+      "path": "https://hts.usitc.gov/download"
+    }
+  ],
+  "contributors": [
+    {
+      "path": "https://www.usitc.gov/",
+      "roles": [
+        "author"
+      ],
+      "title": "U.S. International Trade Commission"
+    },
+    {
+      "path": "https://meridian.online",
+      "roles": [
+        "publisher",
+        "wrangler"
+      ],
+      "title": "Meridian"
+    }
+  ],
+  "resource": {
+    "name": "hts",
+    "path": "https://openlake.meridian.online/usitc/hts.parquet"
+  },
+  "x-meridian-code-list": {
+    "levels": [
+      "chapter",
+      "heading",
+      "subheading",
+      "tariff_line",
+      "statistical_line"
+    ]
+  },
+  "fields": {
+    "code": {
+      "description": "HTS code, digits only: 2 (chapter), 4 (heading), 6 (subheading), 8 (tariff line) or 10 (statistical line) digits. Join other data on this column.",
+      "constraints": {
+        "minLength": 2,
+        "maxLength": 10,
+        "pattern": "^[0-9]{2}$|^[0-9]{4}$|^[0-9]{6}$|^[0-9]{8}$|^[0-9]{10}$"
+      }
+    },
+    "code_display": {
+      "description": "The code as USITC prints it, with dots (8471.30.01.00). For a chapter, the two digits."
+    },
+    "level": {
+      "description": "Hierarchy level: chapter, heading, subheading, tariff_line or statistical_line."
+    },
+    "depth": {
+      "description": "The level's position in the ladder, from 0 for a chapter to 4 for a statistical line."
+    },
+    "parent_code": {
+      "description": "The code one level up, always the code's own prefix; NULL for a chapter.",
+      "constraints": {
+        "minLength": 2,
+        "maxLength": 8,
+        "pattern": "^[0-9]+$"
+      }
+    },
+    "description": {
+      "description": "USITC's text for the row. For a level USITC prints only through longer codes it is the text of that level's node in USITC's outline; for a level USITC gives no text, a label such as 'Heading 9903'. text_source says which."
+    },
+    "description_full": {
+      "description": "The chapter title, the subchapter where the chapter has them, and the outline rows above the row, then its own text, joined with ' › '."
+    },
+    "release": {
+      "description": "USITC's revision name for the schedule this row comes from, for example 2026HTSRev22."
+    },
+    "text_source": {
+      "description": "Whose text description is: usitc (USITC prints the code), usitc_derived (taken from the level's node in USITC's outline), meridian_label (USITC gives the level no text; labelled by level and code) or usitc_toc (a chapter title from USITC's table of contents)."
+    },
+    "corpus": {
+      "description": "Lowercased, accent-stripped description_full: a derived free-text search field, not a source attribute."
+    },
+    "indent": {
+      "description": "USITC's indent for the row in its outline, as an integer. Set for rows USITC prints; NULL for chapters, for levels derived from an outline node and for labelled levels."
+    },
+    "section": {
+      "description": "The section of the schedule the row's chapter belongs to, as a Roman numeral, from USITC's table of contents."
+    },
+    "section_title": {
+      "description": "The title of that section."
+    },
+    "units": {
+      "description": "The unit or units of quantity USITC prints for the line (for example 'kg' or 'No.'), as a list; NULL where none is printed."
+    },
+    "general_rate": {
+      "description": "The general (column 1) rate of duty. The rate is as USITC prints it, blank as NULL. A line that prints none of the general, special and column 2 rates takes all three from its nearest printed ancestor that prints a general rate, named in rate_from_code. Where no printed ancestor prints a general rate (a heading such as 0101), the three stay NULL, as they do on chapters and on rows made for prefixes USITC prints only through longer codes. Chapter 99 provisions reached through footnotes can add duties to this line, and they are not included here."
+    },
+    "special_rate": {
+      "description": "The special (column 1) rate of duty, with the programme codes USITC prints. The rate is as USITC prints it, blank as NULL. A line that prints none of the general, special and column 2 rates takes all three from its nearest printed ancestor that prints a general rate, named in rate_from_code. Where no printed ancestor prints a general rate (a heading such as 0101), the three stay NULL, as they do on chapters and on rows made for prefixes USITC prints only through longer codes. Chapter 99 provisions reached through footnotes can add duties to this line, and they are not included here."
+    },
+    "column2_rate": {
+      "description": "The column 2 rate of duty. The rate is as USITC prints it, blank as NULL. A line that prints none of the general, special and column 2 rates takes all three from its nearest printed ancestor that prints a general rate, named in rate_from_code. Where no printed ancestor prints a general rate (a heading such as 0101), the three stay NULL, as they do on chapters and on rows made for prefixes USITC prints only through longer codes. Chapter 99 provisions reached through footnotes can add duties to this line, and they are not included here."
+    },
+    "rate_from_code": {
+      "description": "The code of the printed line whose rates this row carries: the row's own code where it prints a rate, otherwise its nearest printed ancestor that prints a general rate. Join on this to find the rate that applies to a ten-digit import code. NULL on chapters, on every row made for a prefix USITC prints only through longer codes, and on a printed line that prints no rate and has no printed ancestor that prints a general rate.",
+      "constraints": {
+        "minLength": 6,
+        "maxLength": 10,
+        "pattern": "^[0-9]{6}$|^[0-9]{8}$|^[0-9]{10}$"
+      }
+    },
+    "footnotes": {
+      "description": "The footnote texts USITC prints for the line, as a list. They name the chapter 99 provisions that can add duties."
+    },
+    "quota_quantity": {
+      "description": "USITC's quota quantity field, as printed. USITC leaves it empty on every row of the current revision, so the column is NULL throughout."
+    },
+    "additional_duties": {
+      "description": "The additional-duty text USITC prints on chapter 99 provision lines (for example 'No additional duty'), as printed. NULL where USITC leaves it blank, including rows that hold only a space."
+    }
+  },
+  "primaryKey": [
+    "code"
+  ]
+}
