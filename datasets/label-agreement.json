@@ -41,6 +41,178 @@
         "gleif.legal_name": 1
       },
       "reason": "Two register elements under one label, each with its own bounds. `edgar.company_name` and `edgar_gleif.company_name` are the SEC display name of a registrant, declared `representation.text.entity_name` in each package's nominations.finetype.json, and they carry that label's own bounds of 2 to 200 characters, which the descriptor check holds every value in both columns to. `gleif.legal_name` and `edgar_gleif.legal_name` are the GLEIF register's legal-name element, which LEI-CDF v3.1 types as Tokenized500Type, 1 to 500 characters; single-character and longer-than-200-character names are genuinely registered, so those two columns carry the register's bounds rather than the label's, and both descriptors say so. The direction for a reader validating all four: the register's bounds admit every company name, and the label's bounds would refuse real register names."
+    },
+    {
+      "concept": "geography.transportation.hs_code",
+      "property": "constraints.pattern",
+      "values": {
+        "hts.code": "^\\d{4}\\.?\\d{2}(\\.?\\d{2}){0,2}$|^[0-9]{2}$|^[0-9]{4}$",
+        "hts.code_display": "^\\d{4}\\.?\\d{2}(\\.?\\d{2}){0,2}$|^[0-9]{2}$|^[0-9]{4}$",
+        "hts.rate_from_code": "^\\d{4}\\.?\\d{2}(\\.?\\d{2}){0,2}$",
+        "schedule_b.code": "^\\d{4}\\.?\\d{2}(\\.?\\d{2}){0,2}$|^[0-9]{2}$|^[0-9]{4}$",
+        "schedule_b.code_display": "^\\d{4}\\.?\\d{2}(\\.?\\d{2}){0,2}$|^[0-9]{2}$|^[0-9]{4}$"
+      },
+      "reason": "Two code lists and one column that points into one of them, each pattern true of its own population. `hts.code` and `schedule_b.code` (and the `code_display` beside each) hold every level of their outline, from the two-digit chapter and four-digit heading down to the tariff, statistical or commodity line, so both widen finetype's canonical `geography.transportation.hs_code` pattern, which admits only the 6, 8 and 10-digit forms, by `^[0-9]{2}$|^[0-9]{4}$`; their `x-finetype-pattern-fit` records the widening. `hts.rate_from_code` names the line a row takes its duty rates from, and only a subheading, tariff line or statistical line prints rates, so its values are 6, 8 or 10 digits and it carries the canonical pattern unwidened. Widening it to admit chapters and headings would make it less true of its own bytes. The direction for a reader validating all five: the widened pattern admits every value of `rate_from_code`, and the canonical pattern refuses the chapter and heading rows of both code lists."
+    },
+    {
+      "concept": "identity.industry.naics",
+      "property": "constraints.pattern",
+      "values": {
+        "naics.code": "^(11|2[1-3]|3[1-3]|4[1-2]|4[4-5]|4[8-9]|5[1-6]|6[1-2]|7[1-2]|8[1-2]|9[1-2])[0-9]{0,4}$|^(31-33|44-45|48-49)$",
+        "schedule_b.naics": "^(11|2[1-3]|3[1-3]|4[1-2]|4[4-5]|4[8-9]|5[1-6]|6[1-2]|7[1-2]|8[1-2]|9[1-2])[0-9]{0,4}$|^(31-33|44-45|48-49)$|^[0-9]{6}$|^[A-Z0-9]{6}$"
+      },
+      "reason": "The populations differ: `naics.code` is the NAICS 2022 list itself, and `schedule_b.naics` is the NAICS-based industry code Census attaches to each Schedule B commodity line, which is not always a NAICS 2022 code. Census prints X for digits it leaves unassigned (33641X, 1121XX: 62 lines) and its own codes 910000, 930000 and 990000 for goods no NAICS industry produces (253 lines), so `schedule_b.naics` widens the label's canonical pattern to admit six letters or digits, as its `x-finetype-pattern-fit` records; the `^[0-9]{6}$` alternative is redundant beside `^[A-Z0-9]{6}$` and changes nothing it admits. `naics.code` carries the canonical pattern, which is the shape of the list it is. The direction for a reader joining the two: `schedule_b.naics`'s pattern admits every NAICS code, and the 315 commodity lines outside NAICS are the ones the census/schedule_b descriptor's `x-joins` counts as unmatched. Narrowing `schedule_b.naics` to NAICS's pattern would refuse codes Census really prints."
+    },
+    {
+      "concept": "representation.boolean.terms",
+      "property": "constraints.enum",
+      "values": {
+        "gleif.entity_status": [
+          "ACTIVE",
+          "INACTIVE",
+          "NULL"
+        ],
+        "schedule_b.agricultural": null
+      },
+      "reason": "One label, two storage choices, each true of its column. `gleif.entity_status` is the register's status element stored as text, LEI-CDF v3.1's three terms ACTIVE, INACTIVE and the four-character string NULL, every row carrying one, so it declares that enum and `required`. `schedule_b.agricultural` is a native Parquet BOOLEAN made from Census's USDA field: it needs no enum, since the type admits only true and false, and it is NULL on the chapter, heading and subheading rows, which print no USDA field, so it is not required. Typing the boolean as text to match would lose its type, and an enum or `required` on it would be false of its own rows."
+    },
+    {
+      "concept": "representation.boolean.terms",
+      "property": "constraints.required",
+      "values": {
+        "gleif.entity_status": true,
+        "schedule_b.agricultural": null
+      },
+      "reason": "One label, two storage choices, each true of its column. `gleif.entity_status` is the register's status element stored as text, LEI-CDF v3.1's three terms ACTIVE, INACTIVE and the four-character string NULL, every row carrying one, so it declares that enum and `required`. `schedule_b.agricultural` is a native Parquet BOOLEAN made from Census's USDA field: it needs no enum, since the type admits only true and false, and it is NULL on the chapter, heading and subheading rows, which print no USDA field, so it is not required. Typing the boolean as text to match would lose its type, and an enum or `required` on it would be false of its own rows."
+    },
+    {
+      "concept": "representation.boolean.terms",
+      "property": "type",
+      "values": {
+        "gleif.entity_status": "string",
+        "schedule_b.agricultural": "boolean"
+      },
+      "reason": "One label, two storage choices, each true of its column. `gleif.entity_status` is the register's status element stored as text, LEI-CDF v3.1's three terms ACTIVE, INACTIVE and the four-character string NULL, every row carrying one, so it declares that enum and `required`. `schedule_b.agricultural` is a native Parquet BOOLEAN made from Census's USDA field: it needs no enum, since the type admits only true and false, and it is NULL on the chapter, heading and subheading rows, which print no USDA field, so it is not required. Typing the boolean as text to match would lose its type, and an enum or `required` on it would be false of its own rows."
+    },
+    {
+      "concept": "representation.identifier.alphanumeric_id",
+      "property": "constraints.maxLength",
+      "values": {
+        "gleif.legal_form": 4,
+        "hts.release": null,
+        "schedule_b.hts_release": null,
+        "schedule_b.release": null,
+        "schedule_b.sitc": null,
+        "schedule_b.unit_1": null,
+        "schedule_b.unit_2": null
+      },
+      "reason": "The label names a shape, not a scheme, and these columns are different identifier schemes. `gleif.legal_form` is an ISO 20275 Entity Legal Form code, always four letters or digits, so it carries a fixed length of 4 and `^[A-Z0-9]{4}$`. The census/schedule_b and usitc/hts columns are release names (2026HTSRev22, 2026/2026-07-27), SITC codes of five characters, and Census's unit-of-quantity abbreviations of one to three letters (X, KG, DOZ), so each carries the label's canonical pattern and no length bounds, widened where its values fall outside it (an all-digit SITC code, an all-letter unit, a release that ends in a date), as each `x-finetype-pattern-fit` records. A shared pattern or length would be false of all but one scheme."
+    },
+    {
+      "concept": "representation.identifier.alphanumeric_id",
+      "property": "constraints.minLength",
+      "values": {
+        "gleif.legal_form": 4,
+        "hts.release": null,
+        "schedule_b.hts_release": null,
+        "schedule_b.release": null,
+        "schedule_b.sitc": null,
+        "schedule_b.unit_1": null,
+        "schedule_b.unit_2": null
+      },
+      "reason": "The label names a shape, not a scheme, and these columns are different identifier schemes. `gleif.legal_form` is an ISO 20275 Entity Legal Form code, always four letters or digits, so it carries a fixed length of 4 and `^[A-Z0-9]{4}$`. The census/schedule_b and usitc/hts columns are release names (2026HTSRev22, 2026/2026-07-27), SITC codes of five characters, and Census's unit-of-quantity abbreviations of one to three letters (X, KG, DOZ), so each carries the label's canonical pattern and no length bounds, widened where its values fall outside it (an all-digit SITC code, an all-letter unit, a release that ends in a date), as each `x-finetype-pattern-fit` records. A shared pattern or length would be false of all but one scheme."
+    },
+    {
+      "concept": "representation.identifier.alphanumeric_id",
+      "property": "constraints.pattern",
+      "values": {
+        "gleif.legal_form": "^[A-Z0-9]{4}$",
+        "hts.release": "^[A-Za-z][A-Za-z0-9 /_.#-]*[0-9][A-Za-z0-9 /_.#-]*$|^[0-9][A-Za-z0-9 /_.#-]*[A-Za-z][A-Za-z0-9 /_.#-]*$",
+        "schedule_b.hts_release": "^[A-Za-z][A-Za-z0-9 /_.#-]*[0-9][A-Za-z0-9 /_.#-]*$|^[0-9][A-Za-z0-9 /_.#-]*[A-Za-z][A-Za-z0-9 /_.#-]*$",
+        "schedule_b.release": "^[A-Za-z][A-Za-z0-9 /_.#-]*[0-9][A-Za-z0-9 /_.#-]*$|^[0-9][A-Za-z0-9 /_.#-]*[A-Za-z][A-Za-z0-9 /_.#-]*$|^[0-9]{4}/[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+        "schedule_b.sitc": "^[A-Za-z][A-Za-z0-9 /_.#-]*[0-9][A-Za-z0-9 /_.#-]*$|^[0-9][A-Za-z0-9 /_.#-]*[A-Za-z][A-Za-z0-9 /_.#-]*$|^[0-9]{5}$",
+        "schedule_b.unit_1": "^[A-Za-z][A-Za-z0-9 /_.#-]*[0-9][A-Za-z0-9 /_.#-]*$|^[0-9][A-Za-z0-9 /_.#-]*[A-Za-z][A-Za-z0-9 /_.#-]*$|^[A-Z]$|^[A-Z]{2}$|^[A-Z]{3}$",
+        "schedule_b.unit_2": "^[A-Za-z][A-Za-z0-9 /_.#-]*[0-9][A-Za-z0-9 /_.#-]*$|^[0-9][A-Za-z0-9 /_.#-]*[A-Za-z][A-Za-z0-9 /_.#-]*$|^[A-Z]{2}$|^[A-Z]{3}$"
+      },
+      "reason": "The label names a shape, not a scheme, and these columns are different identifier schemes. `gleif.legal_form` is an ISO 20275 Entity Legal Form code, always four letters or digits, so it carries a fixed length of 4 and `^[A-Z0-9]{4}$`. The census/schedule_b and usitc/hts columns are release names (2026HTSRev22, 2026/2026-07-27), SITC codes of five characters, and Census's unit-of-quantity abbreviations of one to three letters (X, KG, DOZ), so each carries the label's canonical pattern and no length bounds, widened where its values fall outside it (an all-digit SITC code, an all-letter unit, a release that ends in a date), as each `x-finetype-pattern-fit` records. A shared pattern or length would be false of all but one scheme."
+    },
+    {
+      "concept": "representation.identifier.numeric_code",
+      "property": "constraints.pattern",
+      "values": {
+        "edgar.cik": null,
+        "hts.parent_code": "^[0-9]+$",
+        "schedule_b.end_use": "^[0-9]+$",
+        "schedule_b.hitech": "^[0-9]+$",
+        "schedule_b.parent_code": "^[0-9]+$"
+      },
+      "reason": "The same label stored two ways, each for a stated reason. `edgar.cik` is stored as an integer, unpadded, and its description says the decimal rendering is the CIK, so a string pattern does not apply to it. `hts.parent_code`, `schedule_b.parent_code`, `schedule_b.end_use` and `schedule_b.hitech` are codes whose leading zeros are part of the code (chapter 01, end-use 00300, high-technology code 00), so they are text with `^[0-9]+$`; stored as integers they would turn 01 into 1 and no longer join to `code`."
+    },
+    {
+      "concept": "representation.identifier.numeric_code",
+      "property": "type",
+      "values": {
+        "edgar.cik": "integer",
+        "hts.parent_code": "string",
+        "schedule_b.end_use": "string",
+        "schedule_b.hitech": "string",
+        "schedule_b.parent_code": "string"
+      },
+      "reason": "The same label stored two ways, each for a stated reason. `edgar.cik` is stored as an integer, unpadded, and its description says the decimal rendering is the CIK, so a string pattern does not apply to it. `hts.parent_code`, `schedule_b.parent_code`, `schedule_b.end_use` and `schedule_b.hitech` are codes whose leading zeros are part of the code (chapter 01, end-use 00300, high-technology code 00), so they are text with `^[0-9]+$`; stored as integers they would turn 01 into 1 and no longer join to `code`."
+    },
+    {
+      "concept": "representation.numeric.integer_number",
+      "property": "constraints.maxLength",
+      "values": {
+        "edgar_gleif.key": 10,
+        "hts.depth": null,
+        "hts.indent": null,
+        "schedule_b.depth": null
+      },
+      "reason": "The same label inferred on columns of different kinds. `edgar_gleif.key` is text because it carries two SEC schemes in one column, Central Index Keys in decimal digits and fund series identifiers with a letter prefix (S…, CEF…), so it declares the pattern and lengths of that union, as its `x-finetype-pattern-fit` records. `hts.depth`, `hts.indent` and `schedule_b.depth` are true integers, a level's position in the outline (0 to 4) and USITC's printed indent (0 to 11), typed as integers with no string constraints. Making either side agree would mean typing the integers as text or the mixed key as a number."
+    },
+    {
+      "concept": "representation.numeric.integer_number",
+      "property": "constraints.minLength",
+      "values": {
+        "edgar_gleif.key": 4,
+        "hts.depth": null,
+        "hts.indent": null,
+        "schedule_b.depth": null
+      },
+      "reason": "The same label inferred on columns of different kinds. `edgar_gleif.key` is text because it carries two SEC schemes in one column, Central Index Keys in decimal digits and fund series identifiers with a letter prefix (S…, CEF…), so it declares the pattern and lengths of that union, as its `x-finetype-pattern-fit` records. `hts.depth`, `hts.indent` and `schedule_b.depth` are true integers, a level's position in the outline (0 to 4) and USITC's printed indent (0 to 11), typed as integers with no string constraints. Making either side agree would mean typing the integers as text or the mixed key as a number."
+    },
+    {
+      "concept": "representation.numeric.integer_number",
+      "property": "constraints.pattern",
+      "values": {
+        "edgar_gleif.key": "^([1-9][0-9]{0,9}|[A-Z]{1,3}[0-9]{7,9})$",
+        "hts.depth": null,
+        "hts.indent": null,
+        "schedule_b.depth": null
+      },
+      "reason": "The same label inferred on columns of different kinds. `edgar_gleif.key` is text because it carries two SEC schemes in one column, Central Index Keys in decimal digits and fund series identifiers with a letter prefix (S…, CEF…), so it declares the pattern and lengths of that union, as its `x-finetype-pattern-fit` records. `hts.depth`, `hts.indent` and `schedule_b.depth` are true integers, a level's position in the outline (0 to 4) and USITC's printed indent (0 to 11), typed as integers with no string constraints. Making either side agree would mean typing the integers as text or the mixed key as a number."
+    },
+    {
+      "concept": "representation.numeric.integer_number",
+      "property": "type",
+      "values": {
+        "edgar_gleif.key": "string",
+        "hts.depth": "integer",
+        "hts.indent": "integer",
+        "schedule_b.depth": "integer"
+      },
+      "reason": "The same label inferred on columns of different kinds. `edgar_gleif.key` is text because it carries two SEC schemes in one column, Central Index Keys in decimal digits and fund series identifiers with a letter prefix (S…, CEF…), so it declares the pattern and lengths of that union, as its `x-finetype-pattern-fit` records. `hts.depth`, `hts.indent` and `schedule_b.depth` are true integers, a level's position in the outline (0 to 4) and USITC's printed indent (0 to 11), typed as integers with no string constraints. Making either side agree would mean typing the integers as text or the mixed key as a number."
+    },
+    {
+      "field": "code",
+      "property": "x-finetype-label",
+      "values": {
+        "hts.code": "geography.transportation.hs_code",
+        "naics.code": "identity.industry.naics",
+        "schedule_b.code": "geography.transportation.hs_code"
+      },
+      "reason": "A shared column name, not a shared concept. Every Meridian code list names its key column `code` (with `level`, `depth`, `parent_code` and `description` beside it), so a reader can walk any of them the same way. In census/naics_2022 that key is a NAICS code; in usitc/hts and census/schedule_b it is an HS-based tariff or export code. Each package's label is right for its own code system, and making them agree would mislabel one of them."
     }
   ],
   "corrections": []

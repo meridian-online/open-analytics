@@ -4,6 +4,7 @@
     "gleif": "Datasets issued by the Global Legal Entity Identifier Foundation.",
     "sec": "Datasets issued by the U.S. Securities and Exchange Commission.",
     "census": "Datasets issued by the U.S. Census Bureau.",
+    "usitc": "Datasets issued by the U.S. International Trade Commission.",
     "library": "Meridian's curated set: core datasets with no issuing organisation, and data Meridian makes itself.",
     "source": "Held for the compatibility views at the old names `source.gleif`, `source.edgar` and `source.naics`.",
     "crosswalk": "Held for the compatibility view at the old name `crosswalk.edgar_gleif`."
@@ -22,6 +23,11 @@
     "census": {
       "kind": "held",
       "issuer": "U.S. Census Bureau",
+      "claimed": false
+    },
+    "usitc": {
+      "kind": "held",
+      "issuer": "U.S. International Trade Commission",
       "claimed": false
     },
     "usgs": {
@@ -53,6 +59,7 @@
     "gleif",
     "sec",
     "census",
+    "usitc",
     "usgs",
     "nyc_tlc",
     "epoch_ai",
@@ -116,6 +123,26 @@
       "manifest": "https://openlake.meridian.online/manifest.json",
       "doi": null,
       "protocol": "datasets/edgar_gleif/arcform.yaml"
+    },
+    {
+      "uid": "54c62eca-deae-45a0-b55a-8aea44226698",
+      "schema": "usitc",
+      "name": "hts",
+      "title": "HTS — Harmonized Tariff Schedule of the United States",
+      "aliases": [],
+      "manifest": "https://openlake.meridian.online/manifest.json",
+      "doi": null,
+      "protocol": "datasets/hts/arcform.yaml"
+    },
+    {
+      "uid": "28063365-b257-413b-a528-7bbebf74d949",
+      "schema": "census",
+      "name": "schedule_b",
+      "title": "Schedule B — U.S. Export Classification Codes",
+      "aliases": [],
+      "manifest": "https://openlake.meridian.online/manifest.json",
+      "doi": null,
+      "protocol": "datasets/schedule_b/arcform.yaml"
     }
   ]
 }
