@@ -223,7 +223,7 @@ def targets(datasets_dir: Path) -> list[tuple[str, str, Path, list[str]]]:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--parquet", type=Path)
+    ap.add_argument("--parquet", help="a local path or an http(s) URL")
     ap.add_argument("--levels")
     ap.add_argument("--json", type=Path, dest="json_out")
     ap.add_argument(
@@ -240,7 +240,7 @@ def main(argv: list[str] | None = None) -> int:
             levels = [x.strip() for x in args.levels.split(",") if x.strip()]
             if not levels:
                 raise RuntimeError("--levels names no level")
-            work = [(args.parquet.name, str(args.parquet), Path("."), levels)]
+            work = [(args.parquet.rsplit("/", 1)[-1], args.parquet, Path("."), levels)]
         else:
             work = targets(args.datasets_dir)
         roots = []
