@@ -676,6 +676,17 @@ jobs:
       - name: the shipped models, against a scratch build directory
         run: python scripts/test_schedule_b_models.py
 
+  schedule-b-member-date:
+    name: the Schedule B release date is read from the zip's directory
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: scratch archives, exit status and the date written
+        run: python datasets/schedule_b/scripts/test_member_date.py
+
   # Exit 2 is NOT tolerated here: a check that found no code list to examine has not
   # passed, so this job is red until a descriptor carrying `x-meridian-code-list` exists.
   code-list-contract:

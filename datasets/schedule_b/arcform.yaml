@@ -1,0 +1,298 @@
+# The `census/schedule_b` Protocol — the reproducible *definition* of how the U.S.
+# Census Bureau's Schedule B, the export classification codes, is ingested from
+# Census's bulk file, with the heading and subheading text taken from the U.S.
+# International Trade Commission's HTS export. `arc run` executes this manifest; one
+# Run → one Dataset version. See ./README.md.
+#
+# ALL-CONFIG. Every step is a first-class `sql:` model or a typed `op:` operator from
+# the arcform catalog; there is no `command:` step. The fetches are http_fetch, the
+# unzip is archive_extract; the four Python steps (the member date, the join
+# measurement, the code-list check and the stamp) are `op: uv@1`, each naming what it
+# reads and writes and pinning its script by content digest. The SQL builds the outline, the ladder and the
+# terminal table; parquet_export writes the Parquet; datapackage_describe emits the
+# descriptor; check_code_list holds the Parquet to the shared code-list contract;
+# finetype_validate gates it. Operator code lives in the arcform repo, not here.
+#
+# ONE WRITER PER FILE, as datasets/edgar_gleif's manifest has it: the export writes an
+# unstamped Parquet to build/stage/, describe and derive_join_coverage each write a
+# descriptor of their own there, and stamp_descriptor alone writes the published
+# build/schedule_b.parquet and datapackage.json. A step that rewrote an earlier step's
+# file would leave that step stale on every run.
+#
+# BOUNDARY — do NOT fold this into this manifest:
+#   • PUBLISH (content-addressed R2 upload + manifest/catalog pointer flip) stays in
+#     the out-of-repo publish pipeline and READS this Protocol's terminal output,
+#     build/schedule_b.parquet + the emitted datapackage.json. It is not an arcform step.
+#
+# Produces: build/schedule_b.parquet  →  published as census/schedule_b
+name: schedule_b
+engine: duckdb
+engine_version: ">=1.2"
+db: build/schedule_b.db
+
+params:
+  # Census's year folder. load.sql reads it as ARC_PARAM_YEAR for `release` and for the
+  # edition guard. arc does not substitute a param into an operator's `with:`, so the
+  # two Census URLs below carry the year as well: a new January folder changes all
+  # three together.
+  year:
+    default: "2026"
+
+# Transient API/network blips shouldn't sink a run — retry fetches with backoff.
+defaults:
+  retry:
+    max_attempts: 3
+    backoff_sec: 2.0
+
+steps:
+  # ── Fetch: Census's Schedule B bulk file, and the codes file inside it ──────────
+  - name: fetch_schedule_b
+    op: http_fetch@1
+    with:
+      url: https://www.census.gov/foreign-trade/schedules/b/2026/sbsdf.zip
+      out: build/sbsdf.zip
+      headers:
+        User-Agent: "Meridian Protocol (open-analytics; research@meridian.online)"
+
+  - name: extract_schedule_b
+    op: archive_extract@1
+    with:
+      archive: build/sbsdf.zip
+      members: [econcord.txt]
+      dest: build/sbsdf
+
+  # ── Date: econcord.txt's date, as the zip records it ────────────────────────────
+  # archive_extract does not set a member's date on the file it writes, so the date
+  # `release` carries is read from the zip's own directory. The script is addressed by
+  # its bytes: `shasum -a 256 datasets/schedule_b/scripts/member_date.py` prints this.
+  # It needs only the standard library, so the step declares no `deps:`.
+  - name: date_schedule_b
+    op: uv@1
+    with:
+      script: scripts/member_date.py
+      sha256: 27a2058ec738c3e2fda5cedb5e8b67c6b824fb9001c97cfdbc7148aa32c75441
+      args:
+        - --archive
+        - build/sbsdf.zip
+        - --member
+        - econcord.txt
+        - --out
+        - build/econcord_date.json
+      reads:
+        - build/sbsdf.zip
+      produces:
+        - build/econcord_date.json
+
+  # ── Fetch: the year's index page, for chapter titles and sections ───────────────
+  - name: fetch_index
+    op: http_fetch@1
+    with:
+      url: https://www.census.gov/foreign-trade/schedules/b/2026/index.html
+      out: build/schedule_b_index.html
+      headers:
+        User-Agent: "Meridian Protocol (open-analytics; research@meridian.online)"
+
+  # ── Fetch: USITC's current revision, its schedule, and the revision again ───────
+  # As the HTS Protocol does: naming the revision before and after the download
+  # brackets it, and load.sql fails the run if the two differ.
+  - name: fetch_release_before
+    op: http_fetch@1
+    with:
+      url: https://hts.usitc.gov/reststop/currentRelease
+      out: build/release_before.json
+      headers:
+        User-Agent: "Meridian Protocol (open-analytics; research@meridian.online)"
+
+  - name: fetch_hts
+    op: http_fetch@1
+    with:
+      url: "https://hts.usitc.gov/reststop/exportList?from=0100&to=9999&format=JSON&styles=false"
+      out: build/hts.json
+      headers:
+        User-Agent: "Meridian Protocol (open-analytics; research@meridian.online)"
+
+  - name: fetch_release_after
+    op: http_fetch@1
+    depends_on: [build/hts.json]
+    with:
+      url: https://hts.usitc.gov/reststop/currentRelease
+      out: build/release_after.json
+      headers:
+        User-Agent: "Meridian Protocol (open-analytics; research@meridian.online)"
+
+  # ── Outline: USITC's rows in order, with every code prefix's text ───────────────
+  # The HTS Protocol's own file, run by its relative path.
+  - name: outline
+    sql: ../hts/models/outline.sql
+    depends_on: [build/hts.json]
+
+  # ── Load: the ladder, its text, the line columns and the release ────────────────
+  # Fails the run on a revision that changed mid-fetch, on a Schedule B year that is
+  # not USITC's HS edition, and where USITC names fewer than 99% of the headings or
+  # subheadings Schedule B implies (the edition guard; see load.sql's header).
+  - name: load
+    sql: models/load.sql
+    depends_on:
+      - build/sbsdf/econcord.txt
+      - build/schedule_b_index.html
+      - build/release_before.json
+      - build/release_after.json
+      - build/econcord_date.json
+
+  # ── Package: materialise the terminal table (adds the search corpus) ────────────
+  - name: package
+    sql: models/package.sql
+    produces: [schedule_b_out]
+
+  # ── Export: write the unstamped Parquet ─────────────────────────────────────────
+  # order_by code (the primary key) is a total order → reproducible bytes.
+  - name: export_schedule_b
+    op: parquet_export@1
+    with:
+      input: schedule_b_out
+      dest: build/stage/schedule_b.parquet
+      compression: zstd
+      order_by: "code"
+
+  # ── Describe: EMIT build/stage/described.json from the staged Parquet ───────────
+  # finetype types every column nominations.finetype.json does not declare;
+  # descriptor.overrides.json overlays the curated half (identity, licenses, sources,
+  # per-field prose, primaryKey, the code-list declaration, the NAICS join). Hard-fails
+  # on drift.
+  - name: describe
+    op: datapackage_describe@1
+    with:
+      parquet: build/stage/schedule_b.parquet
+      overrides: descriptor.overrides.json
+      nominations: nominations.finetype.json
+      out: build/stage/described.json
+
+  # ── Fetch: the published census/naics_2022 object the NAICS join is measured on ─
+  # crosswalk_join.py would download it itself, but openlake's edge refuses Python's
+  # default User-Agent (403), so the object is fetched here, with the Protocol's own,
+  # and handed to the measurement as a local file. The measurement records its SHA-256
+  # as `measuredAgainst`, which CI's re-measurement reads against the `hash`
+  # datasets/naics/datapackage.json declares.
+  - name: fetch_naics
+    op: http_fetch@1
+    with:
+      url: https://openlake.meridian.online/census/naics_2022.parquet
+      out: build/naics_2022.parquet
+      headers:
+        User-Agent: "Meridian Protocol (open-analytics; research@meridian.online)"
+
+  # ── Derive: measure the NAICS join's coverage from THIS build ───────────────────
+  # descriptor.overrides.json declares the join (naics → census/naics_2022's code, on
+  # commodity rows) without `coverage`; crosswalk_join.py --write measures how many
+  # commodity lines carry a code naics_2022 holds, records the SHA-256 of the NAICS
+  # object it measured against, and writes both into build/stage/measured.json. Run
+  # with no `--write`, the same script is CI's check against the published objects.
+  # `--local` points this package's own resource at the staged build, which has not
+  # been published, and the `naics` resource at the copy fetch_naics made of the
+  # published object, so the hash and the figures come from the same bytes.
+  #
+  # `shasum -a 256 datasets/edgar_gleif/scripts/crosswalk_join.py` prints the digest.
+  # duckdb is pinned to DUCKDB_VERSION in .github/workflows/descriptors.yml — keep the
+  # two in step.
+  - name: derive_join_coverage
+    op: uv@1
+    with:
+      script: ../edgar_gleif/scripts/crosswalk_join.py
+      sha256: 32d3f503eada072ff8b9258e4e219802fb7012b82e3435643c169d56dc7ffea6
+      deps:
+        - duckdb==1.5.5
+      args:
+        - --write
+        - --package
+        - schedule_b
+        - --datasets-dir
+        - ../../datasets
+        - --descriptor
+        - schedule_b=build/stage/described.json
+        - --out
+        - build/stage/measured.json
+        - --local
+        - schedule_b=build/stage/schedule_b.parquet
+        - --local
+        - naics=build/naics_2022.parquet
+      # The script indexes every sibling descriptor by resource name to resolve the
+      # reference, so which object `naics` names depends on all of them.
+      reads:
+        - build/stage/schedule_b.parquet
+        - build/naics_2022.parquet
+        - build/stage/described.json
+        - ../../datasets/edgar/datapackage.json
+        - ../../datasets/edgar_gleif/datapackage.json
+        - ../../datasets/gleif/datapackage.json
+        - ../../datasets/hts/datapackage.json
+        - ../../datasets/naics/datapackage.json
+      produces:
+        - build/stage/measured.json
+
+  # ── Contract: hold the Parquet to the shared code-list columns ──────────────────
+  # scripts/check_code_list.py refuses a file that breaks the contract (a parent that
+  # is missing or not one level up, a depth that is not the level's position, a code
+  # that is not digits). `shasum -a 256 scripts/check_code_list.py` prints the digest.
+  - name: check_code_list
+    op: uv@1
+    with:
+      script: ../../scripts/check_code_list.py
+      sha256: 11b06ca742a70ef483c9626d153d30387ad17f47992a3b4ef3eaf295b1c1e4b8
+      deps:
+        - duckdb==1.5.5
+      args:
+        - --parquet
+        - build/stage/schedule_b.parquet
+        - --levels
+        - chapter,heading,subheading,commodity
+        - --json
+        - build/code_list_check.json
+      reads:
+        - build/stage/schedule_b.parquet
+      # uv@1 must name what it writes. The check writes nothing else, and fails the run
+      # (exit 1) on a broken contract; its findings go to this file.
+      produces:
+        - build/code_list_check.json
+
+  # ── Validate: GATE the staged Parquet against the self-derived finetype contract ─
+  # CHECK-ONLY: writes nothing, so build/stage/schedule_b.parquet is untouched.
+  - name: validate
+    op: finetype_validate@1
+    with:
+      parquet: build/stage/schedule_b.parquet
+      schema: schema.finetype.json
+
+  # ── Self-describe: put the descriptor INSIDE the Parquet it describes ──────────
+  # As edgar_gleif's does: it reads the measured descriptor and the staged Parquet,
+  # writes the descriptor into a copy of the Parquet's footer, and re-measures `bytes`
+  # and `hash` into the published datapackage.json. The embedded copy omits `bytes`,
+  # `hash` and `created`. `--carry-created` keeps the published `created` while the
+  # data pages are the ones already at build/schedule_b.parquet.
+  # `shasum -a 256 scripts/stamp_descriptor.py` prints the digest.
+  - name: stamp_descriptor
+    op: uv@1
+    with:
+      script: ../../scripts/stamp_descriptor.py
+      sha256: b22581b77414303312aa5040e70a66ccd96a6bfd1902820e487428441018b9c2
+      deps:
+        - duckdb==1.5.5
+      args:
+        - stamp
+        - --descriptor
+        - build/stage/measured.json
+        - --parquet
+        - build/stage/schedule_b.parquet
+        - --out
+        - build/schedule_b.parquet
+        - --out-descriptor
+        - datapackage.json
+        - --carry-created
+      reads:
+        - build/stage/measured.json
+        - build/stage/schedule_b.parquet
+      produces:
+        - build/schedule_b.parquet
+        - datapackage.json
+
+  # publish: the out-of-repo publish pipeline reads build/schedule_b.parquet + the
+  # emitted datapackage.json (boundary — not an arc step). See README.

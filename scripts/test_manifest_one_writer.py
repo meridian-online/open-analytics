@@ -37,7 +37,7 @@ import yaml
 DATASETS = Path(__file__).resolve().parent.parent / "datasets"
 
 # Manifests that have been restructured so each file they write has one writer.
-ONE_WRITER = ("edgar_gleif",)
+ONE_WRITER = ("edgar_gleif", "schedule_b")
 
 # The `with:` keys that name a file an operator writes.
 WRITTEN_BY_OPERATOR = ("dest", "out")
