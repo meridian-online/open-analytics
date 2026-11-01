@@ -239,7 +239,7 @@ steps:
   # ── Contract: hold the Parquet to the shared code-list columns ──────────────────
   # scripts/check_code_list.py refuses a file that breaks the contract (a parent that
   # is missing or not one level up, a depth that is not the level's position, a code
-  # that is not digits). `shasum -a 256 scripts/check_code_list.py` prints the digest.
+  # that is repeated or empty). `shasum -a 256 scripts/check_code_list.py` prints the digest.
   - name: check_code_list
     op: uv@1
     with:

@@ -101,7 +101,7 @@ steps:
   # ── Contract: hold the Parquet to the shared code-list columns ───────────────────
   # scripts/check_code_list.py reads the built file and refuses one that breaks the
   # contract (a parent that is missing or not one level up, a depth that is not the
-  # level's position, a code that is not digits). The script is addressed by its
+  # level's position, a repeated or empty code). The script is addressed by its
   # bytes, so editing it is a manifest edit as well:
   # `shasum -a 256 scripts/check_code_list.py` prints the digest. duckdb is pinned to
   # DUCKDB_VERSION in .github/workflows/descriptors.yml — keep the two in step.
