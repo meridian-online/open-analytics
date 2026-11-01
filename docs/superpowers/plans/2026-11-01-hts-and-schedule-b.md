@@ -18,7 +18,7 @@
 - USITC URLs: `https://hts.usitc.gov/reststop/exportList?from=0100&to=9999&format=JSON&styles=false` and `https://hts.usitc.gov/reststop/currentRelease`. Census URLs: `https://www.census.gov/foreign-trade/schedules/b/{year}/sbsdf.zip` and `.../b/{year}/index.html`, `year` a Protocol param defaulting to `2026`.
 - Core columns, in order: `code, code_display, level, depth, parent_code, description, description_full, release, text_source, corpus`. `description_full` joins with ` › ` (space, U+203A, space).
 - HTS levels: `chapter, heading, subheading, tariff_line, statistical_line`. Schedule B levels: `chapter, heading, subheading, commodity`.
-- `text_source` values: HTS `usitc | usitc_derived | usitc_toc`; Schedule B `census | usitc | census_derived`.
+- `text_source` values: HTS `usitc | usitc_derived | meridian_label | usitc_toc`; Schedule B `census | usitc | census_derived`.
 - Licence `other-pd` on both, as `datasets/naics/descriptor.overrides.json` has it.
 - Quick checks before each commit: the self-test of every script the task touches, plus `python3 scripts/check_protocol_readme.py` once a Protocol exists. CI is the full gate.
 - One cargo or arc build at a time on this machine.
@@ -60,7 +60,7 @@
 - Create: `scripts/test_hts_models.py`
 
 **Interfaces:**
-- Produces: `outline.sql` reads `build/hts.json` and creates `hts_outline(seq BIGINT, code VARCHAR, code_display VARCHAR, indent INTEGER, description VARCHAR, context VARCHAR[])` and `hts_levels(prefix VARCHAR, def_seq BIGINT, def_code VARCHAR, text VARCHAR)`. `text` follows the spec's rule: the unnumbered headings between the prefix's parent level and the defining row, then the defining row's text, joined by a space. Schedule B (Task 4) runs this file by `../hts/models/outline.sql` and reads only `hts_levels` and `hts_outline`.
+- Produces: `outline.sql` reads `build/hts.json` and creates `hts_outline(seq BIGINT, code VARCHAR, code_display VARCHAR, indent INTEGER, description VARCHAR, context VARCHAR[])` and `hts_levels(prefix VARCHAR, def_seq BIGINT, def_code VARCHAR, text VARCHAR, text_source VARCHAR)`. `text` follows the spec's node rule; `text_source` is `usitc`, `usitc_derived` or `meridian_label`, and Schedule B treats `meridian_label` as not named by USITC. Schedule B (Task 4) runs this file by `../hts/models/outline.sql` and reads only `hts_levels` and `hts_outline`.
 - Produces: `load.sql` creates `hts` with the core columns, then `indent INTEGER, section VARCHAR, section_title VARCHAR, units VARCHAR[], general_rate VARCHAR, special_rate VARCHAR, column2_rate VARCHAR, rate_from_code VARCHAR, footnotes VARCHAR[], quota_quantity VARCHAR, additional_duties VARCHAR`. It reads `build/release_before.json`, `build/release_after.json` and `chapters.csv`, and calls `error('USITC revision changed during the run: <before> then <after>')` when they differ, and `error('chapter <cc> has no title in chapters.csv')` for an untitled chapter. `package.sql` adds `corpus` as `lower(strip_accents(description_full))` and makes `hts_out`.
 
 - [ ] **Step 1: Make `chapters.csv`** from USITC's table of contents: the JSON literal assigned in `https://hts.usitc.gov/main.*.js` (the `section_type":"chapter"` entries; each chapter's `label` is its title, the section's `title`/`label` its numeral and title). The CSV carries no comment lines; the source URL and the date copied go in `datasets/hts/README.md` (Task 3).
