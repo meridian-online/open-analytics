@@ -18,7 +18,7 @@
 - USITC URLs: `https://hts.usitc.gov/reststop/exportList?from=0100&to=9999&format=JSON&styles=false` and `https://hts.usitc.gov/reststop/currentRelease`. Census URLs: `https://www.census.gov/foreign-trade/schedules/b/{year}/sbsdf.zip` and `.../b/{year}/index.html`, `year` a Protocol param defaulting to `2026`.
 - Core columns, in order: `code, code_display, level, depth, parent_code, description, description_full, release, text_source, corpus`. `description_full` joins with ` › ` (space, U+203A, space).
 - HTS levels: `chapter, heading, subheading, tariff_line, statistical_line`. Schedule B levels: `chapter, heading, subheading, commodity`.
-- `text_source` values: HTS `usitc | usitc_derived | meridian_label | usitc_toc`; Schedule B `census | usitc | census_derived`.
+- `text_source` values: HTS `usitc | usitc_derived | meridian_label | usitc_toc`; Schedule B `census | usitc | census_derived | meridian_label`.
 - Licence `other-pd` on both, as `datasets/naics/descriptor.overrides.json` has it.
 - Quick checks before each commit: the self-test of every script the task touches, plus `python3 scripts/check_protocol_readme.py` once a Protocol exists. CI is the full gate.
 - One cargo or arc build at a time on this machine.
