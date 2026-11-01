@@ -31,9 +31,9 @@ CORE = [
 
 # code, level, depth, parent_code
 LADDER = [
-    ("01", "chapter", 1, None),
-    ("0101", "heading", 2, "01"),
-    ("010121", "subheading", 3, "0101"),
+    ("01", "chapter", 0, None),
+    ("0101", "heading", 1, "01"),
+    ("010121", "subheading", 2, "0101"),
 ]
 
 
@@ -67,8 +67,8 @@ class Case(unittest.TestCase):
                 "INSERT INTO t VALUES (%s)" % ", ".join("?" for _ in columns),
                 [None if r.get(c) is None else str(r.get(c)) for c in columns],
             )
-        con.execute(f"COPY (SELECT * REPLACE (CAST(depth AS INTEGER) AS depth) FROM t) TO '{path}' (FORMAT parquet)"
-                    if "depth" in columns else f"COPY t TO '{path}' (FORMAT parquet)")
+        select = "* REPLACE (CAST(depth AS INTEGER) AS depth)" if "depth" in columns else "*"
+        con.execute(f"COPY (SELECT {select} FROM t) TO '{path}' (FORMAT parquet)")
         con.close()
         return path
 
@@ -81,6 +81,8 @@ class Case(unittest.TestCase):
         result = self.run_check("--parquet", str(path), "--levels", LEVELS)
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
         self.assertIn(f"code-list: {rule}:", result.stdout)
+        rules = {line.split(":")[1].strip() for line in result.stdout.splitlines()}
+        self.assertEqual(rules, {rule}, result.stdout)
 
     def test_ladder_passes(self):
         path = self.write(ladder())
@@ -104,31 +106,86 @@ class Case(unittest.TestCase):
         self.expect_rule(ladder(), "core-columns", cols)
 
     def test_code_unique(self):
-        self.expect_rule(ladder() + [row("0101", "heading", 2, "01")], "code-unique")
+        self.expect_rule(ladder() + [row("0101", "heading", 1, "01")], "code-unique")
 
     def test_code_not_null(self):
-        self.expect_rule(ladder() + [row(None, "heading", 2, "01")], "code-not-null")
+        self.expect_rule(ladder() + [row(None, "heading", 1, "01")], "code-not-null")
 
     def test_parent_present(self):
-        self.expect_rule(ladder() + [row("0202", "heading", 2, "02")], "parent-present")
+        self.expect_rule(ladder() + [row("0202", "heading", 1, "02")], "parent-present")
 
     def test_parent_null_below_top(self):
-        self.expect_rule(ladder() + [row("0202", "heading", 2, None)], "parent-null-below-top")
+        self.expect_rule(ladder() + [row("0202", "heading", 1, None)], "parent-null-below-top")
 
     def test_depth_step(self):
-        self.expect_rule(ladder() + [row("010199", "subheading", 4, "0101")], "depth-step")
+        self.expect_rule(ladder() + [row("0199", "subheading", 2, "01")], "depth-step")
 
     def test_level_set(self):
-        self.expect_rule(ladder() + [row("01012100", "tariff_line", 4, "010121")], "level-set")
+        self.expect_rule(ladder() + [row("01012100", "tariff_line", 3, "010121")], "level-set")
 
     def test_release_not_null(self):
-        self.expect_rule(ladder() + [row("0102", "heading", 2, "01", release=None)], "release-not-null")
+        self.expect_rule(ladder() + [row("0102", "heading", 1, "01", release=None)], "release-not-null")
 
     def test_release_single(self):
-        self.expect_rule(ladder() + [row("0102", "heading", 2, "01", release="2025")], "release-single")
+        self.expect_rule(ladder() + [row("0102", "heading", 1, "01", release="2025")], "release-single")
 
     def test_description_not_null(self):
-        self.expect_rule(ladder() + [row("0102", "heading", 2, "01", description=None)], "description-not-null")
+        self.expect_rule(ladder() + [row("0102", "heading", 1, "01", description=None)], "description-not-null")
+
+    def test_empty_file(self):
+        self.expect_rule([], "non-empty")
+
+    def test_null_level(self):
+        self.expect_rule(ladder() + [row("0102", None, 1, "01")], "level-set")
+
+    def test_level_depth(self):
+        # depth 2 under a depth-1 parent is a clean step, but a heading sits at 1
+        self.expect_rule(ladder() + [row("010299", "heading", 2, "0101")], "level-depth")
+
+    def test_extra_trailing_columns_allowed(self):
+        cols = CORE + ["extra"]
+        path = self.write([dict(r, extra="x") for r in ladder()], cols)
+        result = self.run_check("--parquet", str(path), "--levels", LEVELS)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def descriptor(self, block, resource_path="hts.parquet", resources=True):
+        pkg = self.dir / "datasets" / "hts"
+        pkg.mkdir(parents=True, exist_ok=True)
+        doc = {"x-meridian-code-list": block}
+        if resources:
+            doc["resources"] = [{"name": "hts", "path": resource_path}]
+        (pkg / "datapackage.json").write_text(json.dumps(doc))
+        return pkg
+
+    def test_bad_levels_exit_2(self):
+        for bad in ({"levels": []}, {"levels": "chapter"}, {}):
+            self.descriptor(bad)
+            result = self.run_check("--datasets-dir", str(self.dir / "datasets"))
+            self.assertEqual(result.returncode, 2, result.stdout)
+
+    def test_missing_resource_path_exit_2(self):
+        self.descriptor({"levels": ["chapter"]}, resources=False)
+        result = self.run_check("--datasets-dir", str(self.dir / "datasets"))
+        self.assertEqual(result.returncode, 2, result.stdout)
+
+    def test_url_path_resolved_to_local_root(self):
+        served = self.dir / "served"
+        (served / "usitc").mkdir(parents=True)
+        self.write(ladder(), name="x.parquet").rename(served / "usitc" / "hts.parquet")
+        self.descriptor({"levels": LEVELS.split(",")},
+                        resource_path="https://openlake.meridian.online/usitc/hts.parquet")
+        result = self.run_check(
+            "--datasets-dir", str(self.dir / "datasets"),
+            "--resolve-root", f"https://openlake.meridian.online/={served}/")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_url_path_mapped_but_absent_exit_2(self):
+        self.descriptor({"levels": LEVELS.split(",")},
+                        resource_path="https://openlake.meridian.online/usitc/hts.parquet")
+        result = self.run_check(
+            "--datasets-dir", str(self.dir / "datasets"),
+            "--resolve-root", f"https://openlake.meridian.online/={self.dir}/nowhere/")
+        self.assertEqual(result.returncode, 2, result.stdout)
 
     def test_no_descriptors(self):
         (self.dir / "datasets").mkdir()
@@ -154,7 +211,7 @@ class Case(unittest.TestCase):
     def test_descriptor_mode_finds_break(self):
         pkg = self.dir / "datasets" / "hts"
         pkg.mkdir(parents=True)
-        self.write(ladder() + [row("0101", "heading", 2, "01")], name="x.parquet").rename(pkg / "hts.parquet")
+        self.write(ladder() + [row("0101", "heading", 1, "01")], name="x.parquet").rename(pkg / "hts.parquet")
         (pkg / "datapackage.json").write_text(json.dumps({
             "x-meridian-code-list": {"levels": LEVELS.split(",")},
             "resources": [{"name": "hts", "path": "hts.parquet"}],

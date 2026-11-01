@@ -16,8 +16,13 @@ finding is printed `code-list: <rule>: <detail>`.
                                                            carrying `x-meridian-code-list`
     --json OUT                                             write the findings as JSON as well
 
+`--resolve-root PREFIX=DIR` (repeatable) reads resource URLs under PREFIX from DIR, so a
+test needs no network; any other URL is read over httpfs.
+
 `--levels` lists the level names from the top of the ladder down; only the first may
-have no parent. Exit 0 pass, 1 contract broken, 2 cannot run (including: no
+have no parent, and a row's `depth` is its level's 0-based position in that list.
+
+Exit 0 pass, 1 contract broken, 2 cannot run (including: no
 descriptor declares a code list, so a sweep that examined nothing cannot pass).
 """
 
@@ -77,7 +82,7 @@ def check(con, relation: str, levels: list[str]) -> list[str]:
 
     n = _scalar(con, f"SELECT count(*) FROM {relation}")
     if n == 0:
-        add("code-not-null", "the file has no rows")
+        add("non-empty", "the file has no rows")
         return findings
 
     dup = _scalar(con, f"SELECT count(*) FROM (SELECT code FROM {relation} GROUP BY code HAVING count(*) > 1)")
@@ -127,6 +132,20 @@ def check(con, relation: str, levels: list[str]) -> list[str]:
         )
         add("depth-step", f"{steps} row(s) have a depth that is not their parent's depth + 1, e.g. {eg}")
 
+    pairs: list = []
+    for i, lv in enumerate(levels):
+        pairs += [lv, i]
+    values = ", ".join("(?, ?)" for _ in levels)
+    bad_depth = (
+        f"FROM {relation} r JOIN (VALUES {values}) AS l(name, pos) ON l.name = r.level "
+        f"WHERE r.depth IS DISTINCT FROM l.pos"
+    )
+    wrong = _scalar(con, f"SELECT count(*) {bad_depth}", pairs)
+    if wrong:
+        eg = _sample(con, f"SELECT r.code {bad_depth} ORDER BY 1 LIMIT {SAMPLE}", pairs)
+        add("level-depth", f"{wrong} row(s) have a depth that is not their level's 0-based position in "
+            f"{', '.join(levels)}, e.g. {eg}")
+
     marks = ", ".join("?" for _ in levels)
     stray = _scalar(con, f"SELECT count(*) FROM {relation} WHERE level IS NULL OR level NOT IN ({marks})", levels)
     if stray:
@@ -154,11 +173,32 @@ def check(con, relation: str, levels: list[str]) -> list[str]:
     return findings
 
 
-def quote(path: Path) -> str:
-    return "read_parquet('" + str(path).replace("'", "''") + "')"
+def is_url(path: str) -> bool:
+    return path.startswith(("http://", "https://"))
 
 
-def targets(datasets_dir: Path) -> list[tuple[str, Path, list[str]]]:
+def locate(path: str, base: Path, roots: list[tuple[str, Path]]) -> str:
+    """Where to read a declared resource path from: a mapped local file, the URL, or a file beside the descriptor."""
+    if is_url(path):
+        for prefix, directory in roots:
+            if path.startswith(prefix):
+                return str(directory / path[len(prefix):])
+        return path
+    return str(base / path)
+
+
+def load(con, location: str) -> str:
+    """Read `location` into a table and return its name. The path is bound, never spliced into SQL."""
+    if is_url(location):
+        con.execute("INSTALL httpfs")
+        con.execute("LOAD httpfs")
+    elif not Path(location).is_file():
+        raise RuntimeError(f"{location}: not a readable file")
+    con.execute("CREATE TABLE code_list AS SELECT * FROM read_parquet(?)", [location])
+    return "code_list"
+
+
+def targets(datasets_dir: Path) -> list[tuple[str, str, Path, list[str]]]:
     found = []
     for descriptor in sorted(datasets_dir.glob("*/datapackage.json")):
         try:
@@ -175,7 +215,7 @@ def targets(datasets_dir: Path) -> list[tuple[str, Path, list[str]]]:
         if not isinstance(resources, list) or not resources or not isinstance(resources[0], dict) \
                 or not isinstance(resources[0].get("path"), str):
             raise RuntimeError(f"{descriptor}: resources[0].path is not declared")
-        found.append((descriptor.parent.name, descriptor.parent / resources[0]["path"], levels))
+        found.append((descriptor.parent.name, resources[0]["path"], descriptor.parent, levels))
     if not found:
         raise RuntimeError(f"no code-list descriptors under {datasets_dir}")
     return found
@@ -186,6 +226,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--parquet", type=Path)
     ap.add_argument("--levels")
     ap.add_argument("--json", type=Path, dest="json_out")
+    ap.add_argument(
+        "--resolve-root", action="append", default=[], metavar="PREFIX=DIR",
+        help="read resource URLs starting with PREFIX from DIR instead (repeatable)",
+    )
     ap.add_argument("--datasets-dir", type=Path, default=Path(__file__).resolve().parent.parent / "datasets")
     args = ap.parse_args(argv)
 
@@ -196,19 +240,24 @@ def main(argv: list[str] | None = None) -> int:
             levels = [x.strip() for x in args.levels.split(",") if x.strip()]
             if not levels:
                 raise RuntimeError("--levels names no level")
-            work = [(args.parquet.name, args.parquet, levels)]
+            work = [(args.parquet.name, str(args.parquet), Path("."), levels)]
         else:
             work = targets(args.datasets_dir)
+        roots = []
+        for spec in args.resolve_root:
+            prefix, sep, directory = spec.partition("=")
+            if not sep or not prefix or not directory:
+                raise RuntimeError(f"--resolve-root {spec!r} is not PREFIX=DIR")
+            roots.append((prefix, Path(directory)))
 
         report = {}
-        for name, path, levels in work:
-            if not path.is_file():
-                raise RuntimeError(f"{path}: not a readable file")
+        for name, path, base, levels in work:
+            location = locate(path, base, roots)
             con = duckdb.connect()
             try:
-                report[name] = check(con, quote(path), levels)
+                report[name] = check(con, load(con, location), levels)
             except duckdb.Error as exc:
-                raise RuntimeError(f"{path}: cannot be read: {exc}") from exc
+                raise RuntimeError(f"{location}: cannot be read: {exc}") from exc
             finally:
                 con.close()
     except RuntimeError as exc:
