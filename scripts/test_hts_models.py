@@ -56,7 +56,12 @@ def chapter_titles() -> dict[str, str]:
 class Run:
     """A scratch Protocol directory: `build/` holding the fixture, and chapters.csv."""
 
-    def __init__(self, release_after: str | None = None, drop_chapter: str | None = None):
+    def __init__(
+        self,
+        release_after: str | None = None,
+        drop_chapter: str | None = None,
+        release_after_body: str | None = None,
+    ):
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
         build = self.root / "build"
@@ -65,6 +70,8 @@ class Run:
             shutil.copy(FIXTURE / name, build / name)
         if release_after is not None:
             (build / "release_after.json").write_text(json.dumps({"name": release_after}), encoding="utf-8")
+        if release_after_body is not None:
+            (build / "release_after.json").write_text(release_after_body, encoding="utf-8")
         lines = (HTS / "chapters.csv").read_text(encoding="utf-8").splitlines(keepends=True)
         if drop_chapter is not None:
             lines = [ln for ln in lines if not ln.startswith(drop_chapter + ",")]
@@ -370,6 +377,16 @@ class RefusalTest(unittest.TestCase):
             with self.assertRaises(duckdb.Error) as caught:
                 run.execute()
             self.assertIn("2026HTSRev22 then 2026HTSRev23", str(caught.exception))
+        finally:
+            run.close()
+
+    def test_release_that_names_no_revision(self):
+        # error(NULL) raises nothing: a currentRelease with no name must still fail.
+        run = Run(release_after_body="{}")
+        try:
+            with self.assertRaises(duckdb.Error) as caught:
+                run.execute()
+            self.assertIn("USITC currentRelease names no revision: 2026HTSRev22 / null", str(caught.exception))
         finally:
             run.close()
 

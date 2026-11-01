@@ -67,7 +67,8 @@
 --     page's title ("Schedule B 2026 - Browse Chapters") names another year or none:
 --     the Census URLs carry the year as well as the param, and a run whose URLs and
 --     param disagree would otherwise label one year's data as another's;
---   - if USITC's revision changed between the two currentRelease fetches;
+--   - if either currentRelease fetch names no revision, or USITC's revision changed
+--     between the two fetches;
 --   - 'HS edition mismatch: Schedule B <year>, USITC <revision>', when the revision's
 --     year is not the Schedule B year: USITC serves only its current revision, so
 --     around a new HS edition the two can belong to different editions;
@@ -83,9 +84,9 @@ WITH inputs AS (
     a.name AS after_name,
     d.date AS date,
     nullif(regexp_extract(i.content, '<title>\s*Schedule B (\d{4})\b', 1), '') AS page_year
-  FROM read_json('build/release_before.json', columns = {name: 'VARCHAR'}) b,
-       read_json('build/release_after.json', columns = {name: 'VARCHAR'}) a,
-       read_json('build/econcord_date.json', columns = {date: 'VARCHAR'}) d,
+  FROM read_json('build/release_before.json', columns = {name: 'VARCHAR'}, records = true) b,
+       read_json('build/release_after.json', columns = {name: 'VARCHAR'}, records = true) a,
+       read_json('build/econcord_date.json', columns = {date: 'VARCHAR'}, records = true) d,
        read_text('build/schedule_b_index.html') i
 ),
 checked AS (
@@ -93,10 +94,14 @@ checked AS (
     CASE WHEN NOT regexp_full_match(coalesce(year, ''), '\d{4}')
            THEN error('year must be a four-digit Schedule B year folder, not ' || coalesce('"' || year || '"', 'unset'))
          WHEN page_year IS DISTINCT FROM year
-           THEN error('Schedule B index is for ' || coalesce(page_year, 'no year') || ', not the year param ' || year)
+           THEN error('Schedule B index is for ' || coalesce(page_year, 'no year') || ', not the year param ' || coalesce(year, 'null'))
          ELSE year
     END AS year,
-    CASE WHEN before_name IS DISTINCT FROM after_name
+    -- Every operand is coalesced: error(NULL) raises nothing.
+    CASE WHEN before_name IS NULL OR after_name IS NULL
+         THEN error('USITC currentRelease names no revision: ' || coalesce(before_name, 'null') || ' / '
+                    || coalesce(after_name, 'null'))
+         WHEN before_name <> after_name
          THEN error('USITC revision changed during the run: ' || before_name || ' then ' || after_name)
          ELSE before_name END AS hts_release,
     CASE WHEN regexp_full_match(coalesce(date, ''), '\d{4}-\d{2}-\d{2}') AND TRY_CAST(date AS DATE) IS NOT NULL
@@ -108,7 +113,7 @@ checked AS (
 SELECT
   year,
   CASE WHEN left(hts_release, 4) IS DISTINCT FROM year
-       THEN error('HS edition mismatch: Schedule B ' || year || ', USITC ' || hts_release)
+       THEN error('HS edition mismatch: Schedule B ' || coalesce(year, 'null') || ', USITC ' || coalesce(hts_release, 'null'))
        ELSE hts_release END AS hts_release,
   year || '/' || date AS release
 FROM checked;

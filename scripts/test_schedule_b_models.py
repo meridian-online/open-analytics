@@ -128,6 +128,7 @@ class Run:
         drop_hts_digits: int | None = None,
         drop_htsno: tuple[str, ...] = (),
         index_title: str | None = None,
+        release_after_body: str | None = None,
     ):
         self.year = year
         self.tmp = tempfile.TemporaryDirectory()
@@ -151,6 +152,8 @@ class Run:
         (build / "schedule_b_index.html").write_text(index, encoding="utf-8")
         for name in ("release_before.json", "release_after.json"):
             shutil.copy(HTS_FIXTURE / name, build / name)
+        if release_after_body is not None:
+            (build / "release_after.json").write_text(release_after_body, encoding="utf-8")
         rows = json.loads((HTS_FIXTURE / "hts.json").read_text(encoding="utf-8"))
         rows += padding_hts_rows(rows[0])
         if drop_hts_digits is not None:
@@ -403,6 +406,11 @@ class RefusalTest(unittest.TestCase):
             return str(caught.exception)
         finally:
             run.close()
+
+    def test_release_that_names_no_revision(self):
+        # error(NULL) raises nothing: a currentRelease with no name must still fail.
+        message = self.refused(Run(release_after_body="{}"))
+        self.assertIn("USITC currentRelease names no revision: 2026HTSRev22 / null", message)
 
     def test_edition_mismatch(self):
         message = self.refused(Run(year="2027", index_title="Schedule B 2027 - Browse Chapters"))

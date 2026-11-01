@@ -36,16 +36,21 @@
 -- with rate_from_code = code. Only printed rows carry rates: made levels and chapters
 -- have none.
 --
--- The run fails if USITC's revision changed between the two currentRelease fetches,
--- or if a chapter in the data has no title in chapters.csv.
+-- The run fails if either currentRelease fetch names no revision, if USITC's revision
+-- changed between the two fetches, or if a chapter in the data has no title in
+-- chapters.csv.
 
 CREATE OR REPLACE TABLE hts AS
 WITH release AS (
-  SELECT CASE WHEN b.name IS DISTINCT FROM a.name
+  -- error(NULL) raises nothing, so a missing name is caught before it can reach one.
+  SELECT CASE WHEN b.name IS NULL OR a.name IS NULL
+              THEN error('USITC currentRelease names no revision: ' || coalesce(b.name, 'null') || ' / '
+                         || coalesce(a.name, 'null'))
+              WHEN b.name <> a.name
               THEN error('USITC revision changed during the run: ' || b.name || ' then ' || a.name)
               ELSE b.name END AS release
-  FROM read_json('build/release_before.json', columns = {name: 'VARCHAR'}) b,
-       read_json('build/release_after.json', columns = {name: 'VARCHAR'}) a
+  FROM read_json('build/release_before.json', columns = {name: 'VARCHAR'}, records = true) b,
+       read_json('build/release_after.json', columns = {name: 'VARCHAR'}, records = true) a
 ),
 chapters AS (
   SELECT chapter, nullif(trim(chapter_title), '') AS chapter_title, section, section_title

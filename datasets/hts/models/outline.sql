@@ -44,11 +44,13 @@
 --                     prefix only when its code is a prefix of the level's: heading 3407
 --                     is the node of its only subheading, 340700.
 --     meridian_label  no row belongs to the prefix alone: its rows sit side by side at
---                     the top of the chapter, directly under a row that other prefixes'
---                     rows sit under too (chapters 98 and 99), or under a numbered line
---                     of another prefix (9824.01.01 above 982402's lines). The text is the
---                     level and code ("Heading 9903", "Subheading 9901.00"), and def_seq
---                     is the lowest row above all the prefix's rows, if there is one.
+--                     the top of the chapter, or directly under a row that other
+--                     prefixes' rows sit under too, or under a numbered line of another
+--                     prefix (9824.01.01 above 982402's lines). Most such prefixes are in
+--                     chapters 98 and 99, but not all: subheading 8424.89's lines sit
+--                     under "Other appliances:" with 8424.82.00. The text is the level and
+--                     code ("Heading 9903", "Subheading 9901.00"), and def_seq is the
+--                     lowest row above all the prefix's rows, if there is one.
 --   Two-digit prefixes are listed by the same rule; both ladders take chapter titles
 --   from their own sources.
 
