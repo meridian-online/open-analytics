@@ -632,6 +632,56 @@ jobs:
           path: label-agreement-check.json
           if-no-files-found: ignore
 
+  code-list-self-test:
+    name: the code-list contract can fail
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: install duckdb
+        run: python -m pip install --disable-pip-version-check "duckdb==${DUCKDB_VERSION}"
+      - name: scratch Parquet files, exit status and rule
+        run: python scripts/test_check_code_list.py
+
+  # Exit 2 is NOT tolerated here: a check that found no code list to examine has not
+  # passed, so this job is red until a descriptor carrying `x-meridian-code-list` exists.
+  code-list-contract:
+    name: every hosted code list carries the core columns
+    needs: [code-list-self-test, descriptors-match-their-data]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: install duckdb
+        run: python -m pip install --disable-pip-version-check "duckdb==${DUCKDB_VERSION}"
+      - name: every datasets/*/datapackage.json that declares a code list
+        shell: bash
+        run: |
+          set +e
+          python scripts/check_code_list.py --json code-list-check.json > code-list.log 2>&1
+          status=$?
+          set -e
+          cat code-list.log
+          {
+            echo '### Code-list contract'
+            echo
+            echo '```'
+            cat code-list.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $status
+      - name: upload the findings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: code-list-check
+          path: code-list-check.json
+          if-no-files-found: ignore
+
   constraint-ratchet-self-test:
     name: the constraint ratchet can fail
     runs-on: ubuntu-latest
