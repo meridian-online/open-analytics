@@ -22,7 +22,7 @@ SELECT * FROM read_parquet('https://openlake.meridian.online/census/naics_2022.p
 
 ## Ask a dataset what it is
 
-Every hosted object carries its own description. Each Protocol's last step stamps the descriptor into the Parquet it just built, and all six objects on the endpoint were published through that step; on 2026-11-01 the query below returned the descriptor for each. `check_descriptors.py` prints how many of the published resources carry their own description on every run, and the stamp's own behaviour is covered on every pull request. What nothing here covers is a Protocol run end to end, because no workflow runs `arc run`.
+Every dataset at its current address carries its own description; the frozen flat files from before the move do not. Each Protocol's last step stamps the descriptor into the Parquet it just built, and all six current objects were published through that step; on 2026-11-01 the query below returned the descriptor for each. `check_descriptors.py` prints how many of the published resources carry their own description on every run, and the stamp's own behaviour is covered on every pull request. What nothing here covers is a Protocol run end to end, because no workflow runs `arc run`.
 
 A stamped dataset carries its description **inside the file**, in the Parquet
 footer, so a URL is the only thing you need to know about it — no second file, no
@@ -119,10 +119,10 @@ declares a type its column contradicts, declares a primary key its rows do not
 honour, or states the file's own `bytes`, is a disagreement. A difference in prose
 alone (a `description`, `title` or `$comment`) is reported as pending and does not
 fail: the footer only changes when the object is republished, and a corrected
-sentence in this repository is not a false claim about the bytes. An object carrying
-no description is not — nothing published carries one yet, and a check that
-demanded one would report every correct object as wrong. `--require-self-description` turns that into a refusal for the publish
-path, once a stamped object is what gets published.
+sentence in this repository is not a false claim about the bytes. An object at a
+dataset's current address that carries no description is a refusal too: CI runs
+the check with `--require-self-description`, because every dataset at its current
+address is published through the stamp step.
 
 The same run reads the catalogue table above back against the bytes. Each row's
 **Rows** figure is held to `count(*)` over the Parquet that row's descriptor

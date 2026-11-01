@@ -36,10 +36,10 @@ What it asserts, per resource:
                      the copy in the footer only changes when the object is
                      republished, and a wording fix in this repository is not a false
                      claim about the bytes. Every other difference fails.
-                     An object that carries none is not a violation unless
-                     `--require-self-description` is passed — nothing publishes a
-                     stamped object yet, and a check that demanded one would refuse
-                     every file currently served.
+                     An object that carries none is a violation when
+                     `--require-self-description` is passed, which CI does: every
+                     dataset at its current address is published through the stamp
+                     step.
 
 And per package:
 

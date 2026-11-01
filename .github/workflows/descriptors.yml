@@ -302,7 +302,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          python scripts/check_descriptors.py --examples-dir examples --json descriptor-check.json > check.log 2>&1
+          python scripts/check_descriptors.py --examples-dir examples --require-self-description --json descriptor-check.json > check.log 2>&1
           status=$?
           set -e
           cat check.log
