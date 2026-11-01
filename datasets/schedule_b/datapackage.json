@@ -24,7 +24,7 @@
       "title": "Meridian"
     }
   ],
-  "created": "2026-11-01T11:20:15Z",
+  "created": "2026-11-01T11:27:13Z",
   "description": "Schedule B, the U.S. Census Bureau's classification of exported goods: every ten-digit commodity Census publishes, with a row for each chapter, heading and subheading its codes imply and a parent for every row. Each commodity carries Census's units of quantity, SITC, end-use, agricultural, NAICS and high-technology codes. Chapter titles and commodity text are Census's; heading and subheading text is the U.S. International Trade Commission's, from the HTS revision named in hts_release. The data is credited to the U.S. Census Bureau; Census's bulk file carries no endorsement notice.",
   "homepage": "https://meridian.online/datasets/census/schedule_b",
   "licenses": [
@@ -39,7 +39,7 @@
     {
       "bytes": 1319421,
       "format": "parquet",
-      "hash": "sha256:d972eaa677f6fcce3d8302aa2bf3361069efe03691881edb80280cdcfc9388c3",
+      "hash": "sha256:79a1505b1ecb77ed33348048e591236fb9df5ae154da505ceb27b08e3a6dfa42",
       "mediatype": "application/vnd.apache.parquet",
       "name": "schedule_b",
       "path": "https://openlake.meridian.online/census/schedule_b.parquet",
@@ -248,7 +248,7 @@
             "name": "sitc",
             "type": "string",
             "x-finetype-label": "representation.identifier.alphanumeric_id",
-            "x-finetype-locale": "UR",
+            "x-finetype-locale": "HR",
             "x-finetype-nominated": true,
             "x-finetype-pattern-fit": {
               "canonical": "^[A-Za-z][A-Za-z0-9 /_.#-]*[0-9][A-Za-z0-9 /_.#-]*$|^[0-9][A-Za-z0-9 /_.#-]*[A-Za-z][A-Za-z0-9 /_.#-]*$",
