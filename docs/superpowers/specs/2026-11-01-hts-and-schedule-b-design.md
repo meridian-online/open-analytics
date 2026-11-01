@@ -86,7 +86,7 @@ Every hosted code list leads with these columns, in this order, and adds its own
 
 **Rows.** One row per code in the ladder: every numbered USITC code, plus a row for each chapter, heading and subheading that USITC prints only through a longer code. Levels: `chapter` (2 digits), `heading` (4), `subheading` (6), `tariff_line` (8), `statistical_line` (10). `parent_code` is the prefix one level up that is in the ladder: a ten-digit line whose eight-digit prefix is not a row hangs from its six-digit subheading, and so on up.
 
-**`description` and `description_full`.** A row's `description` is USITC's text for it. A row made for a prefix USITC prints only through a longer code takes that longer row's text, with the unnumbered heading text on its chain in front where the subheading's meaning needs it ("Weighing not more than 185 g: Chickens"). `description_full` walks the parents and includes the unnumbered headings in between.
+**`description` and `description_full`.** A row's `description` is USITC's text for it. A row made for a prefix USITC prints only through a longer code takes, always, the text of every unnumbered heading on the indent chain between the level's parent row and that longer row, in order, followed by the longer row's own text, joined with a space (subheading `010511`: "Weighing not more than 185 g: Chickens"). The rule is applied without judgment, so it is the same for every derived row in both datasets. `description_full` walks the parents and includes the unnumbered headings in between.
 
 **`text_source`.** `usitc` for a row USITC prints with its own code; `usitc_derived` for a level made from a longer code's text; `usitc_toc` for a chapter.
 
@@ -117,7 +117,9 @@ The year in both Census URLs is a Protocol parameter, defaulting to the current 
 
 **Schedule B columns after the contract.** `description_short`; `unit_1`, `unit_2`; `sitc` (SITC Rev. 4); `end_use`; `agricultural` (Census's flag, as a boolean if its values are a closed pair, else as printed); `naics` (six digits); `hitech`; `section`, `section_title`; `hts_release`, the USITC revision the heading and subheading text came from. The upper rows carry NULL in the ten-digit-only columns.
 
-**`release`** is `econcord.txt`'s date as it stands in the zip, as an ISO date (`2026-07-28`), with the year folder in front: `2026/2026-07-28`. If `archive_extract@1` does not carry a member's date through, the release is the zip's `Last-Modified` date and the guide says so.
+**Edition guard.** USITC's export serves only the current revision, so in the weeks around a new HS edition (the next on 1 January 2027) the Schedule B year and the USITC revision can belong to different editions. The `load` step fails the run in two cases: the year in `hts_release` (`2026HTSRev22` → 2026) differs from the Schedule B year folder; or, outside chapter 98, USITC names fewer than 99% of the headings and subheadings Schedule B implies (1,228 of 1,229 and 5,611 of 5,612 on 2026-11-01). A failed run publishes nothing, and the guide says to rerun once both issuers are on the same edition.
+
+**`release`** is `econcord.txt`'s date as it stands in the zip, as an ISO date (`2026-07-28`), with the year folder in front: `2026/2026-07-28`. If `archive_extract@1` does not carry a member's date through, the release takes the zip's `Last-Modified` date, which `http_fetch@1` records as `last_modified` in its `.arcmeta` file, and the guide says so.
 
 **The NAICS join.** `naics` is declared as a foreign key to `census/naics_2022`'s `code`, in the repository's existing cross-package form (`x-package`, `x-status`, `x-evidence`), with its resolution measured at build: how many Schedule B lines carry a NAICS code that `naics_2022` holds.
 
@@ -140,6 +142,8 @@ The year in both Census URLs is a Protocol parameter, defaulting to the current 
 - The Schedule B Protocol reads USITC's export itself rather than Meridian's published `usitc/hts`, so it runs without the lake, and records the revision it used in `hts_release`.
 - The shared outline file lives in the HTS Protocol, which owns the source it reads.
 - Protocol directories `datasets/hts/` and `datasets/schedule_b/`, after each dataset's name.
+- A derived level's text always carries the unnumbered headings between it and the row it is taken from, so the rule needs no judgment.
+- Schedule B's build fails rather than publishing upper-level text from a different HS edition (the edition guard).
 
 ## Left to the builder
 
