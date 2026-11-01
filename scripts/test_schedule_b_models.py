@@ -122,7 +122,13 @@ def padding_hts_rows(template: dict) -> list[dict]:
 class Run:
     """A scratch Protocol directory, and the year arc would pass to its SQL steps."""
 
-    def __init__(self, year: str = "2026", drop_hts_digits: int | None = None, drop_htsno: tuple[str, ...] = ()):
+    def __init__(
+        self,
+        year: str = "2026",
+        drop_hts_digits: int | None = None,
+        drop_htsno: tuple[str, ...] = (),
+        index_title: str | None = None,
+    ):
         self.year = year
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
@@ -136,7 +142,13 @@ class Run:
         for code in ("9803100010", "9803100020"):
             census += census_line(code, f"MADE-UP LINE {code}", f"MADE-UP LINE {code}, LONG")
         (build / "sbsdf" / "econcord.txt").write_bytes(census)
-        shutil.copy(FIXTURE / "index.html", build / "schedule_b_index.html")
+        index = (FIXTURE / "index.html").read_text(encoding="utf-8")
+        if index_title is not None:
+            # The page as Census would serve another year's folder: only its title changes.
+            old = "<title>Schedule B 2026 - Browse Chapters</title>"
+            assert old in index
+            index = index.replace(old, f"<title>{index_title}</title>")
+        (build / "schedule_b_index.html").write_text(index, encoding="utf-8")
         for name in ("release_before.json", "release_after.json"):
             shutil.copy(HTS_FIXTURE / name, build / name)
         rows = json.loads((HTS_FIXTURE / "hts.json").read_text(encoding="utf-8"))
@@ -393,8 +405,17 @@ class RefusalTest(unittest.TestCase):
             run.close()
 
     def test_edition_mismatch(self):
-        message = self.refused(Run(year="2027"))
+        message = self.refused(Run(year="2027", index_title="Schedule B 2027 - Browse Chapters"))
         self.assertIn("HS edition mismatch: Schedule B 2027, USITC 2026HTSRev22", message)
+
+    def test_a_year_param_the_index_does_not_name(self):
+        # `arc run --param year=2028` with the URLs still on the 2026 folder.
+        message = self.refused(Run(year="2028"))
+        self.assertIn("Schedule B index is for 2026, not the year param 2028", message)
+
+    def test_an_index_that_names_no_year(self):
+        message = self.refused(Run(index_title="Schedule B - Browse Chapters"))
+        self.assertIn("Schedule B index is for no year, not the year param 2026", message)
 
     def test_headings_below_99_percent(self):
         message = self.refused(Run(drop_hts_digits=4))

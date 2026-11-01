@@ -33,8 +33,13 @@ db: build/schedule_b.db
 params:
   # Census's year folder. load.sql reads it as ARC_PARAM_YEAR for `release` and for the
   # edition guard. arc does not substitute a param into an operator's `with:`, so the
-  # two Census URLs below carry the year as well: a new January folder changes all
-  # three together.
+  # year is written in four places, and a new January folder changes all four:
+  #   1. this default;
+  #   2. fetch_schedule_b's URL;
+  #   3. fetch_index's URL;
+  #   4. the year's index source in descriptor.overrides.json (its path and title).
+  # scripts/test_protocol_year.py fails when they disagree, and load.sql fails a run
+  # whose index page names another year than this param.
   year:
     default: "2026"
 
@@ -216,7 +221,9 @@ steps:
         - --local
         - naics=build/naics_2022.parquet
       # The script indexes every sibling descriptor by resource name to resolve the
-      # reference, so which object `naics` names depends on all of them.
+      # reference, so which object `naics` names depends on all of them. It globs
+      # datasets/*/datapackage.json; whoever adds a dataset adds its descriptor here,
+      # or arc will not re-run this step when that file changes.
       reads:
         - build/stage/schedule_b.parquet
         - build/naics_2022.parquet

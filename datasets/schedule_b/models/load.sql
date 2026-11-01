@@ -8,9 +8,8 @@
 --   build/schedule_b_index.html  Census's index page for the year's folder
 --   build/release_before.json    USITC's currentRelease, fetched before its export
 --   build/release_after.json     and after it
---   build/econcord_date.json     {"date": "YYYY-MM-DD"}: econcord.txt's date as it
---                                stands in sbsdf.zip, or, where that is not carried
---                                through, the zip's Last-Modified date. An earlier step
+--   build/econcord_date.json     {"date": "YYYY-MM-DD"}: econcord.txt's date as
+--                                sbsdf.zip's directory records it. An earlier step
 --                                writes it, so this file does not depend on how the
 --                                archive is unpacked.
 --   ARC_PARAM_YEAR               the year folder (`2026`), the Protocol's `year` param,
@@ -59,11 +58,15 @@
 -- section `1` and the rest in Roman numerals; every section is written in Roman
 -- numerals (`I`).
 --
--- release is the year folder and econcord.txt's date: `2026/2026-07-28`. hts_release
+-- release is the year folder and econcord.txt's date: `2026/2026-07-27`. hts_release
 -- is USITC's revision (`2026HTSRev22`), the source of the usitc rows' text.
 --
 -- The run fails:
 --   - if the year is not four digits, or econcord_date.json holds no ISO date;
+--   - 'Schedule B index is for <page year>, not the year param <year>', when the index
+--     page's title ("Schedule B 2026 - Browse Chapters") names another year or none:
+--     the Census URLs carry the year as well as the param, and a run whose URLs and
+--     param disagree would otherwise label one year's data as another's;
 --   - if USITC's revision changed between the two currentRelease fetches;
 --   - 'HS edition mismatch: Schedule B <year>, USITC <revision>', when the revision's
 --     year is not the Schedule B year: USITC serves only its current revision, so
@@ -78,15 +81,20 @@ WITH inputs AS (
     nullif(getenv('ARC_PARAM_YEAR'), '') AS year,
     b.name AS before_name,
     a.name AS after_name,
-    d.date AS date
+    d.date AS date,
+    nullif(regexp_extract(i.content, '<title>\s*Schedule B (\d{4})\b', 1), '') AS page_year
   FROM read_json('build/release_before.json', columns = {name: 'VARCHAR'}) b,
        read_json('build/release_after.json', columns = {name: 'VARCHAR'}) a,
-       read_json('build/econcord_date.json', columns = {date: 'VARCHAR'}) d
+       read_json('build/econcord_date.json', columns = {date: 'VARCHAR'}) d,
+       read_text('build/schedule_b_index.html') i
 ),
 checked AS (
   SELECT
-    CASE WHEN regexp_full_match(coalesce(year, ''), '\d{4}') THEN year
-         ELSE error('year must be a four-digit Schedule B year folder, not ' || coalesce('"' || year || '"', 'unset'))
+    CASE WHEN NOT regexp_full_match(coalesce(year, ''), '\d{4}')
+           THEN error('year must be a four-digit Schedule B year folder, not ' || coalesce('"' || year || '"', 'unset'))
+         WHEN page_year IS DISTINCT FROM year
+           THEN error('Schedule B index is for ' || coalesce(page_year, 'no year') || ', not the year param ' || year)
+         ELSE year
     END AS year,
     CASE WHEN before_name IS DISTINCT FROM after_name
          THEN error('USITC revision changed during the run: ' || before_name || ' then ' || after_name)

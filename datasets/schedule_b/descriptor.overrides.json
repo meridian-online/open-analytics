@@ -64,7 +64,7 @@
     "$comment": "How to join Schedule B's NAICS codes to census/naics_2022, and how far the join reaches. It is NOT a `schema.foreignKeys` entry: a foreign key asserts that every value on the left exists on the right, and some of Census's NAICS codes on Schedule B lines are not codes of the 2022 edition. `coverage` does not live in this file: `crosswalk_join.py --write` measures it from the build and writes it into the generated `datapackage.json`.",
     "joins": [
       {
-        "cardinality": "partial — measured at build. The unmatched lines carry a code that is not a 2022 NAICS code: an industry code ending in X (33641X, 1121XX), which stands for more than one six-digit industry, or one of the codes 910000, 930000 and 990000, which Census gives to lines such as waste and scrap, used goods and chapter 98's special provisions.",
+        "cardinality": "partial — measured at build. The unmatched lines carry a code that is not a 2022 NAICS code: an industry code ending in X (33641X, 1121XX), which Census's layout does not define and which reads, from the codes' shape, as digits left unspecified, or one of the codes 910000, 930000 and 990000, which Census gives to lines such as waste and scrap, used goods and chapter 98's special provisions.",
         "compareAs": "exact",
         "description": "The NAICS industry Census assigns to each ten-digit commodity. Join `naics` to `naics.code` on commodity rows; both sides are text. Chapter, heading and subheading rows carry no NAICS code.",
         "evidence": "Census's Schedule B export file (econcord.txt) prints a six-character NAICS code on every ten-digit line, at characters 266 to 271 of the layout Census publishes with it (exp-stru.txt, `NAICS classification`). Where the code is a 2022 national industry, it names that industry in census/naics_2022.",
@@ -128,7 +128,7 @@
       "description": "Census's abbreviation for the commodity's second unit of quantity, as printed. NULL where Census prints none, and on chapter, heading and subheading rows."
     },
     "sitc": {
-      "description": "The commodity's Standard International Trade Classification, Revision 4, code, as Census prints it: five characters, with X standing for digits Census does not specify (792XX). NULL on chapter, heading and subheading rows."
+      "description": "The commodity's Standard International Trade Classification, Revision 4, code, as Census prints it, five characters. A few codes end in X (792XX); Census's layout does not define X, and its reading as digits left unspecified is inferred from the codes' shape. NULL on chapter, heading and subheading rows."
     },
     "end_use": {
       "description": "Census's end-use classification code for the commodity, five digits, as printed. NULL on chapter, heading and subheading rows."
@@ -137,10 +137,10 @@
       "description": "Whether the commodity is an agricultural product, read from Census's one-character flag, which its layout calls 'Agriculture or non-agriculture product code' and prints as '0' or '1'. true is '0'. Census's layout does not say which value is which; the reading is from the data: every line of chapters 1, 2 and 4 is '0', and every line of chapter 3, fish, which USDA's definition of agricultural products leaves out, is '1'. NULL on chapter, heading and subheading rows."
     },
     "naics": {
-      "description": "The NAICS industry Census assigns to the commodity, six characters, as printed. Joins to census/naics_2022's code; the descriptor's x-joins states how many commodity lines match. Some codes are not 2022 NAICS codes: X stands for digits Census does not specify (33641X), and 910000, 930000 and 990000 are Census's own. NULL on chapter, heading and subheading rows."
+      "description": "The NAICS industry Census assigns to the commodity, six characters, as printed. Joins to census/naics_2022's code; the descriptor's x-joins states how many commodity lines match. Some codes are not 2022 NAICS codes: some end in X (33641X, 1121XX), which Census's layout does not define and which reads, from the codes' shape, as digits left unspecified; and 910000, 930000 and 990000 are Census's own. NULL on chapter, heading and subheading rows."
     },
     "hitech": {
-      "description": "Census's high-technology classification for the commodity, two digits: '00' for a line outside it, otherwise the group it falls in. NULL on chapter, heading and subheading rows."
+      "description": "Census's high-technology classification for the commodity, two digits, '00' to '10', as printed. Census's layout calls the field 'HiTech classification' and does not define its values; '00', on most lines, is read from the data as a line outside the classification and the others as the group it falls in. NULL on chapter, heading and subheading rows."
     },
     "section": {
       "description": "The section of the schedule the row's chapter belongs to, as a Roman numeral, from Census's index page."

@@ -30,7 +30,7 @@ Produces `build/schedule_b.parquet`.
 
 ## The year
 
-Census publishes each year's schedule in its own folder (`/schedules/b/2026/`). The Protocol's `year` param (default `2026`) is what `load` stamps into `release` and checks against USITC's revision. arc does not substitute a param into an operator's `with:`, so the two Census URLs carry the year as well: a new January folder changes the param and both URLs together.
+Census publishes each year's schedule in its own folder (`/schedules/b/2026/`). The Protocol's `year` param (default `2026`) is what `load` stamps into `release` and checks against USITC's revision. arc does not substitute a param into an operator's `with:`, so the year is written in four places, and a new January folder changes all four: the param's default, `fetch_schedule_b`'s URL, `fetch_index`'s URL, and the year's index source in `descriptor.overrides.json` (its path and title). `scripts/test_protocol_year.py` fails when they disagree, and `load` fails a run whose index page title ("Schedule B 2026 - Browse Chapters") names another year than the param, so `arc run --param year=2027` with the URLs left on 2026 stops rather than labelling 2026 data as 2027's.
 
 ## Levels and text
 
@@ -51,7 +51,7 @@ USITC serves only its current HTS revision, so around a new HS edition (the next
 
 ## The NAICS join
 
-`naics` is declared as a join to `census/naics_2022`'s `code` in the descriptor's `x-joins`, on commodity rows, not as a `schema.foreignKeys` entry: some of Census's codes are not 2022 NAICS codes. Census writes X for digits it does not specify (`33641X`) and uses its own `910000`, `930000` and `990000` on lines such as waste and scrap, used goods and chapter 98's provisions. `derive_join_coverage` runs `../edgar_gleif/scripts/crosswalk_join.py --write` over the staged build and the fetched NAICS object, and writes `coverage` (commodity rows, and how many match), `measuredAgainst` (the NAICS object's SHA-256) and the first sentence of `cardinality` into the descriptor. CI's `joins-run-against-their-data` job runs the same script without `--write` against the published objects. On 2026-11-01, 9,464 of 9,779 commodity lines match.
+`naics` is declared as a join to `census/naics_2022`'s `code` in the descriptor's `x-joins`, on commodity rows, not as a `schema.foreignKeys` entry: some of Census's codes are not 2022 NAICS codes. Some end in X (`33641X`), which Census's layout does not define and which reads, from the codes' shape, as digits left unspecified; Census also uses its own `910000`, `930000` and `990000` on lines such as waste and scrap, used goods and chapter 98's provisions. `derive_join_coverage` runs `../edgar_gleif/scripts/crosswalk_join.py --write` over the staged build and the fetched NAICS object, and writes `coverage` (commodity rows, and how many match), `measuredAgainst` (the NAICS object's SHA-256) and the first sentence of `cardinality` into the descriptor. CI's `joins-run-against-their-data` job runs the same script without `--write` against the published objects. On 2026-11-01, 9,464 of 9,779 commodity lines match.
 
 The NAICS object is fetched by the Protocol rather than by the script, because openlake's edge refuses Python's default User-Agent.
 
@@ -73,7 +73,7 @@ Census's works are in the public domain. The data is credited to the U.S. Census
 
 ## Run
 
-Needs the `arc` binary, `duckdb`, `uv` (for the four Python steps) and `finetype` with its DuckDB extension (`FINETYPE_DUCKDB_EXT`): `arc run`. A cold run, with USITC's 12.6 MB export, takes about a minute and a half.
+Needs the `arc` binary, `duckdb`, `uv` (for the four Python steps) and `finetype` with its DuckDB extension (`FINETYPE_DUCKDB_EXT`): `arc run`. A cold run, with USITC's 12.6 MB export, takes about a minute.
 
 ## The step list
 

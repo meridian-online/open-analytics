@@ -24,7 +24,7 @@
       "title": "Meridian"
     }
   ],
-  "created": "2026-11-01T10:46:58Z",
+  "created": "2026-11-01T10:57:11Z",
   "description": "Schedule B, the U.S. Census Bureau's classification of exported goods: every ten-digit commodity Census publishes, with a row for each chapter, heading and subheading its codes imply and a parent for every row. Each commodity carries Census's units of quantity, SITC, end-use, agricultural, NAICS and high-technology codes. Chapter titles and commodity text are Census's; heading and subheading text is the U.S. International Trade Commission's, from the HTS revision named in hts_release. The data is credited to the U.S. Census Bureau; Census's bulk file carries no endorsement notice.",
   "homepage": "https://meridian.online/datasets/census/schedule_b",
   "licenses": [
@@ -37,9 +37,9 @@
   "name": "schedule_b",
   "resources": [
     {
-      "bytes": 1318990,
+      "bytes": 1319386,
       "format": "parquet",
-      "hash": "sha256:622d486c811c97db2ccf423047f74bcc5455f2a45e06fca408d6de41ccc39929",
+      "hash": "sha256:67265815324d932d76cf11832366a005cffaec34b4d7e427305799e56515e992",
       "mediatype": "application/vnd.apache.parquet",
       "name": "schedule_b",
       "path": "https://openlake.meridian.online/census/schedule_b.parquet",
@@ -234,11 +234,11 @@
             "constraints": {
               "pattern": "^[A-Za-z][A-Za-z0-9 /_.#-]*[0-9][A-Za-z0-9 /_.#-]*$|^[0-9][A-Za-z0-9 /_.#-]*[A-Za-z][A-Za-z0-9 /_.#-]*$|^[0-9]{5}$"
             },
-            "description": "The commodity's Standard International Trade Classification, Revision 4, code, as Census prints it: five characters, with X standing for digits Census does not specify (792XX). NULL on chapter, heading and subheading rows.",
+            "description": "The commodity's Standard International Trade Classification, Revision 4, code, as Census prints it, five characters. A few codes end in X (792XX); Census's layout does not define X, and its reading as digits left unspecified is inferred from the codes' shape. NULL on chapter, heading and subheading rows.",
             "name": "sitc",
             "type": "string",
             "x-finetype-label": "representation.identifier.alphanumeric_id",
-            "x-finetype-locale": "VI",
+            "x-finetype-locale": "KO",
             "x-finetype-nominated": true,
             "x-finetype-pattern-fit": {
               "canonical": "^[A-Za-z][A-Za-z0-9 /_.#-]*[0-9][A-Za-z0-9 /_.#-]*$|^[0-9][A-Za-z0-9 /_.#-]*[A-Za-z][A-Za-z0-9 /_.#-]*$",
@@ -310,7 +310,7 @@
             "constraints": {
               "pattern": "^(11|2[1-3]|3[1-3]|4[1-2]|4[4-5]|4[8-9]|5[1-6]|6[1-2]|7[1-2]|8[1-2]|9[1-2])[0-9]{0,4}$|^(31-33|44-45|48-49)$|^[0-9]{6}$|^[A-Z0-9]{6}$"
             },
-            "description": "The NAICS industry Census assigns to the commodity, six characters, as printed. Joins to census/naics_2022's code; the descriptor's x-joins states how many commodity lines match. Some codes are not 2022 NAICS codes: X stands for digits Census does not specify (33641X), and 910000, 930000 and 990000 are Census's own. NULL on chapter, heading and subheading rows.",
+            "description": "The NAICS industry Census assigns to the commodity, six characters, as printed. Joins to census/naics_2022's code; the descriptor's x-joins states how many commodity lines match. Some codes are not 2022 NAICS codes: some end in X (33641X, 1121XX), which Census's layout does not define and which reads, from the codes' shape, as digits left unspecified; and 910000, 930000 and 990000 are Census's own. NULL on chapter, heading and subheading rows.",
             "name": "naics",
             "type": "string",
             "x-finetype-confidence": 1.0,
@@ -324,7 +324,7 @@
             "constraints": {
               "pattern": "^[0-9]+$"
             },
-            "description": "Census's high-technology classification for the commodity, two digits: '00' for a line outside it, otherwise the group it falls in. NULL on chapter, heading and subheading rows.",
+            "description": "Census's high-technology classification for the commodity, two digits, '00' to '10', as printed. Census's layout calls the field 'HiTech classification' and does not define its values; '00', on most lines, is read from the data as a line outside the classification and the others as the group it falls in. NULL on chapter, heading and subheading rows.",
             "name": "hitech",
             "type": "string",
             "x-finetype-label": "representation.identifier.numeric_code",
@@ -450,7 +450,7 @@
     "$comment": "How to join Schedule B's NAICS codes to census/naics_2022, and how far the join reaches. It is NOT a `schema.foreignKeys` entry: a foreign key asserts that every value on the left exists on the right, and some of Census's NAICS codes on Schedule B lines are not codes of the 2022 edition. `coverage` does not live in this file: `crosswalk_join.py --write` measures it from the build and writes it into the generated `datapackage.json`.",
     "joins": [
       {
-        "cardinality": "partial — 9,464 of 9,779 rows match. The unmatched lines carry a code that is not a 2022 NAICS code: an industry code ending in X (33641X, 1121XX), which stands for more than one six-digit industry, or one of the codes 910000, 930000 and 990000, which Census gives to lines such as waste and scrap, used goods and chapter 98's special provisions.",
+        "cardinality": "partial — 9,464 of 9,779 rows match. The unmatched lines carry a code that is not a 2022 NAICS code: an industry code ending in X (33641X, 1121XX), which Census's layout does not define and which reads, from the codes' shape, as digits left unspecified, or one of the codes 910000, 930000 and 990000, which Census gives to lines such as waste and scrap, used goods and chapter 98's special provisions.",
         "compareAs": "exact",
         "coverage": {
           "matched": 9464,
