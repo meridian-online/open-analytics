@@ -660,6 +660,22 @@ jobs:
       - name: the shipped models, against a scratch build directory
         run: python scripts/test_hts_models.py
 
+  # The Schedule B Protocol's SQL models, with the shared HTS outline, run over reduced
+  # Census and USITC files: the ladder, whose text it takes, the edition guard's three
+  # refusals, and the code-list check on the result.
+  schedule-b-models:
+    name: the Schedule B models build the ladder
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: install duckdb
+        run: python -m pip install --disable-pip-version-check "duckdb==${DUCKDB_VERSION}"
+      - name: the shipped models, against a scratch build directory
+        run: python scripts/test_schedule_b_models.py
+
   # Exit 2 is NOT tolerated here: a check that found no code list to examine has not
   # passed, so this job is red until a descriptor carrying `x-meridian-code-list` exists.
   code-list-contract:
