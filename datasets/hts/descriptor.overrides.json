@@ -82,7 +82,7 @@
       "description": "Lowercased, accent-stripped description_full: a derived free-text search field, not a source attribute."
     },
     "indent": {
-      "description": "USITC's indent for the row in its outline, as an integer; for a row made for a prefix USITC prints only through longer codes, the indent of its node."
+      "description": "USITC's indent for the row in its outline, as an integer. Set for rows USITC prints; NULL for chapters, for levels derived from an outline node and for labelled levels."
     },
     "section": {
       "description": "The section of the schedule the row's chapter belongs to, as a Roman numeral, from USITC's table of contents."
@@ -94,16 +94,16 @@
       "description": "The unit or units of quantity USITC prints for the line (for example 'kg' or 'No.'), as a list; NULL where none is printed."
     },
     "general_rate": {
-      "description": "The general (column 1) rate of duty. The rate is as USITC prints it. A ten-digit line that prints no rate takes the rate of the line named in rate_from_code. Chapter 99 provisions reached through footnotes can add duties to this line, and they are not included here."
+      "description": "The general (column 1) rate of duty. The rate is as USITC prints it, blank as NULL. A line that prints none of the general, special and column 2 rates takes all three from its nearest printed ancestor that prints a general rate, named in rate_from_code; on the 2026HTSRev22 revision only statistical lines inherit, 11,822 of 19,949. Chapters and rows made for prefixes USITC prints only through longer codes carry no rate. Chapter 99 provisions reached through footnotes can add duties to this line, and they are not included here."
     },
     "special_rate": {
-      "description": "The special (column 1) rate of duty, with the programme codes USITC prints. The rate is as USITC prints it. A ten-digit line that prints no rate takes the rate of the line named in rate_from_code. Chapter 99 provisions reached through footnotes can add duties to this line, and they are not included here."
+      "description": "The special (column 1) rate of duty, with the programme codes USITC prints. The rate is as USITC prints it, blank as NULL. A line that prints none of the general, special and column 2 rates takes all three from its nearest printed ancestor that prints a general rate, named in rate_from_code; on the 2026HTSRev22 revision only statistical lines inherit, 11,822 of 19,949. Chapters and rows made for prefixes USITC prints only through longer codes carry no rate. Chapter 99 provisions reached through footnotes can add duties to this line, and they are not included here."
     },
     "column2_rate": {
-      "description": "The column 2 rate of duty. The rate is as USITC prints it. A ten-digit line that prints no rate takes the rate of the line named in rate_from_code. Chapter 99 provisions reached through footnotes can add duties to this line, and they are not included here."
+      "description": "The column 2 rate of duty. The rate is as USITC prints it, blank as NULL. A line that prints none of the general, special and column 2 rates takes all three from its nearest printed ancestor that prints a general rate, named in rate_from_code; on the 2026HTSRev22 revision only statistical lines inherit, 11,822 of 19,949. Chapters and rows made for prefixes USITC prints only through longer codes carry no rate. Chapter 99 provisions reached through footnotes can add duties to this line, and they are not included here."
     },
     "rate_from_code": {
-      "description": "The code of the line whose rates this row carries: the row's own code where it prints a rate, otherwise the nearest line above it that does. Join on this to find the rate that applies to a ten-digit import code. NULL for a row that prints no rate and has none above it, as chapters do."
+      "description": "The code of the printed line whose rates this row carries: the row's own code where it prints a rate, otherwise its nearest printed ancestor that prints a general rate. Join on this to find the rate that applies to a ten-digit import code. NULL on chapters and on every row made for a prefix USITC prints only through longer codes."
     },
     "footnotes": {
       "description": "The footnote texts USITC prints for the line, as a list. They name the chapter 99 provisions that can add duties."
@@ -112,7 +112,7 @@
       "description": "USITC's quota quantity field, as printed. USITC leaves it empty on every row of the current revision, so the column is NULL throughout."
     },
     "additional_duties": {
-      "description": "USITC's additional-duties field for the line, as printed."
+      "description": "The additional-duty text USITC prints on chapter 99 provision lines (for example 'No additional duty'), as printed. NULL where USITC leaves it blank, including rows that hold only a space; set on 512 rows of the 2026HTSRev22 revision."
     }
   },
   "primaryKey": [

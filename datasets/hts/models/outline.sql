@@ -68,7 +68,7 @@ WITH src AS (
   ) s, unnest(s.rows) WITH ORDINALITY AS u(r, ord)
 )
 SELECT *,
-  first_value(left(code, 2) IGNORE NULLS) OVER (
+  arg_min(left(code, 2), seq) FILTER (WHERE code IS NOT NULL) OVER (
     ORDER BY seq ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING) AS chapter
 FROM src;
 

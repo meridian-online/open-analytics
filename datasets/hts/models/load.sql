@@ -77,7 +77,7 @@ printed AS (
 ),
 subchapters AS (
   -- Each outline row's subchapter text, if one applies (see the header).
-  SELECT seq, last_value(sub IGNORE NULLS) OVER (
+  SELECT seq, arg_max(sub, seq) FILTER (WHERE sub IS NOT NULL) OVER (
            PARTITION BY chapter ORDER BY seq ROWS UNBOUNDED PRECEDING) AS subchapter
   FROM (
     SELECT seq, chapter,
@@ -85,7 +85,7 @@ subchapters AS (
                 AND next_chapter = chapter THEN description END AS sub
     FROM (
       SELECT seq, code, indent, description,
-        first_value(left(code, 2) IGNORE NULLS) OVER (
+        arg_min(left(code, 2), seq) FILTER (WHERE code IS NOT NULL) OVER (
           ORDER BY seq ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING) AS chapter,
         lead(indent) OVER (ORDER BY seq) AS next_indent,
         lead(code) OVER (ORDER BY seq) AS next_code,

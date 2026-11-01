@@ -17,7 +17,7 @@
       "title": "Meridian"
     }
   ],
-  "created": "2026-11-01T09:56:36Z",
+  "created": "2026-11-01T10:01:49Z",
   "description": "The Harmonized Tariff Schedule of the United States, issued by the U.S. International Trade Commission: every chapter, heading, subheading, tariff line and statistical line as a row with its parent, with each line's duty rates, units and footnotes as USITC prints them.",
   "homepage": "https://meridian.online/datasets/usitc/hts",
   "licenses": [
@@ -30,9 +30,9 @@
   "name": "hts",
   "resources": [
     {
-      "bytes": 2096236,
+      "bytes": 2097273,
       "format": "parquet",
-      "hash": "sha256:a72e145e1a09347c92ae8252488850647c71bd258d03ed18790b42daed635d3c",
+      "hash": "sha256:9b450cd3c2d82c5df2b9b61ae0ef0f856ca8c117e763c93311d3e2e7095b53d8",
       "mediatype": "application/vnd.apache.parquet",
       "name": "hts",
       "path": "https://openlake.meridian.online/usitc/hts.parquet",
@@ -182,7 +182,7 @@
             "x-finetype-nominated": true
           },
           {
-            "description": "USITC's indent for the row in its outline, as an integer; for a row made for a prefix USITC prints only through longer codes, the indent of its node.",
+            "description": "USITC's indent for the row in its outline, as an integer. Set for rows USITC prints; NULL for chapters, for levels derived from an outline node and for labelled levels.",
             "name": "indent",
             "type": "integer",
             "x-finetype-confidence": 0.6,
@@ -293,7 +293,7 @@
               "maxLength": 65536,
               "minLength": 1
             },
-            "description": "The general (column 1) rate of duty. The rate is as USITC prints it. A ten-digit line that prints no rate takes the rate of the line named in rate_from_code. Chapter 99 provisions reached through footnotes can add duties to this line, and they are not included here.",
+            "description": "The general (column 1) rate of duty. The rate is as USITC prints it, blank as NULL. A line that prints none of the general, special and column 2 rates takes all three from its nearest printed ancestor that prints a general rate, named in rate_from_code; on the 2026HTSRev22 revision only statistical lines inherit, 11,822 of 19,949. Chapters and rows made for prefixes USITC prints only through longer codes carry no rate. Chapter 99 provisions reached through footnotes can add duties to this line, and they are not included here.",
             "name": "general_rate",
             "type": "string",
             "x-finetype-label": "representation.text.plain_text",
@@ -304,7 +304,7 @@
               "maxLength": 65536,
               "minLength": 1
             },
-            "description": "The special (column 1) rate of duty, with the programme codes USITC prints. The rate is as USITC prints it. A ten-digit line that prints no rate takes the rate of the line named in rate_from_code. Chapter 99 provisions reached through footnotes can add duties to this line, and they are not included here.",
+            "description": "The special (column 1) rate of duty, with the programme codes USITC prints. The rate is as USITC prints it, blank as NULL. A line that prints none of the general, special and column 2 rates takes all three from its nearest printed ancestor that prints a general rate, named in rate_from_code; on the 2026HTSRev22 revision only statistical lines inherit, 11,822 of 19,949. Chapters and rows made for prefixes USITC prints only through longer codes carry no rate. Chapter 99 provisions reached through footnotes can add duties to this line, and they are not included here.",
             "name": "special_rate",
             "type": "string",
             "x-finetype-label": "representation.text.plain_text",
@@ -315,7 +315,7 @@
               "maxLength": 65536,
               "minLength": 1
             },
-            "description": "The column 2 rate of duty. The rate is as USITC prints it. A ten-digit line that prints no rate takes the rate of the line named in rate_from_code. Chapter 99 provisions reached through footnotes can add duties to this line, and they are not included here.",
+            "description": "The column 2 rate of duty. The rate is as USITC prints it, blank as NULL. A line that prints none of the general, special and column 2 rates takes all three from its nearest printed ancestor that prints a general rate, named in rate_from_code; on the 2026HTSRev22 revision only statistical lines inherit, 11,822 of 19,949. Chapters and rows made for prefixes USITC prints only through longer codes carry no rate. Chapter 99 provisions reached through footnotes can add duties to this line, and they are not included here.",
             "name": "column2_rate",
             "type": "string",
             "x-finetype-label": "representation.text.plain_text",
@@ -325,7 +325,7 @@
             "constraints": {
               "pattern": "^\\d{4}\\.?\\d{2}(\\.?\\d{2}){0,2}$"
             },
-            "description": "The code of the line whose rates this row carries: the row's own code where it prints a rate, otherwise the nearest line above it that does. Join on this to find the rate that applies to a ten-digit import code. NULL for a row that prints no rate and has none above it, as chapters do.",
+            "description": "The code of the printed line whose rates this row carries: the row's own code where it prints a rate, otherwise its nearest printed ancestor that prints a general rate. Join on this to find the rate that applies to a ten-digit import code. NULL on chapters and on every row made for a prefix USITC prints only through longer codes.",
             "name": "rate_from_code",
             "type": "string",
             "x-finetype-label": "geography.transportation.hs_code",
@@ -357,7 +357,7 @@
               "maxLength": 65536,
               "minLength": 1
             },
-            "description": "USITC's additional-duties field for the line, as printed.",
+            "description": "The additional-duty text USITC prints on chapter 99 provision lines (for example 'No additional duty'), as printed. NULL where USITC leaves it blank, including rows that hold only a space; set on 512 rows of the 2026HTSRev22 revision.",
             "name": "additional_duties",
             "type": "string",
             "x-finetype-confidence": 0.4384,

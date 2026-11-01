@@ -34,7 +34,7 @@ USITC's export has no chapter rows, and its chapter and section titles live only
 
 ## The code column
 
-`code` is nominated as finetype's `geography.transportation.hs_code`. Inferred from the values it is `unknown` at 0.49 confidence, since a two-digit chapter and a ten-digit line share no shape. The label's canonical pattern was checked against digits-only codes of 2, 4, 6, 8 and 10 digits and admits all five, so no mismatch is left for a finetype issue. `nominations.finetype.json` gives the reason for each nomination.
+`code` is nominated as finetype's `geography.transportation.hs_code`. Inferred from the values it is `unknown` at 0.49 confidence, since a two-digit chapter and a ten-digit line share no shape. The label's canonical pattern, `^\d{4}\.?\d{2}(\.?\d{2}){0,2}$`, admits digits-only codes of 6, 8 and 10 digits but not the 2-digit chapter or 4-digit heading forms, which this dataset holds; `describe` widens it with `|^[0-9]{2}$|^[0-9]{4}$` (pattern-fit `widened` in the descriptor), and `schema.finetype.json` does the same. The canonical pattern lacking the chapter and heading forms is a mismatch for a finetype issue. `nominations.finetype.json` gives the reason for each nomination.
 
 ## Boundary (deliberate)
 
