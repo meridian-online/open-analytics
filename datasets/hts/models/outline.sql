@@ -20,21 +20,34 @@
 --                 first numbered row at or after it, so an unnumbered heading at the top
 --                 of a chapter belongs to that chapter, and no chain crosses a chapter.
 --
--- hts_levels: for every 2, 4, 6, 8 and 10-digit prefix of a numbered code, the row that
--- defines it: the shallowest numbered row under the prefix, first by indent then by seq.
---   prefix    the digits
---   def_seq   the defining row's seq
---   def_code  the defining row's code
---   text      the text of every unnumbered heading on the defining row's chain below the
---             prefix's parent level, in order, then the defining row's own text, joined
---             by a space. Subheading 010511 reads "Weighing not more than 185 g: Chickens".
---             The parent level's place on the chain is its own defining row: when that
---             row is the prefix's defining row too, nothing lies between them (tariff
---             line 01012100 reads "Purebred breeding animals", its subheading 010121
---             having taken "Horses:"); when it is on the chain, the headings below it
---             count. Otherwise the place is the deepest numbered row on the chain no
---             longer than the parent level's code, and for a heading, whose parent is a
---             chapter and so on no chain, the chain is read from the top of the chapter.
+-- hts_levels: for every 2, 4, 6, 8 and 10-digit prefix of a numbered code, the outline
+-- row that names it and the text that row gives it.
+--   prefix       the digits
+--   def_seq      the naming row's seq (see below); NULL when there is none
+--   def_code     the naming row's code; NULL when it is unnumbered or there is none
+--   text         the prefix's text
+--   text_source  whose text it is, so a reader can tell USITC's text from a label:
+--     usitc           USITC prints the prefix as a code: that row, and its own text.
+--     usitc_derived   USITC prints the prefix only through longer codes, and the
+--                     prefix has a node: the lowest outline row, numbered or unnumbered,
+--                     that is, or is above on the indent chain, every numbered row under
+--                     the prefix, and is above no numbered row outside it. The text is
+--                     every unnumbered heading on the node's chain strictly below the
+--                     parent level's node, in order, then the node's own text, joined by
+--                     a space (subheading 010511: "Weighing not more than 185 g:
+--                     Chickens"; 080270, whose two lines sit under "Kola nuts (Cola
+--                     spp.):" alone, takes that heading's text). The parent level's node
+--                     is the lowest row above every numbered row under the parent
+--                     prefix; for a heading, whose parent is a chapter and on no chain,
+--                     and for any prefix whose parent has no such row, the chain is read
+--                     from the top of the chapter.
+--     meridian_label  no row belongs to the prefix alone: its rows sit side by side at
+--                     the top of the chapter, or directly under a row that other
+--                     prefixes' rows sit under too (chapters 98 and 99). The text is the
+--                     level and code ("Heading 9903", "Subheading 9901.00"), and def_seq
+--                     is the lowest row above all the prefix's rows, if there is one.
+--   Two-digit prefixes are listed by the same rule; both ladders take chapter titles
+--   from their own sources.
 
 -- Two working tables, dropped at the end: the rows as read, and every row's chain
 -- ancestors (seq, anc_seq), which both tables below are built from.
@@ -82,45 +95,89 @@ LEFT JOIN (
 ORDER BY r.seq;
 
 CREATE OR REPLACE TABLE hts_levels AS
-WITH prefixes AS (
-  SELECT left(o.code, n.len) AS prefix, n.len, o.seq, o.code, o.indent, o.description
-  FROM hts_outline o, (VALUES (2), (4), (6), (8), (10)) n(len)
-  WHERE o.code IS NOT NULL AND n.len <= length(o.code)
+WITH lineage AS (
+  -- Each row with every row above it on its chain, and itself.
+  SELECT seq, anc_seq FROM hts_chain
+  UNION ALL
+  SELECT seq, seq FROM hts_rows
 ),
-defining AS (
-  SELECT prefix, any_value(len) AS len,
-         arg_min(seq, (indent, seq)) AS def_seq,
-         arg_min(code, (indent, seq)) AS def_code,
-         arg_min(description, (indent, seq)) AS def_text
-  FROM prefixes
+prefixes AS (
+  SELECT DISTINCT left(code, n.len) AS prefix, n.len
+  FROM hts_rows, (VALUES (2), (4), (6), (8), (10)) n(len)
+  WHERE code IS NOT NULL AND n.len <= length(code)
+),
+under AS (
+  SELECT p.prefix, p.len, r.seq
+  FROM prefixes p JOIN hts_rows r ON r.code IS NOT NULL AND left(r.code, p.len) = p.prefix
+),
+common AS (
+  -- The lowest row above (or being) every numbered row under the prefix. Rows above a
+  -- given row form a chain, so the common ones do too, and the lowest is the last.
+  SELECT prefix, max(anc_seq) AS ca_seq
+  FROM (
+    SELECT u.prefix, l.anc_seq, count(*) AS n, any_value(t.total) AS total
+    FROM under u
+    JOIN lineage l ON l.seq = u.seq
+    JOIN (SELECT prefix, count(*) AS total FROM under GROUP BY prefix) t USING (prefix)
+    GROUP BY u.prefix, l.anc_seq
+  )
+  WHERE n = total
   GROUP BY prefix
 ),
-cut AS (
-  -- Where the parent level sits on the defining row's chain: the seq after which the
-  -- unnumbered headings count.
-  SELECT d.prefix,
+leaks AS (
+  -- Prefixes whose common row is above a numbered row outside the prefix.
+  SELECT DISTINCT p.prefix
+  FROM prefixes p
+  JOIN common c USING (prefix)
+  JOIN lineage l ON l.anc_seq = c.ca_seq
+  JOIN hts_rows r ON r.seq = l.seq
+  WHERE r.code IS NOT NULL AND left(r.code, p.len) <> p.prefix
+),
+classified AS (
+  SELECT
+    p.prefix, p.len,
+    own.seq AS own_seq,
+    c.ca_seq,
+    CASE WHEN p.len > 4 THEN pc.ca_seq END AS parent_ca_seq,
     CASE
-      WHEN pd.def_seq = d.def_seq THEN d.def_seq
-      WHEN pd.def_seq IN (SELECT anc_seq FROM hts_chain c WHERE c.seq = d.def_seq) THEN pd.def_seq
-      ELSE (SELECT max(a.seq)
-            FROM hts_chain c JOIN hts_outline a ON a.seq = c.anc_seq
-            WHERE c.seq = d.def_seq AND a.code IS NOT NULL AND length(a.code) <= d.len - 2)
-    END AS cut_seq
-  FROM defining d
-  LEFT JOIN defining pd ON d.len > 2 AND pd.prefix = left(d.prefix, d.len - 2)
+      WHEN own.seq IS NOT NULL THEN 'usitc'
+      WHEN c.ca_seq IS NOT NULL AND lk.prefix IS NULL THEN 'usitc_derived'
+      ELSE 'meridian_label'
+    END AS text_source
+  FROM prefixes p
+  LEFT JOIN hts_rows own ON own.code = p.prefix
+  LEFT JOIN common c ON c.prefix = p.prefix
+  LEFT JOIN leaks lk ON lk.prefix = p.prefix
+  LEFT JOIN common pc ON p.len > 2 AND pc.prefix = left(p.prefix, p.len - 2)
 ),
 headings AS (
-  SELECT d.prefix, string_agg(a.description, ' ' ORDER BY a.seq) AS text
-  FROM defining d
-  LEFT JOIN cut USING (prefix)
-  JOIN hts_chain c ON c.seq = d.def_seq
-  JOIN hts_outline a ON a.seq = c.anc_seq
-  WHERE a.code IS NULL AND a.seq > coalesce(cut.cut_seq, 0)
-  GROUP BY d.prefix
+  -- The unnumbered headings on a node's chain strictly below the parent level's node.
+  SELECT k.prefix, string_agg(a.description, ' ' ORDER BY a.seq) AS text
+  FROM classified k
+  JOIN hts_chain ch ON ch.seq = k.ca_seq
+  JOIN hts_rows a ON a.seq = ch.anc_seq
+  WHERE k.text_source = 'usitc_derived'
+    AND a.code IS NULL AND a.seq > coalesce(k.parent_ca_seq, 0)
+  GROUP BY k.prefix
 )
-SELECT d.prefix, d.def_seq, d.def_code, concat_ws(' ', h.text, d.def_text) AS text
-FROM defining d LEFT JOIN headings h USING (prefix)
-ORDER BY d.prefix;
+SELECT
+  k.prefix,
+  coalesce(k.own_seq, k.ca_seq) AS def_seq,
+  d.code AS def_code,
+  CASE k.text_source
+    WHEN 'usitc' THEN d.description
+    WHEN 'usitc_derived' THEN concat_ws(' ', h.text, d.description)
+    ELSE CASE k.len WHEN 2 THEN 'Chapter' WHEN 4 THEN 'Heading' WHEN 6 THEN 'Subheading'
+                    WHEN 8 THEN 'Tariff line' ELSE 'Statistical line' END
+         || ' ' || CASE WHEN k.len = 2 THEN k.prefix
+                        ELSE array_to_string([left(k.prefix, 4)] || list_transform(
+                               range(5, k.len, 2), lambda i: substr(k.prefix, i, 2)), '.') END
+  END AS text,
+  k.text_source
+FROM classified k
+LEFT JOIN hts_rows d ON d.seq = coalesce(k.own_seq, k.ca_seq)
+LEFT JOIN headings h ON h.prefix = k.prefix
+ORDER BY k.prefix;
 
 DROP TABLE hts_chain;
 DROP TABLE hts_rows;

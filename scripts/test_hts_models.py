@@ -4,15 +4,18 @@
 The models are `datasets/hts/models/outline.sql`, `load.sql` and `package.sql`. Each
 case copies the fixture in `scripts/testdata/hts/` into a scratch `build/`, beside a
 copy of `datasets/hts/chapters.csv`, and runs the three files in order on one DuckDB
-connection from that directory, as the Protocol's `sql:` steps run them.
+connection with that directory as its file search path, as the Protocol's `sql:` steps run them.
 
 The fixture is cut from USITC's `exportList` for 2026HTSRev22, in file order: heading
 0101 down to `0101.21.00.20`, `0104.10.00.00`, heading 0105 down to `0105.11.00.40`,
 the chain above `0201.20.50.91` (an "Other" line under an "Other:" heading under an
-"Other" line), `0409.00.00` and its statistical lines, three chapter 98 rows (one with
-indent "03"), and two chapter 99 rows. Two rows are made up, to cover a shape the real
-export has nowhere in chapters 01-05: an unnumbered row "Of fish:" at indent 0, directly
-under chapter 03, with heading 0301 moved to indent 1 beneath it.
+"Other" line), `0409.00.00` and its statistical lines, heading 0802 with the unnumbered
+"Kola nuts (Cola spp.):" and its two lines, two chapter 28 subchapter rows ("I. CHEMICAL
+ELEMENTS", "II. INORGANIC ACIDS ...") each with the heading and line after it, the
+chains above `9823.01.01` and `9823.52.07`/`.08` (one with indent "03"), and two chapter
+99 rows that sit side by side at indent 0. Two rows are made up, to cover a shape the
+real export has nowhere in chapters 01-05: an unnumbered row "Of fish:" at indent 0,
+directly under chapter 03, with heading 0301 moved to indent 1 beneath it.
 
 Needs duckdb==1.5.5 in the running Python:
 
@@ -23,7 +26,6 @@ from __future__ import annotations
 
 import csv
 import json
-import os
 import shutil
 import subprocess
 import sys
@@ -64,17 +66,13 @@ class Run:
             lines = [ln for ln in lines if not ln.startswith(drop_chapter + ",")]
         (self.root / "chapters.csv").write_text("".join(lines), encoding="utf-8")
         self.con = duckdb.connect()
+        # The models read `build/...` and `chapters.csv` relative to the Protocol
+        # directory; resolve those against the scratch one.
+        self.con.execute("SET file_search_path = ?", [str(self.root)])
 
     def execute(self) -> None:
-        # The models read `build/...` and `chapters.csv` relative to the Protocol
-        # directory, so run them from the scratch one.
-        here = os.getcwd()
-        os.chdir(self.root)
-        try:
-            for model in MODELS:
-                self.con.execute(model.read_text(encoding="utf-8"))
-        finally:
-            os.chdir(here)
+        for model in MODELS:
+            self.con.execute(model.read_text(encoding="utf-8"))
 
     def close(self) -> None:
         self.con.close()
@@ -126,19 +124,29 @@ class LadderTest(unittest.TestCase):
         self.assertEqual(r["description_full"].count("Horses:"), 1, r["description_full"])
         self.assertEqual(r["text_source"], "usitc")
 
-    def test_no_description_full_repeats_an_element(self):
-        for code, full in self.con.execute("SELECT code, description_full FROM hts_out").fetchall():
-            parts = full.split(SEP)
-            self.assertEqual(len(parts), len(set(parts)), f"{code}: {full}")
+    def test_each_outline_row_appears_once_in_description_full(self):
+        # A printed row's path is its chapter title, its subchapter if it has one, each
+        # row on its indent chain, and itself: one element per source, none dropped.
+        rows = self.con.execute(
+            # Every chapter 28 row in the fixture follows a subchapter row.
+            """SELECT h.code, h.description_full, len(o.context), h.code LIKE '28%'
+               FROM hts_out h JOIN hts_outline o ON o.code = h.code
+               WHERE h.text_source = 'usitc'"""
+        ).fetchall()
+        self.assertGreater(len(rows), 30)
+        for code, full, chain, subchapter in rows:
+            self.assertEqual(len(full.split(SEP)), 1 + int(subchapter) + chain + 1, f"{code}: {full}")
 
     def test_description_full_ends_with_the_defining_rows_text(self):
-        # 0409.00.00.35 sits under "Other:" under "Other:", and 0201.20.50.91 "Other"
-        # under "Other:" under the "Other" line 0201.20.50. The repeat is dropped, and
-        # the line's own text still ends the path.
+        # Two different rows with the same text are two levels of the outline, and both
+        # stay: 0409.00.00.35 sits under "Other:" under "Other:".
         r = self.row("0409000035")
-        self.assertEqual(r["description_full"], self.titles["04"] + SEP + "Natural honey" + SEP + "Other:" + SEP + "White or lighter")
+        self.assertEqual(
+            r["description_full"],
+            SEP.join([self.titles["04"], "Natural honey", "Other:", "Other:", "White or lighter"]),
+        )
         r = self.row("0201205091")
-        self.assertTrue(r["description_full"].endswith(SEP + "Other:" + SEP + "Other"), r["description_full"])
+        self.assertTrue(r["description_full"].endswith(SEP.join(["", "Other", "Other:", "Other"])), r["description_full"])
         for code, desc, full in self.con.execute(
             "SELECT code, description, description_full FROM hts_out WHERE text_source = 'usitc'"
         ).fetchall():
@@ -172,6 +180,13 @@ class LadderTest(unittest.TestCase):
         self.assertEqual(own["general_rate"], "Free")
         self.assertEqual(own["rate_from_code"], "0104100000")
 
+    def test_only_printed_rows_carry_rates(self):
+        carrying = self.con.execute(
+            "SELECT code FROM hts_out WHERE text_source <> 'usitc' AND (general_rate IS NOT NULL "
+            "OR special_rate IS NOT NULL OR column2_rate IS NOT NULL OR rate_from_code IS NOT NULL)"
+        ).fetchall()
+        self.assertEqual(carrying, [])
+
     def test_a_line_with_no_rate_above_it_has_none(self):
         r = self.row("0101")
         self.assertIsNone(r["general_rate"])
@@ -182,7 +197,7 @@ class LadderTest(unittest.TestCase):
             "SELECT code, text_source, depth, parent_code, description, description_full "
             "FROM hts_out WHERE level = 'chapter' ORDER BY code"
         ).fetchall()
-        self.assertEqual([c[0] for c in chapters], ["01", "02", "03", "04", "98", "99"])
+        self.assertEqual([c[0] for c in chapters], ["01", "02", "03", "04", "08", "28", "98", "99"])
         for code, source, depth, parent, desc, full in chapters:
             self.assertEqual(source, "usitc_toc", code)
             self.assertEqual(depth, 0, code)
@@ -223,7 +238,13 @@ class LadderTest(unittest.TestCase):
         cols = self.con.execute("DESCRIBE hts_levels").fetchall()
         self.assertEqual(
             [(c[0], c[1]) for c in cols],
-            [("prefix", "VARCHAR"), ("def_seq", "BIGINT"), ("def_code", "VARCHAR"), ("text", "VARCHAR")],
+            [
+                ("prefix", "VARCHAR"),
+                ("def_seq", "BIGINT"),
+                ("def_code", "VARCHAR"),
+                ("text", "VARCHAR"),
+                ("text_source", "VARCHAR"),
+            ],
         )
         level = self.con.execute(
             "SELECT def_code, text FROM hts_levels WHERE prefix = '010511'"
@@ -240,6 +261,50 @@ class LadderTest(unittest.TestCase):
         self.assertEqual(texts["010121"], "Horses: Purebred breeding animals")
         self.assertEqual(texts["01012100"], "Purebred breeding animals")
         self.assertEqual(texts["0101210010"], "Males")
+
+    def test_a_level_with_no_node_of_its_own_is_labelled(self):
+        # 9901.00.50 and 9901.00.52 sit side by side at indent 0: no outline row is
+        # above both, so neither line's text may stand for heading 9901.
+        for code, label in (("9901", "Heading 9901"), ("990100", "Subheading 9901.00"), ("9823", "Heading 9823")):
+            r = self.row(code)
+            self.assertEqual(r["text_source"], "meridian_label", code)
+            self.assertEqual(r["description"], label, code)
+            self.assertEqual(r["description_full"], self.titles[code[:2]] + SEP + label, code)
+        levels = dict(self.con.execute(
+            "SELECT prefix, text_source FROM hts_levels WHERE prefix IN ('9901', '990100', '9823', '010511', '0101')"
+        ).fetchall())
+        self.assertEqual(
+            levels,
+            {"9901": "meridian_label", "990100": "meridian_label", "9823": "meridian_label",
+             "010511": "usitc_derived", "0101": "usitc"},
+        )
+
+    def test_a_level_whose_rows_share_one_outline_row_takes_its_text(self):
+        # Subheading 9823.52's two lines sit under one unnumbered heading, which no other
+        # prefix's rows sit under; heading 9823 has none (see the label test).
+        r = self.row("982352")
+        self.assertEqual(r["text_source"], "usitc_derived")
+        self.assertTrue(r["description"].endswith("Non-originating cotton or man-made fiber spun yard goods as provided for in note 11(a)((iii):"), r["description"])
+        self.assertTrue(r["description"].startswith("Goods entered under the provisions"), r["description"])
+
+    def test_an_unnumbered_node(self):
+        # 0802.70.10.00 and 0802.70.20.00 sit under "Kola nuts (Cola spp.):" alone.
+        r = self.row("080270")
+        self.assertEqual(r["text_source"], "usitc_derived")
+        self.assertEqual(r["description"], "Kola nuts (Cola spp.):")
+        heading = self.row("0802")["description"]
+        self.assertEqual(r["description_full"], SEP.join([self.titles["08"], heading, "Kola nuts (Cola spp.):"]))
+        self.assertEqual(self.row("08027010")["description"], "In shell")
+
+    def test_subchapter_rows_follow_the_chapter_title(self):
+        title = self.titles["28"]
+        first, second = "I. CHEMICAL ELEMENTS", "II. INORGANIC ACIDS AND INORGANIC OXYGEN COMPOUNDS OF NONMETALS"
+        for code, sub in (("2801", first), ("280110", first), ("2801100000", first), ("2806", second), ("2806100000", second)):
+            full = self.row(code)["description_full"]
+            self.assertTrue(full.startswith(title + SEP + sub + SEP), f"{code}: {full}")
+            self.assertEqual(full.count(" › I"), 1, f"{code}: {full}")
+        self.assertEqual(self.row("28")["description_full"], title)
+        self.assertEqual(self.row("2806")["description_full"], SEP.join([title, second, self.row("2806")["description"]]))
 
     def test_hts_columns_follow_the_core(self):
         cols = [c[0] for c in self.con.execute("DESCRIBE hts_out").fetchall()]
