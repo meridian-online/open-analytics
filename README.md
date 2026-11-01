@@ -253,7 +253,7 @@ the reference implementation whether these packages load at all. Data Package v2
 Table Schema field object is a fifteen-branch `oneOf`, one branch per type, each giving
 `constraints` its own properties set, so a keyword beside the wrong `type` is a
 whole-package refusal rather than surplus a reader skips — which is why the reference-implementation
-job exists and is strict with an empty rejections list. All four descriptors shipped here are now
+job exists and is strict with an empty rejections list. All six descriptors shipped here are now
 accepted by `frictionless==5.19.0`, validating the engine correction. It attributes
 each refusal to the field that drew it by re-offering that field on its own, because
 `frictionless` names no field in its note and raises the same sentence for every `date`

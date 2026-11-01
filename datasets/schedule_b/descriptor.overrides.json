@@ -89,7 +89,12 @@
   },
   "fields": {
     "code": {
-      "description": "Schedule B code, digits only: 2 (chapter), 4 (heading), 6 (subheading) or 10 (commodity) digits. Join other data on this column."
+      "description": "Schedule B code, digits only: 2 (chapter), 4 (heading), 6 (subheading) or 10 (commodity) digits. Join other data on this column.",
+      "constraints": {
+        "minLength": 2,
+        "maxLength": 10,
+        "pattern": "^[0-9]{2}$|^[0-9]{4}$|^[0-9]{6}$|^[0-9]{10}$"
+      }
     },
     "code_display": {
       "description": "The code as Census prints it, with dots (0101.21.0000). For a chapter or heading, its digits; for a subheading, 0101.21."
@@ -101,7 +106,12 @@
       "description": "The level's position in the ladder, from 0 for a chapter to 3 for a commodity."
     },
     "parent_code": {
-      "description": "The code one level up, always the code's own prefix; NULL for a chapter."
+      "description": "The code one level up, always the code's own prefix; NULL for a chapter.",
+      "constraints": {
+        "minLength": 2,
+        "maxLength": 6,
+        "pattern": "^[0-9]+$"
+      }
     },
     "description": {
       "description": "The row's text. A commodity's is Census's long description and a chapter's is Census's title from the year's index page. A heading's or subheading's is USITC's text for that prefix in the HTS, except in chapter 98, where USITC's provisions are import ones, and where USITC gives the prefix no text: there it is the text of the one Census line under it, or, with several lines under it, a label such as 'Heading 9802'. text_source says which."
@@ -122,25 +132,55 @@
       "description": "Census's short description of the commodity, at most 50 characters. NULL on chapter, heading and subheading rows."
     },
     "unit_1": {
-      "description": "Census's abbreviation for the commodity's first unit of quantity (for example KG or NO), as printed. NULL where Census prints none, and on chapter, heading and subheading rows."
+      "description": "Census's abbreviation for the commodity's first unit of quantity (for example KG or NO), as printed. NULL where Census prints none, and on chapter, heading and subheading rows.",
+      "constraints": {
+        "minLength": 1,
+        "maxLength": 3,
+        "pattern": "^[A-Z0-9]{1,3}$"
+      }
     },
     "unit_2": {
-      "description": "Census's abbreviation for the commodity's second unit of quantity, as printed. NULL where Census prints none, and on chapter, heading and subheading rows."
+      "description": "Census's abbreviation for the commodity's second unit of quantity, as printed. NULL where Census prints none, and on chapter, heading and subheading rows.",
+      "constraints": {
+        "minLength": 1,
+        "maxLength": 3,
+        "pattern": "^[A-Z0-9]{1,3}$"
+      }
     },
     "sitc": {
-      "description": "The commodity's Standard International Trade Classification, Revision 4, code, as Census prints it, five characters. A few codes end in X (792XX); Census's layout does not define X, and its reading as digits left unspecified is inferred from the codes' shape. NULL on chapter, heading and subheading rows."
+      "description": "The commodity's Standard International Trade Classification, Revision 4, code, as Census prints it, five characters. A few codes end in X (792XX); Census's layout does not define X, and its reading as digits left unspecified is inferred from the codes' shape. NULL on chapter, heading and subheading rows.",
+      "constraints": {
+        "minLength": 5,
+        "maxLength": 5,
+        "pattern": "^[0-9]{3}[0-9X]{2}$"
+      }
     },
     "end_use": {
-      "description": "Census's end-use classification code for the commodity, five digits, as printed. NULL on chapter, heading and subheading rows."
+      "description": "Census's end-use classification code for the commodity, five digits, as printed. NULL on chapter, heading and subheading rows.",
+      "constraints": {
+        "minLength": 5,
+        "maxLength": 5,
+        "pattern": "^[0-9]{5}$"
+      }
     },
     "agricultural": {
       "description": "Whether the commodity is an agricultural product, read from Census's one-character flag, which its layout calls 'Agriculture or non-agriculture product code' and prints as '0' or '1'. true is '0'. Census's layout does not say which value is which; the reading is from the data: every line of chapters 1, 2 and 4 is '0', and every line of chapter 3, fish, which USDA's definition of agricultural products leaves out, is '1'. NULL on chapter, heading and subheading rows."
     },
     "naics": {
-      "description": "The NAICS industry Census assigns to the commodity, six characters, as printed. Joins to census/naics_2022's code; the descriptor's x-joins states how many commodity lines match. Some codes are not 2022 NAICS codes: some end in X (33641X, 1121XX), which Census's layout does not define and which reads, from the codes' shape, as digits left unspecified; and 910000, 930000 and 990000 are Census's own. NULL on chapter, heading and subheading rows."
+      "description": "The NAICS industry Census assigns to the commodity, six characters, as printed. Joins to census/naics_2022's code; the descriptor's x-joins states how many commodity lines match. Some codes are not 2022 NAICS codes: some end in X (33641X, 1121XX), which Census's layout does not define and which reads, from the codes' shape, as digits left unspecified; and 910000, 930000 and 990000 are Census's own. NULL on chapter, heading and subheading rows.",
+      "constraints": {
+        "minLength": 6,
+        "maxLength": 6,
+        "pattern": "^[0-9]{4}[0-9X]{2}$"
+      }
     },
     "hitech": {
-      "description": "Census's high-technology classification for the commodity, two digits, '00' to '10', as printed. Census's layout calls the field 'HiTech classification' and does not define its values; '00', on most lines, is read from the data as a line outside the classification and the others as the group it falls in. NULL on chapter, heading and subheading rows."
+      "description": "Census's high-technology classification for the commodity, two digits, '00' to '10', as printed. Census's layout calls the field 'HiTech classification' and does not define its values; '00', on most lines, is read from the data as a line outside the classification and the others as the group it falls in. NULL on chapter, heading and subheading rows.",
+      "constraints": {
+        "minLength": 2,
+        "maxLength": 2,
+        "pattern": "^[0-9]{2}$"
+      }
     },
     "section": {
       "description": "The section of the schedule the row's chapter belongs to, as a Roman numeral, from Census's index page."

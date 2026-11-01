@@ -4,7 +4,7 @@
     "schedule_b": {
       "code": {
         "label": "geography.transportation.hs_code",
-        "why": "Digits-only Schedule B codes of 2, 4, 6 and 10 digits, HS-based like the HTS. Inferred from the values finetype labels this column `unknown`, because a two-digit chapter and a ten-digit commodity share no shape. The label's canonical pattern, `^\\d{4}\\.?\\d{2}(\\.?\\d{2}){0,2}$`, admits the 6 and 10-digit forms but not the 2-digit chapter or 4-digit heading; describe widens it for them (pattern-fit `widened`), and the contract's length bounds carry the rest."
+        "why": "Digits-only Schedule B codes of 2, 4, 6 and 10 digits, HS-based like the HTS. Inferred from the values finetype labels this column `unknown`, because a two-digit chapter and a ten-digit commodity share no shape. The label's canonical pattern, `^\\d{4}\\.?\\d{2}(\\.?\\d{2}){0,2}$`, admits the 6 and 10-digit forms but not the 2-digit chapter or 4-digit heading; describe widens it for them (pattern-fit `widened`), and descriptor.overrides.json then states the shape the column holds: the four digits-only lengths, bounded 2 to 10."
       },
       "code_display": {
         "label": "geography.transportation.hs_code",

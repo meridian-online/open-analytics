@@ -52,7 +52,12 @@
   },
   "fields": {
     "code": {
-      "description": "HTS code, digits only: 2 (chapter), 4 (heading), 6 (subheading), 8 (tariff line) or 10 (statistical line) digits. Join other data on this column."
+      "description": "HTS code, digits only: 2 (chapter), 4 (heading), 6 (subheading), 8 (tariff line) or 10 (statistical line) digits. Join other data on this column.",
+      "constraints": {
+        "minLength": 2,
+        "maxLength": 10,
+        "pattern": "^[0-9]{2}$|^[0-9]{4}$|^[0-9]{6}$|^[0-9]{8}$|^[0-9]{10}$"
+      }
     },
     "code_display": {
       "description": "The code as USITC prints it, with dots (8471.30.01.00). For a chapter, the two digits."
@@ -64,7 +69,12 @@
       "description": "The level's position in the ladder, from 0 for a chapter to 4 for a statistical line."
     },
     "parent_code": {
-      "description": "The code one level up, always the code's own prefix; NULL for a chapter."
+      "description": "The code one level up, always the code's own prefix; NULL for a chapter.",
+      "constraints": {
+        "minLength": 2,
+        "maxLength": 8,
+        "pattern": "^[0-9]+$"
+      }
     },
     "description": {
       "description": "USITC's text for the row. For a level USITC prints only through longer codes it is the text of that level's node in USITC's outline; for a level USITC gives no text, a label such as 'Heading 9903'. text_source says which."
@@ -103,7 +113,12 @@
       "description": "The column 2 rate of duty. The rate is as USITC prints it, blank as NULL. A line that prints none of the general, special and column 2 rates takes all three from its nearest printed ancestor that prints a general rate, named in rate_from_code. Where no printed ancestor prints a general rate (a heading such as 0101), the three stay NULL, as they do on chapters and on rows made for prefixes USITC prints only through longer codes. Chapter 99 provisions reached through footnotes can add duties to this line, and they are not included here."
     },
     "rate_from_code": {
-      "description": "The code of the printed line whose rates this row carries: the row's own code where it prints a rate, otherwise its nearest printed ancestor that prints a general rate. Join on this to find the rate that applies to a ten-digit import code. NULL on chapters, on every row made for a prefix USITC prints only through longer codes, and on a printed line that prints no rate and has no printed ancestor that prints a general rate."
+      "description": "The code of the printed line whose rates this row carries: the row's own code where it prints a rate, otherwise its nearest printed ancestor that prints a general rate. Join on this to find the rate that applies to a ten-digit import code. NULL on chapters, on every row made for a prefix USITC prints only through longer codes, and on a printed line that prints no rate and has no printed ancestor that prints a general rate.",
+      "constraints": {
+        "minLength": 6,
+        "maxLength": 10,
+        "pattern": "^[0-9]{6}$|^[0-9]{8}$|^[0-9]{10}$"
+      }
     },
     "footnotes": {
       "description": "The footnote texts USITC prints for the line, as a list. They name the chapter 99 provisions that can add duties."

@@ -61,7 +61,7 @@ Census's layout calls the field "Agriculture or non-agriculture product code" an
 
 ## The code column
 
-`code` and `code_display` are nominated as finetype's `geography.transportation.hs_code`; inferred from the values they are `unknown`. The label's canonical pattern, `^\d{4}\.?\d{2}(\.?\d{2}){0,2}$`, admits the 6 and 10-digit forms, dotted or not, but not the 2-digit chapter or 4-digit heading; `describe` widens it with `|^[0-9]{2}$|^[0-9]{4}$` (pattern-fit `widened`), and `schema.finetype.json` does the same, as on `usitc/hts`. `nominations.finetype.json` gives the reason for each nomination.
+`code` and `code_display` are nominated as finetype's `geography.transportation.hs_code`; inferred from the values they are `unknown`. The label's canonical pattern, `^\d{4}\.?\d{2}(\.?\d{2}){0,2}$`, admits the 6 and 10-digit forms, dotted or not, but not the 2-digit chapter or 4-digit heading; `describe` widens it with `|^[0-9]{2}$|^[0-9]{4}$` (pattern-fit `widened`), and `schema.finetype.json` does the same, as on `usitc/hts`. On `code` itself, `descriptor.overrides.json` then declares the shape the column holds, digits only at 2, 4, 6 or 10 digits and bounded 2 to 10; `code_display`, which is dotted, keeps the widened pattern. The line codes carry the fixed shapes the drift contract enforces, declared in the same file: `naics` four digits then two digits or X, `sitc` three digits then two digits or X, `end_use` five digits, `hitech` two digits, and `unit_1` and `unit_2` one to three uppercase letters or digits. `nominations.finetype.json` gives the reason for each nomination.
 
 ## Licence and credit
 
