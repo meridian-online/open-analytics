@@ -1,0 +1,146 @@
+# The `usitc/hts` Protocol — the reproducible *definition* of how the Harmonized Tariff
+# Schedule of the United States is ingested from the U.S. International Trade
+# Commission's published JSON export. `arc run` executes this manifest; one Run → one
+# Dataset version. See ./README.md.
+#
+# MOSTLY-CONFIG. Every step but one is a first-class `sql:` model or a typed `op:`
+# operator (the arcform catalog). The exception is named here rather than left for a
+# reader to discover: `stamp_descriptor` is a `command:` step, as NAICS's is. The three
+# fetches are http_fetch; the SQL builds the outline, the ladder and the terminal table;
+# the COPY is parquet_export; datapackage_describe emits the descriptor from the built
+# Parquet; check_code_list holds the Parquet to the shared code-list contract;
+# finetype_validate gates it. Operator code lives in the arcform repo, not here.
+#
+# BOUNDARY — do NOT fold this into this manifest:
+#   • PUBLISH (content-addressed R2 upload + manifest/catalog pointer flip) stays in
+#     the out-of-repo publish pipeline and READS this Protocol's terminal output,
+#     build/hts.parquet + the emitted datapackage.json. It is not an arcform step.
+#
+# Produces: build/hts.parquet  →  published as usitc/hts
+name: hts
+engine: duckdb
+engine_version: ">=1.2"
+db: build/hts.db
+
+# Transient API/network blips shouldn't sink a run — retry fetches with backoff.
+defaults:
+  retry:
+    max_attempts: 3
+    backoff_sec: 2.0
+
+steps:
+  # ── Fetch: USITC's current revision, its schedule, and the revision again ─────────
+  # USITC's export serves only the current revision. Naming the revision before and
+  # after the 12.6 MB download brackets it: load.sql fails the run if the two differ,
+  # so a schedule that changed mid-fetch is never published under one revision's name.
+  - name: fetch_release_before
+    op: http_fetch@1
+    with:
+      url: https://hts.usitc.gov/reststop/currentRelease
+      out: build/release_before.json
+      headers:
+        User-Agent: "Meridian Protocol (open-analytics; research@meridian.online)"
+
+  - name: fetch_hts
+    op: http_fetch@1
+    with:
+      url: "https://hts.usitc.gov/reststop/exportList?from=0100&to=9999&format=JSON&styles=false"
+      out: build/hts.json
+      headers:
+        User-Agent: "Meridian Protocol (open-analytics; research@meridian.online)"
+
+  - name: fetch_release_after
+    op: http_fetch@1
+    depends_on: [build/hts.json]
+    with:
+      url: https://hts.usitc.gov/reststop/currentRelease
+      out: build/release_after.json
+      headers:
+        User-Agent: "Meridian Protocol (open-analytics; research@meridian.online)"
+
+  # ── Outline: USITC's rows in order, with their indent chains and every code prefix ─
+  # The file is shared: the Schedule B Protocol runs it by relative path.
+  - name: outline
+    sql: models/outline.sql
+    depends_on: [build/hts.json]
+
+  # ── Load: the ladder, parents, text, rates and release ───────────────────────────
+  # Fails the run if the two release files name different revisions, or if a chapter
+  # has no title in chapters.csv.
+  - name: load
+    sql: models/load.sql
+    depends_on: [build/release_before.json, build/release_after.json, chapters.csv]
+
+  # ── Package: materialise the terminal table (adds the search corpus) ─────────────
+  - name: package
+    sql: models/package.sql
+    produces: [hts_out]
+
+  # ── Export: write the terminal Parquet the publish seam consumes ─────────────────
+  # order_by code (the primary key) is a total order → reproducible bytes.
+  - name: export_hts
+    op: parquet_export@1
+    with:
+      input: hts_out
+      dest: build/hts.parquet
+      compression: zstd
+      order_by: "code"
+
+  # ── Describe: EMIT datapackage.json from the built Parquet ───────────────────────
+  # finetype types every column nominations.finetype.json does not declare;
+  # descriptor.overrides.json overlays the curated half (identity, licenses, sources,
+  # per-field prose, primaryKey, the code-list declaration). Hard-fails on drift.
+  - name: describe
+    op: datapackage_describe@1
+    with:
+      parquet: build/hts.parquet
+      overrides: descriptor.overrides.json
+      nominations: nominations.finetype.json
+      out: datapackage.json
+
+  # ── Contract: hold the Parquet to the shared code-list columns ───────────────────
+  # scripts/check_code_list.py reads the built file and refuses one that breaks the
+  # contract (a parent that is missing or not one level up, a depth that is not the
+  # level's position, a code that is not digits). The script is addressed by its
+  # bytes, so editing it is a manifest edit as well:
+  # `shasum -a 256 scripts/check_code_list.py` prints the digest. duckdb is pinned to
+  # DUCKDB_VERSION in .github/workflows/descriptors.yml — keep the two in step.
+  - name: check_code_list
+    op: uv@1
+    with:
+      script: ../../scripts/check_code_list.py
+      sha256: 11b06ca742a70ef483c9626d153d30387ad17f47992a3b4ef3eaf295b1c1e4b8
+      deps:
+        - duckdb==1.5.5
+      args:
+        - --parquet
+        - build/hts.parquet
+        - --levels
+        - chapter,heading,subheading,tariff_line,statistical_line
+        - --json
+        - build/code_list_check.json
+      reads:
+        - build/hts.parquet
+      # uv@1 must name what it writes. The check writes nothing else, and fails the run
+      # (exit 1) on a broken contract; its findings go to this file.
+      produces:
+        - build/code_list_check.json
+
+  # ── Validate: GATE the built Parquet against the self-derived finetype contract ──
+  # finetype_validate (CHECK-ONLY) checks the terminal Parquet against
+  # schema.finetype.json; writes nothing, so build/hts.parquet is untouched.
+  - name: validate
+    op: finetype_validate@1
+    with:
+      parquet: build/hts.parquet
+      schema: schema.finetype.json
+
+  # ── Self-describe: put the descriptor INSIDE the Parquet it describes ───────────
+  # As NAICS's does: the object answers for itself from its URL alone, the embedded
+  # copy omits the resource `bytes` and `hash` and the package's `created`, and the
+  # step runs last because it embeds the FINISHED descriptor.
+  - name: stamp_descriptor
+    command: "python3 ../../scripts/stamp_descriptor.py stamp --descriptor datapackage.json --parquet build/hts.parquet"
+
+  # publish: the out-of-repo publish pipeline reads build/hts.parquet + the emitted
+  # datapackage.json (boundary — not an arc step). See README.
