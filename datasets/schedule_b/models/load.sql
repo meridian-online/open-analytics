@@ -40,15 +40,18 @@
 --                   text hts_levels gives the prefix. USITC names a prefix when
 --                   hts_levels has it with a text_source other than meridian_label.
 --   census_derived  a heading or subheading USITC does not name (no hts_levels row, or
---                   a meridian_label one), and every heading and subheading in chapter
---                   98: the text of the first Census line under it. Chapter 98 always
---                   takes Census's text: USITC's 9801-9803 are import provisions, while
---                   Schedule B's are export ones.
+--                   a meridian_label one), or any heading or subheading in chapter 98,
+--                   with exactly one Census line under it: that line's text. Chapter 98
+--                   never takes USITC's text: USITC's 9801-9803 are import provisions,
+--                   while Schedule B's are export ones.
+--   meridian_label  such a level with several Census lines under it: labelled by its
+--                   level and code ("Heading 9802", "Subheading 9802.20"), since no one
+--                   line's text stands for the others.
 --
 -- description_full is the row's ancestors' text and its own, top down, joined with
--- ' › '. Where consecutive levels take their text from the same source row (heading
--- 0409 and subheading 040900 both from USITC's 0409.00.00; 8800, 880000 and 8800000000
--- all from Census's one line) the text appears once, as the lowest of them.
+-- ' › '. Where levels take their text from the same source row (heading 0409 and
+-- subheading 040900 both from USITC's 0409.00.00; 8800, 880000 and 8800000000 all from
+-- Census's one line) the text appears once, at the lowest of them.
 --
 -- Chapter titles and sections come from the index's table cells: "Chapter 1: Live
 -- Animals" and "Section 1 - Live Animals; Animal Products" once tags are stripped. A
@@ -178,8 +181,8 @@ WHERE chapter IS NOT NULL;
 
 CREATE OR REPLACE TEMP TABLE sb_ladder AS
 WITH ladder AS (
-  -- Each code and prefix, and the first Census line under it.
-  SELECT left(code, n.len) AS code, min(code) AS first_line
+  -- Each code and prefix, the first Census line under it, and how many there are.
+  SELECT left(code, n.len) AS code, min(code) AS first_line, count(*) AS lines
   FROM sb_lines, (VALUES (2), (4), (6), (10)) n(len)
   GROUP BY ALL
 ),
@@ -210,19 +213,23 @@ SELECT
            THEN error('chapter ' || n.code || ' has no title in the Schedule B index')
            ELSE c.chapter_title END
     WHEN n.by_usitc THEN n.usitc_text
-    ELSE coalesce(f.description_long, f.description_short)
+    WHEN n.lines = 1 THEN coalesce(f.description_long, f.description_short)
+    WHEN length(n.code) = 4 THEN 'Heading ' || n.code
+    ELSE 'Subheading ' || left(n.code, 4) || '.' || substr(n.code, 5, 2)
   END AS description,
   CASE
     WHEN length(n.code) IN (2, 10) THEN 'census'
     WHEN n.by_usitc THEN 'usitc'
-    ELSE 'census_derived'
+    WHEN n.lines = 1 THEN 'census_derived'
+    ELSE 'meridian_label'
   END AS text_source,
-  -- The row the text comes from, so a level sharing it with the level above it is
-  -- written once in description_full.
+  -- The row the text comes from, so levels sharing it are written once in
+  -- description_full.
   CASE
     WHEN length(n.code) = 2 THEN 'chapter ' || n.code
     WHEN n.by_usitc THEN 'usitc ' || n.def_seq
-    ELSE 'census ' || n.first_line
+    WHEN n.lines = 1 THEN 'census ' || n.first_line
+    ELSE 'label ' || n.code
   END AS text_from,
   c.section,
   c.section_title
@@ -247,8 +254,8 @@ FROM (
 
 CREATE OR REPLACE TABLE schedule_b AS
 WITH paths AS (
-  -- Each row's ancestors and itself, top down, keeping the lowest of each run of
-  -- levels that share a source row.
+  -- Each row's ancestors and itself, top down. Where several take their text from
+  -- one source row, only the lowest of them is kept.
   SELECT r.code,
     list({text: a.description, text_from: a.text_from} ORDER BY a.depth) AS chain
   FROM sb_ladder r
@@ -264,7 +271,8 @@ SELECT
   r.description,
   array_to_string(
     list_transform(
-      list_filter(p.chain, lambda x, i: i = len(p.chain) OR x.text_from <> p.chain[i + 1].text_from),
+      list_filter(p.chain, lambda x, i: NOT list_contains(
+        list_transform(list_slice(p.chain, i + 1, len(p.chain)), lambda y: y.text_from), x.text_from)),
       lambda x: x.text),
     ' › ') AS description_full,
   run.release,

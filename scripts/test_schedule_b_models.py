@@ -11,9 +11,9 @@ macro, since only the CLI has it).
 
 The scratch `build/` holds:
 
-- `sbsdf/econcord.txt`: `scripts/testdata/schedule_b/econcord.txt`, seven lines cut
+- `sbsdf/econcord.txt`: `scripts/testdata/schedule_b/econcord.txt`, eight lines cut
   from Census's 2026 file in its CRLF fixed width (0101210000, 0101290000, 0409000025,
-  8424890000, 8800000000, 9801100000, 9802100000), plus the padding below.
+  8424890000, 8800000000, 9801100000, 9802100000, 9802200000), plus the padding below.
 - `schedule_b_index.html`: `scripts/testdata/schedule_b/index.html`, cells cut from
   Census's 2026 index: sections 1, XIII, XIV, XVI, XVII and XXII and chapters 1, 4, 70,
   71, 84, 88 and 98, with the "All Chapters 1 Through 98" cell above them.
@@ -26,9 +26,14 @@ subheadings, outside chapter 98; the fixture has one heading (8800) and three su
 (010129, 842489, 880000) USITC does not name, so a few lines alone would trip it. Each run
 therefore adds 198 made-up headings in chapters 70 and 71 (7001 to 7199), each printed by
 USITC as a heading row over two subheading rows (`7001`, `7001.10`, `7001.20`) and by
-Census as two lines (7001100000, 7001200000). The refusal cases drop the padding's and
-the fixture's four-digit or six-digit USITC rows. One more made-up USITC row,
-`9801.00.10`, gives heading 9801 USITC text, which Schedule B's chapter 98 must not take.
+Census as two lines (7001100000, 7001200000). 7199 differs (see ODD): USITC prints only
+its two subheadings, side by side, and Census only 7199100000. That leaves 200 of 202
+headings and 397 of 400 subheadings named, just over 99%. The refusal cases drop the
+fixture's and padding's four-digit or six-digit USITC rows, or one or two padding rows to
+put a level just under 99%. One more made-up USITC row, `9801.00.10`, gives heading 9801
+USITC text, which Schedule B's chapter 98 must not take; two more made-up Census lines,
+9803100010 and 9803100020, give a subheading with several lines under it and no USITC
+text.
 
 Needs duckdb==1.5.5 in the running Python:
 
@@ -82,6 +87,12 @@ def census_line(code: str, short: str, long: str, agricultural: str = "1") -> by
     return "".join(line).encode("ascii") + b"\r\n"
 
 
+# The padding heading USITC gives no text and Census one line (7199100000): the heading
+# takes that line's text, its subheading USITC's, and the line its own, so the line's
+# text reaches 7199100000's description_full twice, two levels apart, unless deduped.
+ODD = "7199"
+
+
 def padding_codes() -> list[str]:
     return [f"{chapter}{n:02d}" for chapter in ("70", "71") for n in range(1, 100)]
 
@@ -89,11 +100,16 @@ def padding_codes() -> list[str]:
 def padding_hts_rows(template: dict) -> list[dict]:
     rows = []
     for heading in padding_codes():
-        for htsno, indent, text in (
+        shape = (
             (heading, "0", f"Made-up heading {heading}:"),
             (f"{heading}.10", "1", f"Made-up subheading {heading}.10"),
             (f"{heading}.20", "1", f"Made-up subheading {heading}.20"),
-        ):
+        )
+        if heading == ODD:
+            # No heading row: the two subheadings sit side by side, so USITC gives the
+            # heading no text of its own (hts_levels labels it).
+            shape = tuple((htsno, "0", text) for htsno, _, text in shape[1:])
+        for htsno, indent, text in shape:
             row = {k: ([] if isinstance(v, list) else "") for k, v in template.items()}
             row.update(htsno=htsno, indent=indent, description=text)
             rows.append(row)
@@ -106,7 +122,7 @@ def padding_hts_rows(template: dict) -> list[dict]:
 class Run:
     """A scratch Protocol directory, and the year arc would pass to its SQL steps."""
 
-    def __init__(self, year: str = "2026", drop_hts_digits: int | None = None):
+    def __init__(self, year: str = "2026", drop_hts_digits: int | None = None, drop_htsno: tuple[str, ...] = ()):
         self.year = year
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
@@ -114,9 +130,11 @@ class Run:
         (build / "sbsdf").mkdir(parents=True)
         census = (FIXTURE / "econcord.txt").read_bytes()
         for heading in padding_codes():
-            for sub in ("10", "20"):
+            for sub in ("10",) if heading == ODD else ("10", "20"):
                 code = f"{heading}{sub}0000"
                 census += census_line(code, f"MADE-UP LINE {code}", f"MADE-UP LINE {code}, LONG")
+        for code in ("9803100010", "9803100020"):
+            census += census_line(code, f"MADE-UP LINE {code}", f"MADE-UP LINE {code}, LONG")
         (build / "sbsdf" / "econcord.txt").write_bytes(census)
         shutil.copy(FIXTURE / "index.html", build / "schedule_b_index.html")
         for name in ("release_before.json", "release_after.json"):
@@ -125,6 +143,7 @@ class Run:
         rows += padding_hts_rows(rows[0])
         if drop_hts_digits is not None:
             rows = [r for r in rows if len(r["htsno"].replace(".", "")) != drop_hts_digits]
+        rows = [r for r in rows if r["htsno"] not in drop_htsno]
         (build / "hts.json").write_text(json.dumps(rows), encoding="utf-8")
         (build / "econcord_date.json").write_text(json.dumps({"date": DATE}), encoding="utf-8")
         self.con = duckdb.connect()
@@ -190,7 +209,21 @@ class LadderTest(unittest.TestCase):
         line = self.row("9801100000")
         self.assertEqual(r["description"], line["description"])
         self.assertEqual(self.row("980110")["text_source"], "census_derived")
-        self.assertEqual(self.row("9802")["description"], self.row("9802100000")["description"])
+        self.assertEqual(self.row("980220")["description"], self.row("9802200000")["description"])
+
+    def test_a_census_level_with_several_lines_is_labelled(self):
+        # 9802 has two lines under it and 980310 two: no one line's text stands for them.
+        for code, label in (("9802", "Heading 9802"), ("9803", "Heading 9803"),
+                            ("980310", "Subheading 9803.10")):
+            r = self.row(code)
+            self.assertEqual(r["text_source"], "meridian_label", code)
+            self.assertEqual(r["description"], label, code)
+        self.assertEqual(self.row("980210")["text_source"], "census_derived")
+        r = self.row("9803100010")
+        self.assertEqual(
+            r["description_full"],
+            SEP.join(["Special Classification Provisions", "Heading 9803", "Subheading 9803.10", r["description"]]),
+        )
 
     def test_export_only_prefixes_take_their_first_lines_text(self):
         line = self.row("8800000000")
@@ -290,6 +323,17 @@ class LadderTest(unittest.TestCase):
             "SELECT code, description, description_full FROM schedule_b_out"
         ).fetchall():
             self.assertTrue(full == desc or full.endswith(SEP + desc), f"{code}: {full}")
+            parts = full.split(SEP)
+            self.assertEqual(len(parts), len(set(parts)), f"{code}: {full}")
+        # The odd padding heading: its text is its line's, two levels above the line.
+        self.assertEqual(self.row(ODD)["text_source"], "census_derived")
+        self.assertEqual(self.row(ODD + "10")["text_source"], "usitc")
+        self.assertEqual(
+            self.row(ODD + "100000")["description_full"],
+            SEP.join(["Natural or Cultured Pearls, Precious or Semiprecious Stones, Precious Metals, Metals Clad "
+                      "with Precious Metal, and Articles Thereof; Imitation Jewelry; Coin",
+                      f"Made-up subheading {ODD}.10", f"MADE-UP LINE {ODD}100000, LONG"]),
+        )
 
     def test_release(self):
         releases = self.con.execute("SELECT DISTINCT release FROM schedule_b_out").fetchall()
@@ -299,7 +343,7 @@ class LadderTest(unittest.TestCase):
 
     def test_counts(self):
         counts = dict(self.con.execute("SELECT level, count(*) FROM schedule_b_out GROUP BY level").fetchall())
-        self.assertEqual(counts, {"chapter": 7, "heading": 6 + 198, "subheading": 7 + 396, "commodity": 7 + 396})
+        self.assertEqual(counts, {"chapter": 7, "heading": 7 + 198, "subheading": 9 + 395, "commodity": 10 + 395})
 
     def test_columns_follow_the_core(self):
         cols = [(c[0], c[1]) for c in self.con.execute("DESCRIBE schedule_b_out").fetchall()]
@@ -331,6 +375,14 @@ class LadderTest(unittest.TestCase):
             self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
 
 
+class FixtureTest(unittest.TestCase):
+    def test_census_fixture_keeps_crlf(self):
+        # .gitattributes keeps git from rewriting these line ends.
+        data = (FIXTURE / "econcord.txt").read_bytes()
+        self.assertIn(b"\r\n", data)
+        self.assertEqual(data.count(b"\n"), data.count(b"\r\n"))
+
+
 class RefusalTest(unittest.TestCase):
     def refused(self, run: Run) -> str:
         try:
@@ -347,6 +399,23 @@ class RefusalTest(unittest.TestCase):
     def test_headings_below_99_percent(self):
         message = self.refused(Run(drop_hts_digits=4))
         self.assertRegex(message, r"USITC names \d+ of \d+ headings outside chapter 98; 99% required")
+
+    def test_headings_just_under_99_percent(self):
+        # Outside chapter 98 the main run has 202 headings, 200 named (99.0%), and
+        # passes. Dropping one padding heading row leaves 199 (98.5%): refused.
+        message = self.refused(Run(drop_htsno=("7001",)))
+        self.assertIn("USITC names 199 of 202 headings outside chapter 98; 99% required", message)
+
+    def test_subheadings_just_under_99_percent(self):
+        # 400 subheadings, 397 named: one fewer, 396 (99.0%), passes; two fewer, 395
+        # (98.75%), is refused.
+        run = Run(drop_htsno=("7001.10",))
+        try:
+            run.execute()
+        finally:
+            run.close()
+        message = self.refused(Run(drop_htsno=("7001.10", "7001.20")))
+        self.assertIn("USITC names 395 of 400 subheadings outside chapter 98; 99% required", message)
 
     def test_subheadings_below_99_percent(self):
         message = self.refused(Run(drop_hts_digits=6))
