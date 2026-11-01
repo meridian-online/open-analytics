@@ -39,8 +39,9 @@
 --                     spp.):" alone, takes that heading's text). The parent level's node
 --                     is the lowest row above every numbered row under the parent
 --                     prefix; for a heading, whose parent is a chapter and on no chain,
---                     and for any prefix whose parent has no such row, the chain is read
---                     from the top of the chapter.
+--                     and for any prefix whose parent is a label, the chain is read from
+--                     the top of the chapter. The node row itself may sit outside the
+--                     prefix: heading 3407 is the node of its only subheading, 340700.
 --     meridian_label  no row belongs to the prefix alone: its rows sit side by side at
 --                     the top of the chapter, or directly under a row that other
 --                     prefixes' rows sit under too (chapters 98 and 99). The text is the
@@ -125,20 +126,21 @@ common AS (
   GROUP BY prefix
 ),
 leaks AS (
-  -- Prefixes whose common row is above a numbered row outside the prefix.
+  -- Prefixes whose common row is above a numbered row outside the prefix. The common
+  -- row itself does not count: a printed heading over its only subheading's lines is
+  -- that subheading's node, though its own code is shorter.
   SELECT DISTINCT p.prefix
   FROM prefixes p
   JOIN common c USING (prefix)
-  JOIN lineage l ON l.anc_seq = c.ca_seq
+  JOIN hts_chain l ON l.anc_seq = c.ca_seq
   JOIN hts_rows r ON r.seq = l.seq
   WHERE r.code IS NOT NULL AND left(r.code, p.len) <> p.prefix
 ),
-classified AS (
+kinds AS (
   SELECT
     p.prefix, p.len,
     own.seq AS own_seq,
     c.ca_seq,
-    CASE WHEN p.len > 4 THEN pc.ca_seq END AS parent_ca_seq,
     CASE
       WHEN own.seq IS NOT NULL THEN 'usitc'
       WHEN c.ca_seq IS NOT NULL AND lk.prefix IS NULL THEN 'usitc_derived'
@@ -148,7 +150,14 @@ classified AS (
   LEFT JOIN hts_rows own ON own.code = p.prefix
   LEFT JOIN common c ON c.prefix = p.prefix
   LEFT JOIN leaks lk ON lk.prefix = p.prefix
-  LEFT JOIN common pc ON p.len > 2 AND pc.prefix = left(p.prefix, p.len - 2)
+),
+classified AS (
+  -- Where the text's chain starts: below the parent level's node, or at the chapter
+  -- top for a heading and for a level whose parent is a label.
+  SELECT k.*,
+    CASE WHEN k.len > 4 AND pk.text_source <> 'meridian_label' THEN pk.ca_seq END AS parent_ca_seq
+  FROM kinds k
+  LEFT JOIN kinds pk ON k.len > 2 AND pk.prefix = left(k.prefix, k.len - 2)
 ),
 headings AS (
   -- The unnumbered headings on a node's chain strictly below the parent level's node.

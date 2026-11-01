@@ -11,7 +11,9 @@ The fixture is cut from USITC's `exportList` for 2026HTSRev22, in file order: he
 the chain above `0201.20.50.91` (an "Other" line under an "Other:" heading under an
 "Other" line), `0409.00.00` and its statistical lines, heading 0802 with the unnumbered
 "Kola nuts (Cola spp.):" and its two lines, two chapter 28 subchapter rows ("I. CHEMICAL
-ELEMENTS", "II. INORGANIC ACIDS ...") each with the heading and line after it, the
+ELEMENTS", "II. INORGANIC ACIDS ...") each with the heading and line after it, heading
+3407 and its two lines (its only subheading), heading 8424 with "Other appliances:"
+over 8424.82.00 and the two 8424.89 lines, the
 chains above `9823.01.01` and `9823.52.07`/`.08` (one with indent "03"), and two chapter
 99 rows that sit side by side at indent 0. Two rows are made up, to cover a shape the
 real export has nowhere in chapters 01-05: an unnumbered row "Of fish:" at indent 0,
@@ -197,7 +199,7 @@ class LadderTest(unittest.TestCase):
             "SELECT code, text_source, depth, parent_code, description, description_full "
             "FROM hts_out WHERE level = 'chapter' ORDER BY code"
         ).fetchall()
-        self.assertEqual([c[0] for c in chapters], ["01", "02", "03", "04", "08", "28", "98", "99"])
+        self.assertEqual([c[0] for c in chapters], ["01", "02", "03", "04", "08", "28", "34", "84", "98", "99"])
         for code, source, depth, parent, desc, full in chapters:
             self.assertEqual(source, "usitc_toc", code)
             self.assertEqual(depth, 0, code)
@@ -295,6 +297,27 @@ class LadderTest(unittest.TestCase):
         heading = self.row("0802")["description"]
         self.assertEqual(r["description_full"], SEP.join([self.titles["08"], heading, "Kola nuts (Cola spp.):"]))
         self.assertEqual(self.row("08027010")["description"], "In shell")
+
+    def test_a_headings_only_subheading_takes_the_headings_text(self):
+        # 3407.00.20.00 and 3407.00.40.00 sit under heading 3407 and nothing else: the
+        # heading row is their node, and no other subheading's rows sit under it.
+        heading = self.row("3407")["description"]
+        r = self.row("340700")
+        self.assertEqual(r["text_source"], "usitc_derived")
+        self.assertEqual(r["description"], heading)
+        level = self.con.execute("SELECT text, text_source FROM hts_levels WHERE prefix = '340700'").fetchone()
+        self.assertEqual(level, (heading, "usitc_derived"))
+
+    def test_below_a_label_the_text_reads_from_the_chapter_top(self):
+        # 8424.89's two lines sit under "Other appliances:", which 8424.82.00 sits under
+        # too, so 842489 is a label; its lines' made tariff lines read from the chapter
+        # top and keep "Other appliances:".
+        r = self.row("842489")
+        self.assertEqual(r["text_source"], "meridian_label")
+        self.assertEqual(r["description"], "Subheading 8424.89")
+        r = self.row("84248990")
+        self.assertEqual(r["text_source"], "usitc_derived")
+        self.assertEqual(r["description"], "Other appliances: Other")
 
     def test_subchapter_rows_follow_the_chapter_title(self):
         title = self.titles["28"]
