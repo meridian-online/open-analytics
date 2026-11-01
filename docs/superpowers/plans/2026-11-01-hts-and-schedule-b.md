@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Build every Protocol with **arc 0.2.1** and **DuckDB CLI 1.5.5**: `ARC_DUCKDB_BIN=/Users/hugh/scratch/duckdb-1.5.5/duckdb`, arc from `gh release download v0.2.1 -R meridian-online/arcform -p 'arc-v0.2.1-aarch64-apple-darwin.tar.gz*'` into the session scratchpad, sha256 checked. arc 0.2.2 refuses DuckDB 1.x, and CI (`DUCKDB_VERSION: "1.5.5"`) and the publish pin (`PUBLISH_DUCKDB_PIN` 1.5.5) hold the Parquet writer to 1.5.5. Do not overwrite `~/.cargo/bin/arc`.
+- Build every Protocol with **arc 0.2.1** and **DuckDB CLI 1.5.5**: `ARC_DUCKDB_BIN=<path to the DuckDB 1.5.5 CLI>`, arc from `gh release download v0.2.1 -R meridian-online/arcform -p 'arc-v0.2.1-aarch64-apple-darwin.tar.gz*'` into the session scratchpad, sha256 checked. arc 0.2.2 refuses DuckDB 1.x, and CI (`DUCKDB_VERSION: "1.5.5"`) and the publish pin (`PUBLISH_DUCKDB_PIN` 1.5.5) hold the Parquet writer to 1.5.5. Do not overwrite `~/.cargo/bin/arc`.
 - Public repository: no Kata refs, no private repo names, no local paths in tracked files, commit messages, branch names or pull request text.
 - `User-Agent: "Meridian Protocol (open-analytics; research@meridian.online)"` on every fetch.
 - USITC URLs: `https://hts.usitc.gov/reststop/exportList?from=0100&to=9999&format=JSON&styles=false` and `https://hts.usitc.gov/reststop/currentRelease`. Census URLs: `https://www.census.gov/foreign-trade/schedules/b/{year}/sbsdf.zip` and `.../b/{year}/index.html`, `year` a Protocol param defaulting to `2026`.
@@ -44,7 +44,7 @@
 - Produces: `python3 scripts/check_code_list.py --parquet PATH --levels L1,L2,... [--json OUT]` checks one built file; exit 0 pass, 1 contract broken (each finding printed `code-list: <rule>: <detail>`), 2 cannot run. With no `--parquet`, it reads every `datasets/*/datapackage.json` carrying `"x-meridian-code-list": {"levels": [...]}` at package level and checks the file at `resources[0].path`.
 - Produces: `CORE_COLUMNS: tuple[str, ...]` (the ten names in order) and `check(con, relation: str, levels: list[str]) -> list[str]` returning finding strings, importable by tests.
 
-- [ ] **Step 1: Write the failing tests** in `scripts/test_check_code_list.py`, `unittest`, building each fixture as a Parquet in a temp dir with `duckdb`. One passing case (a three-level ladder) and one case per rule, each asserting the rule name appears in the output and exit is 1: `core-columns` (a column missing; two swapped), `code-unique` (repeated), `code-not-null`, `parent-present` (parent not in file), `parent-null-below-top`, `depth-step` (child depth not parent+1), `level-set` (level outside `--levels`), `release-not-null`, `release-single` (two distinct), `description-not-null`. Plus: no descriptor carries the key → exit 2 with "no code-list descriptors", and an unreadable path → exit 2.
+- [ ] **Step 1: Write the failing tests** in `scripts/test_check_code_list.py`, `unittest`, building each fixture as a Parquet in a temp dir with `duckdb`. One passing case (a three-level ladder) and one case per rule, each asserting the rule name appears in the output and exit is 1: `core-columns` (a column missing; two swapped), `code-unique` (repeated), `code-not-null`, `parent-present` (parent not in file), `parent-null-below-top`, `depth-step` (child depth not parent+1), `level-depth` (a row's depth is not its level's position in `--levels`), `level-set` (level outside `--levels`), `release-not-null`, `release-single` (two distinct), `description-not-null`. Plus: no descriptor carries the key → exit 2 with "no code-list descriptors", and an unreadable path → exit 2.
 - [ ] **Step 2: Run** `python3 scripts/test_check_code_list.py` — Expected: FAIL, module not found.
 - [ ] **Step 3: Implement `check()` and the CLI** in `scripts/check_code_list.py`. Each rule is one SQL query over the relation. Standard library plus `duckdb` only, with a PEP 723 header pinning `duckdb==1.5.5` so it runs under `op: uv@1`.
 - [ ] **Step 4: Run** `python3 scripts/test_check_code_list.py` — Expected: all pass.
@@ -68,7 +68,10 @@
 - [ ] **Step 3: Write the failing tests** in `scripts/test_hts_models.py`, which copies the fixture into a temp `build/`, runs `outline.sql`, `load.sql`, `package.sql` with the DuckDB 1.5.5 CLI (`ARC_DUCKDB_BIN` or `duckdb` on PATH; skip with a message naming it if absent), and asserts:
   - `0409` exists with `level='heading'`, `text_source='usitc_derived'`, `description='Natural honey'`, `parent_code='04'`;
   - `010511` exists with `description='Weighing not more than 185 g: Chickens'`;
-  - `0101210010` has `parent_code='01012100'`, `description_full` starting `Live horses, asses, mules and hinnies › ` and containing `Horses:`;
+  - `0101210010` has `parent_code='01012100'`, `description_full` starting with chapter 01's title from `chapters.csv` followed by ` › ` and then heading 0101's text, and containing `Horses:` exactly once;
+  - no row's `description_full` repeats an element (split on ` › `);
+  - a ten-digit line whose eight-digit prefix USITC does not print hangs from a made `tariff_line` row with `text_source='usitc_derived'`;
+  - an unnumbered row directly under a chapter, before that chapter's first numbered heading (add one to the fixture), leaves its numbered child's `parent_code` as the chapter and puts the unnumbered text in the child's `description_full`;
   - a ten-digit `0409000010`-style line that prints no rate has `general_rate` equal to its eight-digit line's and `rate_from_code='04090000'`; a line that prints its own has `rate_from_code=code`;
   - `chapter` rows have `text_source='usitc_toc'` and `depth=0`, and every row has `section` set;
   - the `"03"` row has `indent=3`;
@@ -105,7 +108,7 @@
 
 **Interfaces:**
 - Consumes: `../hts/models/outline.sql` → `hts_levels`, `hts_outline`.
-- Produces: `load.sql` reads `build/sbsdf/econcord.txt`, `build/schedule_b_index.html`, `build/release_before.json`, `build/release_after.json`, the year from `getvariable('year')` or a one-row `params` table (whichever arc 0.2.1 offers for `params:`), and the `.arcmeta` of the zip fetch if the member date is not available. It creates `schedule_b` with the core columns, then `description_short, unit_1, unit_2, sitc, end_use, agricultural, naics, hitech, section, section_title, hts_release`. It errors with `'HS edition mismatch: Schedule B <year>, USITC <revision>'` when the revision's year differs from `year`, and with `'USITC names <n> of <m> headings and subheadings outside chapter 98; 99% required'` below 99%.
+- Produces: `load.sql` reads `build/sbsdf/econcord.txt`, `build/schedule_b_index.html`, `build/release_before.json`, `build/release_after.json`, the year from `getvariable('year')` or a one-row `params` table (whichever arc 0.2.1 offers for `params:`), and the `.arcmeta` of the zip fetch if the member date is not available. It creates `schedule_b` with the core columns, then `description_short, unit_1, unit_2, sitc, end_use, agricultural, naics, hitech, section, section_title, hts_release`. It errors with `'HS edition mismatch: Schedule B <year>, USITC <revision>'` when the revision's year differs from `year`, and with `'USITC names <n> of <m> <headings|subheadings> outside chapter 98; 99% required'` when either level, counted on its own, is below 99%.
 
 - [ ] **Step 1: Make the fixture**: ten-digit lines under chapters 01 (`0101210000`, `0101290000`, matching the HTS fixture's prefixes), 04 (`0409000000`), 88 (`8800000000`, any line), 98 (`9801100000`, `9802100000`); an `index.html` holding the chapter and section anchor text for 01, 04, 88, 98 in Census's form (`Chapter 1 : Live Animals`, `Section 1 - Live Animals; Animal Products`).
 - [ ] **Step 2: Write the failing tests** in `scripts/test_schedule_b_models.py`, run the way Task 2's are, asserting:
@@ -116,7 +119,7 @@
   - `0101210000` has `level='commodity'`, `parent_code='010121'`, `description_short` and `description` both set, and `hts_release='2026HTSRev22'`;
   - `release` matches `^2026/\d{4}-\d{2}-\d{2}$`;
   - with `year=2027` the run fails with `HS edition mismatch: Schedule B 2027, USITC 2026HTSRev22`;
-  - with the fixture's HTS rows for chapter 01 removed, the run fails with the 99% message;
+  - with the fixture's HTS heading rows removed but subheadings kept, the run fails with the headings message; with subheading rows removed, with the subheadings message;
   - `check_code_list.py --levels chapter,heading,subheading,commodity` exits 0 on the export.
 - [ ] **Step 3: Run** `python3 scripts/test_schedule_b_models.py` — Expected: FAIL.
 - [ ] **Step 4: Write `load.sql` and `package.sql`.** Fixed-width read: one VARCHAR column per line (`read_csv(..., columns={'line':'VARCHAR'}, header=false, delim=E'\x01', quote='')`), CR stripped, fields by the layout in the spec; empty strings to NULL. Chapter and section titles: `read_text` of the index, `regexp_extract_all` over the tag-stripped text, for `Chapter (\d{1,2}) : ` and `Section (\d+|[IVX]+) - `, each title ending at the next `Chapter`/`Section` marker. `agricultural` is a boolean only if the file's distinct values are exactly two, otherwise VARCHAR as printed.
@@ -129,12 +132,12 @@
 - Create: `datasets/schedule_b/arcform.yaml`, `README.md`, `.gitignore`, `descriptor.overrides.json`, `nominations.finetype.json`, `schema.finetype.json`, `datapackage.json` (emitted)
 
 **Interfaces:**
-- Consumes: Task 4's models; Task 1's check; `census/naics_2022`'s descriptor for the foreign key.
-- Produces: `datasets/schedule_b/build/schedule_b.parquet`; descriptor with resource `path` `https://openlake.meridian.online/census/schedule_b.parquet`, `name` `schedule_b`, `primaryKey` `["code"]`, `x-meridian-code-list` levels `chapter,heading,subheading,commodity`, and a `foreignKeys` entry `naics` → `naics_2022`'s `code` with `x-package` (NAICS's descriptor URL), `x-status`, `x-evidence` and `x-confidence` measured at build.
+- Consumes: Task 4's models; Task 1's check; `census/naics_2022`'s descriptor for the NAICS join.
+- Produces: `datasets/schedule_b/build/schedule_b.parquet`; descriptor with resource `path` `https://openlake.meridian.online/census/schedule_b.parquet`, `name` `schedule_b`, `primaryKey` `["code"]`, `x-meridian-code-list` levels `chapter,heading,subheading,commodity`, and an `x-joins.joins[]` entry from `naics` to `census/naics_2022`'s `code` in `datasets/edgar_gleif`'s form (`cardinality`, `coverage`, `evidence`, `measuredAgainst` set to the NAICS object's hash, `package` its descriptor URL); no `schema.foreignKeys` entry.
 
 - [ ] **Step 1: Write `arcform.yaml`**: `params: year: "2026"`; `fetch_schedule_b` + `archive_extract@1` to `build/sbsdf/`; `fetch_index`; the three USITC fetches as in Task 3; `outline` (`sql: ../hts/models/outline.sql`); `load`; `package`; `export_schedule_b` (`order_by: "code"`); `describe`; `check_code_list`; `validate`; `stamp_descriptor`.
 - [ ] **Step 2: Write `descriptor.overrides.json`**: title "Schedule B — U.S. Export Classification Codes"; licence `other-pd` "Public domain (U.S. Census Bureau)" at `https://www.census.gov/about/policies/open-gov/open-data.html`; sources Census's Schedule B page, the year's index, and USITC's export as the source of heading and subheading text; contributors Census (author), USITC (contributor, for the heading text), Meridian. Field descriptions: `text_source` names its three values; `hts_release` says which USITC revision supplied heading text; `naics` notes the join to `census/naics_2022`. Description says Census's bulk file carries no endorsement notice and that the data is credited to the Census Bureau.
-- [ ] **Step 3: Measure the NAICS join** at build: distinct non-NULL `naics` values, and how many are a `code` in the published `census/naics_2022.parquet`. Write the counts into the foreign key's `x-evidence` in the overrides, in the crosswalk's form.
+- [ ] **Step 3: Measure the NAICS join** at build: distinct non-NULL `naics` values, and how many are a `code` in the published `census/naics_2022.parquet`. Write `coverage` into the generated `datapackage.json` from the build (not by hand in the overrides), as `crosswalk_join.py --write` does for the crosswalk.
 - [ ] **Step 4: Run cold**, nominate and write the contract, and write `README.md`, as Task 3 Steps 3–5.
 - [ ] **Step 5: Run** `python3 scripts/check_protocol_readme.py` and `check_code_list.py` on the build — Expected: exit 0.
 - [ ] **Step 6: Commit** — "census/schedule_b: the Protocol and its descriptor".
@@ -163,7 +166,7 @@
 
 ### Task 8: infra publishes the two addresses (infra repository, its own branch and pull request)
 
-**Files (in `~/github/meridian-online/infra`, branch `hts-and-schedule-b`):**
+**Files (in a checkout of meridian-online/infra, branch `hts-and-schedule-b`):**
 - Modify: `publish/publish-all.sh` (`_script_for` and `PROTOCOL_SLUGS` gain `usitc/hts` and `census/schedule_b` on `publish-protocol-artifact.sh`)
 - Modify: `publish/publish-catalog.sh` (`DATASETS` admits an address with no old name, written `usitc/hts:` with an empty right side; `NTABLES` counts one table for such an entry and three for the others)
 - Modify: `publish/README.md` (address table rows), `publish/test/*.test.sh` that enumerate addresses
