@@ -17,11 +17,12 @@ The reader is an analyst who searches for an HTS or HS code and would rather que
 3. `usitc/hts` carries each line's duty rates, units and footnotes as USITC prints them.
 4. Each snapshot records the issuer's release, so a reader who pins a snapshot knows which revision of the codes it holds.
 5. A code-list contract that the five later lists meet: shared core columns, a check script that holds a built list to them, and a written guide.
-6. Descriptors, finetype contracts, registry entries, the new held namespace `usitc`, and the README catalogue rows, all passing this repository's checks.
+6. Descriptors, finetype contracts, registry entries, the new held namespace `usitc`, and the README catalogue rows, all passing this repository's checks against the served files.
+7. Both lists published from this branch before it merges, to `usitc/hts.parquet` and `census/schedule_b.parquet` on openlake with content-addressed snapshots and as `meridian.usitc.hts` and `meridian.census.schedule_b` in the catalogue, through infra's publish pipeline. **Hugh's ruling:** this repository's CI checks every descriptor and README row count against the served object, so the publish comes before the merge, as it did for the namespace move on 31 October. Whatever infra's pipeline needs to publish the two new addresses is its own pull request in infra.
 
 ## Non-goals
 
-- The R2 publish, the catalogue entries `meridian.usitc.hts` and `meridian.census.schedule_b`, and the dataset pages on meridian.online. They follow this pull request, in infra and web.
+- The dataset pages on meridian.online, and the HS code type page's list of columns carrying HS codes. They follow the publish, in web.
 - Parsing duty rates into numbers. Rates stay verbatim text; a rate parser is later work, if it is wanted.
 - New arcform operations. Hugh asked whether `nest-by-indent` and `nest-by-prefix` would be used regularly. Laid against the seven lists, they would not: an indent outline serves HTS alone, and the prefix shape varies list by list (NAICS ranges, SOC's code pattern, FIPS's fixed widths). They do not earn a place in arc's public catalogue.
 - A library of shared macros for all code lists. Hugh compared that to dbt-utils, a set of functions that are found only by reading them. SQL is shared only where two lists share a source quirk, as HTS and Schedule B do (below).
