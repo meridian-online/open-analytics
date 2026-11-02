@@ -1,0 +1,128 @@
+{
+  "$comment": "Self-derived finetype drift contract for fda/ndc, checked by the in-engine finetype_validate@1 gate (the model-free `ft_validate` DuckDB table macro). ft_validate MELTS every column to VARCHAR, so this contract uses ONLY the string-surviving JSON-Schema keywords. ENFORCED: the `pattern` on code, code_display and parent_code, the shapes descriptor.overrides.json publishes (digits only at 5, 9 or 11 digits; the FDA's hyphenated layouts); the closed `enum` domains on level, text_source and dea_schedule; the release pattern; and `minLength`/`maxLength` envelopes elsewhere. NOT ENFORCED, by design: product_type and marketing_category, which the FDA can extend between refreshes and which would stop a fortnightly refresh for a new value that is not wrong; numeric ranges and dates (a numeric `type` BACKFIRES to 100% reject once melted to VARCHAR); NULLs (invisible to ft_validate); object-level `required` (documentation only); and the list columns, which do not melt to a string shape. Free-text fields carry LOOSE length envelopes with headroom. Derived from build/stage/ndc.parquet on openFDA's 2026-10-30 file: a pass-through on today's rows, a fail-closed tripwire for future drift (a malformed or mis-padded code, an unknown DEA schedule).",
+  "$id": "finetype://ndc.parquet",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "fda/ndc",
+  "type": "object",
+  "properties": {
+    "code": {
+      "type": "string",
+      "minLength": 5,
+      "maxLength": 11,
+      "pattern": "^([0-9]{5}|[0-9]{9}|[0-9]{11})$"
+    },
+    "code_display": {
+      "type": "string",
+      "minLength": 4,
+      "maxLength": 12,
+      "pattern": "^[0-9]{4,5}(-[0-9]{3,4}(-[0-9]{1,2})?)?$"
+    },
+    "level": {
+      "type": "string",
+      "enum": [
+        "labeler",
+        "product",
+        "package"
+      ]
+    },
+    "parent_code": {
+      "type": "string",
+      "minLength": 5,
+      "maxLength": 9,
+      "pattern": "^([0-9]{5}|[0-9]{9})$"
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 8192
+    },
+    "description_full": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 8192
+    },
+    "release": {
+      "type": "string",
+      "minLength": 10,
+      "maxLength": 10,
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    },
+    "text_source": {
+      "type": "string",
+      "enum": [
+        "fda"
+      ]
+    },
+    "corpus": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 8192
+    },
+    "labeler_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "product_type": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "brand_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "brand_name_suffix": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "generic_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 8192
+    },
+    "dosage_form": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "dea_schedule": {
+      "type": "string",
+      "enum": [
+        "CI",
+        "CII",
+        "CIII",
+        "CIV",
+        "CV"
+      ]
+    },
+    "marketing_category": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "application_number": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "package_description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 8192
+    }
+  },
+  "required": [
+    "code",
+    "code_display",
+    "level",
+    "depth",
+    "description",
+    "description_full",
+    "release",
+    "text_source",
+    "corpus"
+  ]
+}

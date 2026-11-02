@@ -1,6 +1,6 @@
 # Hosted code lists
 
-How Meridian hosts a code list, and what the next one reuses. `usitc/hts` (the Harmonized Tariff Schedule of the United States) and `census/schedule_b` (the Census Bureau's export codes) were the first two, and `cms/hcpcs` (HCPCS Level II, CMS's billing codes) the third. The NDC directory, SOC, FIPS state and county codes, and OurAirports' airports follow on the same pattern. Read this before building any of them.
+How Meridian hosts a code list, and what the next one reuses. `usitc/hts` (the Harmonized Tariff Schedule of the United States) and `census/schedule_b` (the Census Bureau's export codes) were the first two, `cms/hcpcs` (HCPCS Level II, CMS's billing codes) the third, and `fda/ndc` (the FDA's National Drug Code directory) the fourth. SOC, FIPS state and county codes, and OurAirports' airports follow on the same pattern. Read this before building any of them.
 
 ## What a hosted code list is
 
@@ -59,7 +59,9 @@ A code-list Protocol is a directory under `datasets/`, named after the dataset, 
 
 **HCPCS** (`datasets/hcpcs/`) is the first flat list, in ten steps: `fetch_hcpcs` and `extract_hcpcs` for CMS's quarterly zip; `load`, which reads CMS's fixed-width records by the record layout CMS ships in the same zip; `package`; `export_hcpcs`; `check_licence`, a `sql:` step over the exported file (see "When a source carries text that is not cleared"); `describe`, `check_code_list`, `validate` and `stamp_descriptor`. It keeps Schedule B's one writer per file: the export and describe write to `build/stage/`, and `stamp_descriptor` alone writes the published Parquet and `datapackage.json`. Its list has one level, `code`, so every row is at depth 0 with a NULL parent and `description_full` is `description`; the contract admits this, since `--levels code` declares a ladder of one.
 
-Each Protocol's SQL has a self-test that runs the shipped models through Python `duckdb` over a reduced copy of the source files and checks the result with `check_code_list.py`: `scripts/test_hts_models.py`, `scripts/test_schedule_b_models.py` and `scripts/test_hcpcs_models.py`, each a CI job. Publishing stays outside the Protocol, in the publish pipeline, which reads its terminal Parquet and descriptor.
+**NDC** (`datasets/ndc/`) is the first list whose source is JSON and the first refreshed on a fixed schedule rather than at each issuer release, in nine steps: `fetch_ndc` and `extract_ndc` for openFDA's NDC zip; `load`, which reads the finished drugs' listings into three levels, `labeler`, `product` and `package`; `package`; `export_ndc`; `describe`, `check_code_list` (`--levels labeler,product,package`), `validate` and `stamp_descriptor`. It keeps the one writer per file. Its `code` is the eleven-digit NDC claims carry, padded 5-4-2 and digits only, at five digits for a labeler and nine for a product, so each level's code is the prefix of the codes below it and a parent is found by prefix, as in the HS lists; `code_display` is the FDA's hyphenated ten-digit form.
+
+Each Protocol's SQL has a self-test that runs the shipped models through Python `duckdb` over a reduced copy of the source files and checks the result with `check_code_list.py`: `scripts/test_hts_models.py`, `scripts/test_schedule_b_models.py`, `scripts/test_hcpcs_models.py` and `scripts/test_ndc_models.py`, each a CI job. Publishing stays outside the Protocol, in the publish pipeline, which reads its terminal Parquet and descriptor.
 
 ### Describing, registering and publishing a list
 
@@ -88,6 +90,8 @@ Every row carries `release`, and a NULL fails the run, so a reader who pins a sn
 **The edition guard and the January rollover.** USITC serves only its current revision, so around a new HS edition (the next takes effect on 1 January 2027) the Schedule B year and the USITC revision can belong to different editions. Schedule B's `load` refuses the run when the year in `hts_release` is not the Schedule B year, or when, outside chapter 98, USITC names fewer than 99% of the headings, or fewer than 99% of the subheadings, Schedule B implies. Each level is counted on its own, and a prefix USITC only labels counts as not named. A failed run publishes nothing: rerun once both issuers are on the same edition.
 
 **CMS's quarter and file date.** CMS publishes each quarter's HCPCS file at its own URL, and the text file inside is named for the quarter and the date CMS built it (`HCPC2026_OCT_ANWEB_09232026.txt`). `release` is `2026-10/2026-09-23`, read in `load` from the extracted file's name, so it cannot disagree with the file the rows came from; the run fails if the directory holds other than one such file or the name does not parse. A new quarter changes two literals in `arcform.yaml`, the URL and the zip member, and the quarter's source in `descriptor.overrides.json`.
+
+**openFDA's last-updated date.** openFDA serves the current NDC directory at one URL, and its file's `meta` records the date openFDA last updated it and how many records the file holds. `release` is that date (`2026-10-30`); `load` fails the run if it is not a date, if the record count is not the count `meta` states, or if the extracted directory holds more than one file. The URL does not change, so a refresh changes nothing in the Protocol. The FDA updates the directory daily and Meridian refreshes it fortnightly, so the dataset's page and descriptor state the as-of date and that cadence. Because the row count moves with each refresh, the README states it rounded (`340K`), as GLEIF's is.
 
 ## When a source carries text that is not cleared
 
@@ -139,6 +143,16 @@ Made for HCPCS, during its build (the operator was away; each is a ruling that c
 - **CPT citations redacted, not the codes dropped.** Fifteen G, M, S and V codes cite CPT codes in their descriptors. They include the prolonged-service codes G0316 to G0318, and dropping a cleared code to remove a citation would cost an analyst the code; replacing the numbers costs only the citation.
 - **CMS's repeated fields as lists.** Pricing indicators (up to 4), type of service (5), laboratory certification codes (8) and cross-references (5) are lists, NULL where CMS prints none, as HTS's units and footnotes are. Manual and statute references, MOG and anesthesia fields are not carried.
 
+Made for the NDC directory, during its build (the operator was away; each is a ruling that can be revisited):
+
+- **openFDA's JSON, not the FDA's text files.** The FDA publishes the directory as two tab-separated files, encoded Windows-1252, which DuckDB 1.5.5 reads only through its `encodings` extension, installed from the network at run time. openFDA's download carries the same listings in UTF-8, records its own date and record count, and openFDA's licence page states the CC0 dedication the issue relies on. Its `openfda` block, which openFDA adds from RxNorm, UNII and other sources with their own terms, is not read.
+- **Finished drugs only.** openFDA's download also holds unfinished drugs (21,645 listings on 2026-10-30): bulk ingredients and drugs for further processing, which are a separate FDA file, reuse product NDCs across firms, and are not the directory claims data joins to.
+- **Three levels, labeler, product and package, with eleven-digit codes.** The labeler code and the product NDC are codes other data carries, and with them every package has a parent that is a real code. Padding to 5-4-2 is the HIPAA billing form, so `code` joins claims data without a rewrite, and the prefix rule gives the ladder; `load` refuses a run where two NDCs pad alike.
+- **A product NDC with several listings is one row.** 903 product NDCs have more than one listing, one per labeling document. The product row takes the listing certified latest, then the latest marketing start, then the lowest `product_id`, and `listing_count` records how many there were; each package row takes its own listing's fields, so nothing a package was listed with is lost.
+- **A labeler's row takes the name its listings give most often.** Names vary by listing (1,273 of 5,395 labeler codes on 2026-10-30), and the FDA's directory has no separate labeler table. Each product and package row keeps its own listing's spelling in `labeler_name`.
+- **A product's text is composed from the FDA's fields.** The FDA has no single product title, so `description` is the brand name and suffix, the generic name in brackets where it differs, and the dosage form. `text_source` stays `fda`, since every word is the FDA's.
+- **A package listed twice keeps its earlier start.** Four package NDCs appear twice in one listing with two marketing start dates.
+
 ## Measured on 2026-11-01
 
 Against USITC's `2026HTSRev22` and Census's Schedule B `2026/2026-07-27`:
@@ -149,10 +163,14 @@ Against USITC's `2026HTSRev22` and Census's Schedule B `2026/2026-07-27`:
 
 Against CMS's HCPCS file for October 2026 (`2026-10/2026-09-23`), on 2026-11-02: `cms/hcpcs`, 8,770 rows; no D codes in CMS's file; 42 codes whose cross-references were CPT codes; 15 descriptions with CPT numbers redacted.
 
+Against openFDA's NDC file of 2026-10-30, on 2026-11-02: `fda/ndc`, 339,885 rows: 5,395 labelers, 115,367 products and 219,123 packages, from 116,528 finished listings.
+
 ## Known gaps
 
 - **finetype's `hs_code` pattern lacks the chapter and heading forms.** It admits 6, 8 and 10 digits but not the 2-digit chapter or 4-digit heading, so `describe` widens it and each dataset's overrides declare the shape `code` holds. This needs fixing in finetype.
 - **Schedule B's published file is not reproducible byte for byte.** `describe` gives the `sitc` column a different `x-finetype-locale` from one run to the next. The stamped footer carries the descriptor, so the published Parquet's bytes and hash, and the descriptor's, change between runs over the same data. The data bytes before stamping do not move.
+- **finetype's `ndc` pattern lacks the labeler and product forms.** It admits the ten-digit hyphenated layouts and eleven digits, which are the package forms, so `describe` widens it for `fda/ndc`'s `code` and `code_display`, and the overrides declare the shapes each holds.
+- **The NDC refresh is not scheduled.** Each publish is run by hand from a laptop, as for every Protocol-built dataset, so the fortnightly cadence holds only as long as someone runs it.
 - **`describe` records pattern-fit from before an override.** A field whose pattern an override replaces still reports how finetype's own pattern fitted.
 - **arc 0.2.1 does not re-run a step when only a param changes.** After changing `--param year=...`, run with `--force`.
 - **`crosswalk_join.py` sends no User-Agent**, and openlake's edge refuses Python's default one, so the Schedule B Protocol fetches the NAICS object itself in `fetch_naics` and hands the script the local file.
