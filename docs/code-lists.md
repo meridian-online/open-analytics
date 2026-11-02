@@ -1,6 +1,6 @@
 # Hosted code lists
 
-How Meridian hosts a code list, and what the next one reuses. `usitc/hts` (the Harmonized Tariff Schedule of the United States) and `census/schedule_b` (the Census Bureau's export codes) are the first two. HCPCS Level II, the NDC directory, SOC, FIPS state and county codes, and OurAirports' airports follow on the same pattern. Read this before building any of them.
+How Meridian hosts a code list, and what the next one reuses. `usitc/hts` (the Harmonized Tariff Schedule of the United States) and `census/schedule_b` (the Census Bureau's export codes) were the first two, and `cms/hcpcs` (HCPCS Level II, CMS's billing codes) the third. The NDC directory, SOC, FIPS state and county codes, and OurAirports' airports follow on the same pattern. Read this before building any of them.
 
 ## What a hosted code list is
 
@@ -57,7 +57,9 @@ A code-list Protocol is a directory under `datasets/`, named after the dataset, 
 
 **Schedule B** (`datasets/schedule_b/`) adds what its sources need, in seventeen steps: `fetch_schedule_b` and `extract_schedule_b` for Census's zip; `date_schedule_b`, which reads the date the zip records for `econcord.txt`; `fetch_index` for the year's index page, which holds the chapter and section titles; the same three USITC fetches as HTS; `outline` by relative path (`../hts/models/outline.sql`); its own `load` and `package`; and, after `describe`, `fetch_naics` and `derive_join_coverage`, which measure the NAICS join against the published `census/naics_2022` object and write its coverage into the descriptor. It keeps one writer per file: the export, describe and join steps write to `build/stage/`, and `stamp_descriptor` alone writes the published `build/schedule_b.parquet` and `datapackage.json`, so no step rewrites an earlier step's file and leaves it stale.
 
-Each Protocol's SQL has a self-test that runs the shipped models through Python `duckdb` over a reduced copy of the source files and checks the result with `check_code_list.py`: `scripts/test_hts_models.py` and `scripts/test_schedule_b_models.py`, each a CI job. Publishing stays outside the Protocol, in the publish pipeline, which reads its terminal Parquet and descriptor.
+**HCPCS** (`datasets/hcpcs/`) is the first flat list, in ten steps: `fetch_hcpcs` and `extract_hcpcs` for CMS's quarterly zip; `load`, which reads CMS's fixed-width records by the record layout CMS ships in the same zip; `package`; `export_hcpcs`; `check_licence`, a `sql:` step over the exported file (see "When a source carries text that is not cleared"); `describe`, `check_code_list`, `validate` and `stamp_descriptor`. It keeps Schedule B's one writer per file: the export and describe write to `build/stage/`, and `stamp_descriptor` alone writes the published Parquet and `datapackage.json`. Its list has one level, `code`, so every row is at depth 0 with a NULL parent and `description_full` is `description`; the contract admits this, since `--levels code` declares a ladder of one.
+
+Each Protocol's SQL has a self-test that runs the shipped models through Python `duckdb` over a reduced copy of the source files and checks the result with `check_code_list.py`: `scripts/test_hts_models.py`, `scripts/test_schedule_b_models.py` and `scripts/test_hcpcs_models.py`, each a CI job. Publishing stays outside the Protocol, in the publish pipeline, which reads its terminal Parquet and descriptor.
 
 ### Describing, registering and publishing a list
 
@@ -84,6 +86,17 @@ Every row carries `release`, and a NULL fails the run, so a reader who pins a sn
 **The year guard.** The year is the Protocol's `year` param, default `2026`, which `load` stamps into `release` and checks against USITC's revision. arc does not substitute a param into an operator's `with:`, so the year appears in four places, and a new January folder changes all four: the param's default, `fetch_schedule_b`'s URL, `fetch_index`'s URL, and the year's index source in `descriptor.overrides.json` (its path and title). `datasets/schedule_b/scripts/test_protocol_year.py` fails in CI when they disagree. `load` also refuses a run whose index page title ("Schedule B 2026 - Browse Chapters") names a different year from the param, so `arc run --param year=2027` with the URLs left on 2026 stops rather than labelling 2026 data as 2027's.
 
 **The edition guard and the January rollover.** USITC serves only its current revision, so around a new HS edition (the next takes effect on 1 January 2027) the Schedule B year and the USITC revision can belong to different editions. Schedule B's `load` refuses the run when the year in `hts_release` is not the Schedule B year, or when, outside chapter 98, USITC names fewer than 99% of the headings, or fewer than 99% of the subheadings, Schedule B implies. Each level is counted on its own, and a prefix USITC only labels counts as not named. A failed run publishes nothing: rerun once both issuers are on the same edition.
+
+**CMS's quarter and file date.** CMS publishes each quarter's HCPCS file at its own URL, and the text file inside is named for the quarter and the date CMS built it (`HCPC2026_OCT_ANWEB_09232026.txt`). `release` is `2026-10/2026-09-23`, read in `load` from the extracted file's name, so it cannot disagree with the file the rows came from; the run fails if the directory holds other than one such file or the name does not parse. A new quarter changes two literals in `arcform.yaml`, the URL and the zip member, and the quarter's source in `descriptor.overrides.json`.
+
+## When a source carries text that is not cleared
+
+An issuer's file can carry content the issuer does not own. CMS's HCPCS file is a US Government work except for two parts: the American Dental Association's CDT codes (the D series) and the American Medical Association's CPT. CMS's file carries no CPT code as a row, but it cites CPT codes in its cross-reference field and in some long descriptions. The pattern the HCPCS Protocol follows, for this and any later list with the same problem:
+
+- **Drop what is not cleared at the point it is read**, in `load`: D-series rows, and cross-references that are CPT or D codes.
+- **Redact, not drop, where the row itself is cleared.** A CMS descriptor that cites a CPT code by number is CMS's text about a Level II code, so the code stays and each CPT-shaped number is replaced by `[CPT code]`. `text_source` marks the row (`cms_cpt_redacted`), as it marks text from a second source.
+- **Prove it on the exported file**, in a step of its own before `describe`, so a run that lets cleared-only content slip fails before anything is described or stamped. `check_licence` counts what it checked and fails on any D code, any code or cross-reference of the wrong shape, and any CPT-shaped number or D code left in the text.
+- **Commit no uncleared content in fixtures.** The HCPCS self-test's fixture is cut from CMS's file with its CPT numbers replaced by made-up ones (`00000`, `0000T`) and a made-up dental record.
 
 ## When SQL is shared between lists
 
@@ -118,6 +131,14 @@ Made during the build:
 - **`agricultural` is true for `'0'`.** Census's layout prints `0` or `1` without saying which is which. Every line of chapters 1, 2 and 4 is `0`, and every line of chapter 3, fish, which USDA's definition of agricultural products leaves out, is `1`. `load` refuses any third value.
 - **Indent is NULL on rows USITC does not print.** Chapters, derived levels and labels have no indent of their own, and the column's description says so.
 
+Made for HCPCS, during its build (the operator was away; each is a ruling that can be revisited):
+
+- **One level, no letter rows.** CMS publishes no titles for the letter a HCPCS code starts with (A transport and supplies, J drugs, and so on); those titles exist in commercial code books, which are not cleared. A level with no text of its own would add nothing a reader cannot get from `left(code, 1)`, so the list is flat.
+- **Terminated codes kept.** CMS's file keeps every code it has terminated, with its termination date (1,322 of 8,770 in October 2026). An analyst joining historical claims needs them; `termination_date` is NULL for a code in use.
+- **Modifiers left out.** CMS's file also carries 384 Level II modifiers (A1, AM, ...). They are not codes on this list, cannot sit on its ladder, and are a separate table if they are wanted.
+- **CPT citations redacted, not the codes dropped.** Fifteen G, M, S and V codes cite CPT codes in their descriptors. They include the prolonged-service codes G0316 to G0318, and dropping a cleared code to remove a citation would cost an analyst the code; replacing the numbers costs only the citation.
+- **CMS's repeated fields as lists.** Pricing indicators (up to 4), type of service (5), laboratory certification codes (8) and cross-references (5) are lists, NULL where CMS prints none, as HTS's units and footnotes are. Manual and statute references, MOG and anesthesia fields are not carried.
+
 ## Measured on 2026-11-01
 
 Against USITC's `2026HTSRev22` and Census's Schedule B `2026/2026-07-27`:
@@ -125,6 +146,8 @@ Against USITC's `2026HTSRev22` and Census's Schedule B `2026/2026-07-27`:
 - `usitc/hts`: 42,036 rows. `census/schedule_b`: 16,727 rows.
 - Outside chapter 98, USITC names 1,228 of the 1,229 headings and 5,610 of the 5,612 subheadings Schedule B implies. The heading left is the export-only `8800`; the subheadings left are `880000` and `842489`.
 - The NAICS join: 9,464 of 9,779 Schedule B commodity lines carry a code `census/naics_2022` holds.
+
+Against CMS's HCPCS file for October 2026 (`2026-10/2026-09-23`), on 2026-11-02: `cms/hcpcs`, 8,770 rows; no D codes in CMS's file; 42 codes whose cross-references were CPT codes; 15 descriptions with CPT numbers redacted.
 
 ## Known gaps
 

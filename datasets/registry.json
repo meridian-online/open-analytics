@@ -5,6 +5,7 @@
     "sec": "Datasets issued by the U.S. Securities and Exchange Commission.",
     "census": "Datasets issued by the U.S. Census Bureau.",
     "usitc": "Datasets issued by the U.S. International Trade Commission.",
+    "cms": "Datasets issued by the Centers for Medicare & Medicaid Services.",
     "library": "Meridian's curated set: core datasets with no issuing organisation, and data Meridian makes itself.",
     "source": "Held for the compatibility views at the old names `source.gleif`, `source.edgar` and `source.naics`.",
     "crosswalk": "Held for the compatibility view at the old name `crosswalk.edgar_gleif`."
@@ -28,6 +29,11 @@
     "usitc": {
       "kind": "held",
       "issuer": "U.S. International Trade Commission",
+      "claimed": false
+    },
+    "cms": {
+      "kind": "held",
+      "issuer": "Centers for Medicare & Medicaid Services",
       "claimed": false
     },
     "usgs": {
@@ -60,6 +66,7 @@
     "sec",
     "census",
     "usitc",
+    "cms",
     "usgs",
     "nyc_tlc",
     "epoch_ai",
@@ -143,6 +150,16 @@
       "manifest": "https://openlake.meridian.online/manifest.json",
       "doi": null,
       "protocol": "datasets/schedule_b/arcform.yaml"
+    },
+    {
+      "uid": "1ac6fe9c-2017-4b6a-9a3d-516401eb1fce",
+      "schema": "cms",
+      "name": "hcpcs",
+      "title": "HCPCS Level II — Healthcare Common Procedure Coding System",
+      "aliases": [],
+      "manifest": "https://openlake.meridian.online/manifest.json",
+      "doi": null,
+      "protocol": "datasets/hcpcs/arcform.yaml"
     }
   ]
 }

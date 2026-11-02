@@ -1,0 +1,121 @@
+{
+  "$comment": "Self-derived finetype drift contract for cms/hcpcs, checked by the in-engine finetype_validate@1 gate (the model-free `ft_validate` DuckDB table macro). ft_validate MELTS every column to VARCHAR, so this contract uses ONLY the string-surviving JSON-Schema keywords. ENFORCED: the `pattern` on code and code_display, a letter other than D and four digits, the shape descriptor.overrides.json publishes and narrower than finetype's canonical `identity.medical.hcpcs` (`^[A-V]\\d{4}$`) by the D series; the closed `enum` domains on level, text_source, action_code, coverage_code, multiple_pricing_indicator and asc_payment_group, as CMS's record layout defines them; the BETOS shape (a letter, a digit and an optional letter); the release pattern; and `minLength`/`maxLength` envelopes elsewhere. NOT ENFORCED, by design: numeric ranges and dates (a numeric `type` BACKFIRES to 100% reject once melted to VARCHAR); NULLs (invisible to ft_validate); object-level `required` (documentation only); and the four list columns, which do not melt to a string shape. Free-text fields (description, description_full, corpus) carry LOOSE length envelopes with headroom; short_description holds CMS's 28-character limit. Derived from build/stage/hcpcs.parquet: a pass-through on today's 8,770 rows, a fail-closed tripwire for future drift (an unknown action or coverage code, a malformed or dental code).",
+  "$id": "finetype://hcpcs.parquet",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "cms/hcpcs",
+  "type": "object",
+  "properties": {
+    "code": {
+      "type": "string",
+      "pattern": "^[A-CE-V][0-9]{4}$",
+      "minLength": 5,
+      "maxLength": 5
+    },
+    "code_display": {
+      "type": "string",
+      "pattern": "^[A-CE-V][0-9]{4}$",
+      "minLength": 5,
+      "maxLength": 5
+    },
+    "level": {
+      "type": "string",
+      "enum": [
+        "code"
+      ]
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 8192
+    },
+    "description_full": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 8192
+    },
+    "release": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-(01|04|07|10)/[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+      "minLength": 18,
+      "maxLength": 18
+    },
+    "text_source": {
+      "type": "string",
+      "enum": [
+        "cms",
+        "cms_cpt_redacted"
+      ]
+    },
+    "corpus": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 8192
+    },
+    "short_description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 28
+    },
+    "action_code": {
+      "type": "string",
+      "enum": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "F",
+        "N",
+        "P",
+        "R",
+        "S",
+        "T"
+      ]
+    },
+    "coverage_code": {
+      "type": "string",
+      "enum": [
+        "C",
+        "D",
+        "I",
+        "M",
+        "S"
+      ]
+    },
+    "multiple_pricing_indicator": {
+      "type": "string",
+      "enum": [
+        "9",
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F",
+        "G"
+      ]
+    },
+    "betos": {
+      "type": "string",
+      "pattern": "^[A-Z][0-9][A-Z]?$",
+      "minLength": 2,
+      "maxLength": 3
+    },
+    "asc_payment_group": {
+      "type": "string",
+      "enum": [
+        "YY"
+      ]
+    }
+  },
+  "required": [
+    "code",
+    "code_display",
+    "level",
+    "depth",
+    "description",
+    "description_full",
+    "release",
+    "text_source",
+    "corpus"
+  ]
+}

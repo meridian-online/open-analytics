@@ -141,6 +141,8 @@
       "property": "constraints.maxLength",
       "values": {
         "gleif.legal_form": 4,
+        "hcpcs.betos": 3,
+        "hcpcs.release": 18,
         "hts.release": null,
         "schedule_b.hts_release": null,
         "schedule_b.release": null,
@@ -148,13 +150,15 @@
         "schedule_b.unit_1": 3,
         "schedule_b.unit_2": 3
       },
-      "reason": "The label names a shape, not a scheme, and each of these columns is its own identifier scheme with its own bounds. `gleif.legal_form` is an ISO 20275 Entity Legal Form code, always four letters or digits, so its length is fixed at 4. In census/schedule_b, `sitc` is an SITC Revision 4 code of five characters, three digits then two digits or X (792XX), fixed at 5, and `unit_1` and `unit_2` are Census's unit-of-quantity abbreviations, one to three uppercase letters or digits (X, KG, M2, DOZ), bounded 1 to 3. The release columns are names of one snapshot each, not codes from a list with a published length: `hts.release` and `schedule_b.hts_release` are USITC's revision name (2026HTSRev22), and `schedule_b.release` is Census's year folder and file date (2026/2026-07-27). So they carry the label's canonical pattern and no length bounds, widened for `schedule_b.release`'s date as its `x-finetype-pattern-fit` records. A shared pattern or length would be false of all but one scheme."
+      "reason": "The label names a shape, not a scheme, and each of these columns is its own identifier scheme with its own bounds. `gleif.legal_form` is an ISO 20275 Entity Legal Form code, always four letters or digits, so its length is fixed at 4. In census/schedule_b, `sitc` is an SITC Revision 4 code of five characters, three digits then two digits or X (792XX), fixed at 5, and `unit_1` and `unit_2` are Census's unit-of-quantity abbreviations, one to three uppercase letters or digits (X, KG, M2, DOZ), bounded 1 to 3. The release columns are names of one snapshot each, not codes from a list with a published length: `hts.release` and `schedule_b.hts_release` are USITC's revision name (2026HTSRev22), and `schedule_b.release` is Census's year folder and file date (2026/2026-07-27). So they carry the label's canonical pattern and no length bounds, widened for `schedule_b.release`'s date as its `x-finetype-pattern-fit` records. In cms/hcpcs, `betos` is CMS's Berenson-Eggers Type of Service category, a letter, a digit and an optional letter (Z2, O1E), bounded 2 to 3, and `release` is CMS's quarter and file date (2026-10/2026-09-23), always 18 characters, which it declares exactly. A shared pattern or length would be false of all but one scheme."
     },
     {
       "concept": "representation.identifier.alphanumeric_id",
       "property": "constraints.minLength",
       "values": {
         "gleif.legal_form": 4,
+        "hcpcs.betos": 2,
+        "hcpcs.release": 18,
         "hts.release": null,
         "schedule_b.hts_release": null,
         "schedule_b.release": null,
@@ -162,13 +166,15 @@
         "schedule_b.unit_1": 1,
         "schedule_b.unit_2": 1
       },
-      "reason": "The label names a shape, not a scheme, and each of these columns is its own identifier scheme with its own bounds. `gleif.legal_form` is an ISO 20275 Entity Legal Form code, always four letters or digits, so its length is fixed at 4. In census/schedule_b, `sitc` is an SITC Revision 4 code of five characters, three digits then two digits or X (792XX), fixed at 5, and `unit_1` and `unit_2` are Census's unit-of-quantity abbreviations, one to three uppercase letters or digits (X, KG, M2, DOZ), bounded 1 to 3. The release columns are names of one snapshot each, not codes from a list with a published length: `hts.release` and `schedule_b.hts_release` are USITC's revision name (2026HTSRev22), and `schedule_b.release` is Census's year folder and file date (2026/2026-07-27). So they carry the label's canonical pattern and no length bounds, widened for `schedule_b.release`'s date as its `x-finetype-pattern-fit` records. A shared pattern or length would be false of all but one scheme."
+      "reason": "The label names a shape, not a scheme, and each of these columns is its own identifier scheme with its own bounds. `gleif.legal_form` is an ISO 20275 Entity Legal Form code, always four letters or digits, so its length is fixed at 4. In census/schedule_b, `sitc` is an SITC Revision 4 code of five characters, three digits then two digits or X (792XX), fixed at 5, and `unit_1` and `unit_2` are Census's unit-of-quantity abbreviations, one to three uppercase letters or digits (X, KG, M2, DOZ), bounded 1 to 3. The release columns are names of one snapshot each, not codes from a list with a published length: `hts.release` and `schedule_b.hts_release` are USITC's revision name (2026HTSRev22), and `schedule_b.release` is Census's year folder and file date (2026/2026-07-27). So they carry the label's canonical pattern and no length bounds, widened for `schedule_b.release`'s date as its `x-finetype-pattern-fit` records. In cms/hcpcs, `betos` is CMS's Berenson-Eggers Type of Service category, a letter, a digit and an optional letter (Z2, O1E), bounded 2 to 3, and `release` is CMS's quarter and file date (2026-10/2026-09-23), always 18 characters, which it declares exactly. A shared pattern or length would be false of all but one scheme."
     },
     {
       "concept": "representation.identifier.alphanumeric_id",
       "property": "constraints.pattern",
       "values": {
         "gleif.legal_form": "^[A-Z0-9]{4}$",
+        "hcpcs.betos": "^[A-Z][0-9][A-Z]?$",
+        "hcpcs.release": "^[0-9]{4}-(01|04|07|10)/[0-9]{4}-[0-9]{2}-[0-9]{2}$",
         "hts.release": "^[A-Za-z][A-Za-z0-9 /_.#-]*[0-9][A-Za-z0-9 /_.#-]*$|^[0-9][A-Za-z0-9 /_.#-]*[A-Za-z][A-Za-z0-9 /_.#-]*$",
         "schedule_b.hts_release": "^[A-Za-z][A-Za-z0-9 /_.#-]*[0-9][A-Za-z0-9 /_.#-]*$|^[0-9][A-Za-z0-9 /_.#-]*[A-Za-z][A-Za-z0-9 /_.#-]*$",
         "schedule_b.release": "^[A-Za-z][A-Za-z0-9 /_.#-]*[0-9][A-Za-z0-9 /_.#-]*$|^[0-9][A-Za-z0-9 /_.#-]*[A-Za-z][A-Za-z0-9 /_.#-]*$|^[0-9]{4}/[0-9]{4}-[0-9]{2}-[0-9]{2}$",
@@ -176,7 +182,7 @@
         "schedule_b.unit_1": "^[A-Z0-9]{1,3}$",
         "schedule_b.unit_2": "^[A-Z0-9]{1,3}$"
       },
-      "reason": "The label names a shape, not a scheme, and each of these columns is its own identifier scheme with its own bounds. `gleif.legal_form` is an ISO 20275 Entity Legal Form code, always four letters or digits, so its length is fixed at 4. In census/schedule_b, `sitc` is an SITC Revision 4 code of five characters, three digits then two digits or X (792XX), fixed at 5, and `unit_1` and `unit_2` are Census's unit-of-quantity abbreviations, one to three uppercase letters or digits (X, KG, M2, DOZ), bounded 1 to 3. The release columns are names of one snapshot each, not codes from a list with a published length: `hts.release` and `schedule_b.hts_release` are USITC's revision name (2026HTSRev22), and `schedule_b.release` is Census's year folder and file date (2026/2026-07-27). So they carry the label's canonical pattern and no length bounds, widened for `schedule_b.release`'s date as its `x-finetype-pattern-fit` records. A shared pattern or length would be false of all but one scheme."
+      "reason": "The label names a shape, not a scheme, and each of these columns is its own identifier scheme with its own bounds. `gleif.legal_form` is an ISO 20275 Entity Legal Form code, always four letters or digits, so its length is fixed at 4. In census/schedule_b, `sitc` is an SITC Revision 4 code of five characters, three digits then two digits or X (792XX), fixed at 5, and `unit_1` and `unit_2` are Census's unit-of-quantity abbreviations, one to three uppercase letters or digits (X, KG, M2, DOZ), bounded 1 to 3. The release columns are names of one snapshot each, not codes from a list with a published length: `hts.release` and `schedule_b.hts_release` are USITC's revision name (2026HTSRev22), and `schedule_b.release` is Census's year folder and file date (2026/2026-07-27). So they carry the label's canonical pattern and no length bounds, widened for `schedule_b.release`'s date as its `x-finetype-pattern-fit` records. In cms/hcpcs, `betos` is CMS's Berenson-Eggers Type of Service category, a letter, a digit and an optional letter (Z2, O1E), bounded 2 to 3, and `release` is CMS's quarter and file date (2026-10/2026-09-23), always 18 characters, which it declares exactly. A shared pattern or length would be false of all but one scheme."
     },
     {
       "concept": "representation.identifier.numeric_code",
@@ -231,54 +237,220 @@
       "property": "constraints.maxLength",
       "values": {
         "edgar_gleif.key": 10,
+        "hcpcs.depth": null,
         "hts.depth": null,
         "hts.indent": null,
         "schedule_b.depth": null
       },
-      "reason": "The same label inferred on columns of different kinds. `edgar_gleif.key` is text because it carries two SEC schemes in one column, Central Index Keys in decimal digits and fund series identifiers with a letter prefix (S…, CEF…), so it declares the pattern and lengths of that union, as its `x-finetype-pattern-fit` records. `hts.depth`, `hts.indent` and `schedule_b.depth` are true integers, a level's position in the outline (0 to 4) and USITC's printed indent (0 to 11), typed as integers with no string constraints. Making either side agree would mean typing the integers as text or the mixed key as a number."
+      "reason": "The same label inferred on columns of different kinds. `edgar_gleif.key` is text because it carries two SEC schemes in one column, Central Index Keys in decimal digits and fund series identifiers with a letter prefix (S…, CEF…), so it declares the pattern and lengths of that union, as its `x-finetype-pattern-fit` records. `hts.depth`, `hts.indent` and `schedule_b.depth` are true integers, a level's position in the outline (0 to 4) and USITC's printed indent (0 to 11), typed as integers with no string constraints. `hcpcs.depth` is the same integer as the other depths, always 0 in a one-level list. Making either side agree would mean typing the integers as text or the mixed key as a number."
     },
     {
       "concept": "representation.numeric.integer_number",
       "property": "constraints.minLength",
       "values": {
         "edgar_gleif.key": 4,
+        "hcpcs.depth": null,
         "hts.depth": null,
         "hts.indent": null,
         "schedule_b.depth": null
       },
-      "reason": "The same label inferred on columns of different kinds. `edgar_gleif.key` is text because it carries two SEC schemes in one column, Central Index Keys in decimal digits and fund series identifiers with a letter prefix (S…, CEF…), so it declares the pattern and lengths of that union, as its `x-finetype-pattern-fit` records. `hts.depth`, `hts.indent` and `schedule_b.depth` are true integers, a level's position in the outline (0 to 4) and USITC's printed indent (0 to 11), typed as integers with no string constraints. Making either side agree would mean typing the integers as text or the mixed key as a number."
+      "reason": "The same label inferred on columns of different kinds. `edgar_gleif.key` is text because it carries two SEC schemes in one column, Central Index Keys in decimal digits and fund series identifiers with a letter prefix (S…, CEF…), so it declares the pattern and lengths of that union, as its `x-finetype-pattern-fit` records. `hts.depth`, `hts.indent` and `schedule_b.depth` are true integers, a level's position in the outline (0 to 4) and USITC's printed indent (0 to 11), typed as integers with no string constraints. `hcpcs.depth` is the same integer as the other depths, always 0 in a one-level list. Making either side agree would mean typing the integers as text or the mixed key as a number."
     },
     {
       "concept": "representation.numeric.integer_number",
       "property": "constraints.pattern",
       "values": {
         "edgar_gleif.key": "^([1-9][0-9]{0,9}|[A-Z]{1,3}[0-9]{7,9})$",
+        "hcpcs.depth": null,
         "hts.depth": null,
         "hts.indent": null,
         "schedule_b.depth": null
       },
-      "reason": "The same label inferred on columns of different kinds. `edgar_gleif.key` is text because it carries two SEC schemes in one column, Central Index Keys in decimal digits and fund series identifiers with a letter prefix (S…, CEF…), so it declares the pattern and lengths of that union, as its `x-finetype-pattern-fit` records. `hts.depth`, `hts.indent` and `schedule_b.depth` are true integers, a level's position in the outline (0 to 4) and USITC's printed indent (0 to 11), typed as integers with no string constraints. Making either side agree would mean typing the integers as text or the mixed key as a number."
+      "reason": "The same label inferred on columns of different kinds. `edgar_gleif.key` is text because it carries two SEC schemes in one column, Central Index Keys in decimal digits and fund series identifiers with a letter prefix (S…, CEF…), so it declares the pattern and lengths of that union, as its `x-finetype-pattern-fit` records. `hts.depth`, `hts.indent` and `schedule_b.depth` are true integers, a level's position in the outline (0 to 4) and USITC's printed indent (0 to 11), typed as integers with no string constraints. `hcpcs.depth` is the same integer as the other depths, always 0 in a one-level list. Making either side agree would mean typing the integers as text or the mixed key as a number."
     },
     {
       "concept": "representation.numeric.integer_number",
       "property": "type",
       "values": {
         "edgar_gleif.key": "string",
+        "hcpcs.depth": "integer",
         "hts.depth": "integer",
         "hts.indent": "integer",
         "schedule_b.depth": "integer"
       },
-      "reason": "The same label inferred on columns of different kinds. `edgar_gleif.key` is text because it carries two SEC schemes in one column, Central Index Keys in decimal digits and fund series identifiers with a letter prefix (S…, CEF…), so it declares the pattern and lengths of that union, as its `x-finetype-pattern-fit` records. `hts.depth`, `hts.indent` and `schedule_b.depth` are true integers, a level's position in the outline (0 to 4) and USITC's printed indent (0 to 11), typed as integers with no string constraints. Making either side agree would mean typing the integers as text or the mixed key as a number."
+      "reason": "The same label inferred on columns of different kinds. `edgar_gleif.key` is text because it carries two SEC schemes in one column, Central Index Keys in decimal digits and fund series identifiers with a letter prefix (S…, CEF…), so it declares the pattern and lengths of that union, as its `x-finetype-pattern-fit` records. `hts.depth`, `hts.indent` and `schedule_b.depth` are true integers, a level's position in the outline (0 to 4) and USITC's printed indent (0 to 11), typed as integers with no string constraints. `hcpcs.depth` is the same integer as the other depths, always 0 in a one-level list. Making either side agree would mean typing the integers as text or the mixed key as a number."
     },
     {
       "field": "code",
       "property": "x-finetype-label",
       "values": {
+        "hcpcs.code": "identity.medical.hcpcs",
         "hts.code": "geography.transportation.hs_code",
         "naics.code": "identity.industry.naics",
         "schedule_b.code": "geography.transportation.hs_code"
       },
-      "reason": "A shared column name, not a shared concept. Every Meridian code list names its key column `code` (with `level`, `depth`, `parent_code` and `description` beside it), so a reader can walk any of them the same way. In census/naics_2022 that key is a NAICS code; in usitc/hts and census/schedule_b it is an HS-based tariff or export code. Each package's label is right for its own code system, and making them agree would mislabel one of them."
+      "reason": "A shared column name, not a shared concept. Every Meridian code list names its key column `code` (with `level`, `depth`, `parent_code` and `description` beside it), so a reader can walk any of them the same way. In census/naics_2022 that key is a NAICS code; in usitc/hts and census/schedule_b it is an HS-based tariff or export code. In cms/hcpcs it is a HCPCS Level II code, labelled `identity.medical.hcpcs`. Each package's label is right for its own code system, and making them agree would mislabel one of them."
+    },
+    {
+      "concept": "representation.text.word",
+      "property": "constraints.enum",
+      "values": {
+        "edgar.exchange": null,
+        "edgar_gleif.category": null,
+        "edgar_gleif.key_type": null,
+        "edgar_gleif.method": null,
+        "edgar_gleif.reg_status": null,
+        "edgar_gleif.tier": null,
+        "gleif.registration_status": null,
+        "hcpcs.action_code": [
+          "A",
+          "B",
+          "C",
+          "D",
+          "F",
+          "N",
+          "P",
+          "R",
+          "S",
+          "T"
+        ],
+        "hcpcs.asc_payment_group": [
+          "YY"
+        ],
+        "hcpcs.coverage_code": [
+          "C",
+          "D",
+          "I",
+          "M",
+          "S"
+        ],
+        "hcpcs.level": [
+          "code"
+        ],
+        "hcpcs.multiple_pricing_indicator": [
+          "9",
+          "A",
+          "B",
+          "C",
+          "D",
+          "E",
+          "F",
+          "G"
+        ],
+        "hcpcs.text_source": [
+          "cms",
+          "cms_cpt_redacted"
+        ],
+        "hts.level": null,
+        "hts.section": null,
+        "hts.text_source": null,
+        "naics.level": null,
+        "schedule_b.level": null,
+        "schedule_b.section": null,
+        "schedule_b.text_source": null
+      },
+      "reason": "One label on columns that are not one concept: `representation.text.word` is what finetype infers for any short token. Where the issuer's own documentation defines the column's values as a closed set, cms/hcpcs declares that set as an enum, as its data holds it: `level` is always 'code'; `text_source` is cms or cms_cpt_redacted; `action_code`, `coverage_code`, `multiple_pricing_indicator` and `asc_payment_group` take the codes CMS's HCPCS record layout lists for each. Each of those enums is true of its own column and of no other, so it declares no length or pattern beside it. The other columns, in other packages, carry the label's canonical token pattern and its 1 to 100 length; whether any of them should declare its own closed set is a question for its own package, and making cms/hcpcs agree with them would loosen six declarations that CMS's record layout or this Protocol fixes."
+    },
+    {
+      "concept": "representation.text.word",
+      "property": "constraints.maxLength",
+      "values": {
+        "edgar.exchange": 100,
+        "edgar_gleif.category": 100,
+        "edgar_gleif.key_type": 100,
+        "edgar_gleif.method": 100,
+        "edgar_gleif.reg_status": 100,
+        "edgar_gleif.tier": 100,
+        "gleif.registration_status": 100,
+        "hcpcs.action_code": null,
+        "hcpcs.asc_payment_group": null,
+        "hcpcs.coverage_code": null,
+        "hcpcs.level": null,
+        "hcpcs.multiple_pricing_indicator": null,
+        "hcpcs.text_source": null,
+        "hts.level": 100,
+        "hts.section": 100,
+        "hts.text_source": 100,
+        "naics.level": 100,
+        "schedule_b.level": 100,
+        "schedule_b.section": 100,
+        "schedule_b.text_source": 100
+      },
+      "reason": "One label on columns that are not one concept: `representation.text.word` is what finetype infers for any short token. Where the issuer's own documentation defines the column's values as a closed set, cms/hcpcs declares that set as an enum, as its data holds it: `level` is always 'code'; `text_source` is cms or cms_cpt_redacted; `action_code`, `coverage_code`, `multiple_pricing_indicator` and `asc_payment_group` take the codes CMS's HCPCS record layout lists for each. Each of those enums is true of its own column and of no other, so it declares no length or pattern beside it. The other columns, in other packages, carry the label's canonical token pattern and its 1 to 100 length; whether any of them should declare its own closed set is a question for its own package, and making cms/hcpcs agree with them would loosen six declarations that CMS's record layout or this Protocol fixes."
+    },
+    {
+      "concept": "representation.text.word",
+      "property": "constraints.minLength",
+      "values": {
+        "edgar.exchange": 1,
+        "edgar_gleif.category": 1,
+        "edgar_gleif.key_type": 1,
+        "edgar_gleif.method": 1,
+        "edgar_gleif.reg_status": 1,
+        "edgar_gleif.tier": 1,
+        "gleif.registration_status": 1,
+        "hcpcs.action_code": null,
+        "hcpcs.asc_payment_group": null,
+        "hcpcs.coverage_code": null,
+        "hcpcs.level": null,
+        "hcpcs.multiple_pricing_indicator": null,
+        "hcpcs.text_source": null,
+        "hts.level": 1,
+        "hts.section": 1,
+        "hts.text_source": 1,
+        "naics.level": 1,
+        "schedule_b.level": 1,
+        "schedule_b.section": 1,
+        "schedule_b.text_source": 1
+      },
+      "reason": "One label on columns that are not one concept: `representation.text.word` is what finetype infers for any short token. Where the issuer's own documentation defines the column's values as a closed set, cms/hcpcs declares that set as an enum, as its data holds it: `level` is always 'code'; `text_source` is cms or cms_cpt_redacted; `action_code`, `coverage_code`, `multiple_pricing_indicator` and `asc_payment_group` take the codes CMS's HCPCS record layout lists for each. Each of those enums is true of its own column and of no other, so it declares no length or pattern beside it. The other columns, in other packages, carry the label's canonical token pattern and its 1 to 100 length; whether any of them should declare its own closed set is a question for its own package, and making cms/hcpcs agree with them would loosen six declarations that CMS's record layout or this Protocol fixes."
+    },
+    {
+      "concept": "representation.text.word",
+      "property": "constraints.pattern",
+      "values": {
+        "edgar.exchange": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$",
+        "edgar_gleif.category": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$",
+        "edgar_gleif.key_type": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$",
+        "edgar_gleif.method": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$",
+        "edgar_gleif.reg_status": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$",
+        "edgar_gleif.tier": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$",
+        "gleif.registration_status": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$",
+        "hcpcs.action_code": null,
+        "hcpcs.asc_payment_group": null,
+        "hcpcs.coverage_code": null,
+        "hcpcs.level": null,
+        "hcpcs.multiple_pricing_indicator": null,
+        "hcpcs.text_source": null,
+        "hts.level": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$",
+        "hts.section": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$",
+        "hts.text_source": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$",
+        "naics.level": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$",
+        "schedule_b.level": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$",
+        "schedule_b.section": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$",
+        "schedule_b.text_source": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$"
+      },
+      "reason": "One label on columns that are not one concept: `representation.text.word` is what finetype infers for any short token. Where the issuer's own documentation defines the column's values as a closed set, cms/hcpcs declares that set as an enum, as its data holds it: `level` is always 'code'; `text_source` is cms or cms_cpt_redacted; `action_code`, `coverage_code`, `multiple_pricing_indicator` and `asc_payment_group` take the codes CMS's HCPCS record layout lists for each. Each of those enums is true of its own column and of no other, so it declares no length or pattern beside it. The other columns, in other packages, carry the label's canonical token pattern and its 1 to 100 length; whether any of them should declare its own closed set is a question for its own package, and making cms/hcpcs agree with them would loosen six declarations that CMS's record layout or this Protocol fixes."
+    },
+    {
+      "field": "code_display",
+      "property": "x-finetype-label",
+      "values": {
+        "hcpcs.code_display": "identity.medical.hcpcs",
+        "hts.code_display": "geography.transportation.hs_code",
+        "schedule_b.code_display": "geography.transportation.hs_code"
+      },
+      "reason": "The same shared column name as `code`, carrying each code list's own code system as its issuer prints it: HS-based codes, dotted, in usitc/hts and census/schedule_b, and HCPCS Level II codes in cms/hcpcs, which CMS prints with no punctuation. Each label is right for its own code system, and making them agree would mislabel one of them."
+    },
+    {
+      "field": "parent_code",
+      "property": "x-finetype-label",
+      "values": {
+        "hcpcs.parent_code": "unknown",
+        "hts.parent_code": "representation.identifier.numeric_code",
+        "schedule_b.parent_code": "representation.identifier.numeric_code"
+      },
+      "reason": "cms/hcpcs is a one-level list, so its `parent_code` is NULL on every row and finetype has no value to infer a label from; it is `unknown`. In usitc/hts and census/schedule_b `parent_code` holds the digits-only code one level up. Nominating a label for a column with no values would state a shape no row shows."
     }
   ],
   "corrections": []

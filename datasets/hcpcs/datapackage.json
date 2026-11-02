@@ -1,0 +1,496 @@
+{
+  "$schema": "https://datapackage.org/profiles/2.0/datapackage.json",
+  "contributors": [
+    {
+      "path": "https://www.cms.gov/",
+      "roles": [
+        "author"
+      ],
+      "title": "Centers for Medicare & Medicaid Services"
+    },
+    {
+      "path": "https://meridian.online",
+      "roles": [
+        "publisher",
+        "wrangler"
+      ],
+      "title": "Meridian"
+    }
+  ],
+  "created": "2026-11-02T01:57:34Z",
+  "description": "HCPCS Level II, the alpha-numeric codes the Centers for Medicare & Medicaid Services (CMS) maintain for billing supplies, drugs, equipment and services that CPT does not cover: one row per code in CMS's quarterly file, current and terminated, with its long and short description, the dates CMS added, last changed and terminated it, and CMS's pricing, coverage, BETOS and type-of-service fields. Two parts of CMS's file are not CMS's own work and are left out: the American Dental Association's dental codes (the D series, CDT) and every CPT code of the American Medical Association, including CPT codes CMS cites in a cross-reference or a description; where a description cited one, the number is replaced by '[CPT code]' and text_source says so. Modifiers are not included.",
+  "homepage": "https://meridian.online/datasets/cms/hcpcs",
+  "licenses": [
+    {
+      "name": "other-pd",
+      "path": "https://www.cms.gov/medicare/coding-billing/healthcare-common-procedure-system",
+      "title": "Public domain (Centers for Medicare & Medicaid Services)"
+    }
+  ],
+  "name": "hcpcs",
+  "resources": [
+    {
+      "bytes": 717953,
+      "format": "parquet",
+      "hash": "sha256:935628b337fc15cb5011a48ef2d4775c3c9fb5382f89c3d97e4bff9eed1c41a6",
+      "mediatype": "application/vnd.apache.parquet",
+      "name": "hcpcs",
+      "path": "https://openlake.meridian.online/cms/hcpcs.parquet",
+      "schema": {
+        "fields": [
+          {
+            "constraints": {
+              "maxLength": 5,
+              "minLength": 5,
+              "pattern": "^[A-CE-V][0-9]{4}$"
+            },
+            "description": "The HCPCS Level II code: a letter and four digits (A0021, J0120), as claims carry it. Join other data on this column. No code in the D series (the ADA's dental codes) and no CPT code appears; the letters in use run from A to V.",
+            "name": "code",
+            "type": "string",
+            "x-finetype-confidence": 1.0,
+            "x-finetype-label": "identity.medical.hcpcs"
+          },
+          {
+            "constraints": {
+              "maxLength": 5,
+              "minLength": 5,
+              "pattern": "^[A-CE-V][0-9]{4}$"
+            },
+            "description": "The code as CMS prints it, which is the same as code.",
+            "name": "code_display",
+            "type": "string",
+            "x-finetype-confidence": 1.0,
+            "x-finetype-label": "identity.medical.hcpcs"
+          },
+          {
+            "constraints": {
+              "enum": [
+                "code"
+              ]
+            },
+            "description": "Hierarchy level: always 'code'. HCPCS Level II is a flat list, and CMS publishes no titles for the letter a code starts with, so the list has one level.",
+            "name": "level",
+            "type": "string",
+            "x-finetype-enum-domain": {
+              "cohesion": 1.0,
+              "distinct": 1,
+              "domain": [
+                "code"
+              ],
+              "open": true,
+              "rows": 8770
+            },
+            "x-finetype-label": "representation.text.word",
+            "x-finetype-nominated": true
+          },
+          {
+            "description": "Always 0: every code is at the top of a one-level list.",
+            "name": "depth",
+            "type": "integer",
+            "x-finetype-confidence": 0.9997,
+            "x-finetype-display": {
+              "number": ",d"
+            },
+            "x-finetype-label": "representation.numeric.integer_number",
+            "x-finetype-unsupported-constraints": {
+              "pattern": "^-?[0-9]+$"
+            }
+          },
+          {
+            "constraints": {
+              "maxLength": 5
+            },
+            "description": "Always NULL: a code in a one-level list has no parent.",
+            "name": "parent_code",
+            "type": "string",
+            "x-finetype-confidence": 0.0,
+            "x-finetype-label": "unknown"
+          },
+          {
+            "constraints": {
+              "maxLength": 65536,
+              "minLength": 1
+            },
+            "description": "CMS's long description of the code, its lines joined with a space. Where CMS's text cites a CPT code by number (fifteen G, M, S and V codes in October 2026, such as 'list separately in addition to cpt codes 99306, 99310'), each number is replaced by '[CPT code]', and text_source is cms_cpt_redacted.",
+            "name": "description",
+            "type": "string",
+            "x-finetype-confidence": 0.5074,
+            "x-finetype-label": "representation.text.plain_text"
+          },
+          {
+            "constraints": {
+              "maxLength": 65536,
+              "minLength": 1
+            },
+            "description": "The same as description, since a code has no ancestors to put in front of it.",
+            "name": "description_full",
+            "type": "string",
+            "x-finetype-confidence": 0.618,
+            "x-finetype-label": "representation.text.plain_text"
+          },
+          {
+            "constraints": {
+              "maxLength": 18,
+              "minLength": 18,
+              "pattern": "^[0-9]{4}-(01|04|07|10)/[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+            },
+            "description": "CMS's quarter and the date in the file's name, as <year>-<month>/<file date>: the October 2026 file, HCPC2026_OCT_ANWEB_09232026, is 2026-10/2026-09-23.",
+            "name": "release",
+            "type": "string",
+            "x-finetype-label": "representation.identifier.alphanumeric_id",
+            "x-finetype-nominated": true,
+            "x-finetype-pattern-fit": {
+              "canonical": "^[A-Za-z][A-Za-z0-9 /_.#-]*[0-9][A-Za-z0-9 /_.#-]*$|^[0-9][A-Za-z0-9 /_.#-]*[A-Za-z][A-Za-z0-9 /_.#-]*$",
+              "outcome": "widened"
+            }
+          },
+          {
+            "constraints": {
+              "enum": [
+                "cms",
+                "cms_cpt_redacted"
+              ]
+            },
+            "description": "Whose text description is: cms (CMS's text as printed) or cms_cpt_redacted (CMS's text with the CPT code numbers it cites replaced by '[CPT code]').",
+            "name": "text_source",
+            "type": "string",
+            "x-finetype-enum-domain": {
+              "cohesion": 0.5,
+              "distinct": 2,
+              "domain": [
+                "cms",
+                "cms_cpt_redacted"
+              ],
+              "open": true,
+              "rows": 8770
+            },
+            "x-finetype-label": "representation.text.word",
+            "x-finetype-nominated": true
+          },
+          {
+            "constraints": {
+              "maxLength": 65536,
+              "minLength": 1
+            },
+            "description": "Lowercased, accent-stripped description_full: a derived free-text search field, not a source attribute.",
+            "name": "corpus",
+            "type": "string",
+            "x-finetype-confidence": 1.0,
+            "x-finetype-label": "representation.text.plain_text"
+          },
+          {
+            "constraints": {
+              "maxLength": 65536,
+              "minLength": 1
+            },
+            "description": "CMS's short description, 28 characters or fewer, as printed, abbreviations included.",
+            "name": "short_description",
+            "type": "string",
+            "x-finetype-confidence": 0.752,
+            "x-finetype-label": "representation.text.plain_text"
+          },
+          {
+            "description": "The date CMS added the code to HCPCS.",
+            "format": "%Y-%m-%d",
+            "name": "added_date",
+            "type": "date",
+            "x-finetype-confidence": 1.0,
+            "x-finetype-display": {
+              "time": "%Y-%m-%d"
+            },
+            "x-finetype-label": "datetime.date.iso",
+            "x-finetype-unsupported-constraints": {
+              "maxLength": 10,
+              "minLength": 10,
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            }
+          },
+          {
+            "description": "The date CMS's latest action on the code (action_code) took effect.",
+            "format": "%Y-%m-%d",
+            "name": "action_effective_date",
+            "type": "date",
+            "x-finetype-confidence": 1.0,
+            "x-finetype-display": {
+              "time": "%Y-%m-%d"
+            },
+            "x-finetype-label": "datetime.date.iso",
+            "x-finetype-unsupported-constraints": {
+              "maxLength": 10,
+              "minLength": 10,
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            }
+          },
+          {
+            "description": "The last date Medicare providers may use the code. NULL for a code still in use; CMS's file keeps terminated codes, so filter on this column for the codes valid on a date.",
+            "format": "%Y-%m-%d",
+            "name": "termination_date",
+            "type": "date",
+            "x-finetype-confidence": 1.0,
+            "x-finetype-display": {
+              "time": "%Y-%m-%d"
+            },
+            "x-finetype-label": "datetime.date.iso",
+            "x-finetype-unsupported-constraints": {
+              "maxLength": 10,
+              "minLength": 10,
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            }
+          },
+          {
+            "constraints": {
+              "enum": [
+                "A",
+                "B",
+                "C",
+                "D",
+                "F",
+                "N",
+                "P",
+                "R",
+                "S",
+                "T"
+              ]
+            },
+            "description": "CMS's code for its latest change to the code: A added, B administrative data and long description changed, C long description changed, D discontinued, F administrative data changed, N no maintenance, P payment change, R reactivated, S short description changed, T miscellaneous change (BETOS, type of service).",
+            "name": "action_code",
+            "type": "string",
+            "x-finetype-enum-domain": {
+              "cohesion": 1.0,
+              "distinct": 6,
+              "domain": [
+                "A",
+                "C",
+                "D",
+                "F",
+                "N",
+                "P"
+              ],
+              "open": true,
+              "rows": 8770
+            },
+            "x-finetype-label": "representation.text.word",
+            "x-finetype-nominated": true
+          },
+          {
+            "constraints": {
+              "enum": [
+                "C",
+                "D",
+                "I",
+                "M",
+                "S"
+              ]
+            },
+            "description": "CMS's Medicare coverage status: C carrier judgment, D special coverage instructions apply, I not payable by Medicare, M non-covered by Medicare, S non-covered by Medicare statute.",
+            "name": "coverage_code",
+            "type": "string",
+            "x-finetype-confidence": 0.4742,
+            "x-finetype-enum-domain": {
+              "cohesion": 1.0,
+              "distinct": 5,
+              "domain": [
+                "C",
+                "D",
+                "I",
+                "M",
+                "S"
+              ],
+              "open": true,
+              "rows": 8770
+            },
+            "x-finetype-label": "representation.text.word"
+          },
+          {
+            "description": "CMS's Medicare Part B pricing indicators for the code, one to four two-digit codes, as a list: for example 00 not separately priced by Part B, 11 priced using national RVUs, 51 drugs, 99 value not established. CMS's record layout, in the zip the Protocol fetches, defines each. NULL where none is printed.",
+            "name": "pricing_indicators",
+            "type": "array",
+            "x-finetype-confidence": 0.9,
+            "x-finetype-enum-domain": {
+              "cohesion": 0.8930000066757202,
+              "distinct": 28,
+              "domain": [
+                "[00]",
+                "[11, 21]",
+                "[11]",
+                "[13, 21]",
+                "[13]",
+                "[21]",
+                "[22]",
+                "[31]",
+                "[32]",
+                "[33]",
+                "[34]",
+                "[35]",
+                "[36]",
+                "[37]",
+                "[38]",
+                "[39]",
+                "[40]",
+                "[45]",
+                "[46]",
+                "[51]",
+                "[52]",
+                "[53]",
+                "[54]",
+                "[55]",
+                "[56]",
+                "[57, 21]",
+                "[57]",
+                "[99]"
+              ],
+              "open": true,
+              "rows": 8770
+            },
+            "x-finetype-label": "container.object.json_array",
+            "x-finetype-unsupported-constraints": {
+              "pattern": "^\\[.*\\]$"
+            }
+          },
+          {
+            "constraints": {
+              "enum": [
+                "9",
+                "A",
+                "B",
+                "C",
+                "D",
+                "E",
+                "F",
+                "G"
+              ]
+            },
+            "description": "CMS's indicator for a code that can be priced under more than one methodology: 9 not applicable because the code is not separately priced by Part B or has no established value, A priced under one methodology, B to G the split methodologies CMS's record layout defines (D, E and F not applicable since 1 January 1998). NULL where CMS prints none.",
+            "name": "multiple_pricing_indicator",
+            "type": "string",
+            "x-finetype-confidence": 0.9736,
+            "x-finetype-enum-domain": {
+              "cohesion": 0.6669999957084656,
+              "distinct": 3,
+              "domain": [
+                "9",
+                "A",
+                "C"
+              ],
+              "open": true,
+              "rows": 8768
+            },
+            "x-finetype-label": "representation.text.word"
+          },
+          {
+            "constraints": {
+              "maxLength": 3,
+              "minLength": 2,
+              "pattern": "^[A-Z][0-9][A-Z]?$"
+            },
+            "description": "The code's Berenson-Eggers Type of Service (BETOS) category, as CMS assigns it (for example D1F prosthetic/orthotic devices, O1E other drugs, Z2 undefined codes). CMS's record layout lists the categories.",
+            "name": "betos",
+            "type": "string",
+            "x-finetype-confidence": 0.9992,
+            "x-finetype-label": "representation.identifier.alphanumeric_id"
+          },
+          {
+            "description": "CMS's type-of-service codes for the code, one to five single characters, as a list. NULL where none is printed.",
+            "name": "type_of_service",
+            "type": "array",
+            "x-finetype-confidence": 0.6326,
+            "x-finetype-label": "container.object.json_array",
+            "x-finetype-unsupported-constraints": {
+              "pattern": "^\\[.*\\]$"
+            }
+          },
+          {
+            "description": "CMS's laboratory specialty certification codes for a laboratory code, up to eight three-digit codes, as a list (for example 310 routine chemistry, 400 hematology). NULL for a code that is not a laboratory test.",
+            "name": "lab_certification_codes",
+            "type": "array",
+            "x-finetype-confidence": 0.5181,
+            "x-finetype-enum-domain": {
+              "cohesion": 0.6470000147819519,
+              "distinct": 17,
+              "domain": [
+                "[110, 120, 130, 400]",
+                "[110]",
+                "[120]",
+                "[130]",
+                "[140, 220]",
+                "[140]",
+                "[220, 310, 900]",
+                "[220, 400]",
+                "[220, 610]",
+                "[220]",
+                "[310, 400]",
+                "[310]",
+                "[330]",
+                "[340]",
+                "[400]",
+                "[610]",
+                "[630]"
+              ],
+              "open": true,
+              "rows": 72
+            },
+            "x-finetype-label": "container.object.json_array",
+            "x-finetype-unsupported-constraints": {
+              "pattern": "^\\[.*\\]$"
+            }
+          },
+          {
+            "constraints": {
+              "enum": [
+                "YY"
+              ]
+            },
+            "description": "YY where the procedure is approved to be performed in an ambulatory surgical center; NULL otherwise.",
+            "name": "asc_payment_group",
+            "type": "string",
+            "x-finetype-enum-domain": {
+              "cohesion": 1.0,
+              "distinct": 1,
+              "domain": [
+                "YY"
+              ],
+              "open": true,
+              "rows": 1201
+            },
+            "x-finetype-label": "representation.text.word",
+            "x-finetype-nominated": true
+          },
+          {
+            "description": "Up to five HCPCS Level II codes CMS crosswalks a deleted or non-Medicare code to, as a list. CMS's cross-references to CPT codes (42 codes in October 2026) and to dental codes are left out, so a code whose only cross-references were CPT codes has NULL here.",
+            "name": "cross_reference_codes",
+            "type": "array",
+            "x-finetype-confidence": 0.9,
+            "x-finetype-label": "container.object.json_array",
+            "x-finetype-unsupported-constraints": {
+              "pattern": "^\\[.*\\]$"
+            }
+          }
+        ],
+        "primaryKey": [
+          "code"
+        ]
+      }
+    }
+  ],
+  "sources": [
+    {
+      "path": "https://www.cms.gov/medicare/coding-billing/healthcare-common-procedure-system",
+      "title": "Healthcare Common Procedure Coding System (HCPCS) — CMS"
+    },
+    {
+      "path": "https://www.cms.gov/medicare/coding-billing/healthcare-common-procedure-system/quarterly-update",
+      "title": "HCPCS quarterly update — CMS"
+    },
+    {
+      "path": "https://www.cms.gov/files/zip/october-2026-alpha-numeric-hcpcs-file.zip",
+      "title": "October 2026 alpha-numeric HCPCS file — CMS"
+    }
+  ],
+  "title": "HCPCS Level II — Healthcare Common Procedure Coding System",
+  "x-finetype-version": "0.6.67",
+  "x-meridian-code-list": {
+    "levels": [
+      "code"
+    ]
+  }
+}
