@@ -169,6 +169,19 @@ class RefusalTest(unittest.TestCase):
     def test_unparsed_name(self):
         self.refuse(Run(name="HCPC2026_XYZ_ANWEB_09232026.txt"), Run.load, "does not parse")
 
+    def test_unparsed_date_in_name(self):
+        self.refuse(Run(name="HCPC2026_OCT_ANWEB_092326.txt"), Run.load, "does not parse")
+
+    def test_missing_first_record(self):
+        lines = [l for l in fixture_lines() if not l.startswith("A0080001003")]
+        self.refuse(Run(body="\r\n".join(lines)), Run.load, "0 first records: A0080")
+
+    def test_duplicate_first_record(self):
+        lines = fixture_lines()
+        first = next(l for l in lines if l.startswith("J0120"))
+        lines.insert(lines.index(first), first)
+        self.refuse(Run(body="\r\n".join(lines)), Run.load, "2 first records: J0120")
+
     def test_malformed_code(self):
         lines = fixture_lines()
         lines[1] = "A002X" + lines[1][5:]

@@ -46,7 +46,9 @@ files AS (
   FROM raw
 ),
 release AS (
-  SELECT CASE WHEN m IS NULL OR m['mon'] IS NULL OR month_number IS NULL
+  -- regexp_extract's struct form gives empty strings, not NULL, when the name does not
+  -- match, so emptiness is what is tested.
+  SELECT CASE WHEN m['year'] = '' OR m['fy'] = '' OR month_number IS NULL
               THEN error('CMS file name does not parse as HCPC<year>_<MON>_ANWEB_<MMDDYYYY>: '
                          || filename)
               ELSE m['year'] || '-' || lpad(month_number::VARCHAR, 2, '0') || '/'
@@ -92,11 +94,14 @@ dates AS (
   ) UNPIVOT (v FOR k IN (added, effective, terminated))
 ),
 first_records AS (
+  -- Every code with any record, so a code whose first record is missing is refused
+  -- rather than dropped.
   SELECT code,
-         CASE WHEN count(*) <> 1
-              THEN error('CMS code has ' || count(*) || ' first records: ' || code)
-              ELSE any_value(line) END AS line
-  FROM level_ii WHERE ric = '3'
+         CASE WHEN count(*) FILTER (WHERE ric = '3') <> 1
+              THEN error('CMS code has ' || count(*) FILTER (WHERE ric = '3')
+                         || ' first records: ' || code)
+              ELSE any_value(line) FILTER (WHERE ric = '3') END AS line
+  FROM level_ii
   GROUP BY code
 ),
 long_text AS (
