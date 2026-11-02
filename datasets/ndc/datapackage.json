@@ -17,7 +17,7 @@
       "title": "Meridian"
     }
   ],
-  "created": "2026-11-02T07:20:15Z",
+  "created": "2026-11-02T07:26:59Z",
   "description": "The FDA's National Drug Code directory: the codes that identify each finished drug sold in the United States, as one row per labeler, product and package, with each package under its product and each product under its labeler. Each product row carries the FDA's fields for it: brand and generic name, dosage form, routes, active ingredients and strengths, pharmacologic classes, DEA schedule, marketing category and application number, and marketing dates; each package row carries its description and dates, and its product's fields. Read from openFDA's NDC download, which the FDA releases under CC0; unfinished drugs (bulk ingredients and drugs for further processing) are not included. The FDA updates the directory daily and Meridian refreshes this dataset fortnightly, so release gives the date the data is as of. The listings are submitted by the labelers, and the FDA does not verify them: a code's presence in the directory does not mean the FDA has approved the drug. Brand names can be trademarks, which CC0 does not waive.",
   "homepage": "https://meridian.online/datasets/fda/ndc",
   "licenses": [
@@ -30,9 +30,9 @@
   "name": "ndc",
   "resources": [
     {
-      "bytes": 23167462,
+      "bytes": 23090081,
       "format": "parquet",
-      "hash": "sha256:addfaeb9ec8676349b2e5cbca7e6ac12a30195033714fa35f23280e5802e5f7c",
+      "hash": "sha256:ad13ac8e61517ec08af5d1d7d50c34cd4deaf0bb5f97ddb7d48944d0d4613444",
       "mediatype": "application/vnd.apache.parquet",
       "name": "ndc",
       "path": "https://openlake.meridian.online/fda/ndc.parquet",
@@ -125,7 +125,7 @@
               "maxLength": 65536,
               "minLength": 1
             },
-            "description": "The row's own text, as labelers submit it to the FDA. A labeler: its name, the one its listings give most often. A product: its brand name and suffix, then its generic name in brackets where that differs, then its dosage form (Zepbound (tirzepatide), INJECTION, SOLUTION); the generic name alone where there is no brand name. A package: the FDA's package description (1 VIAL, SINGLE-DOSE in 1 CARTON (0002-0152-01) / .5 mL in 1 VIAL, SINGLE-DOSE).",
+            "description": "The row's own text, as labelers submit it to the FDA. A labeler: its name, the one its listings give most often. A product: its brand name, suffix included, then its generic name in brackets where that differs, then its dosage form (Zepbound (tirzepatide), INJECTION, SOLUTION); the generic name alone where there is no brand name. A package: the FDA's package description (1 VIAL, SINGLE-DOSE in 1 CARTON (0002-0152-01) / .5 mL in 1 VIAL, SINGLE-DOSE).",
             "name": "description",
             "type": "string",
             "x-finetype-label": "representation.text.plain_text",
@@ -139,7 +139,7 @@
             "description": "The labeler's name, the product's text and the package's description, joined with ' › ', down to the row's own level.",
             "name": "description_full",
             "type": "string",
-            "x-finetype-confidence": 0.9521,
+            "x-finetype-confidence": 0.9564,
             "x-finetype-label": "representation.text.plain_text"
           },
           {
@@ -232,7 +232,7 @@
               "maxLength": 512,
               "minLength": 1
             },
-            "description": "The proprietary name the labeler gives the product. NULL on a labeler row and on the few products listed without one.",
+            "description": "The proprietary name the labeler gives the product, ending with brand_name_suffix where there is one. NULL on a labeler row and on the few products listed without one.",
             "name": "brand_name",
             "type": "string",
             "x-finetype-confidence": 0.9887,
@@ -243,7 +243,7 @@
               "maxLength": 256,
               "minLength": 1
             },
-            "description": "A suffix to the proprietary name, such as XR or R. NULL where the listing gives none.",
+            "description": "The suffix that ends the proprietary name, such as XR or R, which brand_name already includes. NULL where the listing gives none.",
             "name": "brand_name_suffix",
             "type": "string",
             "x-finetype-confidence": 0.9989,

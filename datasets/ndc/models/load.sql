@@ -30,17 +30,17 @@
 -- ("Willow Birch Pharma, Inc." and "Willow Birch Pharma, LLC"), so product and package
 -- rows carry the name their own listing gives in `labeler_name`.
 --
--- The text is the FDA's: a labeler's name, a product's brand name with its suffix and,
--- where it differs, its generic name in brackets, then its dosage form; a package's
--- description. All of it is submitted by the labelers, and the FDA does not verify it.
+-- The text is the FDA's: a labeler's name, a product's brand name (openFDA's brand_name,
+-- which already ends with any suffix) and, where it differs, its generic name in brackets,
+-- then its dosage form; a package's description. All of it is submitted by the labelers, and the FDA does not verify it.
 --
 -- release is the date openFDA's `meta` gives as last updated: `2026-10-30`.
 --
 -- The run fails if the file's record count is not the count `meta` states, if openFDA's
 -- date is missing or not a date, if a product or package NDC is not in one of the three
 -- layouts, if a package NDC does not start with its listing's product NDC, if two
--- different NDCs pad to the same eleven digits, if a product has no name, or if a date
--- field is not a date.
+-- different NDCs pad to the same eleven digits, if a product has no name, if a labeler
+-- code has no name on any of its listings, or if a date field is not a date.
 
 CREATE OR REPLACE TABLE ndc AS
 WITH raw AS (
@@ -111,8 +111,7 @@ dated AS (
               ELSE strptime(listing_expiration_date, '%Y%m%d')::DATE END AS listing_expires,
          CASE WHEN nullif(trim(coalesce(brand_name, generic_name)), '') IS NULL
               THEN error('openFDA product has no brand or generic name: ' || product_id)
-              ELSE trim(coalesce(trim(brand_name) || coalesce(' ' || nullif(trim(brand_name_suffix), ''), ''),
-                                 generic_name))
+              ELSE trim(coalesce(nullif(trim(brand_name), ''), generic_name))
                    || CASE WHEN nullif(trim(brand_name), '') IS NOT NULL
                                 AND nullif(trim(generic_name), '') IS NOT NULL
                                 AND lower(trim(generic_name)) <> lower(trim(brand_name))
@@ -235,7 +234,10 @@ SELECT
   x.level,
   x.depth,
   x.parent_code,
-  CASE WHEN nullif(x.description, '') IS NULL
+  CASE WHEN lab.code IS NULL
+       THEN error('NDC labeler ' || left(x.code_display, strpos(x.code_display || '-', '-') - 1)
+                  || ' has no name on any of its listings')
+       WHEN nullif(x.description, '') IS NULL
        THEN error('NDC ' || x.code_display || ' has no text')
        ELSE x.description END AS description,
   -- The labeler, then the product, then the package, each level's text once.
@@ -267,5 +269,5 @@ SELECT
   f.spl_id,
   x.product_id
 FROM ladder x
-JOIN labelers lab ON lab.code = left(x.code, 5)
+LEFT JOIN labelers lab ON lab.code = left(x.code, 5)
 LEFT JOIN product_fields f ON f.product_id = x.product_id;

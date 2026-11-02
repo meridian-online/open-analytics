@@ -91,7 +91,7 @@
       }
     },
     "description": {
-      "description": "The row's own text, as labelers submit it to the FDA. A labeler: its name, the one its listings give most often. A product: its brand name and suffix, then its generic name in brackets where that differs, then its dosage form (Zepbound (tirzepatide), INJECTION, SOLUTION); the generic name alone where there is no brand name. A package: the FDA's package description (1 VIAL, SINGLE-DOSE in 1 CARTON (0002-0152-01) / .5 mL in 1 VIAL, SINGLE-DOSE)."
+      "description": "The row's own text, as labelers submit it to the FDA. A labeler: its name, the one its listings give most often. A product: its brand name, suffix included, then its generic name in brackets where that differs, then its dosage form (Zepbound (tirzepatide), INJECTION, SOLUTION); the generic name alone where there is no brand name. A package: the FDA's package description (1 VIAL, SINGLE-DOSE in 1 CARTON (0002-0152-01) / .5 mL in 1 VIAL, SINGLE-DOSE)."
     },
     "description_full": {
       "description": "The labeler's name, the product's text and the package's description, joined with ' › ', down to the row's own level."
@@ -126,14 +126,14 @@
       "description": "The FDA's product type, such as HUMAN PRESCRIPTION DRUG, HUMAN OTC DRUG, VACCINE or PLASMA DERIVATIVE. NULL on a labeler row."
     },
     "brand_name": {
-      "description": "The proprietary name the labeler gives the product. NULL on a labeler row and on the few products listed without one.",
+      "description": "The proprietary name the labeler gives the product, ending with brand_name_suffix where there is one. NULL on a labeler row and on the few products listed without one.",
       "constraints": {
         "minLength": 1,
         "maxLength": 512
       }
     },
     "brand_name_suffix": {
-      "description": "A suffix to the proprietary name, such as XR or R. NULL where the listing gives none.",
+      "description": "The suffix that ends the proprietary name, such as XR or R, which brand_name already includes. NULL where the listing gives none.",
       "constraints": {
         "minLength": 1,
         "maxLength": 256

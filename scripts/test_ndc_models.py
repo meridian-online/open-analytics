@@ -153,6 +153,13 @@ class BuildTest(unittest.TestCase):
         finally:
             scratch.close()
 
+    def test_brand_name_already_carries_its_suffix(self):
+        prod = self.row("711101505")
+        self.assertEqual(prod["brand_name_suffix"], "Roll-On Anti-Perspirant Deodorant")
+        self.assertEqual(prod["description"],
+                         "AVON Cool Confidence Essence Roll-On Anti-Perspirant Deodorant "
+                         "(Aluminum Chlorohydrate), STICK")
+
     def test_package_rows_carry_their_listings_product_fields(self):
         pkg = self.row("00002015261")
         self.assertEqual(pkg["brand_name"], "Zepbound")
@@ -235,6 +242,13 @@ class RefusalTest(unittest.TestCase):
         doc["results"].append(twin)
         doc["meta"]["results"]["total"] += 1
         self.refuses(doc, "two labeler codes pad to 00002")
+
+    def test_a_labeler_with_no_name_on_any_listing(self):
+        doc = fixture()
+        for r in doc["results"]:
+            if r["product_ndc"].startswith("72043-"):
+                r["labeler_name"] = " "
+        self.refuses(doc, "NDC labeler 72043 has no name on any of its listings")
 
     def test_dates_must_parse(self):
         doc = fixture()
