@@ -1,0 +1,341 @@
+{
+ "meta": {
+  "disclaimer": "Do not rely on openFDA to make decisions regarding medical care. While we make every effort to ensure that data is accurate, you should assume all results are unvalidated. We may limit or otherwise restrict your access to the API in line with our Terms of Service.",
+  "terms": "https://open.fda.gov/terms/",
+  "license": "https://open.fda.gov/license/",
+  "last_updated": "2026-10-30",
+  "results": {
+   "skip": 0,
+   "limit": 8,
+   "total": 8
+  }
+ },
+ "results": [
+  {
+   "product_ndc": "85533-203",
+   "generic_name": "Titanium Dioxide, Zinc Oxide",
+   "labeler_name": "Mint Skin Incorporated",
+   "brand_name": "Tinted Matte Defense Sunscreen Primer",
+   "active_ingredients": [
+    {
+     "name": "ZINC OXIDE",
+     "strength": "38 mg/g"
+    },
+    {
+     "name": "TITANIUM DIOXIDE",
+     "strength": "80 mg/g"
+    }
+   ],
+   "finished": true,
+   "packaging": [
+    {
+     "package_ndc": "85533-203-50",
+     "description": "53 g in 1 BOTTLE, PUMP (85533-203-50)",
+     "marketing_start_date": "20210706",
+     "sample": false
+    }
+   ],
+   "listing_expiration_date": "20271231",
+   "marketing_category": "OTC MONOGRAPH DRUG",
+   "dosage_form": "CREAM",
+   "spl_id": "45b4d122-1d1f-1945-e063-6294a90a90bb",
+   "product_type": "HUMAN OTC DRUG",
+   "route": [
+    "TOPICAL"
+   ],
+   "marketing_start_date": "20210706",
+   "product_id": "85533-203_45b4d122-1d1f-1945-e063-6294a90a90bb",
+   "application_number": "M020",
+   "brand_name_base": "Tinted Matte Defense Sunscreen Primer"
+  },
+  {
+   "product_ndc": "63323-729",
+   "generic_name": "Micafungin Sodium",
+   "labeler_name": "Fresenius Kabi USA, LLC",
+   "brand_name": "Micafungin",
+   "active_ingredients": [
+    {
+     "name": "MICAFUNGIN SODIUM",
+     "strength": "100 mg/1"
+    }
+   ],
+   "finished": true,
+   "packaging": [
+    {
+     "package_ndc": "63323-729-12",
+     "description": "10 CARTON in 1 CARTON (63323-729-12)  / 1 VIAL, SINGLE-DOSE in 1 CARTON (63323-729-02)  / 1 INJECTION, POWDER, LYOPHILIZED, FOR SOLUTION in 1 VIAL, SINGLE-DOSE",
+     "marketing_start_date": "20200508",
+     "sample": false
+    }
+   ],
+   "listing_expiration_date": "20271231",
+   "marketing_category": "ANDA",
+   "dosage_form": "INJECTION, POWDER, LYOPHILIZED, FOR SOLUTION",
+   "spl_id": "e8fcf6a2-1a58-4a13-9290-1fc0d4fecfd1",
+   "product_type": "HUMAN PRESCRIPTION DRUG",
+   "route": [
+    "INTRAVENOUS"
+   ],
+   "marketing_start_date": "20200508",
+   "product_id": "63323-729_e8fcf6a2-1a58-4a13-9290-1fc0d4fecfd1",
+   "application_number": "ANDA207344",
+   "brand_name_base": "Micafungin",
+   "pharm_class": [
+    "Echinocandin Antifungal [EPC]",
+    "Lipopeptides [CS]"
+   ]
+  },
+  {
+   "product_ndc": "85533-203",
+   "generic_name": "Titanium Dioxide, Zinc Oxide",
+   "labeler_name": "Mint Skin Incroporated",
+   "brand_name": "Tinted Matte Defense Sunscreen Primer",
+   "active_ingredients": [
+    {
+     "name": "ZINC OXIDE",
+     "strength": "38 mg/g"
+    },
+    {
+     "name": "TITANIUM DIOXIDE",
+     "strength": "80 mg/g"
+    }
+   ],
+   "finished": true,
+   "packaging": [
+    {
+     "package_ndc": "85533-203-15",
+     "description": "1.5 g in 1 PACKET (85533-203-15)",
+     "marketing_start_date": "20210706",
+     "sample": true
+    }
+   ],
+   "listing_expiration_date": "20271231",
+   "marketing_category": "OTC MONOGRAPH DRUG",
+   "dosage_form": "CREAM",
+   "spl_id": "45b4d346-8004-d20f-e063-6394a90a68d2",
+   "product_type": "HUMAN OTC DRUG",
+   "route": [
+    "TOPICAL"
+   ],
+   "marketing_start_date": "20210706",
+   "product_id": "85533-203_45b4d346-8004-d20f-e063-6394a90a68d2",
+   "application_number": "M020",
+   "brand_name_base": "Tinted Matte Defense Sunscreen Primer"
+  },
+  {
+   "product_ndc": "0002-0152",
+   "generic_name": "tirzepatide",
+   "labeler_name": "Eli Lilly and Company",
+   "brand_name": "Zepbound",
+   "active_ingredients": [
+    {
+     "name": "TIRZEPATIDE",
+     "strength": "2.5 mg/.5mL"
+    }
+   ],
+   "finished": true,
+   "packaging": [
+    {
+     "package_ndc": "0002-0152-01",
+     "description": "1 VIAL, SINGLE-DOSE in 1 CARTON (0002-0152-01)  / .5 mL in 1 VIAL, SINGLE-DOSE",
+     "marketing_start_date": "20240328",
+     "sample": false
+    },
+    {
+     "package_ndc": "0002-0152-04",
+     "description": "4 VIAL, SINGLE-DOSE in 1 CARTON (0002-0152-04)  / .5 mL in 1 VIAL, SINGLE-DOSE",
+     "marketing_start_date": "20240808",
+     "sample": false
+    },
+    {
+     "package_ndc": "0002-0152-61",
+     "description": "4 VIAL, SINGLE-DOSE in 1 CARTON (0002-0152-61)  / .5 mL in 1 VIAL, SINGLE-DOSE",
+     "marketing_start_date": "20250501",
+     "sample": true
+    }
+   ],
+   "listing_expiration_date": "20271231",
+   "marketing_category": "NDA",
+   "dosage_form": "INJECTION, SOLUTION",
+   "spl_id": "a5dba1a3-f7f7-4b8d-b9f1-a09dcdc1b2fc",
+   "product_type": "HUMAN PRESCRIPTION DRUG",
+   "route": [
+    "SUBCUTANEOUS"
+   ],
+   "marketing_start_date": "20240328",
+   "product_id": "0002-0152_a5dba1a3-f7f7-4b8d-b9f1-a09dcdc1b2fc",
+   "application_number": "NDA217806",
+   "brand_name_base": "Zepbound",
+   "pharm_class": [
+    "G-Protein-linked Receptor Interactions [MoA]",
+    "GLP-1 Receptor Agonist [EPC]",
+    "Glucagon-like Peptide-1 (GLP-1) Agonists [MoA]",
+    "Glucose-dependent Insulinotropic Polypeptide Receptor Agonist [EPC]"
+   ]
+  },
+  {
+   "product_ndc": "72043-2500",
+   "generic_name": "Zinc oxide and Octinoxate sunscreen",
+   "labeler_name": "CP Skin Health Group, Inc.",
+   "brand_name": "EltaMD UV Clear SPF46",
+   "active_ingredients": [
+    {
+     "name": "ZINC OXIDE",
+     "strength": "90 g/1000g"
+    },
+    {
+     "name": "OCTINOXATE",
+     "strength": "75 g/1000g"
+    }
+   ],
+   "finished": true,
+   "packaging": [
+    {
+     "package_ndc": "72043-2500-1",
+     "description": "48 g in 1 BOTTLE (72043-2500-1)",
+     "marketing_start_date": "20180110",
+     "sample": false
+    },
+    {
+     "package_ndc": "72043-2500-1",
+     "description": "48 g in 1 BOTTLE (72043-2500-1)",
+     "marketing_start_date": "20250501",
+     "sample": false
+    },
+    {
+     "package_ndc": "72043-2500-2",
+     "description": "2 g in 1 PACKET (72043-2500-2)",
+     "marketing_start_date": "20220706",
+     "sample": false
+    },
+    {
+     "package_ndc": "72043-2500-3",
+     "description": "106 g in 1 TUBE (72043-2500-3)",
+     "marketing_start_date": "20250604",
+     "sample": false
+    },
+    {
+     "package_ndc": "72043-2500-5",
+     "description": "14 g in 1 BOTTLE (72043-2500-5)",
+     "marketing_start_date": "20201217",
+     "sample": false
+    }
+   ],
+   "listing_expiration_date": "20261231",
+   "marketing_category": "OTC MONOGRAPH DRUG",
+   "dosage_form": "LOTION",
+   "spl_id": "e1ccd02f-6246-493f-8ce5-a39b29b7bde7",
+   "product_type": "HUMAN OTC DRUG",
+   "route": [
+    "TOPICAL"
+   ],
+   "marketing_start_date": "20180110",
+   "product_id": "72043-2500_e1ccd02f-6246-493f-8ce5-a39b29b7bde7",
+   "application_number": "M020",
+   "brand_name_base": "EltaMD UV Clear SPF46",
+   "pharm_class": [
+    "Copper Absorption Inhibitor [EPC]",
+    "Decreased Copper Ion Absorption [PE]"
+   ]
+  },
+  {
+   "product_ndc": "63323-729",
+   "generic_name": "Micafungin Sodium",
+   "labeler_name": "Fresenius Kabi USA, LLC",
+   "brand_name": "Micafungin",
+   "active_ingredients": [
+    {
+     "name": "MICAFUNGIN SODIUM",
+     "strength": "100 mg/1"
+    }
+   ],
+   "finished": true,
+   "packaging": [
+    {
+     "package_ndc": "63323-729-10",
+     "description": "10 CARTON in 1 CARTON (63323-729-10)  / 1 VIAL, SINGLE-DOSE in 1 CARTON (63323-729-01)  / 1 INJECTION, POWDER, LYOPHILIZED, FOR SOLUTION in 1 VIAL, SINGLE-DOSE",
+     "marketing_start_date": "20200508",
+     "sample": false
+    }
+   ],
+   "listing_expiration_date": "20271231",
+   "marketing_category": "ANDA",
+   "dosage_form": "INJECTION, POWDER, LYOPHILIZED, FOR SOLUTION",
+   "spl_id": "e9aa7e59-831f-4994-802b-b62221fdfca3",
+   "product_type": "HUMAN PRESCRIPTION DRUG",
+   "route": [
+    "INTRAVENOUS"
+   ],
+   "marketing_start_date": "20200508",
+   "product_id": "63323-729_e9aa7e59-831f-4994-802b-b62221fdfca3",
+   "application_number": "ANDA207344",
+   "brand_name_base": "Micafungin",
+   "pharm_class": [
+    "Echinocandin Antifungal [EPC]",
+    "Lipopeptides [CS]"
+   ]
+  },
+  {
+   "product_ndc": "71110-1505",
+   "generic_name": "Aluminum Chlorohydrate",
+   "labeler_name": "Avon Cosmetics Manufacturing, S. de R.L. de C.V.",
+   "brand_name": "AVON Cool Confidence Essence Roll-On Anti-Perspirant Deodorant",
+   "brand_name_suffix": "Roll-On Anti-Perspirant Deodorant",
+   "active_ingredients": [
+    {
+     "name": "ALUMINUM CHLOROHYDRATE",
+     "strength": "250 mg/mL"
+    }
+   ],
+   "finished": true,
+   "packaging": [
+    {
+     "package_ndc": "71110-1505-1",
+     "description": "50 mL in 1 CONTAINER (71110-1505-1)",
+     "marketing_start_date": "20240320",
+     "sample": false
+    }
+   ],
+   "listing_expiration_date": "20261231",
+   "marketing_category": "OTC MONOGRAPH DRUG",
+   "dosage_form": "STICK",
+   "spl_id": "258e6c32-e923-8a3d-e063-6394a90a9144",
+   "product_type": "HUMAN OTC DRUG",
+   "route": [
+    "TOPICAL"
+   ],
+   "marketing_start_date": "20240320",
+   "product_id": "71110-1505_258e6c32-e923-8a3d-e063-6394a90a9144",
+   "application_number": "M019",
+   "brand_name_base": "AVON Cool Confidence Essence"
+  },
+  {
+   "product_ndc": "0006-0001",
+   "generic_name": "suvorexant",
+   "labeler_name": "Merck Sharp & Dohme LLC.",
+   "dea_schedule": "CIV",
+   "active_ingredients": [
+    {
+     "name": "SUVOREXANT",
+     "strength": "5 mg/1"
+    }
+   ],
+   "finished": false,
+   "packaging": [
+    {
+     "package_ndc": "0006-0001-01",
+     "description": "1 BAG in 1 DRUM (0006-0001-01)  / 480000 TABLET, FILM COATED in 1 BAG",
+     "marketing_start_date": "15-AUG-14"
+    }
+   ],
+   "listing_expiration_date": "20261231",
+   "marketing_category": "DRUG FOR FURTHER PROCESSING",
+   "dosage_form": "TABLET, FILM COATED",
+   "spl_id": "04380331-421e-49f5-8dcc-d896fc8094e5",
+   "product_type": "DRUG FOR FURTHER PROCESSING",
+   "marketing_start_date": "20140815",
+   "product_id": "0006-0001_04380331-421e-49f5-8dcc-d896fc8094e5",
+   "brand_name_base": null
+  }
+ ]
+}

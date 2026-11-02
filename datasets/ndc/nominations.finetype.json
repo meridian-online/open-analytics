@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "resources": {
+    "ndc": {
+      "code": {
+        "label": "identity.medical.ndc",
+        "why": "The NDC at three lengths: five digits for a labeler, nine for a product, eleven for a package. Inferred from the values it is not read as an NDC, since only the eleven-digit package codes match finetype's NDC pattern; nominated so the column carries the NDC label, and the overrides declare the three lengths it holds."
+      },
+      "code_display": {
+        "label": "identity.medical.ndc",
+        "why": "The FDA's hyphenated NDC, with its labeler and product prefixes on the rows above a package. Only the package rows match finetype's NDC pattern; nominated so the column carries the NDC label, and the overrides declare the shapes it holds."
+      },
+      "level": {
+        "label": "representation.text.word",
+        "why": "A closed set of three level names, labeler, product and package."
+      },
+      "release": {
+        "label": "representation.identifier.alphanumeric_id",
+        "why": "openFDA's last-updated date, such as 2026-10-30, used as the identifier of the snapshot, as the other code lists' release is. Stored as text, so every code list's release has one type; nominated so finetype does not type it a DATE."
+      },
+      "text_source": {
+        "label": "representation.text.word",
+        "why": "A closed set of one value, fda; nominated so the label does not move with the inference's confidence on a single repeated value."
+      },
+      "description": {
+        "label": "representation.text.plain_text",
+        "why": "Free text: a labeler's name, a product's names and dosage form, or a package's description, up to 2,429 characters. Inferred, finetype reads the package descriptions as postal addresses, whose 500-character limit the longest ones break."
+      },
+      "package_description": {
+        "label": "representation.text.plain_text",
+        "why": "The FDA's package description, free text up to 2,429 characters. Inferred, finetype reads it as a postal address, whose 500-character limit the longest ones break."
+      },
+      "dosage_form": {
+        "label": "representation.text.plain_text",
+        "why": "The FDA's dosage form, such as TABLET, FILM COATED. Inferred, finetype reads the short forms as US state codes."
+      },
+      "generic_name": {
+        "label": "representation.text.plain_text",
+        "why": "The product's nonproprietary name, often a list of ingredients, up to 512 characters. Inferred, finetype reads it as an entity name, whose 200-character limit the longest ones break."
+      },
+      "product_id": {
+        "label": "representation.identifier.alphanumeric_id",
+        "why": "The FDA's listing identifier, the product NDC and a labeling document's UUID joined with an underscore. Inferred it is `unknown`."
+      }
+    }
+  }
+}

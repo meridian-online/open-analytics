@@ -6,6 +6,7 @@
     "census": "Datasets issued by the U.S. Census Bureau.",
     "usitc": "Datasets issued by the U.S. International Trade Commission.",
     "cms": "Datasets issued by the Centers for Medicare & Medicaid Services.",
+    "fda": "Datasets issued by the U.S. Food and Drug Administration.",
     "library": "Meridian's curated set: core datasets with no issuing organisation, and data Meridian makes itself.",
     "source": "Held for the compatibility views at the old names `source.gleif`, `source.edgar` and `source.naics`.",
     "crosswalk": "Held for the compatibility view at the old name `crosswalk.edgar_gleif`."
@@ -34,6 +35,11 @@
     "cms": {
       "kind": "held",
       "issuer": "Centers for Medicare & Medicaid Services",
+      "claimed": false
+    },
+    "fda": {
+      "kind": "held",
+      "issuer": "U.S. Food and Drug Administration",
       "claimed": false
     },
     "usgs": {
@@ -67,6 +73,7 @@
     "census",
     "usitc",
     "cms",
+    "fda",
     "usgs",
     "nyc_tlc",
     "epoch_ai",
@@ -160,6 +167,16 @@
       "manifest": "https://openlake.meridian.online/manifest.json",
       "doi": null,
       "protocol": "datasets/hcpcs/arcform.yaml"
+    },
+    {
+      "uid": "3b6a8280-86c1-4f25-8b66-7252ffd5e272",
+      "schema": "fda",
+      "name": "ndc",
+      "title": "NDC Directory — National Drug Code",
+      "aliases": [],
+      "manifest": "https://openlake.meridian.online/manifest.json",
+      "doi": null,
+      "protocol": "datasets/ndc/arcform.yaml"
     }
   ]
 }

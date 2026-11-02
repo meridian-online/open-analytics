@@ -1,0 +1,149 @@
+# The `fda/ndc` Protocol — the reproducible *definition* of how the FDA's National Drug
+# Code directory, the codes that identify each drug product and package sold in the
+# United States, is ingested from openFDA's NDC download. `arc run` executes this
+# manifest; one Run → one Dataset version. See ./README.md.
+#
+# CONFIG ONLY. Every step is a first-class `sql:` model or a typed `op:` operator (the
+# arcform catalog). The fetch is http_fetch and the unzip archive_extract; the SQL reads
+# openFDA's JSON into one row per labeler, product and package and adds the search
+# corpus; the COPY is parquet_export; datapackage_describe emits the descriptor;
+# check_code_list holds the Parquet to the shared code-list contract; finetype_validate
+# gates it; and stamp_descriptor writes the published Parquet with its descriptor in the
+# footer. Operator code lives in the arcform repo, not here.
+#
+# ONE WRITER PER FILE. The export and describe work on build/stage/; stamp_descriptor
+# alone writes the published build/ndc.parquet and datapackage.json.
+#
+# THE RELEASE. openFDA serves the current directory at one URL and records the date it
+# last updated it inside the file, so `release` is read from the file in load.sql and
+# nothing here changes from one refresh to the next. The FDA updates the directory
+# daily; Meridian refreshes it fortnightly, in place under one name.
+#
+# BOUNDARY — do NOT fold this into this manifest:
+#   • PUBLISH (content-addressed R2 upload + manifest/catalog pointer flip) stays in
+#     the out-of-repo publish pipeline and READS this Protocol's terminal output,
+#     build/ndc.parquet + the emitted datapackage.json. It is not an arcform step.
+#
+# Produces: build/ndc.parquet  →  published as fda/ndc
+name: ndc
+engine: duckdb
+engine_version: ">=1.2"
+db: build/ndc.db
+
+defaults:
+  retry:
+    max_attempts: 3
+    backoff_sec: 2.0
+
+steps:
+  # ── Fetch: openFDA's NDC download, finished and unfinished drugs ────────────────
+  - name: fetch_ndc
+    op: http_fetch@1
+    with:
+      url: https://download.open.fda.gov/drug/ndc/drug-ndc-0001-of-0001.json.zip
+      out: build/ndc.zip
+      headers:
+        User-Agent: "Meridian Protocol (open-analytics; research@meridian.online)"
+
+  - name: extract_ndc
+    op: archive_extract@1
+    with:
+      archive: build/ndc.zip
+      members: [drug-ndc-0001-of-0001.json]
+      dest: build/ndc
+
+  # ── Load: one row per labeler, product and package, and the release ─────────────
+  # Reads the finished drugs only, and fails the run on a record it cannot read. See
+  # the model's header.
+  - name: load
+    sql: models/load.sql
+    depends_on: [build/ndc/drug-ndc-0001-of-0001.json]
+
+  # ── Package: materialise the terminal table (adds the search corpus) ────────────
+  - name: package
+    sql: models/package.sql
+    produces: [ndc_out]
+
+  # ── Export: write the Parquet the later steps read ──────────────────────────────
+  # order_by code (the primary key) is a total order → reproducible bytes.
+  - name: export_ndc
+    op: parquet_export@1
+    with:
+      input: ndc_out
+      dest: build/stage/ndc.parquet
+      compression: zstd
+      order_by: "code"
+
+  # ── Describe: EMIT the descriptor from the built Parquet ────────────────────────
+  # finetype types every column nominations.finetype.json does not declare;
+  # descriptor.overrides.json overlays the curated half (identity, licenses, sources,
+  # per-field prose, primaryKey, the code-list declaration). Hard-fails on drift.
+  - name: describe
+    op: datapackage_describe@1
+    with:
+      parquet: build/stage/ndc.parquet
+      overrides: descriptor.overrides.json
+      nominations: nominations.finetype.json
+      out: build/stage/described.json
+
+  # ── Contract: hold the Parquet to the shared code-list columns ──────────────────
+  # The script is addressed by its bytes, so editing it is a manifest edit as well:
+  # `shasum -a 256 scripts/check_code_list.py` prints the digest. duckdb is pinned to
+  # DUCKDB_VERSION in .github/workflows/descriptors.yml — keep the two in step.
+  - name: check_code_list
+    op: uv@1
+    with:
+      script: ../../scripts/check_code_list.py
+      sha256: 11b06ca742a70ef483c9626d153d30387ad17f47992a3b4ef3eaf295b1c1e4b8
+      deps:
+        - duckdb==1.5.5
+      args:
+        - --parquet
+        - build/stage/ndc.parquet
+        - --levels
+        - labeler,product,package
+        - --json
+        - build/code_list_check.json
+      reads:
+        - build/stage/ndc.parquet
+      produces:
+        - build/code_list_check.json
+
+  # ── Validate: GATE the built Parquet against the self-derived finetype contract ─
+  - name: validate
+    op: finetype_validate@1
+    with:
+      parquet: build/stage/ndc.parquet
+      schema: schema.finetype.json
+
+  # ── Self-describe: write the published Parquet with its descriptor inside ───────
+  # The object answers for itself from its URL alone; the embedded copy omits the
+  # resource `bytes` and `hash` and the package's `created`. It runs last because it
+  # embeds the FINISHED descriptor.
+  - name: stamp_descriptor
+    op: uv@1
+    with:
+      script: ../../scripts/stamp_descriptor.py
+      sha256: b22581b77414303312aa5040e70a66ccd96a6bfd1902820e487428441018b9c2
+      deps:
+        - duckdb==1.5.5
+      args:
+        - stamp
+        - --descriptor
+        - build/stage/described.json
+        - --parquet
+        - build/stage/ndc.parquet
+        - --out
+        - build/ndc.parquet
+        - --out-descriptor
+        - datapackage.json
+        - --carry-created
+      reads:
+        - build/stage/described.json
+        - build/stage/ndc.parquet
+      produces:
+        - build/ndc.parquet
+        - datapackage.json
+
+  # publish: the out-of-repo publish pipeline reads build/ndc.parquet + the emitted
+  # datapackage.json (boundary — not an arc step). See README.

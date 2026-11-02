@@ -27,9 +27,13 @@
         "edgar.company_name": 200,
         "edgar_gleif.company_name": 200,
         "edgar_gleif.legal_name": 500,
-        "gleif.legal_name": 500
+        "gleif.legal_name": 500,
+        "ndc.brand_name": 512,
+        "ndc.brand_name_suffix": 256,
+        "ndc.labeler_name": 256,
+        "ndc.product_type": 200
       },
-      "reason": "Two register elements under one label, each with its own bounds. `edgar.company_name` and `edgar_gleif.company_name` are the SEC display name of a registrant, declared `representation.text.entity_name` in each package's nominations.finetype.json, and they carry that label's own bounds of 2 to 200 characters, which the descriptor check holds every value in both columns to. `gleif.legal_name` and `edgar_gleif.legal_name` are the GLEIF register's legal-name element, which LEI-CDF v3.1 types as Tokenized500Type, 1 to 500 characters; single-character and longer-than-200-character names are genuinely registered, so those two columns carry the register's bounds rather than the label's, and both descriptors say so. The direction for a reader validating all four: the register's bounds admit every company name, and the label's bounds would refuse real register names."
+      "reason": "Two register elements under one label, each with its own bounds. `edgar.company_name` and `edgar_gleif.company_name` are the SEC display name of a registrant, declared `representation.text.entity_name` in each package's nominations.finetype.json, and they carry that label's own bounds of 2 to 200 characters, which the descriptor check holds every value in both columns to. `gleif.legal_name` and `edgar_gleif.legal_name` are the GLEIF register's legal-name element, which LEI-CDF v3.1 types as Tokenized500Type, 1 to 500 characters; single-character and longer-than-200-character names are genuinely registered, so those two columns carry the register's bounds rather than the label's, and both descriptors say so. The direction for a reader validating all four: the register's bounds admit every company name, and the label's bounds would refuse real register names. In fda/ndc, `product_type` is the FDA's product type and carries the label's bounds; `labeler_name`, `brand_name` and `brand_name_suffix` are names labelers submit, which run to one character (a suffix such as R) and past 200 (a brand name of 367 characters), so they declare 1 to 256, 1 to 512 and 1 to 256."
     },
     {
       "concept": "representation.text.entity_name",
@@ -38,9 +42,13 @@
         "edgar.company_name": 2,
         "edgar_gleif.company_name": 2,
         "edgar_gleif.legal_name": 1,
-        "gleif.legal_name": 1
+        "gleif.legal_name": 1,
+        "ndc.brand_name": 1,
+        "ndc.brand_name_suffix": 1,
+        "ndc.labeler_name": 1,
+        "ndc.product_type": 2
       },
-      "reason": "Two register elements under one label, each with its own bounds. `edgar.company_name` and `edgar_gleif.company_name` are the SEC display name of a registrant, declared `representation.text.entity_name` in each package's nominations.finetype.json, and they carry that label's own bounds of 2 to 200 characters, which the descriptor check holds every value in both columns to. `gleif.legal_name` and `edgar_gleif.legal_name` are the GLEIF register's legal-name element, which LEI-CDF v3.1 types as Tokenized500Type, 1 to 500 characters; single-character and longer-than-200-character names are genuinely registered, so those two columns carry the register's bounds rather than the label's, and both descriptors say so. The direction for a reader validating all four: the register's bounds admit every company name, and the label's bounds would refuse real register names."
+      "reason": "Two register elements under one label, each with its own bounds. `edgar.company_name` and `edgar_gleif.company_name` are the SEC display name of a registrant, declared `representation.text.entity_name` in each package's nominations.finetype.json, and they carry that label's own bounds of 2 to 200 characters, which the descriptor check holds every value in both columns to. `gleif.legal_name` and `edgar_gleif.legal_name` are the GLEIF register's legal-name element, which LEI-CDF v3.1 types as Tokenized500Type, 1 to 500 characters; single-character and longer-than-200-character names are genuinely registered, so those two columns carry the register's bounds rather than the label's, and both descriptors say so. The direction for a reader validating all four: the register's bounds admit every company name, and the label's bounds would refuse real register names. In fda/ndc, `product_type` is the FDA's product type and carries the label's bounds; `labeler_name`, `brand_name` and `brand_name_suffix` are names labelers submit, which run to one character (a suffix such as R) and past 200 (a brand name of 367 characters), so they declare 1 to 256, 1 to 512 and 1 to 256."
     },
     {
       "concept": "geography.transportation.hs_code",
@@ -114,27 +122,30 @@
           "INACTIVE",
           "NULL"
         ],
+        "ndc.sample": null,
         "schedule_b.agricultural": null
       },
-      "reason": "One label, two storage choices, each true of its column. `gleif.entity_status` is the register's status element stored as text, LEI-CDF v3.1's three terms ACTIVE, INACTIVE and the four-character string NULL, every row carrying one, so it declares that enum and `required`. `schedule_b.agricultural` is a native Parquet BOOLEAN made from Census's USDA field: it needs no enum, since the type admits only true and false, and it is NULL on the chapter, heading and subheading rows, which print no USDA field, so it is not required. Typing the boolean as text to match would lose its type, and an enum or `required` on it would be false of its own rows."
+      "reason": "One label, two storage choices, each true of its column. `gleif.entity_status` is the register's status element stored as text, LEI-CDF v3.1's three terms ACTIVE, INACTIVE and the four-character string NULL, every row carrying one, so it declares that enum and `required`. `schedule_b.agricultural` is a native Parquet BOOLEAN made from Census's USDA field: it needs no enum, since the type admits only true and false, and it is NULL on the chapter, heading and subheading rows, which print no USDA field, so it is not required. Typing the boolean as text to match would lose its type, and an enum or `required` on it would be false of its own rows. `ndc.sample` in fda/ndc is the same kind of column as `schedule_b.agricultural`: a native BOOLEAN, NULL on the labeler and product rows, which are not packages, so it declares no enum and is not required."
     },
     {
       "concept": "representation.boolean.terms",
       "property": "constraints.required",
       "values": {
         "gleif.entity_status": true,
+        "ndc.sample": null,
         "schedule_b.agricultural": null
       },
-      "reason": "One label, two storage choices, each true of its column. `gleif.entity_status` is the register's status element stored as text, LEI-CDF v3.1's three terms ACTIVE, INACTIVE and the four-character string NULL, every row carrying one, so it declares that enum and `required`. `schedule_b.agricultural` is a native Parquet BOOLEAN made from Census's USDA field: it needs no enum, since the type admits only true and false, and it is NULL on the chapter, heading and subheading rows, which print no USDA field, so it is not required. Typing the boolean as text to match would lose its type, and an enum or `required` on it would be false of its own rows."
+      "reason": "One label, two storage choices, each true of its column. `gleif.entity_status` is the register's status element stored as text, LEI-CDF v3.1's three terms ACTIVE, INACTIVE and the four-character string NULL, every row carrying one, so it declares that enum and `required`. `schedule_b.agricultural` is a native Parquet BOOLEAN made from Census's USDA field: it needs no enum, since the type admits only true and false, and it is NULL on the chapter, heading and subheading rows, which print no USDA field, so it is not required. Typing the boolean as text to match would lose its type, and an enum or `required` on it would be false of its own rows. `ndc.sample` in fda/ndc is the same kind of column as `schedule_b.agricultural`: a native BOOLEAN, NULL on the labeler and product rows, which are not packages, so it declares no enum and is not required."
     },
     {
       "concept": "representation.boolean.terms",
       "property": "type",
       "values": {
         "gleif.entity_status": "string",
+        "ndc.sample": "boolean",
         "schedule_b.agricultural": "boolean"
       },
-      "reason": "One label, two storage choices, each true of its column. `gleif.entity_status` is the register's status element stored as text, LEI-CDF v3.1's three terms ACTIVE, INACTIVE and the four-character string NULL, every row carrying one, so it declares that enum and `required`. `schedule_b.agricultural` is a native Parquet BOOLEAN made from Census's USDA field: it needs no enum, since the type admits only true and false, and it is NULL on the chapter, heading and subheading rows, which print no USDA field, so it is not required. Typing the boolean as text to match would lose its type, and an enum or `required` on it would be false of its own rows."
+      "reason": "One label, two storage choices, each true of its column. `gleif.entity_status` is the register's status element stored as text, LEI-CDF v3.1's three terms ACTIVE, INACTIVE and the four-character string NULL, every row carrying one, so it declares that enum and `required`. `schedule_b.agricultural` is a native Parquet BOOLEAN made from Census's USDA field: it needs no enum, since the type admits only true and false, and it is NULL on the chapter, heading and subheading rows, which print no USDA field, so it is not required. Typing the boolean as text to match would lose its type, and an enum or `required` on it would be false of its own rows. `ndc.sample` in fda/ndc is the same kind of column as `schedule_b.agricultural`: a native BOOLEAN, NULL on the labeler and product rows, which are not packages, so it declares no enum and is not required."
     },
     {
       "concept": "representation.identifier.alphanumeric_id",
@@ -144,13 +155,16 @@
         "hcpcs.betos": 3,
         "hcpcs.release": 18,
         "hts.release": null,
+        "ndc.application_number": null,
+        "ndc.product_id": null,
+        "ndc.release": 10,
         "schedule_b.hts_release": null,
         "schedule_b.release": null,
         "schedule_b.sitc": 5,
         "schedule_b.unit_1": 3,
         "schedule_b.unit_2": 3
       },
-      "reason": "The label names a shape, not a scheme, and each of these columns is its own identifier scheme with its own bounds. `gleif.legal_form` is an ISO 20275 Entity Legal Form code, always four letters or digits, so its length is fixed at 4. In census/schedule_b, `sitc` is an SITC Revision 4 code of five characters, three digits then two digits or X (792XX), fixed at 5, and `unit_1` and `unit_2` are Census's unit-of-quantity abbreviations, one to three uppercase letters or digits (X, KG, M2, DOZ), bounded 1 to 3. The release columns are names of one snapshot each, not codes from a list with a published length: `hts.release` and `schedule_b.hts_release` are USITC's revision name (2026HTSRev22), and `schedule_b.release` is Census's year folder and file date (2026/2026-07-27). So they carry the label's canonical pattern and no length bounds, widened for `schedule_b.release`'s date as its `x-finetype-pattern-fit` records. In cms/hcpcs, `betos` is CMS's Berenson-Eggers Type of Service category, a letter, a digit and an optional letter (Z2, O1E), bounded 2 to 3, and `release` is CMS's quarter and file date (2026-10/2026-09-23), always 18 characters, which it declares exactly. A shared pattern or length would be false of all but one scheme."
+      "reason": "The label names a shape, not a scheme, and each of these columns is its own identifier scheme with its own bounds. `gleif.legal_form` is an ISO 20275 Entity Legal Form code, always four letters or digits, so its length is fixed at 4. In census/schedule_b, `sitc` is an SITC Revision 4 code of five characters, three digits then two digits or X (792XX), fixed at 5, and `unit_1` and `unit_2` are Census's unit-of-quantity abbreviations, one to three uppercase letters or digits (X, KG, M2, DOZ), bounded 1 to 3. The release columns are names of one snapshot each, not codes from a list with a published length: `hts.release` and `schedule_b.hts_release` are USITC's revision name (2026HTSRev22), and `schedule_b.release` is Census's year folder and file date (2026/2026-07-27). So they carry the label's canonical pattern and no length bounds, widened for `schedule_b.release`'s date as its `x-finetype-pattern-fit` records. In cms/hcpcs, `betos` is CMS's Berenson-Eggers Type of Service category, a letter, a digit and an optional letter (Z2, O1E), bounded 2 to 3, and `release` is CMS's quarter and file date (2026-10/2026-09-23), always 18 characters, which it declares exactly. A shared pattern or length would be false of all but one scheme. In fda/ndc, `release` is openFDA's last-updated date (2026-10-30), always 10 characters, which it declares exactly; `product_id` is the FDA's listing identifier, a product NDC and a labeling document's UUID joined with an underscore, of no fixed length, so it carries the label's canonical pattern; and `application_number` is the application or monograph a product is marketed under (NDA217806, M017, 333G(a)(9)), which declares no pattern because monograph citations carry brackets the canonical pattern refuses."
     },
     {
       "concept": "representation.identifier.alphanumeric_id",
@@ -160,13 +174,16 @@
         "hcpcs.betos": 2,
         "hcpcs.release": 18,
         "hts.release": null,
+        "ndc.application_number": null,
+        "ndc.product_id": null,
+        "ndc.release": 10,
         "schedule_b.hts_release": null,
         "schedule_b.release": null,
         "schedule_b.sitc": 5,
         "schedule_b.unit_1": 1,
         "schedule_b.unit_2": 1
       },
-      "reason": "The label names a shape, not a scheme, and each of these columns is its own identifier scheme with its own bounds. `gleif.legal_form` is an ISO 20275 Entity Legal Form code, always four letters or digits, so its length is fixed at 4. In census/schedule_b, `sitc` is an SITC Revision 4 code of five characters, three digits then two digits or X (792XX), fixed at 5, and `unit_1` and `unit_2` are Census's unit-of-quantity abbreviations, one to three uppercase letters or digits (X, KG, M2, DOZ), bounded 1 to 3. The release columns are names of one snapshot each, not codes from a list with a published length: `hts.release` and `schedule_b.hts_release` are USITC's revision name (2026HTSRev22), and `schedule_b.release` is Census's year folder and file date (2026/2026-07-27). So they carry the label's canonical pattern and no length bounds, widened for `schedule_b.release`'s date as its `x-finetype-pattern-fit` records. In cms/hcpcs, `betos` is CMS's Berenson-Eggers Type of Service category, a letter, a digit and an optional letter (Z2, O1E), bounded 2 to 3, and `release` is CMS's quarter and file date (2026-10/2026-09-23), always 18 characters, which it declares exactly. A shared pattern or length would be false of all but one scheme."
+      "reason": "The label names a shape, not a scheme, and each of these columns is its own identifier scheme with its own bounds. `gleif.legal_form` is an ISO 20275 Entity Legal Form code, always four letters or digits, so its length is fixed at 4. In census/schedule_b, `sitc` is an SITC Revision 4 code of five characters, three digits then two digits or X (792XX), fixed at 5, and `unit_1` and `unit_2` are Census's unit-of-quantity abbreviations, one to three uppercase letters or digits (X, KG, M2, DOZ), bounded 1 to 3. The release columns are names of one snapshot each, not codes from a list with a published length: `hts.release` and `schedule_b.hts_release` are USITC's revision name (2026HTSRev22), and `schedule_b.release` is Census's year folder and file date (2026/2026-07-27). So they carry the label's canonical pattern and no length bounds, widened for `schedule_b.release`'s date as its `x-finetype-pattern-fit` records. In cms/hcpcs, `betos` is CMS's Berenson-Eggers Type of Service category, a letter, a digit and an optional letter (Z2, O1E), bounded 2 to 3, and `release` is CMS's quarter and file date (2026-10/2026-09-23), always 18 characters, which it declares exactly. A shared pattern or length would be false of all but one scheme. In fda/ndc, `release` is openFDA's last-updated date (2026-10-30), always 10 characters, which it declares exactly; `product_id` is the FDA's listing identifier, a product NDC and a labeling document's UUID joined with an underscore, of no fixed length, so it carries the label's canonical pattern; and `application_number` is the application or monograph a product is marketed under (NDA217806, M017, 333G(a)(9)), which declares no pattern because monograph citations carry brackets the canonical pattern refuses."
     },
     {
       "concept": "representation.identifier.alphanumeric_id",
@@ -176,13 +193,16 @@
         "hcpcs.betos": "^[A-Z][0-9][A-Z]?$",
         "hcpcs.release": "^[0-9]{4}-(01|04|07|10)/[0-9]{4}-[0-9]{2}-[0-9]{2}$",
         "hts.release": "^[A-Za-z][A-Za-z0-9 /_.#-]*[0-9][A-Za-z0-9 /_.#-]*$|^[0-9][A-Za-z0-9 /_.#-]*[A-Za-z][A-Za-z0-9 /_.#-]*$",
+        "ndc.application_number": null,
+        "ndc.product_id": "^[A-Za-z][A-Za-z0-9 /_.#-]*[0-9][A-Za-z0-9 /_.#-]*$|^[0-9][A-Za-z0-9 /_.#-]*[A-Za-z][A-Za-z0-9 /_.#-]*$",
+        "ndc.release": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
         "schedule_b.hts_release": "^[A-Za-z][A-Za-z0-9 /_.#-]*[0-9][A-Za-z0-9 /_.#-]*$|^[0-9][A-Za-z0-9 /_.#-]*[A-Za-z][A-Za-z0-9 /_.#-]*$",
         "schedule_b.release": "^[A-Za-z][A-Za-z0-9 /_.#-]*[0-9][A-Za-z0-9 /_.#-]*$|^[0-9][A-Za-z0-9 /_.#-]*[A-Za-z][A-Za-z0-9 /_.#-]*$|^[0-9]{4}/[0-9]{4}-[0-9]{2}-[0-9]{2}$",
         "schedule_b.sitc": "^[0-9]{3}[0-9X]{2}$",
         "schedule_b.unit_1": "^[A-Z0-9]{1,3}$",
         "schedule_b.unit_2": "^[A-Z0-9]{1,3}$"
       },
-      "reason": "The label names a shape, not a scheme, and each of these columns is its own identifier scheme with its own bounds. `gleif.legal_form` is an ISO 20275 Entity Legal Form code, always four letters or digits, so its length is fixed at 4. In census/schedule_b, `sitc` is an SITC Revision 4 code of five characters, three digits then two digits or X (792XX), fixed at 5, and `unit_1` and `unit_2` are Census's unit-of-quantity abbreviations, one to three uppercase letters or digits (X, KG, M2, DOZ), bounded 1 to 3. The release columns are names of one snapshot each, not codes from a list with a published length: `hts.release` and `schedule_b.hts_release` are USITC's revision name (2026HTSRev22), and `schedule_b.release` is Census's year folder and file date (2026/2026-07-27). So they carry the label's canonical pattern and no length bounds, widened for `schedule_b.release`'s date as its `x-finetype-pattern-fit` records. In cms/hcpcs, `betos` is CMS's Berenson-Eggers Type of Service category, a letter, a digit and an optional letter (Z2, O1E), bounded 2 to 3, and `release` is CMS's quarter and file date (2026-10/2026-09-23), always 18 characters, which it declares exactly. A shared pattern or length would be false of all but one scheme."
+      "reason": "The label names a shape, not a scheme, and each of these columns is its own identifier scheme with its own bounds. `gleif.legal_form` is an ISO 20275 Entity Legal Form code, always four letters or digits, so its length is fixed at 4. In census/schedule_b, `sitc` is an SITC Revision 4 code of five characters, three digits then two digits or X (792XX), fixed at 5, and `unit_1` and `unit_2` are Census's unit-of-quantity abbreviations, one to three uppercase letters or digits (X, KG, M2, DOZ), bounded 1 to 3. The release columns are names of one snapshot each, not codes from a list with a published length: `hts.release` and `schedule_b.hts_release` are USITC's revision name (2026HTSRev22), and `schedule_b.release` is Census's year folder and file date (2026/2026-07-27). So they carry the label's canonical pattern and no length bounds, widened for `schedule_b.release`'s date as its `x-finetype-pattern-fit` records. In cms/hcpcs, `betos` is CMS's Berenson-Eggers Type of Service category, a letter, a digit and an optional letter (Z2, O1E), bounded 2 to 3, and `release` is CMS's quarter and file date (2026-10/2026-09-23), always 18 characters, which it declares exactly. A shared pattern or length would be false of all but one scheme. In fda/ndc, `release` is openFDA's last-updated date (2026-10-30), always 10 characters, which it declares exactly; `product_id` is the FDA's listing identifier, a product NDC and a labeling document's UUID joined with an underscore, of no fixed length, so it carries the label's canonical pattern; and `application_number` is the application or monograph a product is marketed under (NDA217806, M017, 333G(a)(9)), which declares no pattern because monograph citations carry brackets the canonical pattern refuses."
     },
     {
       "concept": "representation.identifier.numeric_code",
@@ -190,11 +210,12 @@
       "values": {
         "edgar.cik": null,
         "hts.parent_code": 8,
+        "ndc.parent_code": 9,
         "schedule_b.end_use": 5,
         "schedule_b.hitech": 2,
         "schedule_b.parent_code": 6
       },
-      "reason": "The same label on codes of different lengths, stored two ways. `edgar.cik` is stored as an integer, unpadded, and its description says the decimal rendering is the CIK, so no string pattern or length applies to it. The others are text because their leading zeros are part of the code, and each declares its own length. `hts.parent_code` and `schedule_b.parent_code` are a parent's code, 2 to 8 digits in usitc/hts and 2 to 6 in census/schedule_b, which has no eight-digit level. `schedule_b.end_use` is Census's five-digit end-use code (00000 to 60010) and `schedule_b.hitech` its two-digit high-technology code (00 to 10), each fixed at its length. Stored as integers, 01 would become 1 and no longer join to `code`, and a shared length would be false of all but one of them."
+      "reason": "The same label on codes of different lengths, stored two ways. `edgar.cik` is stored as an integer, unpadded, and its description says the decimal rendering is the CIK, so no string pattern or length applies to it. The others are text because their leading zeros are part of the code, and each declares its own length. `hts.parent_code` and `schedule_b.parent_code` are a parent's code, 2 to 8 digits in usitc/hts and 2 to 6 in census/schedule_b, which has no eight-digit level. `schedule_b.end_use` is Census's five-digit end-use code (00000 to 60010) and `schedule_b.hitech` its two-digit high-technology code (00 to 10), each fixed at its length. Stored as integers, 01 would become 1 and no longer join to `code`, and a shared length would be false of all but one of them. `ndc.parent_code` is a parent's code in fda/ndc: a labeler's five digits or a product's nine, the prefixes of the eleven-digit NDC."
     },
     {
       "concept": "representation.identifier.numeric_code",
@@ -202,11 +223,12 @@
       "values": {
         "edgar.cik": null,
         "hts.parent_code": 2,
+        "ndc.parent_code": 5,
         "schedule_b.end_use": 5,
         "schedule_b.hitech": 2,
         "schedule_b.parent_code": 2
       },
-      "reason": "The same label on codes of different lengths, stored two ways. `edgar.cik` is stored as an integer, unpadded, and its description says the decimal rendering is the CIK, so no string pattern or length applies to it. The others are text because their leading zeros are part of the code, and each declares its own length. `hts.parent_code` and `schedule_b.parent_code` are a parent's code, 2 to 8 digits in usitc/hts and 2 to 6 in census/schedule_b, which has no eight-digit level. `schedule_b.end_use` is Census's five-digit end-use code (00000 to 60010) and `schedule_b.hitech` its two-digit high-technology code (00 to 10), each fixed at its length. Stored as integers, 01 would become 1 and no longer join to `code`, and a shared length would be false of all but one of them."
+      "reason": "The same label on codes of different lengths, stored two ways. `edgar.cik` is stored as an integer, unpadded, and its description says the decimal rendering is the CIK, so no string pattern or length applies to it. The others are text because their leading zeros are part of the code, and each declares its own length. `hts.parent_code` and `schedule_b.parent_code` are a parent's code, 2 to 8 digits in usitc/hts and 2 to 6 in census/schedule_b, which has no eight-digit level. `schedule_b.end_use` is Census's five-digit end-use code (00000 to 60010) and `schedule_b.hitech` its two-digit high-technology code (00 to 10), each fixed at its length. Stored as integers, 01 would become 1 and no longer join to `code`, and a shared length would be false of all but one of them. `ndc.parent_code` is a parent's code in fda/ndc: a labeler's five digits or a product's nine, the prefixes of the eleven-digit NDC."
     },
     {
       "concept": "representation.identifier.numeric_code",
@@ -214,11 +236,12 @@
       "values": {
         "edgar.cik": null,
         "hts.parent_code": "^[0-9]+$",
+        "ndc.parent_code": "^([0-9]{5}|[0-9]{9})$",
         "schedule_b.end_use": "^[0-9]{5}$",
         "schedule_b.hitech": "^[0-9]{2}$",
         "schedule_b.parent_code": "^[0-9]+$"
       },
-      "reason": "The same label on codes of different lengths, stored two ways. `edgar.cik` is stored as an integer, unpadded, and its description says the decimal rendering is the CIK, so no string pattern or length applies to it. The others are text because their leading zeros are part of the code, and each declares its own length. `hts.parent_code` and `schedule_b.parent_code` are a parent's code, 2 to 8 digits in usitc/hts and 2 to 6 in census/schedule_b, which has no eight-digit level. `schedule_b.end_use` is Census's five-digit end-use code (00000 to 60010) and `schedule_b.hitech` its two-digit high-technology code (00 to 10), each fixed at its length. Stored as integers, 01 would become 1 and no longer join to `code`, and a shared length would be false of all but one of them."
+      "reason": "The same label on codes of different lengths, stored two ways. `edgar.cik` is stored as an integer, unpadded, and its description says the decimal rendering is the CIK, so no string pattern or length applies to it. The others are text because their leading zeros are part of the code, and each declares its own length. `hts.parent_code` and `schedule_b.parent_code` are a parent's code, 2 to 8 digits in usitc/hts and 2 to 6 in census/schedule_b, which has no eight-digit level. `schedule_b.end_use` is Census's five-digit end-use code (00000 to 60010) and `schedule_b.hitech` its two-digit high-technology code (00 to 10), each fixed at its length. Stored as integers, 01 would become 1 and no longer join to `code`, and a shared length would be false of all but one of them. `ndc.parent_code` is a parent's code in fda/ndc: a labeler's five digits or a product's nine, the prefixes of the eleven-digit NDC."
     },
     {
       "concept": "representation.identifier.numeric_code",
@@ -226,11 +249,12 @@
       "values": {
         "edgar.cik": "integer",
         "hts.parent_code": "string",
+        "ndc.parent_code": "string",
         "schedule_b.end_use": "string",
         "schedule_b.hitech": "string",
         "schedule_b.parent_code": "string"
       },
-      "reason": "The same label on codes of different lengths, stored two ways. `edgar.cik` is stored as an integer, unpadded, and its description says the decimal rendering is the CIK, so no string pattern or length applies to it. The others are text because their leading zeros are part of the code, and each declares its own length. `hts.parent_code` and `schedule_b.parent_code` are a parent's code, 2 to 8 digits in usitc/hts and 2 to 6 in census/schedule_b, which has no eight-digit level. `schedule_b.end_use` is Census's five-digit end-use code (00000 to 60010) and `schedule_b.hitech` its two-digit high-technology code (00 to 10), each fixed at its length. Stored as integers, 01 would become 1 and no longer join to `code`, and a shared length would be false of all but one of them."
+      "reason": "The same label on codes of different lengths, stored two ways. `edgar.cik` is stored as an integer, unpadded, and its description says the decimal rendering is the CIK, so no string pattern or length applies to it. The others are text because their leading zeros are part of the code, and each declares its own length. `hts.parent_code` and `schedule_b.parent_code` are a parent's code, 2 to 8 digits in usitc/hts and 2 to 6 in census/schedule_b, which has no eight-digit level. `schedule_b.end_use` is Census's five-digit end-use code (00000 to 60010) and `schedule_b.hitech` its two-digit high-technology code (00 to 10), each fixed at its length. Stored as integers, 01 would become 1 and no longer join to `code`, and a shared length would be false of all but one of them. `ndc.parent_code` is a parent's code in fda/ndc: a labeler's five digits or a product's nine, the prefixes of the eleven-digit NDC."
     },
     {
       "concept": "representation.numeric.integer_number",
@@ -240,9 +264,11 @@
         "hcpcs.depth": null,
         "hts.depth": null,
         "hts.indent": null,
+        "ndc.depth": null,
+        "ndc.listing_count": null,
         "schedule_b.depth": null
       },
-      "reason": "The same label inferred on columns of different kinds. `edgar_gleif.key` is text because it carries two SEC schemes in one column, Central Index Keys in decimal digits and fund series identifiers with a letter prefix (S…, CEF…), so it declares the pattern and lengths of that union, as its `x-finetype-pattern-fit` records. `hts.depth`, `hts.indent` and `schedule_b.depth` are true integers, a level's position in the outline (0 to 4) and USITC's printed indent (0 to 11), typed as integers with no string constraints. `hcpcs.depth` is the same integer as the other depths, always 0 in a one-level list. Making either side agree would mean typing the integers as text or the mixed key as a number."
+      "reason": "The same label inferred on columns of different kinds. `edgar_gleif.key` is text because it carries two SEC schemes in one column, Central Index Keys in decimal digits and fund series identifiers with a letter prefix (S…, CEF…), so it declares the pattern and lengths of that union, as its `x-finetype-pattern-fit` records. `hts.depth`, `hts.indent` and `schedule_b.depth` are true integers, a level's position in the outline (0 to 4) and USITC's printed indent (0 to 11), typed as integers with no string constraints. `hcpcs.depth` is the same integer as the other depths, always 0 in a one-level list. Making either side agree would mean typing the integers as text or the mixed key as a number. `ndc.depth` is the same integer (0 to 2), and `ndc.listing_count` a count of the FDA's listings for a product."
     },
     {
       "concept": "representation.numeric.integer_number",
@@ -252,9 +278,11 @@
         "hcpcs.depth": null,
         "hts.depth": null,
         "hts.indent": null,
+        "ndc.depth": null,
+        "ndc.listing_count": null,
         "schedule_b.depth": null
       },
-      "reason": "The same label inferred on columns of different kinds. `edgar_gleif.key` is text because it carries two SEC schemes in one column, Central Index Keys in decimal digits and fund series identifiers with a letter prefix (S…, CEF…), so it declares the pattern and lengths of that union, as its `x-finetype-pattern-fit` records. `hts.depth`, `hts.indent` and `schedule_b.depth` are true integers, a level's position in the outline (0 to 4) and USITC's printed indent (0 to 11), typed as integers with no string constraints. `hcpcs.depth` is the same integer as the other depths, always 0 in a one-level list. Making either side agree would mean typing the integers as text or the mixed key as a number."
+      "reason": "The same label inferred on columns of different kinds. `edgar_gleif.key` is text because it carries two SEC schemes in one column, Central Index Keys in decimal digits and fund series identifiers with a letter prefix (S…, CEF…), so it declares the pattern and lengths of that union, as its `x-finetype-pattern-fit` records. `hts.depth`, `hts.indent` and `schedule_b.depth` are true integers, a level's position in the outline (0 to 4) and USITC's printed indent (0 to 11), typed as integers with no string constraints. `hcpcs.depth` is the same integer as the other depths, always 0 in a one-level list. Making either side agree would mean typing the integers as text or the mixed key as a number. `ndc.depth` is the same integer (0 to 2), and `ndc.listing_count` a count of the FDA's listings for a product."
     },
     {
       "concept": "representation.numeric.integer_number",
@@ -264,9 +292,11 @@
         "hcpcs.depth": null,
         "hts.depth": null,
         "hts.indent": null,
+        "ndc.depth": null,
+        "ndc.listing_count": null,
         "schedule_b.depth": null
       },
-      "reason": "The same label inferred on columns of different kinds. `edgar_gleif.key` is text because it carries two SEC schemes in one column, Central Index Keys in decimal digits and fund series identifiers with a letter prefix (S…, CEF…), so it declares the pattern and lengths of that union, as its `x-finetype-pattern-fit` records. `hts.depth`, `hts.indent` and `schedule_b.depth` are true integers, a level's position in the outline (0 to 4) and USITC's printed indent (0 to 11), typed as integers with no string constraints. `hcpcs.depth` is the same integer as the other depths, always 0 in a one-level list. Making either side agree would mean typing the integers as text or the mixed key as a number."
+      "reason": "The same label inferred on columns of different kinds. `edgar_gleif.key` is text because it carries two SEC schemes in one column, Central Index Keys in decimal digits and fund series identifiers with a letter prefix (S…, CEF…), so it declares the pattern and lengths of that union, as its `x-finetype-pattern-fit` records. `hts.depth`, `hts.indent` and `schedule_b.depth` are true integers, a level's position in the outline (0 to 4) and USITC's printed indent (0 to 11), typed as integers with no string constraints. `hcpcs.depth` is the same integer as the other depths, always 0 in a one-level list. Making either side agree would mean typing the integers as text or the mixed key as a number. `ndc.depth` is the same integer (0 to 2), and `ndc.listing_count` a count of the FDA's listings for a product."
     },
     {
       "concept": "representation.numeric.integer_number",
@@ -276,9 +306,11 @@
         "hcpcs.depth": "integer",
         "hts.depth": "integer",
         "hts.indent": "integer",
+        "ndc.depth": "integer",
+        "ndc.listing_count": "integer",
         "schedule_b.depth": "integer"
       },
-      "reason": "The same label inferred on columns of different kinds. `edgar_gleif.key` is text because it carries two SEC schemes in one column, Central Index Keys in decimal digits and fund series identifiers with a letter prefix (S…, CEF…), so it declares the pattern and lengths of that union, as its `x-finetype-pattern-fit` records. `hts.depth`, `hts.indent` and `schedule_b.depth` are true integers, a level's position in the outline (0 to 4) and USITC's printed indent (0 to 11), typed as integers with no string constraints. `hcpcs.depth` is the same integer as the other depths, always 0 in a one-level list. Making either side agree would mean typing the integers as text or the mixed key as a number."
+      "reason": "The same label inferred on columns of different kinds. `edgar_gleif.key` is text because it carries two SEC schemes in one column, Central Index Keys in decimal digits and fund series identifiers with a letter prefix (S…, CEF…), so it declares the pattern and lengths of that union, as its `x-finetype-pattern-fit` records. `hts.depth`, `hts.indent` and `schedule_b.depth` are true integers, a level's position in the outline (0 to 4) and USITC's printed indent (0 to 11), typed as integers with no string constraints. `hcpcs.depth` is the same integer as the other depths, always 0 in a one-level list. Making either side agree would mean typing the integers as text or the mixed key as a number. `ndc.depth` is the same integer (0 to 2), and `ndc.listing_count` a count of the FDA's listings for a product."
     },
     {
       "field": "code",
@@ -287,9 +319,10 @@
         "hcpcs.code": "identity.medical.hcpcs",
         "hts.code": "geography.transportation.hs_code",
         "naics.code": "identity.industry.naics",
+        "ndc.code": "identity.medical.ndc",
         "schedule_b.code": "geography.transportation.hs_code"
       },
-      "reason": "A shared column name, not a shared concept. Every Meridian code list names its key column `code` (with `level`, `depth`, `parent_code` and `description` beside it), so a reader can walk any of them the same way. In census/naics_2022 that key is a NAICS code; in usitc/hts and census/schedule_b it is an HS-based tariff or export code. In cms/hcpcs it is a HCPCS Level II code, labelled `identity.medical.hcpcs`. Each package's label is right for its own code system, and making them agree would mislabel one of them."
+      "reason": "A shared column name, not a shared concept. Every Meridian code list names its key column `code` (with `level`, `depth`, `parent_code` and `description` beside it), so a reader can walk any of them the same way. In census/naics_2022 that key is a NAICS code; in usitc/hts and census/schedule_b it is an HS-based tariff or export code. In cms/hcpcs it is a HCPCS Level II code, labelled `identity.medical.hcpcs`. Each package's label is right for its own code system, and making them agree would mislabel one of them. In fda/ndc it is a National Drug Code, labelled `identity.medical.ndc`."
     },
     {
       "concept": "representation.text.word",
@@ -345,11 +378,27 @@
         "hts.section": null,
         "hts.text_source": null,
         "naics.level": null,
+        "ndc.dea_schedule": [
+          "CI",
+          "CII",
+          "CIII",
+          "CIV",
+          "CV"
+        ],
+        "ndc.level": [
+          "labeler",
+          "product",
+          "package"
+        ],
+        "ndc.marketing_category": null,
+        "ndc.text_source": [
+          "fda"
+        ],
         "schedule_b.level": null,
         "schedule_b.section": null,
         "schedule_b.text_source": null
       },
-      "reason": "One label on columns that are not one concept: `representation.text.word` is what finetype infers for any short token. Where the issuer's own documentation defines the column's values as a closed set, cms/hcpcs declares that set as an enum, as its data holds it: `level` is always 'code'; `text_source` is cms or cms_cpt_redacted; `action_code`, `coverage_code`, `multiple_pricing_indicator` and `asc_payment_group` take the codes CMS's HCPCS record layout lists for each. Each of those enums is true of its own column and of no other, so it declares no length or pattern beside it. The other columns, in other packages, carry the label's canonical token pattern and its 1 to 100 length; whether any of them should declare its own closed set is a question for its own package, and making cms/hcpcs agree with them would loosen six declarations that CMS's record layout or this Protocol fixes."
+      "reason": "One label on columns that are not one concept: `representation.text.word` is what finetype infers for any short token. Where the issuer's own documentation defines the column's values as a closed set, cms/hcpcs declares that set as an enum, as its data holds it: `level` is always 'code'; `text_source` is cms or cms_cpt_redacted; `action_code`, `coverage_code`, `multiple_pricing_indicator` and `asc_payment_group` take the codes CMS's HCPCS record layout lists for each. Each of those enums is true of its own column and of no other, so it declares no length or pattern beside it. The other columns, in other packages, carry the label's canonical token pattern and its 1 to 100 length; whether any of them should declare its own closed set is a question for its own package, and making cms/hcpcs agree with them would loosen six declarations that CMS's record layout or this Protocol fixes. fda/ndc declares closed sets the same way: `level` is labeler, product or package; `text_source` is always fda; and `dea_schedule` is one of the Drug Enforcement Administration's five schedules, CI to CV. Its `marketing_category` is the FDA's marketing category, a list the FDA can extend between fortnightly refreshes, so it carries the label's length and no enum."
     },
     {
       "concept": "representation.text.word",
@@ -372,11 +421,15 @@
         "hts.section": 100,
         "hts.text_source": 100,
         "naics.level": 100,
+        "ndc.dea_schedule": null,
+        "ndc.level": null,
+        "ndc.marketing_category": 100,
+        "ndc.text_source": null,
         "schedule_b.level": 100,
         "schedule_b.section": 100,
         "schedule_b.text_source": 100
       },
-      "reason": "One label on columns that are not one concept: `representation.text.word` is what finetype infers for any short token. Where the issuer's own documentation defines the column's values as a closed set, cms/hcpcs declares that set as an enum, as its data holds it: `level` is always 'code'; `text_source` is cms or cms_cpt_redacted; `action_code`, `coverage_code`, `multiple_pricing_indicator` and `asc_payment_group` take the codes CMS's HCPCS record layout lists for each. Each of those enums is true of its own column and of no other, so it declares no length or pattern beside it. The other columns, in other packages, carry the label's canonical token pattern and its 1 to 100 length; whether any of them should declare its own closed set is a question for its own package, and making cms/hcpcs agree with them would loosen six declarations that CMS's record layout or this Protocol fixes."
+      "reason": "One label on columns that are not one concept: `representation.text.word` is what finetype infers for any short token. Where the issuer's own documentation defines the column's values as a closed set, cms/hcpcs declares that set as an enum, as its data holds it: `level` is always 'code'; `text_source` is cms or cms_cpt_redacted; `action_code`, `coverage_code`, `multiple_pricing_indicator` and `asc_payment_group` take the codes CMS's HCPCS record layout lists for each. Each of those enums is true of its own column and of no other, so it declares no length or pattern beside it. The other columns, in other packages, carry the label's canonical token pattern and its 1 to 100 length; whether any of them should declare its own closed set is a question for its own package, and making cms/hcpcs agree with them would loosen six declarations that CMS's record layout or this Protocol fixes. fda/ndc declares closed sets the same way: `level` is labeler, product or package; `text_source` is always fda; and `dea_schedule` is one of the Drug Enforcement Administration's five schedules, CI to CV. Its `marketing_category` is the FDA's marketing category, a list the FDA can extend between fortnightly refreshes, so it carries the label's length and no enum."
     },
     {
       "concept": "representation.text.word",
@@ -399,11 +452,15 @@
         "hts.section": 1,
         "hts.text_source": 1,
         "naics.level": 1,
+        "ndc.dea_schedule": null,
+        "ndc.level": null,
+        "ndc.marketing_category": 1,
+        "ndc.text_source": null,
         "schedule_b.level": 1,
         "schedule_b.section": 1,
         "schedule_b.text_source": 1
       },
-      "reason": "One label on columns that are not one concept: `representation.text.word` is what finetype infers for any short token. Where the issuer's own documentation defines the column's values as a closed set, cms/hcpcs declares that set as an enum, as its data holds it: `level` is always 'code'; `text_source` is cms or cms_cpt_redacted; `action_code`, `coverage_code`, `multiple_pricing_indicator` and `asc_payment_group` take the codes CMS's HCPCS record layout lists for each. Each of those enums is true of its own column and of no other, so it declares no length or pattern beside it. The other columns, in other packages, carry the label's canonical token pattern and its 1 to 100 length; whether any of them should declare its own closed set is a question for its own package, and making cms/hcpcs agree with them would loosen six declarations that CMS's record layout or this Protocol fixes."
+      "reason": "One label on columns that are not one concept: `representation.text.word` is what finetype infers for any short token. Where the issuer's own documentation defines the column's values as a closed set, cms/hcpcs declares that set as an enum, as its data holds it: `level` is always 'code'; `text_source` is cms or cms_cpt_redacted; `action_code`, `coverage_code`, `multiple_pricing_indicator` and `asc_payment_group` take the codes CMS's HCPCS record layout lists for each. Each of those enums is true of its own column and of no other, so it declares no length or pattern beside it. The other columns, in other packages, carry the label's canonical token pattern and its 1 to 100 length; whether any of them should declare its own closed set is a question for its own package, and making cms/hcpcs agree with them would loosen six declarations that CMS's record layout or this Protocol fixes. fda/ndc declares closed sets the same way: `level` is labeler, product or package; `text_source` is always fda; and `dea_schedule` is one of the Drug Enforcement Administration's five schedules, CI to CV. Its `marketing_category` is the FDA's marketing category, a list the FDA can extend between fortnightly refreshes, so it carries the label's length and no enum."
     },
     {
       "concept": "representation.text.word",
@@ -426,11 +483,15 @@
         "hts.section": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$",
         "hts.text_source": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$",
         "naics.level": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$",
+        "ndc.dea_schedule": null,
+        "ndc.level": null,
+        "ndc.marketing_category": null,
+        "ndc.text_source": null,
         "schedule_b.level": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$",
         "schedule_b.section": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$",
         "schedule_b.text_source": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$"
       },
-      "reason": "One label on columns that are not one concept: `representation.text.word` is what finetype infers for any short token. Where the issuer's own documentation defines the column's values as a closed set, cms/hcpcs declares that set as an enum, as its data holds it: `level` is always 'code'; `text_source` is cms or cms_cpt_redacted; `action_code`, `coverage_code`, `multiple_pricing_indicator` and `asc_payment_group` take the codes CMS's HCPCS record layout lists for each. Each of those enums is true of its own column and of no other, so it declares no length or pattern beside it. The other columns, in other packages, carry the label's canonical token pattern and its 1 to 100 length; whether any of them should declare its own closed set is a question for its own package, and making cms/hcpcs agree with them would loosen six declarations that CMS's record layout or this Protocol fixes."
+      "reason": "One label on columns that are not one concept: `representation.text.word` is what finetype infers for any short token. Where the issuer's own documentation defines the column's values as a closed set, cms/hcpcs declares that set as an enum, as its data holds it: `level` is always 'code'; `text_source` is cms or cms_cpt_redacted; `action_code`, `coverage_code`, `multiple_pricing_indicator` and `asc_payment_group` take the codes CMS's HCPCS record layout lists for each. Each of those enums is true of its own column and of no other, so it declares no length or pattern beside it. The other columns, in other packages, carry the label's canonical token pattern and its 1 to 100 length; whether any of them should declare its own closed set is a question for its own package, and making cms/hcpcs agree with them would loosen six declarations that CMS's record layout or this Protocol fixes. fda/ndc declares closed sets the same way: `level` is labeler, product or package; `text_source` is always fda; and `dea_schedule` is one of the Drug Enforcement Administration's five schedules, CI to CV. Its `marketing_category` is the FDA's marketing category, a list the FDA can extend between fortnightly refreshes, so it carries the label's length and no enum."
     },
     {
       "field": "code_display",
@@ -438,9 +499,10 @@
       "values": {
         "hcpcs.code_display": "identity.medical.hcpcs",
         "hts.code_display": "geography.transportation.hs_code",
+        "ndc.code_display": "identity.medical.ndc",
         "schedule_b.code_display": "geography.transportation.hs_code"
       },
-      "reason": "The same shared column name as `code`, carrying each code list's own code system as its issuer prints it: HS-based codes, dotted, in usitc/hts and census/schedule_b, and HCPCS Level II codes in cms/hcpcs, which CMS prints with no punctuation. Each label is right for its own code system, and making them agree would mislabel one of them."
+      "reason": "The same shared column name as `code`, carrying each code list's own code system as its issuer prints it: HS-based codes, dotted, in usitc/hts and census/schedule_b, and HCPCS Level II codes in cms/hcpcs, which CMS prints with no punctuation. Each label is right for its own code system, and making them agree would mislabel one of them. In fda/ndc it is the FDA's hyphenated National Drug Code, labelled `identity.medical.ndc`."
     },
     {
       "field": "parent_code",
@@ -448,9 +510,37 @@
       "values": {
         "hcpcs.parent_code": "unknown",
         "hts.parent_code": "representation.identifier.numeric_code",
+        "ndc.parent_code": "representation.identifier.numeric_code",
         "schedule_b.parent_code": "representation.identifier.numeric_code"
       },
-      "reason": "cms/hcpcs is a one-level list, so its `parent_code` is NULL on every row and finetype has no value to infer a label from; it is `unknown`. In usitc/hts and census/schedule_b `parent_code` holds the digits-only code one level up. Nominating a label for a column with no values would state a shape no row shows."
+      "reason": "cms/hcpcs is a one-level list, so its `parent_code` is NULL on every row and finetype has no value to infer a label from; it is `unknown`. In usitc/hts and census/schedule_b `parent_code` holds the digits-only code one level up. Nominating a label for a column with no values would state a shape no row shows. In fda/ndc it holds the labeler's five digits or the product's nine, and carries the same label as in usitc/hts and census/schedule_b."
+    },
+    {
+      "concept": "identity.medical.ndc",
+      "property": "constraints.maxLength",
+      "values": {
+        "ndc.code": 11,
+        "ndc.code_display": 12
+      },
+      "reason": "Two forms of one code in one package. `ndc.code` is the NDC as claims carry it, digits only and padded to 5, 9 or 11 digits by level (labeler, product, package); `ndc.code_display` is the FDA's own hyphenated form, 4 or 5 digits for a labeler and up to 12 characters with its hyphens for a package. finetype's NDC pattern admits only the package forms of each, so each column declares the shapes it holds, and one shared pattern or length would be false of one of them."
+    },
+    {
+      "concept": "identity.medical.ndc",
+      "property": "constraints.minLength",
+      "values": {
+        "ndc.code": 5,
+        "ndc.code_display": 4
+      },
+      "reason": "Two forms of one code in one package. `ndc.code` is the NDC as claims carry it, digits only and padded to 5, 9 or 11 digits by level (labeler, product, package); `ndc.code_display` is the FDA's own hyphenated form, 4 or 5 digits for a labeler and up to 12 characters with its hyphens for a package. finetype's NDC pattern admits only the package forms of each, so each column declares the shapes it holds, and one shared pattern or length would be false of one of them."
+    },
+    {
+      "concept": "identity.medical.ndc",
+      "property": "constraints.pattern",
+      "values": {
+        "ndc.code": "^([0-9]{5}|[0-9]{9}|[0-9]{11})$",
+        "ndc.code_display": "^[0-9]{4,5}(-[0-9]{3,4}(-[0-9]{1,2})?)?$"
+      },
+      "reason": "Two forms of one code in one package. `ndc.code` is the NDC as claims carry it, digits only and padded to 5, 9 or 11 digits by level (labeler, product, package); `ndc.code_display` is the FDA's own hyphenated form, 4 or 5 digits for a labeler and up to 12 characters with its hyphens for a package. finetype's NDC pattern admits only the package forms of each, so each column declares the shapes it holds, and one shared pattern or length would be false of one of them."
     }
   ],
   "corrections": []
