@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "resources": {
+    "hcpcs": {
+      "level": {
+        "label": "representation.text.word",
+        "why": "A closed set of one level name, 'code'. Inferred, finetype also reads it as a word; nominated so the label does not move with the inference's confidence on a single repeated value."
+      },
+      "release": {
+        "label": "representation.identifier.alphanumeric_id",
+        "why": "CMS's quarter and the file's date, such as 2026-10/2026-09-23: an identifier for the snapshot. Inferred it is `unknown`; it is not a date, since the quarter in front is CMS's release."
+      },
+      "text_source": {
+        "label": "representation.text.word",
+        "why": "A closed set of two values, cms and cms_cpt_redacted. Inferred, finetype labels it a software version, which it is not; each value is one word-like token."
+      },
+      "action_code": {
+        "label": "representation.text.word",
+        "why": "CMS's one-letter action codes (A, B, C, D, F, N, P, R, S, T). Inferred, finetype labels the column a boolean from initials and the descriptor would type it boolean, which would lose every code but two; it is a closed set of letters."
+      },
+      "asc_payment_group": {
+        "label": "representation.text.word",
+        "why": "YY or NULL, CMS's ambulatory surgical center indicator. Inferred it is `unknown`; the value is one short token."
+      }
+    }
+  }
+}

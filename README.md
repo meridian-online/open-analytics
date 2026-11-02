@@ -12,7 +12,7 @@ ATTACH 'ducklake:https://openlake.meridian.online/catalog/open.ducklake' AS meri
 SELECT * FROM meridian.gleif.lei LIMIT 10;
 ```
 
-A dataset's address is `<namespace>/<name>`: `gleif/lei`, `sec/company_tickers_exchange`, `census/naics_2022`, `census/schedule_b`, `usitc/hts` and `library/edgar_lei`, which are the SQL names `meridian.gleif.lei` and so on and the file URLs `https://openlake.meridian.online/<namespace>/<name>.parquet`. The old flat files stay readable but are frozen at the move and no longer refreshed, so read current data from the new URLs. The old SQL names (`source.gleif`, `source.edgar`, `source.naics`, `crosswalk.edgar_gleif`) keep working as views for a window after the move, then retire along with the old flat files.
+A dataset's address is `<namespace>/<name>`: `gleif/lei`, `sec/company_tickers_exchange`, `census/naics_2022`, `census/schedule_b`, `usitc/hts`, `cms/hcpcs` and `library/edgar_lei`, which are the SQL names `meridian.gleif.lei` and so on and the file URLs `https://openlake.meridian.online/<namespace>/<name>.parquet`. The old flat files stay readable but are frozen at the move and no longer refreshed, so read current data from the new URLs. The old SQL names (`source.gleif`, `source.edgar`, `source.naics`, `crosswalk.edgar_gleif`) keep working as views for a window after the move, then retire along with the old flat files.
 
 Or read a single file directly:
 
@@ -22,7 +22,7 @@ SELECT * FROM read_parquet('https://openlake.meridian.online/census/naics_2022.p
 
 ## Ask a dataset what it is
 
-Every dataset at its current address carries its own description; the frozen flat files from before the move do not. Each Protocol's last step stamps the descriptor into the Parquet it just built, and all six current objects were published through that step; on 2026-11-01 the query below returned the descriptor for each. `check_descriptors.py` prints how many of the published resources carry their own description on every run, and the stamp's own behaviour is covered on every pull request. What nothing here covers is a Protocol run end to end, because no workflow runs `arc run`.
+Every dataset at its current address carries its own description; the frozen flat files from before the move do not. Each Protocol's last step stamps the descriptor into the Parquet it just built, and all seven current objects were published through that step; by 2026-11-02 the query below returned the descriptor for each. `check_descriptors.py` prints how many of the published resources carry their own description on every run, and the stamp's own behaviour is covered on every pull request. What nothing here covers is a Protocol run end to end, because no workflow runs `arc run`.
 
 A stamped dataset carries its description **inside the file**, in the Parquet
 footer, so a URL is the only thing you need to know about it — no second file, no
@@ -66,11 +66,12 @@ copies to each other.
 | EDGAR ↔ GLEIF — company-to-LEI crosswalk | 212,319 | CC0-1.0 | SEC + GLEIF | [datapackage.json](datasets/edgar_gleif/datapackage.json) |
 | HTS — Harmonized Tariff Schedule of the United States | 42,036 | Public domain | [USITC](https://hts.usitc.gov/) | [datapackage.json](datasets/hts/datapackage.json) |
 | Schedule B — U.S. Export Classification Codes | 16,727 | Public domain | [U.S. Census Bureau](https://www.census.gov/foreign-trade/schedules/b/index.html) | [datapackage.json](datasets/schedule_b/datapackage.json) |
+| HCPCS Level II — Healthcare Common Procedure Coding System | 8,770 | Public domain | [CMS](https://www.cms.gov/medicare/coding-billing/healthcare-common-procedure-system) | [datapackage.json](datasets/hcpcs/datapackage.json) |
 
 The **Rows** figures are counted from the published objects themselves on every
 run of the checks below, not maintained by hand.
 
-HTS and Schedule B are code lists: every level of their hierarchy is a row with its parent, and both lead with the same ten core columns, which `scripts/check_code_list.py` holds them to. [`docs/code-lists.md`](docs/code-lists.md) is the guide for building the next one: the contract, how a code-list Protocol is laid out, how its release is recorded, and the decisions behind both lists.
+HTS, Schedule B and HCPCS Level II are code lists: every level of their hierarchy is a row with its parent, and all three lead with the same ten core columns, which `scripts/check_code_list.py` holds them to. [`docs/code-lists.md`](docs/code-lists.md) is the guide for building the next one: the contract, how a code-list Protocol is laid out, how its release is recorded, and the decisions behind each list.
 
 Each dataset carries a [Data Package](https://datapackage.org/) descriptor
 (`datasets/<name>/datapackage.json`) with the canonical download URL, byte
@@ -246,7 +247,7 @@ the reference implementation whether these packages load at all. Data Package v2
 Table Schema field object is a fifteen-branch `oneOf`, one branch per type, each giving
 `constraints` its own properties set, so a keyword beside the wrong `type` is a
 whole-package refusal rather than surplus a reader skips — which is why the reference-implementation
-job exists and is strict with an empty rejections list. All six descriptors shipped here are now
+job exists and is strict with an empty rejections list. All seven descriptors shipped here are now
 accepted by `frictionless==5.19.0`, validating the engine correction. It attributes
 each refusal to the field that drew it by re-offering that field on its own, because
 `frictionless` names no field in its note and raises the same sentence for every `date`

@@ -1,0 +1,162 @@
+# The `cms/hcpcs` Protocol — the reproducible *definition* of how HCPCS Level II, the
+# codes the Centers for Medicare & Medicaid Services maintain for billing supplies,
+# drugs and services, is ingested from CMS's quarterly alpha-numeric file. `arc run`
+# executes this manifest; one Run → one Dataset version. See ./README.md.
+#
+# CONFIG ONLY. Every step is a first-class `sql:` model or a typed `op:` operator (the
+# arcform catalog). The fetch is http_fetch and the unzip archive_extract; the SQL
+# reads CMS's fixed-width file into one row per code and adds the search corpus; the
+# COPY is parquet_export; check_licence proves the file carries no dental (CDT) code
+# and no CPT content; datapackage_describe emits the descriptor; check_code_list holds
+# the Parquet to the shared code-list contract; finetype_validate gates it; and
+# stamp_descriptor writes the published Parquet with its descriptor in the footer.
+# Operator code lives in the arcform repo, not here.
+#
+# ONE WRITER PER FILE. The export, the licence check and describe work on
+# build/stage/; stamp_descriptor alone writes the published build/hcpcs.parquet and
+# datapackage.json.
+#
+# THE QUARTER. CMS publishes each quarter's file at its own URL
+# (/files/zip/<month>-<year>-alpha-numeric-hcpcs-file.zip), and the text file inside
+# is named for the quarter and the date CMS built it. arc does not substitute a param
+# into an operator's `with:`, so a new quarter changes two literals here: the URL in
+# fetch_hcpcs and the member in extract_hcpcs. `release` is read from the member's
+# name in load.sql, so it cannot disagree with the file it was built from.
+#
+# BOUNDARY — do NOT fold this into this manifest:
+#   • PUBLISH (content-addressed R2 upload + manifest/catalog pointer flip) stays in
+#     the out-of-repo publish pipeline and READS this Protocol's terminal output,
+#     build/hcpcs.parquet + the emitted datapackage.json. It is not an arcform step.
+#
+# Produces: build/hcpcs.parquet  →  published as cms/hcpcs
+name: hcpcs
+engine: duckdb
+engine_version: ">=1.2"
+db: build/hcpcs.db
+
+defaults:
+  retry:
+    max_attempts: 3
+    backoff_sec: 2.0
+
+steps:
+  # ── Fetch: CMS's alpha-numeric HCPCS file for the quarter, and the codes in it ──
+  - name: fetch_hcpcs
+    op: http_fetch@1
+    with:
+      url: https://www.cms.gov/files/zip/october-2026-alpha-numeric-hcpcs-file.zip
+      out: build/hcpcs.zip
+      headers:
+        User-Agent: "Meridian Protocol (open-analytics; research@meridian.online)"
+
+  # The zip also holds an Excel copy, CMS's record layout, a transaction report, a
+  # corrections list, the not-otherwise-classified codes and the processing notes;
+  # only the fixed-width codes file is read.
+  - name: extract_hcpcs
+    op: archive_extract@1
+    with:
+      archive: build/hcpcs.zip
+      members: [HCPC2026_OCT_ANWEB_09232026.txt]
+      dest: build/hcpcs
+
+  # ── Load: one row per code, its text, its CMS fields and its release ────────────
+  # Drops the D series and every CPT code, and fails the run on a record it cannot
+  # read. See the model's header.
+  - name: load
+    sql: models/load.sql
+    depends_on: [build/hcpcs/HCPC2026_OCT_ANWEB_09232026.txt]
+
+  # ── Package: materialise the terminal table (adds the search corpus) ────────────
+  - name: package
+    sql: models/package.sql
+    produces: [hcpcs_out]
+
+  # ── Export: write the Parquet the later steps read ──────────────────────────────
+  # order_by code (the primary key) is a total order → reproducible bytes.
+  - name: export_hcpcs
+    op: parquet_export@1
+    with:
+      input: hcpcs_out
+      dest: build/stage/hcpcs.parquet
+      compression: zstd
+      order_by: "code"
+
+  # ── Licence: no dental (CDT) code and no CPT content in the exported file ───────
+  - name: check_licence
+    sql: models/check_licence.sql
+    depends_on: [build/stage/hcpcs.parquet]
+    produces: [licence_check]
+
+  # ── Describe: EMIT the descriptor from the built Parquet ────────────────────────
+  # finetype types every column nominations.finetype.json does not declare;
+  # descriptor.overrides.json overlays the curated half (identity, licenses, sources,
+  # per-field prose, primaryKey, the code-list declaration). Hard-fails on drift.
+  - name: describe
+    op: datapackage_describe@1
+    with:
+      parquet: build/stage/hcpcs.parquet
+      overrides: descriptor.overrides.json
+      nominations: nominations.finetype.json
+      out: build/stage/described.json
+
+  # ── Contract: hold the Parquet to the shared code-list columns ──────────────────
+  # The script is addressed by its bytes, so editing it is a manifest edit as well:
+  # `shasum -a 256 scripts/check_code_list.py` prints the digest. duckdb is pinned to
+  # DUCKDB_VERSION in .github/workflows/descriptors.yml — keep the two in step.
+  - name: check_code_list
+    op: uv@1
+    with:
+      script: ../../scripts/check_code_list.py
+      sha256: 11b06ca742a70ef483c9626d153d30387ad17f47992a3b4ef3eaf295b1c1e4b8
+      deps:
+        - duckdb==1.5.5
+      args:
+        - --parquet
+        - build/stage/hcpcs.parquet
+        - --levels
+        - code
+        - --json
+        - build/code_list_check.json
+      reads:
+        - build/stage/hcpcs.parquet
+      produces:
+        - build/code_list_check.json
+
+  # ── Validate: GATE the built Parquet against the self-derived finetype contract ─
+  - name: validate
+    op: finetype_validate@1
+    with:
+      parquet: build/stage/hcpcs.parquet
+      schema: schema.finetype.json
+
+  # ── Self-describe: write the published Parquet with its descriptor inside ───────
+  # The object answers for itself from its URL alone; the embedded copy omits the
+  # resource `bytes` and `hash` and the package's `created`. It runs last because it
+  # embeds the FINISHED descriptor.
+  - name: stamp_descriptor
+    op: uv@1
+    with:
+      script: ../../scripts/stamp_descriptor.py
+      sha256: b22581b77414303312aa5040e70a66ccd96a6bfd1902820e487428441018b9c2
+      deps:
+        - duckdb==1.5.5
+      args:
+        - stamp
+        - --descriptor
+        - build/stage/described.json
+        - --parquet
+        - build/stage/hcpcs.parquet
+        - --out
+        - build/hcpcs.parquet
+        - --out-descriptor
+        - datapackage.json
+        - --carry-created
+      reads:
+        - build/stage/described.json
+        - build/stage/hcpcs.parquet
+      produces:
+        - build/hcpcs.parquet
+        - datapackage.json
+
+  # publish: the out-of-repo publish pipeline reads build/hcpcs.parquet + the emitted
+  # datapackage.json (boundary — not an arc step). See README.
