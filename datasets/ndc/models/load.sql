@@ -109,7 +109,7 @@ dated AS (
                    AND try_strptime(listing_expiration_date, '%Y%m%d') IS NULL
               THEN error('openFDA listing expiration date is not a date: ' || product_id)
               ELSE strptime(listing_expiration_date, '%Y%m%d')::DATE END AS listing_expires,
-         CASE WHEN nullif(trim(coalesce(brand_name, generic_name)), '') IS NULL
+         CASE WHEN coalesce(nullif(trim(brand_name), ''), nullif(trim(generic_name), '')) IS NULL
               THEN error('openFDA product has no brand or generic name: ' || product_id)
               ELSE trim(coalesce(nullif(trim(brand_name), ''), generic_name))
                    || CASE WHEN nullif(trim(brand_name), '') IS NOT NULL

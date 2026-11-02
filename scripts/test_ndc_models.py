@@ -160,6 +160,19 @@ class BuildTest(unittest.TestCase):
                          "AVON Cool Confidence Essence Roll-On Anti-Perspirant Deodorant "
                          "(Aluminum Chlorohydrate), STICK")
 
+    def test_a_blank_brand_name_falls_back_to_the_generic_name(self):
+        doc = fixture()
+        for r in doc["results"]:
+            if r["product_ndc"] == "71110-1505":
+                r["brand_name"] = " "
+        scratch = Run(doc)
+        try:
+            scratch.load()
+            got = scratch.con.execute("SELECT description FROM ndc_out WHERE code = '711101505'").fetchone()[0]
+            self.assertEqual(got, "Aluminum Chlorohydrate, STICK")
+        finally:
+            scratch.close()
+
     def test_package_rows_carry_their_listings_product_fields(self):
         pkg = self.row("00002015261")
         self.assertEqual(pkg["brand_name"], "Zepbound")
