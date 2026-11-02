@@ -82,8 +82,10 @@ listings AS (
 ),
 finished AS (
   SELECT *,
-         CASE WHEN NOT regexp_full_match(product_ndc, '[0-9]{4}-[0-9]{4}|[0-9]{5}-[0-9]{3,4}')
-              THEN error('openFDA product NDC is not 4-4, 5-3 or 5-4: ' || product_ndc)
+         CASE WHEN product_ndc IS NULL
+                   OR NOT regexp_full_match(product_ndc, '[0-9]{4}-[0-9]{4}|[0-9]{5}-[0-9]{3,4}')
+              THEN error('openFDA product NDC is not 4-4, 5-3 or 5-4: '
+                         || coalesce(product_ndc, 'NULL') || ' in ' || coalesce(product_id, 'a listing'))
               ELSE lpad(split_part(product_ndc, '-', 1), 5, '0')
                    || lpad(split_part(product_ndc, '-', 2), 4, '0') END AS product_code,
          -- The order that picks a product's listing, and a package's when it is listed twice.
@@ -125,9 +127,11 @@ packages AS (
 ),
 package_rows AS (
   SELECT *,
-         CASE WHEN NOT regexp_full_match(package_ndc,
+         CASE WHEN package_ndc IS NULL
+                   OR NOT regexp_full_match(package_ndc,
                          '[0-9]{4}-[0-9]{4}-[0-9]{2}|[0-9]{5}-[0-9]{3}-[0-9]{2}|[0-9]{5}-[0-9]{4}-[0-9]')
-              THEN error('openFDA package NDC is not 4-4-2, 5-3-2 or 5-4-1: ' || package_ndc)
+              THEN error('openFDA package NDC is not 4-4-2, 5-3-2 or 5-4-1: '
+                         || coalesce(package_ndc, 'NULL') || ' under ' || product_ndc)
               WHEN NOT starts_with(package_ndc, product_ndc || '-')
               THEN error('openFDA package NDC ' || package_ndc || ' is not under its product '
                          || product_ndc)
@@ -145,7 +149,8 @@ package_rows AS (
 package_pick AS (
   SELECT *,
          row_number() OVER (PARTITION BY package_ndc
-                            ORDER BY listing_rank, package_start NULLS LAST, description)
+                            ORDER BY listing_rank, package_start NULLS LAST, description,
+                                     package_end NULLS LAST, "sample" NULLS LAST)
            AS package_rank
   FROM package_rows
 ),

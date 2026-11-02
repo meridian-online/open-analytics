@@ -241,6 +241,16 @@ class RefusalTest(unittest.TestCase):
         doc["results"][0]["product_ndc"] = "855-203"
         self.refuses(doc, "openFDA product NDC is not 4-4, 5-3 or 5-4: 855-203")
 
+    def test_a_missing_package_ndc(self):
+        doc = fixture()
+        del doc["results"][0]["packaging"][0]["package_ndc"]
+        self.refuses(doc, "openFDA package NDC is not 4-4-2, 5-3-2 or 5-4-1: NULL under 85533-203")
+
+    def test_a_missing_product_ndc(self):
+        doc = fixture()
+        del doc["results"][0]["product_ndc"]
+        self.refuses(doc, "openFDA product NDC is not 4-4, 5-3 or 5-4: NULL in 85533-203_")
+
     def test_package_must_sit_under_its_product(self):
         doc = fixture()
         doc["results"][0]["packaging"][0]["package_ndc"] = "85533-204-50"
