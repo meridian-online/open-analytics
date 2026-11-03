@@ -12,8 +12,13 @@ FROM (SELECT count(*) AS n, count(from_pattern) AS p, count(level) AS l FROM con
 WHERE n != 1 OR p != 1 OR l != 1;
 
 -- The core columns, in order, lead the table (extra columns may follow).
+-- Read from information_schema, not (DESCRIBE ...): arc's SQL reader cannot parse DESCRIBE
+-- as a subquery, and treats a file it cannot parse as an opaque step whose tables it
+-- cannot see, so it reruns the step on every run.
 SELECT error('crosswalk: core columns out of order, expected leading ' || ['from_code', 'from_description', 'to_code', 'to_description', 'from_edition', 'to_edition', 'release']::VARCHAR || ', found ' || found::VARCHAR)
-FROM (SELECT list(column_name) AS found FROM (SELECT column_name FROM (DESCRIBE contract_crosswalk) LIMIT 7))
+FROM (SELECT list(column_name ORDER BY ordinal_position) AS found FROM information_schema.columns
+      WHERE table_catalog = current_database() AND table_schema = current_schema()
+        AND table_name = 'contract_crosswalk' AND ordinal_position <= 7)
 WHERE found != ['from_code', 'from_description', 'to_code', 'to_description', 'from_edition', 'to_edition', 'release'];
 
 -- A repeated (from_code, to_code) pair.

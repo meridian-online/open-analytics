@@ -12,8 +12,13 @@ FROM (SELECT count(*) AS n, count(level) AS non_null FROM contract_title_level)
 WHERE n != 1 OR non_null != 1;
 
 -- The core columns, in order, lead the table (extra columns may follow).
+-- Read from information_schema, not (DESCRIBE ...): arc's SQL reader cannot parse DESCRIBE
+-- as a subquery, and treats a file it cannot parse as an opaque step whose tables it
+-- cannot see, so it reruns the step on every run.
 SELECT error('titles: core columns out of order, expected leading ' || ['entry_id', 'title', 'code', 'code_description', 'release', 'text_source', 'corpus']::VARCHAR || ', found ' || found::VARCHAR)
-FROM (SELECT list(column_name) AS found FROM (SELECT column_name FROM (DESCRIBE contract_titles) LIMIT 7))
+FROM (SELECT list(column_name ORDER BY ordinal_position) AS found FROM information_schema.columns
+      WHERE table_catalog = current_database() AND table_schema = current_schema()
+        AND table_name = 'contract_titles' AND ordinal_position <= 7)
 WHERE found != ['entry_id', 'title', 'code', 'code_description', 'release', 'text_source', 'corpus'];
 
 -- A repeated entry_id.
