@@ -78,7 +78,9 @@ class Run:
             self.con.execute(f"COPY (FROM {table}) TO '{self.build / 'stage' / (name + '.parquet')}' (FORMAT parquet)")
 
     def check(self, inputs: str, contract: str) -> None:
-        """Run a check_inputs model then a shared contract check; raises duckdb.Error on a broken rule."""
+        """Run the code-list and table check_inputs models, as the Protocol's steps do, then a
+        shared contract check; raises duckdb.Error on a broken rule."""
+        self.con.execute((MODELS_DIR / "check_inputs_code_list.sql").read_text(encoding="utf-8"))
         self.con.execute((MODELS_DIR / inputs).read_text(encoding="utf-8"))
         self.con.execute((CONTRACTS / contract).read_text(encoding="utf-8"))
 

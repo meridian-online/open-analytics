@@ -170,20 +170,25 @@ steps:
       produces:
         - build/code_list_check.json
 
+  # ── Contract inputs: the code list both contract checks read ────────────────────
+  # The code list exported in this Run, set up once for check_titles and check_crosswalk.
+  - name: check_inputs_code_list
+    sql: models/check_inputs_code_list.sql
+    depends_on: [build/stage/soc_2018.parquet]
+    produces: [contract_code_list]
+
   # ── Contract: hold the title index to the job-title index contract ──────────────
-  # check_inputs_titles points the shared check at the exported index and the code list
-  # exported in this Run, at the detailed level BLS codes its titles to; the check fails
-  # the run on any broken rule (see contracts/README.md).
+  # check_inputs_titles points the shared check at the exported index, at the detailed
+  # level BLS codes its titles to; the check fails the run on any broken rule (see
+  # contracts/README.md).
   - name: check_inputs_titles
     sql: models/check_inputs_titles.sql
-    depends_on:
-      - build/stage/soc_2018_titles.parquet
-      - build/stage/soc_2018.parquet
+    depends_on: [build/stage/soc_2018_titles.parquet]
     produces: [contract_titles, contract_title_level]
 
   - name: check_titles
     sql: ../../contracts/check_titles.sql
-    depends_on: [contract_titles, contract_title_level]
+    depends_on: [contract_titles, contract_title_level, contract_code_list]
     produces: [contract_titles_result]
 
   # ── Contract: hold the crosswalk to the edition crosswalk contract ──────────────
@@ -191,14 +196,12 @@ steps:
   # every 2010 code of the form NN-NNNN.
   - name: check_inputs_crosswalk
     sql: models/check_inputs_crosswalk.sql
-    depends_on:
-      - build/stage/soc_2010_to_2018.parquet
-      - build/stage/soc_2018.parquet
+    depends_on: [build/stage/soc_2010_to_2018.parquet]
     produces: [contract_crosswalk, contract_crosswalk_shape]
 
   - name: check_crosswalk
     sql: ../../contracts/check_crosswalk.sql
-    depends_on: [contract_crosswalk, contract_crosswalk_shape]
+    depends_on: [contract_crosswalk, contract_crosswalk_shape, contract_code_list]
     produces: [contract_crosswalk_result]
 
   # ── Validate: GATE each Parquet against its self-derived finetype contract ──────

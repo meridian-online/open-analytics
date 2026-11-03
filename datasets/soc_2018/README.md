@@ -26,7 +26,7 @@ None of the three is published yet, and none is in `../registry.json`. This dire
 4. **export** — write each table's zstd Parquet to `build/stage/`, ordered by its primary key.
 5. **describe** — emit each descriptor from its Parquet, typed by finetype with the table's nominations and overrides applied.
 6. **check_code_list** — hold the code list to the shared code-list contract (`scripts/check_code_list.py`, see `docs/code-lists.md`).
-7. **check_titles**, **check_crosswalk** — hold the title index and the crosswalk to their contracts (`contracts/check_titles.sql`, `contracts/check_crosswalk.sql`), each after a `check_inputs_*` model points it at the exported table, the code list exported in the same Run, and the level BLS codes to: every title and every 2018 code must be a detailed occupation in that code list.
+7. **check_titles**, **check_crosswalk** — hold the title index and the crosswalk to their contracts (`contracts/check_titles.sql`, `contracts/check_crosswalk.sql`), each after `check_inputs_code_list` points both at the code list exported in the same Run and a `check_inputs_*` model points it at its exported table and the level BLS codes to: every title and every 2018 code must be a detailed occupation in that code list.
 8. **validate** — gate each Parquet against its `<table>.schema.finetype.json`.
 9. **stamp** — write each published `build/<table>.parquet` with its finished descriptor in the footer, and `<table>.datapackage.json` beside the manifest.
 
@@ -42,7 +42,7 @@ Four levels, as BLS names them: `major` (depth 0), `minor` (1), `broad` (2) and 
 
 `description` is BLS's title and `definition` BLS's definition, which BLS gives for detailed occupations only. `text_source` is `bls` on every row.
 
-The title index has one row per BLS direct match title, keyed `<code>|<title>` because BLS gives its titles no id; `illustrative` carries BLS's mark for a title that is an illustrative example rather than a direct match. Three detailed occupations have no titles. The crosswalk has one row per pairing BLS publishes, with its titles as BLS prints them, including the `(#)` and `(##)` BLS appends to an occupation that pairs with more than one on the other side; BLS gives no weights.
+The title index has one row per BLS direct match title, keyed `<code>|<title>` because BLS gives its titles no id; `illustrative` carries BLS's mark for a title that is an illustrative example rather than a direct match. Three detailed occupations have no titles. The crosswalk has one row per pairing BLS publishes, with its titles as BLS prints them, including a `(#)` or `(##)` ending some titles: in BLS's file `(#)` ends exactly the 2010 occupations that pair with more than one 2018 occupation, and `(##)` the 2018 occupations that pair with more than one 2010 occupation, though the workbook does not define the marks. BLS gives no weights.
 
 ## The release
 
@@ -64,7 +64,7 @@ Needs the `arc` binary, `duckdb` with its `excel` extension, `uv` (for `check_co
 
 <!-- protocol-steps: generated from arcform.yaml by scripts/check_protocol_readme.py — do not edit this block by hand -->
 
-All 24 steps are `sql:` models or typed `op:` operators from the arcform catalog. This Protocol runs no opaque `command:`/shell step.
+All 25 steps are `sql:` models or typed `op:` operators from the arcform catalog. This Protocol runs no opaque `command:`/shell step.
 
 | # | Step | How it runs |
 |---|---|---|
@@ -82,15 +82,16 @@ All 24 steps are `sql:` models or typed `op:` operators from the arcform catalog
 | 12 | `describe_soc_2018_titles` | `op: datapackage_describe@1` |
 | 13 | `describe_soc_2010_to_2018` | `op: datapackage_describe@1` |
 | 14 | `check_code_list` | `op: uv@1` |
-| 15 | `check_inputs_titles` | `sql: models/check_inputs_titles.sql` |
-| 16 | `check_titles` | `sql: ../../contracts/check_titles.sql` |
-| 17 | `check_inputs_crosswalk` | `sql: models/check_inputs_crosswalk.sql` |
-| 18 | `check_crosswalk` | `sql: ../../contracts/check_crosswalk.sql` |
-| 19 | `validate_soc_2018` | `op: finetype_validate@1` |
-| 20 | `validate_soc_2018_titles` | `op: finetype_validate@1` |
-| 21 | `validate_soc_2010_to_2018` | `op: finetype_validate@1` |
-| 22 | `stamp_soc_2018` | `op: uv@1` |
-| 23 | `stamp_soc_2018_titles` | `op: uv@1` |
-| 24 | `stamp_soc_2010_to_2018` | `op: uv@1` |
+| 15 | `check_inputs_code_list` | `sql: models/check_inputs_code_list.sql` |
+| 16 | `check_inputs_titles` | `sql: models/check_inputs_titles.sql` |
+| 17 | `check_titles` | `sql: ../../contracts/check_titles.sql` |
+| 18 | `check_inputs_crosswalk` | `sql: models/check_inputs_crosswalk.sql` |
+| 19 | `check_crosswalk` | `sql: ../../contracts/check_crosswalk.sql` |
+| 20 | `validate_soc_2018` | `op: finetype_validate@1` |
+| 21 | `validate_soc_2018_titles` | `op: finetype_validate@1` |
+| 22 | `validate_soc_2010_to_2018` | `op: finetype_validate@1` |
+| 23 | `stamp_soc_2018` | `op: uv@1` |
+| 24 | `stamp_soc_2018_titles` | `op: uv@1` |
+| 25 | `stamp_soc_2010_to_2018` | `op: uv@1` |
 
 <!-- /protocol-steps -->
