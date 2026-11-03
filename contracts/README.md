@@ -1,6 +1,6 @@
 # Contracts
 
-Shared checks that code-list Protocols run inside their arc Runs, as `sql:` steps. Each file is plain DuckDB SQL with no parameters; a broken rule stops the Run with `error('<rule>: <first offending value>')`. `scripts/test_contracts.py` runs every rule against small in-memory tables.
+Shared checks that code-list Protocols run inside their arc Runs, as `sql:` steps. Each file is plain DuckDB SQL with no parameters; a broken rule stops the Run with `error('<contract>: <rule>: <first offending value>')`, where `<contract>` is `titles` or `crosswalk` (`titles: code not in code list: 11-9999`). `scripts/test_contracts.py` runs every rule against small in-memory tables.
 
 ## `check_titles.sql`: the job-title index contract
 

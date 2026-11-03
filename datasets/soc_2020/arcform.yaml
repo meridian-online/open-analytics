@@ -25,8 +25,10 @@
 # and a revision gets a new URL. Each workbook is fetched to a fixed path, and load.sql
 # reads each release from the `url:` line of the `.arcmeta` sidecar http_fetch writes
 # beside it, so the release is the one in the URL actually fetched. A refresh changes a
-# URL below, that workbook's source entry in the overrides, and any description there
-# that quotes today's release or counts.
+# URL below, that workbook's source entry in the overrides, any description there that
+# quotes today's release or counts, and in ../../scripts/test_soc_2020_models.py that
+# workbook's URL constant (VOLUME1_URL, INDEX_URL or RELATIONSHIP_URL, held to this
+# manifest by a test) and the releases test_release and test_staging_releases expect.
 #
 # BOUNDARY — do NOT fold this into this manifest:
 #   • PUBLISH (content-addressed R2 upload + manifest/catalog pointer flip) is not an

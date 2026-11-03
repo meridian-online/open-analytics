@@ -50,7 +50,7 @@ The crosswalk has one row per pairing in the unit group sheet of the relationshi
 
 ## The release
 
-ONS issues each revision of a workbook under a new URL, and the URL carries its date. `load` reads each release from the `url:` line of the `.arcmeta` sidecar `http_fetch` writes beside the workbook, so it is the release of the file actually fetched: the code list's is `2020/2026-08-27` (the edition and Volume 1's date), the index's `v14/2026-08-27` (its version, from the INFO sheet, and its date) and the crosswalk's `2021-07`. `load` fails the run if any of them does not parse. A refresh changes the URL in `arcform.yaml`, that workbook's source entry in the overrides, and any field or table description that quotes today's release or counts.
+ONS issues each revision of a workbook under a new URL, and the URL carries its date. `load` reads each release from the `url:` line of the `.arcmeta` sidecar `http_fetch` writes beside the workbook, so it is the release of the file actually fetched: the code list's is `2020/2026-08-27` (the edition and Volume 1's date), the index's `v14/2026-08-27` (its version, from the INFO sheet, and its date) and the crosswalk's `2021-07`. `load` fails the run if any of them does not parse. A refresh changes the URL in `arcform.yaml`, that workbook's source entry in the overrides, any field or table description that quotes today's release or counts, and in `scripts/test_soc_2020_models.py` that workbook's URL constant (`VOLUME1_URL`, `INDEX_URL` or `RELATIONSHIP_URL`, which a test holds to the manifest) and the releases `test_release` and `test_staging_releases` expect.
 
 ## The code columns
 
