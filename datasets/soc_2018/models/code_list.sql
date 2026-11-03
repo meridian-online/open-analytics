@@ -12,7 +12,10 @@
 --               characters (NN-N);
 --   detailed -> the highest broad group at or below it that shares its first five
 --               characters (NN-NN).
--- A row below the top that finds no such parent fails the run.
+-- A row below the top that finds no such parent fails the run. So does a broad group
+-- whose parent is not the last minor group above it in BLS's sheet, and a detailed
+-- occupation whose parent is not the last broad group above it, so a group BLS drops or
+-- miscodes cannot leave its children quietly under the group before it.
 --
 -- `description_full` is each ancestor's own title in order, then the row's, joined with
 -- ' › '. Titles repeat where a broad group and its only detailed occupation share one;
@@ -22,7 +25,7 @@ WITH src AS (
   SELECT
     CASE WHEN regexp_matches(code, '^[0-9]{2}-[0-9]{4}$') THEN code
          ELSE error('BLS SOC code is not NN-NNNN: ' || coalesce(code, 'NULL')) END AS code,
-    title, definition,
+    sheet_row, title, definition,
     CASE soc_group WHEN 'Major' THEN 'major' WHEN 'Minor' THEN 'minor'
                    WHEN 'Broad' THEN 'broad' WHEN 'Detailed' THEN 'detailed'
          ELSE error('BLS SOC group is not Major, Minor, Broad or Detailed: '
@@ -49,13 +52,25 @@ WITH src AS (
                AND p.level = CASE s.level WHEN 'minor' THEN 'major' WHEN 'broad' THEN 'minor' ELSE 'broad' END),
            error('BLS SOC ' || s.level || ' ' || s.code || ' has no parent at the level above')) END AS parent_code
   FROM shaped s
+), ordered AS (
+  SELECT p.*,
+    CASE WHEN p.level IN ('broad', 'detailed')
+              AND p.parent_code IS DISTINCT FROM
+                  (SELECT q.code FROM src q
+                   WHERE q.level = CASE p.level WHEN 'broad' THEN 'minor' ELSE 'broad' END
+                     AND q.sheet_row < p.sheet_row
+                   ORDER BY q.sheet_row DESC LIMIT 1)
+         THEN error('BLS SOC ' || p.level || ' ' || p.code || ' has parent ' || p.parent_code
+                    || ' by code, but is not under it in BLS''s sheet order')
+         ELSE p.parent_code END AS checked_parent
+  FROM parented p
 )
 SELECT
   c.code,
   c.code AS code_display,
   c.level,
   c.depth,
-  c.parent_code,
+  c.checked_parent AS parent_code,
   c.title AS description,
   concat_ws(' › ', ma.title, mi.title, br.title, c.title) AS description_full,
   (SELECT release FROM bls_release) AS release,
@@ -65,9 +80,9 @@ SELECT
   ma.code AS major_code,
   mi.code AS minor_code,
   br.code AS broad_code
-FROM parented c
-LEFT JOIN parented par ON par.code = c.parent_code
-LEFT JOIN parented br ON c.depth = 3 AND br.code = c.parent_code
-LEFT JOIN parented mi ON mi.code = CASE c.depth WHEN 2 THEN c.parent_code WHEN 3 THEN par.parent_code END
-LEFT JOIN parented ma ON ma.code = CASE WHEN c.depth >= 1 THEN substr(c.code, 1, 2) || '-0000' END
+FROM ordered c
+LEFT JOIN ordered par ON par.code = c.checked_parent
+LEFT JOIN ordered br ON c.depth = 3 AND br.code = c.checked_parent
+LEFT JOIN ordered mi ON mi.code = CASE c.depth WHEN 2 THEN c.checked_parent WHEN 3 THEN par.checked_parent END
+LEFT JOIN ordered ma ON ma.code = CASE WHEN c.depth >= 1 THEN substr(c.code, 1, 2) || '-0000' END
 ORDER BY c.code;

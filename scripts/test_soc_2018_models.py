@@ -34,13 +34,15 @@ DATA = Path(__file__).resolve().parent / "testdata" / "soc_2018"
 CHECK = Path(__file__).resolve().parent / "check_code_list.py"
 LEVELS = "major,minor,broad,detailed"
 DEFINITIONS = "soc_2018_definitions.xlsx"
-FILES = (DEFINITIONS, "soc_2018_direct_match_title_file.xlsx", "soc_2010_to_2018_crosswalk.xlsx")
+TITLES = "soc_2018_direct_match_title_file.xlsx"
+CROSSWALK = "soc_2010_to_2018_crosswalk.xlsx"
+FILES = (DEFINITIONS, TITLES, CROSSWALK)
 
 
 class Run:
     """A scratch Protocol directory whose `build/bls/` holds the three BLS workbooks."""
 
-    def __init__(self, edit=None):
+    def __init__(self, edit=None, file: str = DEFINITIONS):
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
         self.build = self.root / "build"
@@ -49,7 +51,7 @@ class Run:
         for name in FILES:
             shutil.copy(DATA / name, self.build / "bls" / name)
         if edit:
-            edit(self.build / "bls" / DEFINITIONS)
+            edit(self.build / "bls" / file)
         self.con = duckdb.connect()
         self.con.execute("SET file_search_path = ?", [str(self.root)])
 
@@ -204,13 +206,17 @@ class BuildTest(unittest.TestCase):
             "UNION ALL SELECT 'xwalk', count(*) FROM bls_crosswalk").fetchall())
         self.assertEqual(counts, {"defs": 80, "titles": 308, "xwalk": 53})
         self.assertEqual(self.con.execute(
-            "SELECT code, title, direct_match_title, illustrative FROM bls_titles "
-            "ORDER BY code, direct_match_title LIMIT 1").fetchone()[0], "11-3012")
+            "SELECT code, direct_match_title, illustrative FROM bls_titles "
+            "WHERE direct_match_title IN ('Records Management Director', 'Business Office Manager') "
+            "AND code = '11-3012' ORDER BY direct_match_title").fetchall(),
+            [("11-3012", "Business Office Manager", None), ("11-3012", "Records Management Director", "x")])
+        self.assertEqual(self.con.execute(
+            "SELECT count(*) FILTER (illustrative = 'x') FROM bls_titles").fetchone()[0], 145)
 
 
 class RefusalTest(unittest.TestCase):
-    def refuses(self, edit, message: str) -> None:
-        scratch = Run(edit)
+    def refuses(self, edit, message: str, file: str = DEFINITIONS) -> None:
+        scratch = Run(edit, file)
         try:
             with self.assertRaises(duckdb.Error) as caught:
                 scratch.load()
@@ -229,6 +235,41 @@ class RefusalTest(unittest.TestCase):
     def test_moved_header_fails(self):
         self.refuses(lambda p: edit_sheet(p, lambda ws: ws.cell(8, 2).__setattr__("value", "Code")),
                      "header")
+
+    def test_titles_update_date_mismatch_fails(self):
+        self.refuses(lambda p: edit_sheet(p, lambda ws: ws.cell(4, 1).__setattr__(
+            "value", "November 2017 (Updated April 16, 2020)")), "update date", TITLES)
+
+    def test_titles_release_unparseable_fails(self):
+        self.refuses(lambda p: edit_sheet(p, lambda ws: ws.cell(4, 1).__setattr__("value", "Some day")),
+                     "update date", TITLES)
+
+    def test_crosswalk_release_unparseable_fails(self):
+        self.refuses(lambda p: edit_sheet(p, lambda ws: ws.cell(4, 1).__setattr__("value", "Autumn 2017")),
+                     "crosswalk release", CROSSWALK)
+
+    def test_titles_moved_header_fails(self):
+        self.refuses(lambda p: edit_sheet(p, lambda ws: ws.cell(8, 3).__setattr__("value", "Title")),
+                     "direct match title header", TITLES)
+
+    def test_crosswalk_moved_header_fails(self):
+        # The crosswalk's headers are row 9; a row inserted above moves them to row 10.
+        self.refuses(lambda p: edit_sheet(p, lambda ws: ws.insert_rows(5)),
+                     "crosswalk header", CROSSWALK)
+
+    def test_non_first_broad_group_miscoded_fails(self):
+        # With 15-1220 recoded 15-1330, 15-1221 falls to 15-1210 by code, but the last broad
+        # group above it in BLS's sheet is the miscoded one.
+        def recode(path):
+            def change(ws):
+                for row in range(1, ws.max_row + 1):
+                    if ws.cell(row, 2).value == "15-1220":
+                        ws.cell(row, 2).value = "15-1330"
+            edit_sheet(path, change)
+        self.refuses(recode, "not under it in BLS's sheet order")
+
+    def test_non_first_minor_group_dropped_fails(self):
+        self.refuses(delete_code("11-9000"), "no parent")
 
     def test_broad_without_minor_fails(self):
         self.refuses(delete_code("11-3000"), "no parent")

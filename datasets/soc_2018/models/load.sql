@@ -70,12 +70,17 @@ SELECT
        ELSE strftime(crosswalk_month, '%Y-%m') END AS crosswalk_release
 FROM parsed;
 
+-- `sheet_row` is the cell row in the workbook, taken in sheet order before blank rows are
+-- dropped; `code_list.sql` uses it to check each parent against BLS's own ordering.
 CREATE OR REPLACE TABLE bls_definitions AS
 SELECT
-  trim(A) AS soc_group, trim(B) AS code, trim(C) AS title,
+  sheet_row, trim(A) AS soc_group, trim(B) AS code, trim(C) AS title,
   nullif(trim(regexp_replace(D, '\s+', ' ', 'g')), '') AS definition
-FROM read_xlsx('build/bls/soc_2018_definitions.xlsx', header = false, all_varchar = true,
-               stop_at_empty = false, range = 'A9:D')
+FROM (
+  SELECT 8 + row_number() OVER () AS sheet_row, *
+  FROM read_xlsx('build/bls/soc_2018_definitions.xlsx', header = false, all_varchar = true,
+                 stop_at_empty = false, range = 'A9:D')
+)
 WHERE coalesce(A, B, C, D) IS NOT NULL;
 
 CREATE OR REPLACE TABLE bls_titles AS
