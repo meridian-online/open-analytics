@@ -1,0 +1,300 @@
+# The `bls/soc_2018` Protocol — the reproducible *definition* of how the U.S. Bureau of
+# Labor Statistics' 2018 Standard Occupational Classification is ingested from BLS's own
+# workbooks, as three tables: the code list (bls/soc_2018), the job-title index
+# (bls/soc_2018_titles) and the 2010 to 2018 edition crosswalk (bls/soc_2010_to_2018).
+# `arc run` executes this manifest; one Run → one version of each. See ./README.md.
+#
+# CONFIG ONLY. Every step is a first-class `sql:` model or a typed `op:` operator (the
+# arcform catalog). The fetches are http_fetch; the SQL reads BLS's three workbooks into
+# staging tables and builds each table from them; the COPYs are parquet_export;
+# datapackage_describe emits each descriptor; check_code_list holds the code list to the
+# shared code-list contract, and the two contract checks in ../../contracts/ hold the
+# title index and the crosswalk to theirs; finetype_validate gates each table; and
+# stamp_descriptor writes each published Parquet with its descriptor in the footer.
+# Operator code lives in the arcform repo, not here.
+#
+# ONE WRITER PER FILE. The exports and describes work on build/stage/; each table's
+# stamp_descriptor step alone writes its published build/<table>.parquet and its
+# <table>.datapackage.json. Each table's descriptor inputs sit beside this file under
+# the same prefix (<table>.overrides.json, .nominations.finetype.json,
+# .schema.finetype.json).
+#
+# THE RELEASE. BLS's 2018 SOC is a fixed edition, and BLS revises its files in place
+# under the same URLs. Each workbook states its release in its title block (cell A4),
+# so `release` is read from the files in load.sql and nothing here changes when BLS
+# updates one.
+#
+# BOUNDARY — do NOT fold this into this manifest:
+#   • PUBLISH (content-addressed R2 upload + manifest/catalog pointer flip) is not an
+#     arcform step here. None of the three tables is published yet.
+#
+# Produces: build/soc_2018.parquet           →  bls/soc_2018
+#           build/soc_2018_titles.parquet    →  bls/soc_2018_titles
+#           build/soc_2010_to_2018.parquet   →  bls/soc_2010_to_2018
+name: soc_2018
+engine: duckdb
+engine_version: ">=1.2"
+db: build/soc_2018.db
+
+defaults:
+  retry:
+    max_attempts: 3
+    backoff_sec: 2.0
+
+steps:
+  # ── Fetch: BLS's definitions, direct match title file and 2010 crosswalk ────────
+  - name: fetch_definitions
+    op: http_fetch@1
+    with:
+      url: https://www.bls.gov/soc/2018/soc_2018_definitions.xlsx
+      out: build/bls/soc_2018_definitions.xlsx
+      headers:
+        User-Agent: "Meridian Protocol (open-analytics; research@meridian.online)"
+
+  - name: fetch_titles
+    op: http_fetch@1
+    with:
+      url: https://www.bls.gov/soc/2018/soc_2018_direct_match_title_file.xlsx
+      out: build/bls/soc_2018_direct_match_title_file.xlsx
+      headers:
+        User-Agent: "Meridian Protocol (open-analytics; research@meridian.online)"
+
+  - name: fetch_crosswalk
+    op: http_fetch@1
+    with:
+      url: https://www.bls.gov/soc/2018/soc_2010_to_2018_crosswalk.xlsx
+      out: build/bls/soc_2010_to_2018_crosswalk.xlsx
+      headers:
+        User-Agent: "Meridian Protocol (open-analytics; research@meridian.online)"
+
+  # ── Load: stage the three workbooks, and read each one's release ────────────────
+  # Fails the run on a header row that has moved, or a release line that does not
+  # parse. See the model's header.
+  - name: load
+    sql: models/load.sql
+    depends_on:
+      - build/bls/soc_2018_definitions.xlsx
+      - build/bls/soc_2018_direct_match_title_file.xlsx
+      - build/bls/soc_2010_to_2018_crosswalk.xlsx
+
+  # ── Build: one model per table ──────────────────────────────────────────────────
+  # The code list, with each row's parent and ancestors (fails the run on a row with no
+  # parent, or one out of BLS's sheet order); the title index; the crosswalk.
+  - name: code_list
+    sql: models/code_list.sql
+    produces: [soc_2018_out]
+
+  - name: titles
+    sql: models/titles.sql
+    depends_on: [soc_2018_out]
+    produces: [soc_2018_titles_out]
+
+  - name: crosswalk
+    sql: models/crosswalk.sql
+    produces: [soc_2010_to_2018_out]
+
+  # ── Export: write the Parquet the later steps read ──────────────────────────────
+  # Each order_by is the table's primary key, a total order → reproducible bytes.
+  - name: export_soc_2018
+    op: parquet_export@1
+    with:
+      input: soc_2018_out
+      dest: build/stage/soc_2018.parquet
+      compression: zstd
+      order_by: "code"
+
+  - name: export_soc_2018_titles
+    op: parquet_export@1
+    with:
+      input: soc_2018_titles_out
+      dest: build/stage/soc_2018_titles.parquet
+      compression: zstd
+      order_by: "entry_id"
+
+  - name: export_soc_2010_to_2018
+    op: parquet_export@1
+    with:
+      input: soc_2010_to_2018_out
+      dest: build/stage/soc_2010_to_2018.parquet
+      compression: zstd
+      order_by: "from_code, to_code"
+
+  # ── Describe: EMIT each descriptor from its built Parquet ───────────────────────
+  # finetype types every column the table's nominations do not declare; its overrides
+  # overlay the curated half (identity, licenses, sources, per-field prose,
+  # primaryKey, the table's contract declaration). Hard-fails on drift.
+  - name: describe_soc_2018
+    op: datapackage_describe@1
+    with:
+      parquet: build/stage/soc_2018.parquet
+      overrides: soc_2018.overrides.json
+      nominations: soc_2018.nominations.finetype.json
+      out: build/stage/soc_2018.described.json
+
+  - name: describe_soc_2018_titles
+    op: datapackage_describe@1
+    with:
+      parquet: build/stage/soc_2018_titles.parquet
+      overrides: soc_2018_titles.overrides.json
+      nominations: soc_2018_titles.nominations.finetype.json
+      out: build/stage/soc_2018_titles.described.json
+
+  - name: describe_soc_2010_to_2018
+    op: datapackage_describe@1
+    with:
+      parquet: build/stage/soc_2010_to_2018.parquet
+      overrides: soc_2010_to_2018.overrides.json
+      nominations: soc_2010_to_2018.nominations.finetype.json
+      out: build/stage/soc_2010_to_2018.described.json
+
+  # ── Contract: hold the code list to the shared code-list columns ────────────────
+  # The script is addressed by its bytes, so editing it is a manifest edit as well:
+  # `shasum -a 256 scripts/check_code_list.py` prints the digest. duckdb is pinned to
+  # DUCKDB_VERSION in .github/workflows/descriptors.yml — keep the two in step.
+  - name: check_code_list
+    op: uv@1
+    with:
+      script: ../../scripts/check_code_list.py
+      sha256: 11b06ca742a70ef483c9626d153d30387ad17f47992a3b4ef3eaf295b1c1e4b8
+      deps:
+        - duckdb==1.5.5
+      args:
+        - --parquet
+        - build/stage/soc_2018.parquet
+        - --levels
+        - major,minor,broad,detailed
+        - --json
+        - build/code_list_check.json
+      reads:
+        - build/stage/soc_2018.parquet
+      produces:
+        - build/code_list_check.json
+
+  # ── Contract: hold the title index to the job-title index contract ──────────────
+  # check_inputs_titles points the shared check at the exported index and the code list
+  # exported in this Run, at the detailed level BLS codes its titles to; the check fails
+  # the run on any broken rule (see contracts/README.md).
+  - name: check_inputs_titles
+    sql: models/check_inputs_titles.sql
+    depends_on:
+      - build/stage/soc_2018_titles.parquet
+      - build/stage/soc_2018.parquet
+    produces: [contract_titles, contract_title_level]
+
+  - name: check_titles
+    sql: ../../contracts/check_titles.sql
+    depends_on: [contract_titles, contract_title_level]
+    produces: [contract_titles_result]
+
+  # ── Contract: hold the crosswalk to the edition crosswalk contract ──────────────
+  # As for the title index: every 2018 code a detailed occupation in the code list,
+  # every 2010 code of the form NN-NNNN.
+  - name: check_inputs_crosswalk
+    sql: models/check_inputs_crosswalk.sql
+    depends_on:
+      - build/stage/soc_2010_to_2018.parquet
+      - build/stage/soc_2018.parquet
+    produces: [contract_crosswalk, contract_crosswalk_shape]
+
+  - name: check_crosswalk
+    sql: ../../contracts/check_crosswalk.sql
+    depends_on: [contract_crosswalk, contract_crosswalk_shape]
+    produces: [contract_crosswalk_result]
+
+  # ── Validate: GATE each Parquet against its self-derived finetype contract ──────
+  - name: validate_soc_2018
+    op: finetype_validate@1
+    with:
+      parquet: build/stage/soc_2018.parquet
+      schema: soc_2018.schema.finetype.json
+
+  - name: validate_soc_2018_titles
+    op: finetype_validate@1
+    with:
+      parquet: build/stage/soc_2018_titles.parquet
+      schema: soc_2018_titles.schema.finetype.json
+
+  - name: validate_soc_2010_to_2018
+    op: finetype_validate@1
+    with:
+      parquet: build/stage/soc_2010_to_2018.parquet
+      schema: soc_2010_to_2018.schema.finetype.json
+
+  # ── Self-describe: write each published Parquet with its descriptor inside ──────
+  # Each object answers for itself from its URL alone; the embedded copy omits the
+  # resource `bytes` and `hash` and the package's `created`. They run last because
+  # each embeds its FINISHED descriptor.
+  - name: stamp_soc_2018
+    op: uv@1
+    with:
+      script: ../../scripts/stamp_descriptor.py
+      sha256: b22581b77414303312aa5040e70a66ccd96a6bfd1902820e487428441018b9c2
+      deps:
+        - duckdb==1.5.5
+      args:
+        - stamp
+        - --descriptor
+        - build/stage/soc_2018.described.json
+        - --parquet
+        - build/stage/soc_2018.parquet
+        - --out
+        - build/soc_2018.parquet
+        - --out-descriptor
+        - soc_2018.datapackage.json
+        - --carry-created
+      reads:
+        - build/stage/soc_2018.described.json
+        - build/stage/soc_2018.parquet
+      produces:
+        - build/soc_2018.parquet
+        - soc_2018.datapackage.json
+
+  - name: stamp_soc_2018_titles
+    op: uv@1
+    with:
+      script: ../../scripts/stamp_descriptor.py
+      sha256: b22581b77414303312aa5040e70a66ccd96a6bfd1902820e487428441018b9c2
+      deps:
+        - duckdb==1.5.5
+      args:
+        - stamp
+        - --descriptor
+        - build/stage/soc_2018_titles.described.json
+        - --parquet
+        - build/stage/soc_2018_titles.parquet
+        - --out
+        - build/soc_2018_titles.parquet
+        - --out-descriptor
+        - soc_2018_titles.datapackage.json
+        - --carry-created
+      reads:
+        - build/stage/soc_2018_titles.described.json
+        - build/stage/soc_2018_titles.parquet
+      produces:
+        - build/soc_2018_titles.parquet
+        - soc_2018_titles.datapackage.json
+
+  - name: stamp_soc_2010_to_2018
+    op: uv@1
+    with:
+      script: ../../scripts/stamp_descriptor.py
+      sha256: b22581b77414303312aa5040e70a66ccd96a6bfd1902820e487428441018b9c2
+      deps:
+        - duckdb==1.5.5
+      args:
+        - stamp
+        - --descriptor
+        - build/stage/soc_2010_to_2018.described.json
+        - --parquet
+        - build/stage/soc_2010_to_2018.parquet
+        - --out
+        - build/soc_2010_to_2018.parquet
+        - --out-descriptor
+        - soc_2010_to_2018.datapackage.json
+        - --carry-created
+      reads:
+        - build/stage/soc_2010_to_2018.described.json
+        - build/stage/soc_2010_to_2018.parquet
+      produces:
+        - build/soc_2010_to_2018.parquet
+        - soc_2010_to_2018.datapackage.json

@@ -1,0 +1,98 @@
+{
+  "name": "soc_2018_titles",
+  "title": "SOC 2018 job titles — direct match titles (U.S.)",
+  "description": "The job titles the U.S. Bureau of Labor Statistics codes to each detailed occupation of the 2018 Standard Occupational Classification, for coding free-text job titles from job postings, HR extracts and survey answers: one row per title in BLS's direct match title file, with the code it points at and that code's title in bls/soc_2018. BLS marks some titles as illustrative examples of an occupation rather than direct matches, and illustrative carries the mark. Every code is a detailed occupation in bls/soc_2018, which the run checks against the code list it builds; three detailed occupations (11-9039, 19-2099 and 51-9199) have no titles in BLS's file. No title appears under two codes. BLS's files are U.S. Government works in the public domain.",
+  "homepage": "https://meridian.online/datasets/bls/soc_2018_titles",
+  "licenses": [
+    {
+      "name": "other-pd",
+      "title": "Public domain (U.S. Bureau of Labor Statistics)",
+      "path": "https://www.bls.gov/opub/copyright-information.htm"
+    }
+  ],
+  "sources": [
+    {
+      "title": "2018 Standard Occupational Classification System — U.S. Bureau of Labor Statistics",
+      "path": "https://www.bls.gov/soc/2018/home.htm"
+    },
+    {
+      "title": "2018 SOC direct match title file (soc_2018_direct_match_title_file.xlsx) — U.S. Bureau of Labor Statistics",
+      "path": "https://www.bls.gov/soc/2018/soc_2018_direct_match_title_file.xlsx"
+    },
+    {
+      "title": "2018 SOC definitions (soc_2018_definitions.xlsx) — U.S. Bureau of Labor Statistics",
+      "path": "https://www.bls.gov/soc/2018/soc_2018_definitions.xlsx"
+    }
+  ],
+  "contributors": [
+    {
+      "path": "https://www.bls.gov/soc/",
+      "roles": [
+        "author"
+      ],
+      "title": "U.S. Bureau of Labor Statistics"
+    },
+    {
+      "path": "https://meridian.online",
+      "roles": [
+        "publisher",
+        "wrangler"
+      ],
+      "title": "Meridian"
+    }
+  ],
+  "resource": {
+    "name": "soc_2018_titles",
+    "path": "https://openlake.meridian.online/bls/soc_2018_titles.parquet"
+  },
+  "x-meridian-title-index": {
+    "codeList": "bls/soc_2018"
+  },
+  "fields": {
+    "entry_id": {
+      "description": "The entry's key, its code and title joined with '|' (11-1011|Admiral). BLS gives its titles no id of its own.",
+      "constraints": {
+        "pattern": "^[0-9]{2}-[0-9]{4}\\|.+$"
+      }
+    },
+    "title": {
+      "description": "The job title as BLS's direct match title file prints it (Admiral), trimmed."
+    },
+    "code": {
+      "description": "The detailed occupation BLS codes the title to, in bls/soc_2018's form (11-1011).",
+      "constraints": {
+        "minLength": 7,
+        "maxLength": 7,
+        "pattern": "^[0-9]{2}-[0-9]{4}$"
+      }
+    },
+    "code_description": {
+      "description": "The code's title in bls/soc_2018 (Chief Executives), so a lookup needs no second join."
+    },
+    "release": {
+      "description": "The release of bls/soc_2018, the code list the titles point at, as <year>/<date>: 2018/2020-04-15. BLS's direct match title file gives the same update date (\"November 2017 (Updated April 15, 2020)\"), and the run fails if the two files' dates differ.",
+      "constraints": {
+        "minLength": 15,
+        "maxLength": 15,
+        "pattern": "^[0-9]{4}/[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+      }
+    },
+    "text_source": {
+      "description": "Whose text title is: always bls, BLS's own title.",
+      "constraints": {
+        "enum": [
+          "bls"
+        ]
+      }
+    },
+    "corpus": {
+      "description": "Lowercased, accent-stripped title, with runs of whitespace collapsed to one space: a derived free-text search field, not a source attribute."
+    },
+    "illustrative": {
+      "description": "True where BLS marks the title with an x as an illustrative example of the occupation rather than a direct match for it; false for a direct match."
+    }
+  },
+  "primaryKey": [
+    "entry_id"
+  ]
+}

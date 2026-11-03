@@ -1,0 +1,101 @@
+{
+  "name": "soc_2010_to_2018",
+  "title": "SOC 2010 to 2018 crosswalk (U.S.)",
+  "description": "The U.S. Bureau of Labor Statistics' own crosswalk from the 2010 Standard Occupational Classification to the 2018 edition, at the detailed occupation level, for bridging data coded to 2010, such as OEWS before 2021: one row per pairing of a 2010 code with a 2018 code, as BLS publishes it. A 2010 occupation BLS split appears once for each 2018 occupation it went to, and a 2018 occupation formed from several 2010 occupations once for each of them; BLS gives no weights for apportioning counts between them. Every 2018 code is a detailed occupation in bls/soc_2018, which the run checks; the 2010 edition is not hosted, so the 2010 codes are checked by their shape only. BLS's files are U.S. Government works in the public domain.",
+  "homepage": "https://meridian.online/datasets/bls/soc_2010_to_2018",
+  "licenses": [
+    {
+      "name": "other-pd",
+      "title": "Public domain (U.S. Bureau of Labor Statistics)",
+      "path": "https://www.bls.gov/opub/copyright-information.htm"
+    }
+  ],
+  "sources": [
+    {
+      "title": "2018 Standard Occupational Classification System — U.S. Bureau of Labor Statistics",
+      "path": "https://www.bls.gov/soc/2018/home.htm"
+    },
+    {
+      "title": "2010 to 2018 SOC crosswalk (soc_2010_to_2018_crosswalk.xlsx) — U.S. Bureau of Labor Statistics",
+      "path": "https://www.bls.gov/soc/2018/soc_2010_to_2018_crosswalk.xlsx"
+    }
+  ],
+  "contributors": [
+    {
+      "path": "https://www.bls.gov/soc/",
+      "roles": [
+        "author"
+      ],
+      "title": "U.S. Bureau of Labor Statistics"
+    },
+    {
+      "path": "https://meridian.online",
+      "roles": [
+        "publisher",
+        "wrangler"
+      ],
+      "title": "Meridian"
+    }
+  ],
+  "resource": {
+    "name": "soc_2010_to_2018",
+    "path": "https://openlake.meridian.online/bls/soc_2010_to_2018.parquet"
+  },
+  "x-meridian-crosswalk": {
+    "from": "2010",
+    "to": "2018",
+    "toCodeList": "bls/soc_2018"
+  },
+  "fields": {
+    "from_code": {
+      "description": "A detailed occupation code of the 2010 SOC, in BLS's form (11-1011).",
+      "constraints": {
+        "minLength": 7,
+        "maxLength": 7,
+        "pattern": "^[0-9]{2}-[0-9]{4}$"
+      }
+    },
+    "from_description": {
+      "description": "The 2010 occupation's title, as BLS prints it in the crosswalk. BLS appends (#) to the title of a 2010 occupation that pairs with more than one 2018 occupation, and the mark is kept."
+    },
+    "to_code": {
+      "description": "A detailed occupation code of the 2018 SOC, a code in bls/soc_2018.",
+      "constraints": {
+        "minLength": 7,
+        "maxLength": 7,
+        "pattern": "^[0-9]{2}-[0-9]{4}$"
+      }
+    },
+    "to_description": {
+      "description": "The 2018 occupation's title, as BLS prints it in the crosswalk. BLS appends (##) to the title of a 2018 occupation that pairs with more than one 2010 occupation, and the mark is kept, so the text can differ from the code's description in bls/soc_2018."
+    },
+    "from_edition": {
+      "description": "The edition from_code belongs to: always 2010.",
+      "constraints": {
+        "enum": [
+          "2010"
+        ]
+      }
+    },
+    "to_edition": {
+      "description": "The edition to_code belongs to: always 2018.",
+      "constraints": {
+        "enum": [
+          "2018"
+        ]
+      }
+    },
+    "release": {
+      "description": "The crosswalk's own release, the month its title block gives (\"November 2017\"), as 2017-11.",
+      "constraints": {
+        "minLength": 7,
+        "maxLength": 7,
+        "pattern": "^[0-9]{4}-[0-9]{2}$"
+      }
+    }
+  },
+  "primaryKey": [
+    "from_code",
+    "to_code"
+  ]
+}

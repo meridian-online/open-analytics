@@ -211,6 +211,8 @@ env:
   # same reason every other version on this page is: a resolver picking the version of
   # the day makes what ran a property of the day rather than of this file.
   PYYAML_VERSION: "6.0.3"
+  # The SOC 2018 models' self-test edits its BLS fixture workbooks with openpyxl.
+  OPENPYXL_VERSION: "3.1.5"
   # The reference Frictionless implementation, which the two jobs at the foot of this
   # page put every descriptor through. This literal is NOT reconciled against
   # `datasets/frictionless-rejections.json`'s `frictionless_version` by comparing the
@@ -707,6 +709,23 @@ jobs:
         run: python -m pip install --disable-pip-version-check "duckdb==${DUCKDB_VERSION}"
       - name: the shipped models, against a scratch build directory
         run: python scripts/test_ndc_models.py
+
+  # The SOC 2018 Protocol's BLS SQL models, run over reduced BLS workbooks: the code
+  # list's parents by BLS's rule and sheet order, the job-title index, the 2010 crosswalk,
+  # the load's refusals, the code-list check, and the title-index and crosswalk contracts
+  # on the result. openpyxl edits the fixture workbooks for the refusal cases.
+  soc-2018-models:
+    name: the SOC 2018 models build the code list, title index and crosswalk
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: install duckdb and openpyxl
+        run: python -m pip install --disable-pip-version-check "duckdb==${DUCKDB_VERSION}" "openpyxl==${OPENPYXL_VERSION}"
+      - name: the shipped models, against a scratch build directory
+        run: python scripts/test_soc_2018_models.py
 
   # The title-index and crosswalk contracts the SOC Protocols run as SQL steps, each rule
   # tried against small in-memory tables: the passing case and one failing case per rule.

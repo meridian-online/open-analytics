@@ -1,0 +1,57 @@
+{
+  "$comment": "Self-derived finetype drift contract for bls/soc_2018_titles, checked by the in-engine finetype_validate@1 gate (the model-free `ft_validate` DuckDB table macro). ft_validate MELTS every column to VARCHAR, so this contract uses ONLY the string-surviving JSON-Schema keywords. ENFORCED: the `pattern` on entry_id (a code, '|', a title) and on code (NN-NNNN), the shapes soc_2018_titles.overrides.json publishes; the closed `enum` on text_source; the release pattern; and `minLength`/`maxLength` envelopes on the text. NOT ENFORCED, by design: numeric ranges and booleans (a numeric `type` BACKFIRES to 100% reject once melted to VARCHAR); NULLs (invisible to ft_validate); and object-level `required` (documentation only). Free-text fields carry LOOSE length envelopes with headroom. Derived from build/stage/soc_2018_titles.parquet on BLS's files of 2026-11-03: a pass-through on today's rows, a fail-closed tripwire for future drift (a code that has lost its hyphen, an entry_id of another shape, an unparsed release).",
+  "$id": "finetype://soc_2018_titles.parquet",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "bls/soc_2018_titles",
+  "type": "object",
+  "properties": {
+    "entry_id": {
+      "type": "string",
+      "minLength": 9,
+      "maxLength": 1024,
+      "pattern": "^[0-9]{2}-[0-9]{4}\\|.+$"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "code": {
+      "type": "string",
+      "minLength": 7,
+      "maxLength": 7,
+      "pattern": "^[0-9]{2}-[0-9]{4}$"
+    },
+    "code_description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "release": {
+      "type": "string",
+      "minLength": 15,
+      "maxLength": 15,
+      "pattern": "^[0-9]{4}/[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    },
+    "text_source": {
+      "type": "string",
+      "enum": [
+        "bls"
+      ]
+    },
+    "corpus": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    }
+  },
+  "required": [
+    "entry_id",
+    "title",
+    "code",
+    "release",
+    "text_source",
+    "corpus",
+    "illustrative"
+  ]
+}

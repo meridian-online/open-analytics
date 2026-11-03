@@ -1,0 +1,147 @@
+{
+  "name": "soc_2018",
+  "title": "SOC 2018 — Standard Occupational Classification (U.S.)",
+  "description": "The 2018 Standard Occupational Classification, the U.S. federal statistical standard for classifying workers by occupation: one row per major group, minor group, broad occupation and detailed occupation, each under the group above it, with BLS's definition of each detailed occupation. Every row also carries the code of each group above it, so a detailed occupation rolls up to its major group with one GROUP BY. Codes keep BLS's hyphen (11-1011), the form the Occupational Employment and Wage Statistics, O*NET and the Department of Labor's filings carry. Read from the definitions workbook the U.S. Bureau of Labor Statistics publishes on behalf of the Office of Management and Budget and the Standard Occupational Classification Policy Committee; BLS's files are U.S. Government works in the public domain. bls/soc_2018_titles codes BLS's job titles to these occupations, and bls/soc_2010_to_2018 pairs the 2010 edition's codes with them.",
+  "homepage": "https://meridian.online/datasets/bls/soc_2018",
+  "licenses": [
+    {
+      "name": "other-pd",
+      "title": "Public domain (U.S. Bureau of Labor Statistics)",
+      "path": "https://www.bls.gov/opub/copyright-information.htm"
+    }
+  ],
+  "sources": [
+    {
+      "title": "2018 Standard Occupational Classification System — U.S. Bureau of Labor Statistics",
+      "path": "https://www.bls.gov/soc/2018/home.htm"
+    },
+    {
+      "title": "2018 SOC definitions (soc_2018_definitions.xlsx) — U.S. Bureau of Labor Statistics",
+      "path": "https://www.bls.gov/soc/2018/soc_2018_definitions.xlsx"
+    }
+  ],
+  "contributors": [
+    {
+      "path": "https://www.bls.gov/soc/",
+      "roles": [
+        "author"
+      ],
+      "title": "U.S. Bureau of Labor Statistics"
+    },
+    {
+      "path": "https://meridian.online",
+      "roles": [
+        "publisher",
+        "wrangler"
+      ],
+      "title": "Meridian"
+    }
+  ],
+  "resource": {
+    "name": "soc_2018",
+    "path": "https://openlake.meridian.online/bls/soc_2018.parquet"
+  },
+  "x-meridian-code-list": {
+    "levels": [
+      "major",
+      "minor",
+      "broad",
+      "detailed"
+    ]
+  },
+  "fields": {
+    "code": {
+      "description": "The SOC 2018 code as BLS prints it, two digits, a hyphen and four digits, at every level: a major group 11-0000, a minor group 11-1000, a broad occupation 11-1010, a detailed occupation 11-1011. This is the form OEWS, O*NET and the Department of Labor's filings carry; O*NET adds a two-digit suffix (11-1011.00), so join O*NET data on its first seven characters.",
+      "constraints": {
+        "minLength": 7,
+        "maxLength": 7,
+        "pattern": "^[0-9]{2}-[0-9]{4}$"
+      }
+    },
+    "code_display": {
+      "description": "The code as BLS prints it, the same as code: BLS's hyphenated form is also the form other data carries.",
+      "constraints": {
+        "minLength": 7,
+        "maxLength": 7,
+        "pattern": "^[0-9]{2}-[0-9]{4}$"
+      }
+    },
+    "level": {
+      "description": "Hierarchy level, as BLS names it: major (a major group), minor (a minor group), broad (a broad occupation) or detailed (a detailed occupation, the level OEWS and O*NET code to).",
+      "constraints": {
+        "enum": [
+          "major",
+          "minor",
+          "broad",
+          "detailed"
+        ]
+      }
+    },
+    "depth": {
+      "description": "0 for a major group, 1 for a minor group, 2 for a broad occupation, 3 for a detailed occupation."
+    },
+    "parent_code": {
+      "description": "The code one level up: a minor group's major group (XX-0000), a broad occupation's minor group, a detailed occupation's broad occupation. SOC codes are not plain prefixes, so the parent is the group BLS prints last above the row at the level above, which is the highest code at that level at or below the row's own sharing its leading digits: the broad occupation 11-3110 sits under 11-3000 but 15-1210 under 15-1200, and the detailed occupation 29-1221 under 29-1210. NULL for a major group.",
+      "constraints": {
+        "minLength": 7,
+        "maxLength": 7,
+        "pattern": "^[0-9]{2}-[0-9]{4}$"
+      }
+    },
+    "description": {
+      "description": "BLS's title for the group or occupation (Chief Executives)."
+    },
+    "description_full": {
+      "description": "The titles of the major group, minor group and broad occupation above the row, then the row's own, joined with ' › '. Where a broad occupation has a single detailed occupation the two share a title, and it appears twice, as BLS prints both."
+    },
+    "release": {
+      "description": "The edition's reference year and the date BLS last updated the definitions file, as <year>/<date>: 2018/2020-04-15, read from the file's title block, which reads \"November 2017 (for reference year January 2018 - Updated April 15, 2020)\". BLS revises the 2018 files in place, so the date moves when it does.",
+      "constraints": {
+        "minLength": 15,
+        "maxLength": 15,
+        "pattern": "^[0-9]{4}/[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+      }
+    },
+    "text_source": {
+      "description": "Whose text description is: always bls, BLS's own title.",
+      "constraints": {
+        "enum": [
+          "bls"
+        ]
+      }
+    },
+    "corpus": {
+      "description": "Lowercased, accent-stripped description_full: a derived free-text search field, not a source attribute."
+    },
+    "definition": {
+      "description": "BLS's definition of a detailed occupation, as its definitions file gives it: the work the occupation covers, and for some what it includes or excludes. Runs of whitespace are collapsed to one space. NULL above the detailed level, where BLS prints none."
+    },
+    "major_code": {
+      "description": "The code of the major group the row falls under (XX-0000), so data coded to any level rolls up to its major group in one GROUP BY. NULL on a major group's own row.",
+      "constraints": {
+        "minLength": 7,
+        "maxLength": 7,
+        "pattern": "^[0-9]{2}-[0-9]{4}$"
+      }
+    },
+    "minor_code": {
+      "description": "The code of the minor group the row falls under. NULL on major and minor group rows.",
+      "constraints": {
+        "minLength": 7,
+        "maxLength": 7,
+        "pattern": "^[0-9]{2}-[0-9]{4}$"
+      }
+    },
+    "broad_code": {
+      "description": "The code of the broad occupation a detailed occupation falls under. NULL on every row above the detailed level.",
+      "constraints": {
+        "minLength": 7,
+        "maxLength": 7,
+        "pattern": "^[0-9]{2}-[0-9]{4}$"
+      }
+    }
+  },
+  "primaryKey": [
+    "code"
+  ]
+}

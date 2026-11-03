@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "resources": {
+    "soc_2010_to_2018": {
+      "from_code": {
+        "label": "representation.identifier.numeric_code",
+        "why": "A detailed occupation code of the 2010 SOC, two digits, a hyphen and four digits (11-1011). Inferred, finetype reads it as an ordinal date and the descriptor would type the column as a date, which it is not. finetype has no SOC type yet, so the column is nominated the label for a classification code whose digits carry meaning; its pattern admits digits only, so describe widens it for the hyphen, and the overrides declare the NN-NNNN shape the column holds."
+      },
+      "to_code": {
+        "label": "representation.identifier.numeric_code",
+        "why": "A detailed occupation code of the 2018 SOC, two digits, a hyphen and four digits (11-1011). Inferred, finetype reads it as an ordinal date and the descriptor would type the column as a date, which it is not. finetype has no SOC type yet, so the column is nominated the label for a classification code whose digits carry meaning; its pattern admits digits only, so describe widens it for the hyphen, and the overrides declare the NN-NNNN shape the column holds."
+      },
+      "from_description": {
+        "label": "representation.text.plain_text",
+        "why": "The 2010 occupation's title as BLS prints it in the crosswalk, such as Chief Executives. Inferred, finetype labels it an entity name, an organisation's or product's name, which it is not; it is prose naming work."
+      },
+      "from_edition": {
+        "label": "representation.text.word",
+        "why": "A closed set of one edition name, 2010, stored as text. Inferred, finetype labels it a year and the descriptor would type the column as a year; it names an edition of the classification, and is one short token."
+      },
+      "to_edition": {
+        "label": "representation.text.word",
+        "why": "A closed set of one edition name, 2018, stored as text. Inferred, finetype labels it a year and the descriptor would type the column as a year; it names an edition of the classification, and is one short token."
+      },
+      "release": {
+        "label": "representation.identifier.alphanumeric_id",
+        "why": "The crosswalk's release, the month BLS gives in its title block, 2017-11: an identifier for the snapshot, stored as text as every release is. Inferred, finetype labels it a year and month and the descriptor would type the column as a date."
+      }
+    }
+  }
+}
