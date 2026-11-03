@@ -200,6 +200,13 @@ class BuildTest(unittest.TestCase):
                          [self.row("15-1210")["description"], r["description"]])
         self.assertEqual(len(r["description_full"].split(" › ")), 4)
 
+    def test_sheet_row_is_the_workbook_row(self):
+        # 15-1210 is cell B68 of the fixture; a read that loses sheet order changes this.
+        self.assertEqual(self.con.execute(
+            "SELECT sheet_row FROM bls_definitions WHERE code = '15-1210'").fetchone()[0], 68)
+        self.assertEqual(self.con.execute(
+            "SELECT sheet_row FROM bls_definitions WHERE code = '11-0000'").fetchone()[0], 9)
+
     def test_staging_tables(self):
         counts = dict(self.con.execute(
             "SELECT 'defs', count(*) FROM bls_definitions UNION ALL SELECT 'titles', count(*) FROM bls_titles "
@@ -268,7 +275,18 @@ class RefusalTest(unittest.TestCase):
             edit_sheet(path, change)
         self.refuses(recode, "not under it in BLS's sheet order")
 
-    def test_non_first_minor_group_dropped_fails(self):
+    def test_a_miscoded_minor_group_above_a_broad_group_fails(self):
+        # A minor row coded 15-1900 sits between 15-1200 and its broad groups: 15-1210 falls
+        # to 15-1200 by code, but the last minor group above it in the sheet is 15-1900.
+        def insert(path):
+            def change(ws):
+                ws.insert_rows(68)
+                for col, value in enumerate(("Minor", "15-1900", "Miscoded", ""), 1):
+                    ws.cell(68, col).value = value
+            edit_sheet(path, change)
+        self.refuses(insert, "not under it in BLS's sheet order")
+
+    def test_dropped_non_first_minor_group_fails_for_want_of_a_parent(self):
         self.refuses(delete_code("11-9000"), "no parent")
 
     def test_broad_without_minor_fails(self):
