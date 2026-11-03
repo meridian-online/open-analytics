@@ -38,34 +38,38 @@ CREATE OR REPLACE TEMP MACRO ons_cell(x) AS nullif(nullif(trim(x), '<blank>'), '
 CREATE OR REPLACE TEMP MACRO ons_code(x) AS
   CASE WHEN regexp_matches(trim(x), '^[}]+(/[}]+)?$') THEN NULL ELSE nullif(trim(x), '') END;
 
+-- The model is written so arc's SQL parser reads it and records the tables it makes and
+-- reads: lists are list_value(...) rather than [...] literals, the newline in a header is
+-- chr(10) rather than an E'' string, lambdas use `lambda x:`, and no window uses
+-- IGNORE NULLS.
 -- The header rows, each compared with the text ONS prints.
-SELECT CASE WHEN [*COLUMNS(*)] IS NOT DISTINCT FROM
-         ['UNIQUE ID', 'SOC2020 Major Group', 'SOC2020 Sub-Major Group', 'SOC2020 Minor Group',
-          'SOC2020 Unit Group', E'SOC2020\nGroup Title', 'Groups Classified Within Sub-Groups',
+SELECT CASE WHEN list_value(A, B, C, D, E, F, G, H, I, J, K) IS NOT DISTINCT FROM
+         list_value('UNIQUE ID', 'SOC2020 Major Group', 'SOC2020 Sub-Major Group', 'SOC2020 Minor Group',
+          'SOC2020 Unit Group', 'SOC2020' || chr(10) || 'Group Title', 'Groups Classified Within Sub-Groups',
           'Group Description', 'Typical Entry Routes And Associated Qualifications', 'Tasks',
-          'Related Job Titles'] THEN 1
+          'Related Job Titles') THEN 1
        ELSE error('ONS Volume 1 header row has moved: expected UNIQUE ID, SOC2020 Major Group ... Related Job Titles in A1:K1, found '
-                  || array_to_string(list_transform([*COLUMNS(*)], x -> coalesce(x, 'NULL')), ', ')) END
+                  || array_to_string(list_transform(list_value(A, B, C, D, E, F, G, H, I, J, K), lambda x: coalesce(x, 'NULL')), ', ')) END
 FROM read_xlsx('build/ons/volume1.xlsx', sheet = 'SOC2020 descriptions', header = false, all_varchar = true,
                stop_at_empty = false, range = 'A1:K1');
 
-SELECT CASE WHEN [*COLUMNS(*)] IS NOT DISTINCT FROM
-         ['UNIQUE ID', 'RECNO', 'D', 'SOC_90', 'SOC_2000', 'SOC_2010', 'SOC_2020', 'SOC_2020_ext',
+SELECT CASE WHEN list_value(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V) IS NOT DISTINCT FROM
+         list_value('UNIQUE ID', 'RECNO', 'D', 'SOC_90', 'SOC_2000', 'SOC_2010', 'SOC_2020', 'SOC_2020_ext',
           'INDEXOCC', 'ADD', 'IND', 'SEE', 'ISCO-08 code based on SOC2020', 'VERSNO', 'CHANGE',
           'SOC2020_ext_SUG_title', 'SOC90_unit_group_title', 'SOC2000_unit_group_title',
           'SOC2010_unit_group_title', 'SOC2020_unit_group_title', 'ISCO08_unit_group_title',
-          'INDEXOCC_-_natural_word_order'] THEN 1
+          'INDEXOCC_-_natural_word_order') THEN 1
        ELSE error('ONS coding index header row has moved: expected UNIQUE ID, RECNO, D ... INDEXOCC_-_natural_word_order in A1:V1, found '
-                  || array_to_string(list_transform([*COLUMNS(*)], x -> coalesce(x, 'NULL')), ', ')) END
+                  || array_to_string(list_transform(list_value(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V), lambda x: coalesce(x, 'NULL')), ', ')) END
 FROM read_xlsx('build/ons/coding_index.xlsx', sheet = 'SOC2020 coding index', header = false, all_varchar = true,
                stop_at_empty = false, range = 'A1:V1');
 
-SELECT CASE WHEN [*COLUMNS(*)] IS NOT DISTINCT FROM
-         ['SOC2010', 'SOC2020', 'men_lfs_base_2010', 'men_lfs_perc_2020', 'men_census_base_2010',
+SELECT CASE WHEN list_value(A, B, C, D, E, F, G, H, I, J) IS NOT DISTINCT FROM
+         list_value('SOC2010', 'SOC2020', 'men_lfs_base_2010', 'men_lfs_perc_2020', 'men_census_base_2010',
           'men_census_perc_2020', 'women_lfs_base_2010', 'women_lfs_perc_2020',
-          'women_census_base_2010', 'women_census_perc_2020'] THEN 1
+          'women_census_base_2010', 'women_census_perc_2020') THEN 1
        ELSE error('ONS relationship tables header row has moved: expected SOC2010, SOC2020, men_lfs_base_2010 ... women_census_perc_2020 in A1:J1, found '
-                  || array_to_string(list_transform([*COLUMNS(*)], x -> coalesce(x, 'NULL')), ', ')) END
+                  || array_to_string(list_transform(list_value(A, B, C, D, E, F, G, H, I, J), lambda x: coalesce(x, 'NULL')), ', ')) END
 FROM read_xlsx('build/ons/relationship_2010_2020.xlsx', sheet = 'soc2010-soc2020-map_Unit', header = false,
                all_varchar = true, stop_at_empty = false, range = 'A1:J1');
 
@@ -86,8 +90,8 @@ WITH sidecars AS (
     try_strptime(regexp_extract(volume1_url, 'excel([0-9]{8})', 1), '%Y%m%d') AS volume1_date,
     try_strptime(regexp_extract(index_url, 'excel([0-9]{8})', 1), '%Y%m%d') AS index_date,
     regexp_extract(info_line, '^Version ([0-9]+) Of The Standard Occupational Classification 2020 Index', 1) AS index_version,
-    list_position(['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august',
-                   'september', 'october', 'november', 'december'],
+    list_position(list_value('january', 'february', 'march', 'april', 'may', 'june', 'july', 'august',
+                   'september', 'october', 'november', 'december'),
                   regexp_extract(lower(relationship_url), '(january|february|march|april|may|june|july|august|september|october|november|december)([0-9]{4})\.xlsx$', 1)) AS relationship_month,
     regexp_extract(relationship_url, '([0-9]{4})\.xlsx$', 1) AS relationship_year
   FROM sidecars
@@ -141,13 +145,13 @@ SELECT
   group_description,
   entry_routes,
   CASE WHEN tasks IS NULL THEN NULL::VARCHAR[]
-       WHEN len(list_filter(regexp_split_to_array(tasks, '\r?\n'), l -> trim(l) <> '' AND NOT regexp_matches(l, '^\s*~'))) > 0
+       WHEN len(list_filter(regexp_split_to_array(tasks, '\r?\n'), lambda l: trim(l) <> '' AND NOT regexp_matches(l, '^\s*~'))) > 0
        THEN error('ONS Volume 1 tasks of ' || valid_code || ' are not one "~ " item per line')
-       ELSE list_filter(list_transform(regexp_split_to_array(tasks, '\r?\n'), l -> trim(regexp_replace(l, '^\s*~\s*', ''))), l -> l <> '') END AS tasks,
+       ELSE list_filter(list_transform(regexp_split_to_array(tasks, '\r?\n'), lambda l: trim(regexp_replace(l, '^\s*~\s*', ''))), lambda l: l <> '') END AS tasks,
   CASE WHEN related_job_titles IS NULL THEN NULL::VARCHAR[]
-       WHEN len(list_filter(regexp_split_to_array(related_job_titles, '\r?\n'), l -> trim(l) <> '' AND NOT regexp_matches(l, '^\s*~'))) > 0
+       WHEN len(list_filter(regexp_split_to_array(related_job_titles, '\r?\n'), lambda l: trim(l) <> '' AND NOT regexp_matches(l, '^\s*~'))) > 0
        THEN error('ONS Volume 1 related job titles of ' || valid_code || ' are not one "~ " item per line')
-       ELSE list_filter(list_transform(regexp_split_to_array(related_job_titles, '\r?\n'), l -> trim(regexp_replace(l, '^\s*~\s*', ''))), l -> l <> '') END AS related_job_titles
+       ELSE list_filter(list_transform(regexp_split_to_array(related_job_titles, '\r?\n'), lambda l: trim(regexp_replace(l, '^\s*~\s*', ''))), lambda l: l <> '') END AS related_job_titles
 FROM checked;
 
 -- The coding index's coded entries. A row with no unit group code is left out only if it
@@ -205,7 +209,9 @@ WITH src AS (
   FROM src
   WHERE coalesce(nullif(trim(A), ''), nullif(trim(B), ''), C, D, E, F, G, H, I, J) IS NOT NULL
 ), filled AS (
-  SELECT *, last_value(CASE WHEN b = 'Total sample' THEN rn END IGNORE NULLS) OVER (ORDER BY rn) AS group_rn
+  -- The latest "Total sample" row at or above this one: rn rises down the sheet, so it is
+  -- the running max of those rows' rn.
+  SELECT *, max(CASE WHEN b = 'Total sample' THEN rn END) OVER (ORDER BY rn) AS group_rn
   FROM kept
 ), pairings AS (
   SELECT p.rn, p.b, p.D, p.F, p.H, p.J,

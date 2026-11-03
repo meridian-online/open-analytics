@@ -11,6 +11,8 @@
 -- `description_full` is each ancestor's own title in order, then the row's, joined with
 -- ' › '. Titles repeat where a minor group and its only unit group share one; the repeat
 -- is kept, as ONS prints both.
+-- `ons_release` (one row) is joined rather than read in a scalar subquery, so arc records it
+-- as an input of this step and a release-only change reruns it.
 CREATE OR REPLACE TABLE soc_2020_out AS
 WITH shaped AS (
   SELECT *,
@@ -44,7 +46,7 @@ SELECT
   parent_code,
   title AS description,
   full_title AS description_full,
-  (SELECT code_list_release FROM ons_release) AS release,
+  r.code_list_release AS release,
   'ons' AS text_source,
   lower(strip_accents(full_title)) AS corpus,
   group_description,
@@ -55,4 +57,5 @@ SELECT
   sub_major_code,
   minor_code
 FROM titled
+CROSS JOIN ons_release r
 ORDER BY code;

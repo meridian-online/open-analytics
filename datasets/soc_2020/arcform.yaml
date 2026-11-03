@@ -73,10 +73,12 @@ steps:
 
   # ── Load: stage the three workbooks, and read each one's release ────────────────
   # Fails the run on a header row that has moved, a row it cannot place, or a release
-  # that does not parse. The releases come from the sidecars, so they are inputs too.
-  # See the model's header.
+  # that does not parse. The releases come from the sidecars, so they are inputs too,
+  # and ons_release is an input of each builder below, so a release-only change (a new
+  # URL, the same rows) rebuilds and restamps every table. See the model's header.
   - name: load
     sql: models/load.sql
+    produces: [ons_release, ons_groups, ons_index, ons_relationship]
     depends_on:
       - build/ons/volume1.xlsx
       - build/ons/volume1.xlsx.arcmeta

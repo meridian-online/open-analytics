@@ -6,6 +6,8 @@
 -- the four base counts of its 2010 group, from that group's "Total sample" row; a pairing
 -- whose shares are all 0 is kept, as ONS prints it. `release` is the tables' own, not the
 -- code list's.
+-- `ons_release` (one row) is joined rather than read in a scalar subquery, so arc records it
+-- as an input of this step and a release-only change reruns it.
 CREATE OR REPLACE TABLE soc_2010_to_2020_out AS
 SELECT
   code_2010 AS from_code,
@@ -14,7 +16,7 @@ SELECT
   title_2020 AS to_description,
   '2010' AS from_edition,
   '2020' AS to_edition,
-  (SELECT crosswalk_release FROM ons_release) AS release,
+  r.crosswalk_release AS release,
   men_lfs_base,
   women_lfs_base,
   men_census_base,
@@ -24,4 +26,5 @@ SELECT
   men_census_share,
   women_census_share
 FROM ons_relationship
+CROSS JOIN ons_release r
 ORDER BY code_2010, code_2020;

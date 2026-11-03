@@ -21,6 +21,8 @@
 -- `description_full` is each ancestor's own title in order, then the row's, joined with
 -- ' › '. Titles repeat where a broad group and its only detailed occupation share one;
 -- the repeat is kept, as BLS prints both.
+-- `bls_release` (one row) is joined rather than read in a scalar subquery, so arc records it
+-- as an input of this step and a release-only change reruns it.
 CREATE OR REPLACE TABLE soc_2018_out AS
 WITH src AS (
   SELECT
@@ -74,7 +76,7 @@ SELECT
   c.checked_parent AS parent_code,
   c.title AS description,
   concat_ws(' › ', ma.title, mi.title, br.title, c.title) AS description_full,
-  (SELECT release FROM bls_release) AS release,
+  r.release,
   'bls' AS text_source,
   lower(strip_accents(concat_ws(' › ', ma.title, mi.title, br.title, c.title))) AS corpus,
   CASE WHEN c.level = 'detailed' THEN c.definition END AS definition,
@@ -82,6 +84,7 @@ SELECT
   mi.code AS minor_code,
   br.code AS broad_code
 FROM ordered c
+CROSS JOIN bls_release r
 LEFT JOIN ordered par ON par.code = c.checked_parent
 LEFT JOIN ordered br ON c.depth = 3 AND br.code = c.checked_parent
 LEFT JOIN ordered mi ON mi.code = CASE c.depth WHEN 2 THEN c.checked_parent WHEN 3 THEN par.checked_parent END

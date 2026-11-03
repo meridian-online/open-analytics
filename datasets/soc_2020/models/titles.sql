@@ -7,13 +7,15 @@
 -- where they decide the code, so `corpus` is the title with its additional and industry
 -- qualifiers, lowered, accent-stripped and whitespace-collapsed. The columns after the
 -- contract's core ones are ONS's. `release` is the index's own, not the code list's.
+-- `ons_release` (one row) is joined rather than read in a scalar subquery, so arc records it
+-- as an input of this step and a release-only change reruns it.
 CREATE OR REPLACE TABLE soc_2020_titles_out AS
 SELECT
   t.entry_id,
   t.title,
   t.code,
   c.description AS code_description,
-  (SELECT index_release FROM ons_release) AS release,
+  r.index_release AS release,
   'ons' AS text_source,
   lower(strip_accents(regexp_replace(concat_ws(' ', t.title, t.additional_qualifier, t.industry_qualifier), '\s+', ' ', 'g'))) AS corpus,
   t.title_natural,
@@ -29,5 +31,6 @@ SELECT
   t.version_added_or_amended,
   t.change
 FROM ons_index t
+CROSS JOIN ons_release r
 LEFT JOIN soc_2020_out c ON c.code = t.code
 ORDER BY t.code, t.entry_id;
