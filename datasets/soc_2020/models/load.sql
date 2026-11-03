@@ -97,15 +97,21 @@ WITH sidecars AS (
   FROM sidecars
 )
 SELECT
-  CASE WHEN volume1_date IS NULL
+  CASE WHEN volume1_url IS NULL
+       THEN error('ONS Volume 1 release: build/ons/volume1.xlsx.arcmeta is missing or has no url: line')
+       WHEN volume1_date IS NULL
        THEN error('ONS Volume 1 release: its sidecar url does not carry a date as "excel<yyyymmdd>": ' || coalesce(volume1_url, 'NULL'))
        ELSE '2020/' || strftime(volume1_date, '%Y-%m-%d') END AS code_list_release,
   CASE WHEN coalesce(index_version, '') = ''
        THEN error('ONS coding index version: INFO cell B2 is not "Version <n> Of The Standard Occupational Classification 2020 Index": ' || coalesce(info_line, 'NULL'))
+       WHEN index_url IS NULL
+       THEN error('ONS coding index release: build/ons/coding_index.xlsx.arcmeta is missing or has no url: line')
        WHEN index_date IS NULL
        THEN error('ONS coding index release: its sidecar url does not carry a date as "excel<yyyymmdd>": ' || coalesce(index_url, 'NULL'))
        ELSE 'v' || index_version || '/' || strftime(index_date, '%Y-%m-%d') END AS index_release,
-  CASE WHEN relationship_month IS NULL OR relationship_month = 0
+  CASE WHEN relationship_url IS NULL
+       THEN error('ONS relationship tables release: build/ons/relationship_2010_2020.xlsx.arcmeta is missing or has no url: line')
+       WHEN relationship_month IS NULL OR relationship_month = 0
        THEN error('ONS relationship tables release: its sidecar url does not end in "<month><yyyy>.xlsx": ' || coalesce(relationship_url, 'NULL'))
        ELSE relationship_year || '-' || lpad(relationship_month::VARCHAR, 2, '0') END AS crosswalk_release
 FROM parsed;

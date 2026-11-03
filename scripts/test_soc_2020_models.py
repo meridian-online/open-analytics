@@ -433,19 +433,13 @@ class ReleaseTest(unittest.TestCase):
         self.refuses("release", urls={RELATIONSHIP: "https://www.ons.gov.uk/file?uri=/relationship2021.xlsx"})
 
     def test_missing_sidecar_fails(self):
-        scratch = self.build(skip_sidecar=VOLUME1)
-        with self.assertRaises(duckdb.Error):
-            scratch.load()
+        self.refuses(VOLUME1 + ".arcmeta", skip_sidecar=VOLUME1)
 
     def test_index_missing_sidecar_fails(self):
-        scratch = self.build(skip_sidecar=INDEX)
-        with self.assertRaises(duckdb.Error):
-            scratch.load()
+        self.refuses(INDEX + ".arcmeta", skip_sidecar=INDEX)
 
     def test_relationship_missing_sidecar_fails(self):
-        scratch = self.build(skip_sidecar=RELATIONSHIP)
-        with self.assertRaises(duckdb.Error):
-            scratch.load()
+        self.refuses(RELATIONSHIP + ".arcmeta", skip_sidecar=RELATIONSHIP)
 
     def test_index_version_unparseable_fails(self):
         scratch = self.build(file=INDEX, edit=lambda p: edit_sheet(

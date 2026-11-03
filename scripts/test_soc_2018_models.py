@@ -216,7 +216,8 @@ class BuildTest(unittest.TestCase):
                          {"bls"})
 
     def test_repeated_titles_are_kept(self):
-        # A broad group and its only detailed occupation share a title (ruling R2).
+        # A broad group and its only detailed occupation share a title. Both rows are kept,
+        # each with its own text, as HTS keeps two rows' equal text: they are different levels.
         r = self.row("15-1211")
         self.assertEqual(r["description_full"].split(" › ")[-2:],
                          [self.row("15-1210")["description"], r["description"]])
