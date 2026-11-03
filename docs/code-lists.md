@@ -1,6 +1,6 @@
 # Hosted code lists
 
-How Meridian hosts a code list, and what the next one reuses. `usitc/hts` (the Harmonized Tariff Schedule of the United States) and `census/schedule_b` (the Census Bureau's export codes) were the first two, `cms/hcpcs` (HCPCS Level II, CMS's billing codes) the third, and `fda/ndc` (the FDA's National Drug Code directory) the fourth. SOC, FIPS state and county codes, and OurAirports' airports follow on the same pattern. Read this before building any of them.
+How Meridian hosts a code list, and what the next one reuses. `usitc/hts` (the Harmonized Tariff Schedule of the United States) and `census/schedule_b` (the Census Bureau's export codes) were the first two, `cms/hcpcs` (HCPCS Level II, CMS's billing codes) the third, and `fda/ndc` (the FDA's National Drug Code directory) the fourth. The two Standard Occupational Classifications, `bls/soc_2018` (the US 2018 SOC, from the Bureau of Labor Statistics) and `ons/soc_2020` (the UK's SOC 2020, from the Office for National Statistics), are built and not yet published; each comes with a job-title index and an edition crosswalk, written by the same Protocol, and they are the first lists to carry those two tables. FIPS state and county codes, OurAirports' airports, and NAICS's title index and concordance follow on the same pattern. Read this before building any of them.
 
 ## What a hosted code list is
 
@@ -16,8 +16,8 @@ Every hosted code list leads with these ten columns, in this order, and adds its
 
 | Column | Type | Meaning |
 |---|---|---|
-| `code` | VARCHAR, primary key | The code in the form other data carries it: digits only for HTS and Schedule B (`0101210010`, chapters `01`). |
-| `code_display` | VARCHAR | The code as the issuer prints it (`0101.21.00.10` for HTS, `0101.21.0000` for Schedule B). |
+| `code` | VARCHAR, primary key | The code in the form other data carries it: digits only for HTS and Schedule B (`0101210010`, chapters `01`), hyphenated for US SOC (`11-1011`). |
+| `code_display` | VARCHAR | The code as the issuer prints it (`0101.21.00.10` for HTS, `0101.21.0000` for Schedule B; the same as `code` for SOC). |
 | `level` | VARCHAR, closed set per list | The level's name. |
 | `depth` | INTEGER | 0 for the top level, one more per level down. |
 | `parent_code` | VARCHAR | The `code` of the row one level up; NULL only at depth 0. |
@@ -26,6 +26,8 @@ Every hosted code list leads with these ten columns, in this order, and adds its
 | `release` | VARCHAR, not null | The issuer's release this row was built from. |
 | `text_source` | VARCHAR, closed set per list | Whose text `description` is. |
 | `corpus` | VARCHAR | `description_full` lowercased and accent-stripped, the field the in-browser search reads. |
+
+The `code` rule is one question: in what form does the data an analyst will join this list to carry the code? The answer differs by list, and the rule does not. Trade data carries HTS and Schedule B codes both dotted and as digits, and digits join without a rewrite, so `code` is digits only. US occupation data carries SOC codes with BLS's hyphen (BLS's OEWS wages, O*NET's `11-1011.00`, the Department of Labor's filings), so `bls/soc_2018`'s `code` is `11-1011` and `code_display` is the same; Census's ACS carries digits with `X` placeholders that match no code in either form, so it does not decide the question. UK occupation data carries ONS's plain digits, so `ons/soc_2020`'s `code` is `1111`, stored as text. `code` is VARCHAR on every list, so a leading zero or a hyphen is never lost.
 
 A descriptor marks itself a code list with a package-level key naming its levels from the top down, set in its `descriptor.overrides.json`:
 
@@ -38,6 +40,62 @@ A descriptor marks itself a code list with a package-level key naming its levels
 It runs in two places. Each code-list Protocol runs it as its `check_code_list` step (`op: uv@1`, the script pinned by sha256, with `--parquet` and `--levels`), so a build that breaks the contract fails the run before it is validated and stamped. CI runs it with no arguments: it reads every `datasets/*/datapackage.json` carrying `x-meridian-code-list` and checks the object each one serves. Which datasets are code lists is read from their descriptors, never from a list in the script, so a new list opts in by declaring the key. A sweep that finds no code list exits 2, and CI counts that as a failure. `scripts/test_check_code_list.py` runs the check on deliberately broken fixtures.
 
 Editing the script changes its digest, so every Protocol pinning it needs its `sha256` updated in the same commit (`shasum -a 256 scripts/check_code_list.py`).
+
+## The job-title index contract
+
+A job-title index is a table of names pointing at codes in a code list, for an analyst coding free-text job titles (job postings, HR extracts, survey answers). It leads with these seven columns, in this order, and adds its own after them.
+
+| Column | Type | Meaning |
+|---|---|---|
+| `entry_id` | VARCHAR, primary key | The issuer's id for the entry where it has one (ONS's `UNIQUE ID`); otherwise the code and title together (`<code>\|<title>` for BLS). |
+| `title` | VARCHAR, not null | The title as the issuer prints it. |
+| `code` | VARCHAR, not null | The code it points at, in the code list's own form. |
+| `code_description` | VARCHAR | That code's `description` in the code list, so a lookup needs no second join. |
+| `release` | VARCHAR, not null | The index's release. One distinct value per file. |
+| `text_source` | VARCHAR | Whose text `title` is. |
+| `corpus` | VARCHAR | The title with any qualifiers the issuer codes it by, lowercased, accent-stripped and with runs of whitespace collapsed, the field the in-browser search reads. |
+
+A descriptor marks the table with a package-level key naming the code list it points at, set in its overrides:
+
+```json
+"x-meridian-title-index": {"codeList": "bls/soc_2018"}
+```
+
+`contracts/check_titles.sql` holds the exported index to the contract, as a `sql:` step inside the Run. It fails the run on no rows; a missing or misordered core column; a NULL or repeated `entry_id`; a NULL `title`, `code` or `release`; a `code` that is not a `code` in the code list built in the same Run; a `code` whose level in that list is not the level the issuer codes titles to (detailed occupations for BLS, unit groups for ONS); or more than one `release`.
+
+## The edition crosswalk contract
+
+An edition crosswalk is a table of the issuer's own pairings between the codes of two editions of a list, for an analyst bridging data coded to the earlier one. It leads with these seven columns, in this order, and adds its own after them, such as ONS's shares.
+
+| Column | Type | Meaning |
+|---|---|---|
+| `from_code` | VARCHAR, not null | A code of the earlier edition. |
+| `from_description` | VARCHAR | Its title, as the issuer prints it in the crosswalk. |
+| `to_code` | VARCHAR, not null | A code of the later edition, in the hosted code list's own form. |
+| `to_description` | VARCHAR | Its title, as the issuer prints it in the crosswalk. |
+| `from_edition` | VARCHAR, not null | The earlier edition (`2010`). |
+| `to_edition` | VARCHAR, not null | The later edition (`2018`, `2020`). |
+| `release` | VARCHAR, not null | The crosswalk's own release. One distinct value per file. |
+
+`(from_code, to_code)` is the primary key. A descriptor marks the table with the two editions and the code list its `to_code` points at:
+
+```json
+"x-meridian-crosswalk": {"from": "2010", "to": "2018", "toCodeList": "bls/soc_2018"}
+```
+
+`contracts/check_crosswalk.sql` fails the run on no rows; a missing or misordered core column; a repeated `(from_code, to_code)` pair; a NULL `from_code`, `to_code`, `from_edition`, `to_edition` or `release`; a `to_code` that is not a `code` in the code list built in the same Run, or is one at a level other than the crosswalk's (detailed for BLS, unit for ONS); a `from_code` that does not fully match the earlier edition's code pattern; or more than one `release`. The earlier edition is not hosted, so `from_code` is checked by its shape alone.
+
+Every crosswalk row is a pairing the issuer published. A crosswalk Meridian inferred, such as one drawn from the job titles two editions' indexes share, would read as an official concordance and would not be one, so none is built.
+
+### How a Protocol runs the two contracts
+
+Each contract is one file of plain DuckDB SQL with no parameters, in `contracts/`, and a broken rule stops the Run with `error('<rule>: <first offending value>')`. A Protocol runs it by relative path (`sql: ../../contracts/check_titles.sql`) after its own models have set up what it reads on the Run's connection:
+
+- `check_inputs_code_list`, a step of its own, creates the view `contract_code_list` over the code list exported in the same Run (`build/stage/<code list>.parquet`). Both checks read it, so it is set up once, by one step.
+- `check_inputs_titles` creates the view `contract_titles` over the exported index and the one-row table `contract_title_level(level)` naming the level the issuer codes titles to.
+- `check_inputs_crosswalk` creates the view `contract_crosswalk` over the exported crosswalk and the one-row table `contract_crosswalk_shape(from_pattern, level)`: the earlier edition's code pattern (`^[0-9]{2}-[0-9]{4}$` for BLS, `^[0-9]{4}$` for ONS) and the level `to_code` must be at.
+
+Each check refuses a level or shape table that is not exactly one row with no NULL, and on success writes `contract_titles_result(rows_checked)` or `contract_crosswalk_result(rows_checked)`, which its step declares as what it produces. The contract's interface is these names, documented in `contracts/README.md`; `scripts/test_contracts.py` runs every rule against small in-memory tables in CI. A rule changed in either file changes it for every Protocol that runs it, which is the point: the same rules hold for every index and every crosswalk, as `check_code_list.py` is one script for every code list.
 
 ## How a code-list Protocol is laid out
 
@@ -61,7 +119,13 @@ A code-list Protocol is a directory under `datasets/`, named after the dataset, 
 
 **NDC** (`datasets/ndc/`) is the first list whose source is JSON and the first refreshed on a fixed schedule rather than at each issuer release, in nine steps: `fetch_ndc` and `extract_ndc` for openFDA's NDC zip; `load`, which reads the finished drugs' listings into three levels, `labeler`, `product` and `package`; `package`; `export_ndc`; `describe`, `check_code_list` (`--levels labeler,product,package`), `validate` and `stamp_descriptor`. It keeps the one writer per file. Its `code` is the eleven-digit NDC claims carry, padded 5-4-2 and digits only, at five digits for a labeler and nine for a product, so each level's code is the prefix of the codes below it and a parent is found by prefix, as in the HS lists; `code_display` is the FDA's hyphenated ten-digit form.
 
-Each Protocol's SQL has a self-test that runs the shipped models through Python `duckdb` over a reduced copy of the source files and checks the result with `check_code_list.py`: `scripts/test_hts_models.py`, `scripts/test_schedule_b_models.py`, `scripts/test_hcpcs_models.py` and `scripts/test_ndc_models.py`, each a CI job. Publishing stays outside the Protocol, in the publish pipeline, which reads its terminal Parquet and descriptor.
+**SOC 2018** (`datasets/soc_2018/`) is the first Protocol that writes several tables (see "A Protocol that writes several tables"), in twenty-five steps: `fetch_definitions`, `fetch_titles` and `fetch_crosswalk` for BLS's three workbooks (the 2018 SOC definitions, the direct match title file and the 2010 to 2018 crosswalk); `load`, which reads every sheet as text from an explicit range with DuckDB's `excel` extension, fails the run if a header row is not where it was measured, and reads the releases; `code_list`, `titles` and `crosswalk`, one model per table; an export and then a describe for each table; `check_code_list` (`--levels major,minor,broad,detailed`); `check_inputs_code_list`, `check_inputs_titles`, `check_titles`, `check_inputs_crosswalk` and `check_crosswalk` for the two new contracts; and a validate and then a stamp for each table. Its four levels are BLS's, `major`, `minor`, `broad` and `detailed`. `code` keeps BLS's hyphen. SOC codes are not plain prefixes: the broad occupation `11-3110` sits under the minor group `11-3000`, but `15-1210` under `15-1200`, and the detailed occupation `29-1221` under the broad occupation `29-1210`, not the `29-1220` its last digit would name. So a minor group's parent is its major group (`NN-0000`), a broad occupation's the highest minor group at or below its code that shares its first four characters, and a detailed occupation's the highest broad occupation at or below its code that shares its first five; `code_list` fails the run if a row below the top finds none, or if the parent is not also the last group of that level BLS prints above the row in its sheet, so a miscoded or misplaced group stops the run. `definition` is BLS's, on detailed occupations only. The title index has one row per direct match title, keyed `<code>|<title>`, with BLS's `illustrative` mark as a boolean. The crosswalk is BLS's pairings at the detailed level as BLS prints them, unweighted, with each title's `(#)` or `(##)` kept.
+
+**SOC 2020** (`datasets/soc_2020/`) has the same twenty-five steps, in the same order: `fetch_volume1`, `fetch_coding_index` and `fetch_relationship` fetch ONS's Volume 1 (the structure and descriptions of unit groups), Volume 2's coding index and the SOC 2010 to SOC 2020 relationship tables, each to a fixed path under `build/ons/`, so a refresh changes a URL and never a path a model reads. Its four levels are ONS's, `major`, `sub_major`, `minor` and `unit`, of one to four digits; each code is its parent's with one more digit, so `parent_code` is the code with its last digit dropped, and `code_list` fails the run if that is not a group at the level above. `description` is the title as Volume 1's descriptions sheet writes it, `group_description` ONS's description on every row, and unit groups carry `entry_routes`, and `tasks` and `related_job_titles` as lists of strings split from ONS's `~ `-bulleted cells. The title index is the coding index's coded entries, keyed by ONS's `UNIQUE ID`, with the additional and industry qualifiers ONS codes a title by as columns and in `corpus`, and ONS's coding fields after them (the default flag, the extended sub-unit group and its title, the codes in SOC 2010, SOC 2000, SOC 90 and ISCO-08, and the version that added or amended the entry). `load` fails the run on an index entry without a code that is not a cross-reference. The crosswalk is the unit-group sheet of the relationship tables, 2010 to 2020: one row per pairing with ONS's four shares (men and women, in the Labour Force Survey and the 2011 Census), and each 2010 group's "Total sample" row, which gives its four base counts, carried as `*_base` columns on each of its pairings rather than as a row. Every descriptor's `licenses` is `OGL-UK-3.0`, and its description carries ONS's attribution and says that Meridian prepared the table from ONS's files.
+
+Both SOC code lists carry ancestor columns after the contract's ten: the code of each level above the row (`major_code`, `minor_code`, `broad_code` for BLS; `major_code`, `sub_major_code`, `minor_code` for ONS), NULL at the row's own level and below, so an occupation rolls up to its major group in one GROUP BY without walking `parent_code`.
+
+Each Protocol's SQL has a self-test that runs the shipped models through Python `duckdb` over a reduced copy of the source files and checks the result with `check_code_list.py`: `scripts/test_hts_models.py`, `scripts/test_schedule_b_models.py`, `scripts/test_hcpcs_models.py`, `scripts/test_ndc_models.py`, `scripts/test_soc_2018_models.py` and `scripts/test_soc_2020_models.py`, each a CI job. The SOC self-tests also run the two contract checks over the index and crosswalk they build, and hold the committed descriptors to those tables (see "A Protocol that writes several tables"); their fixtures are cut-down copies of the issuers' workbooks, cut with `openpyxl` and committed under `scripts/testdata/`, each with a README saying what was kept. Publishing stays outside the Protocol, in the publish pipeline, which reads its terminal Parquet and descriptor.
 
 ### Describing, registering and publishing a list
 
@@ -76,6 +140,24 @@ Beside the Protocol, a new list needs these files and entries. HTS's and Schedul
 - **`datasets/label-agreement.json`**: `scripts/check_label_agreement.py` reports every declaration that differs between packages sharing a label or a field name. Give a reason only for a difference that is true of both packages: a different population (Schedule B's `naics` holds Census's own codes and codes ending in X that `census/naics_2022` does not), a different storage choice for one concept (Schedule B's `agricultural` as a boolean, GLEIF's status as text), or one field name used for different concepts (`code`). A declaration looser than the data is a defect, and the fix is to tighten it, not to excuse it. Schedule B's `code` first carried finetype's widened `hs_code` pattern, which admits dotted forms and lengths no level has; it now declares digits only at 2, 4, 6 or 10 digits, bounded 2 to 10, and its line codes (`naics`, `sitc`, `end_use`, `hitech`, the units) declare their fixed shapes, with the drift contract enforcing the same.
 
 **Publishing.** A list is published from its branch, before the branch merges, because CI checks every descriptor and every README row count against the object the descriptor serves, and stays red until the object exists. The publish runs through infra's publish pipeline, which calls `scripts/publish_dataset.py publish` with the Protocol's finished Run; a new address may need infra's pipeline to learn it, in a pull request of infra's own. After the publish, `scripts/publish_dataset.py restamp` writes the `bytes` and `hash` the endpoint serves into the descriptor, and that commit goes on the branch.
+
+## A Protocol that writes several tables
+
+An issuer that publishes a code list, a job-title index and an edition crosswalk gets one Protocol that writes all three, as the two SOC Protocols do. Each source file is fetched once and loaded once; one model per table builds it from the staging tables; and each table is then exported, described, checked, validated and stamped on its own. arc skips a step whose inputs have not changed, so a refresh rebuilds only the tables whose sources moved.
+
+**Per-table files.** The single-table names do not fit a directory that holds three tables, so every file a table's descriptor is made from carries the table's name as a prefix, beside `arcform.yaml`: `<table>.overrides.json`, `<table>.nominations.finetype.json` and `<table>.schema.finetype.json`, and the committed descriptor `<table>.datapackage.json` (`datasets/soc_2018/soc_2018_titles.datapackage.json`). Each table has its own export, describe, validate and stamp step, named for it (`export_soc_2018_titles`, `describe_soc_2018_titles`, and so on).
+
+**One writer per file.** The exports write `build/stage/<table>.parquet` and the describes `build/stage/<table>.described.json`; each table's `stamp_<table>` step alone writes its published `build/<table>.parquet` and its `<table>.datapackage.json`, with `--carry-created` so a rerun over the same data keeps the descriptor's `created`. Both SOC Protocols are in `scripts/test_manifest_one_writer.py`'s `ONE_WRITER` list, which fails CI if two steps declare the same file.
+
+**The release is an input arc records.** arc decides whether a step is fresh from the tables and files it reads, and it reads those from the model's SQL. Each SOC `load` writes one row holding every source's release (`bls_release`, `ons_release`), and each table's model `CROSS JOIN`s that row and reads its release column. A release read in a scalar subquery instead (`(SELECT release FROM bls_release)`) does not appear among the step's inputs, so a change of release alone, with every staged row the same, would leave the tables and their stamps fresh and the old release published. With the join, a release-only change reruns every builder and stamp after it; this was checked on both Protocols by changing only a release line.
+
+**The contract inputs are set up once.** Both new contracts read the same `contract_code_list` view, so it is created by `check_inputs_code_list`, a step of its own after `check_code_list`, and not by each check's inputs model; `check_inputs_titles` and `check_inputs_crosswalk` set up only their own table and its one-row level or shape table. Each view reads the file the export wrote in the same Run, so the index and the crosswalk are held to the code list being built, never to an earlier publish and never to the lake.
+
+**Models arc can parse.** arc 0.2.1 parses each `sql:` model to find what it reads and writes. A model it cannot parse runs, but arc warns "could not parse … treating as opaque step", records no inputs and no outputs for it, and, if its step declares `produces`, reruns it on every run because it cannot see the declared tables being written. Three DuckDB forms broke the parse during the SOC build: a `(DESCRIBE …)` subquery, an `E'…'` string, and `[*COLUMNS(*)]`. The contracts read a table's column order from `information_schema.columns` instead of `DESCRIBE`; ONS's `load.sql` builds a newline as `chr(10)` and a list of columns with `list_value(A, B, …)`, and writes lambdas as `lambda x: …`, which needs DuckDB 1.3, so both SOC manifests declare `engine_version: ">=1.3"`. A Protocol is finished when its run gives no parse warning and a second plain `arc run` skips every step.
+
+**Descriptors outside CI's sweeps until the publish.** CI's descriptor checks read `datasets/*/datapackage.json` and hold each to the object it serves; a `<table>.datapackage.json` is not one of those paths, so an unpublished table does not turn CI red. Until it is published, each Protocol's own steps hold its tables to their contracts, and its self-test's `DescriptorTest` holds each committed descriptor to the table the models build: its fields are that table's columns in order, and its primary key, contract declaration (`x-meridian-code-list`, `x-meridian-title-index` or `x-meridian-crosswalk`, and no other table's), licence and field descriptions are the ones its overrides give, with no field undescribed; the release the models build is the one the overrides' `release` description quotes; and every URL the manifest fetches is among the sources of each table built from it. The descriptors are still the ones a finished `arc run` wrote, committed unedited.
+
+**Why publishing waits.** `scripts/publish_dataset.py` and CI's served-object checks assume one `datapackage.json` per Protocol directory. Rather than teach that seam to publish several tables, a Protocol that writes several waits for arcform's publish step, which retires the seam, to write to openlake and to publish several tables from one Protocol; SOC is then published by `arc run` alone. Its registry entries, the held namespaces `bls` and `ons`, the README's Datasets rows and the dataset pages follow with that publish.
 
 ## How a release is recorded
 
@@ -93,6 +175,10 @@ Every row carries `release`, and a NULL fails the run, so a reader who pins a sn
 
 **openFDA's last-updated date.** openFDA serves the current NDC directory at one URL, and its file's `meta` records the date openFDA last updated it and how many records the file holds. `release` is that date (`2026-10-30`); `load` fails the run if it is not a date, if the record count is not the count `meta` states, or if the extracted directory holds more than one file. The URL does not change, so a refresh changes nothing in the Protocol. The FDA updates the directory daily and Meridian refreshes it fortnightly, so the dataset's page and descriptor state the as-of date and that cadence. Because the row count moves with each refresh, the README states it rounded (`340K`), as GLEIF's is.
 
+**BLS's title-block date.** BLS's 2018 SOC is a fixed edition that BLS revises in place under the same URLs, and its files' names carry no release. Each workbook states one in its title block, cell A4: the definitions file reads "November 2017 (for reference year January 2018 - Updated April 15, 2020)". The code list's `release` is `2018/2020-04-15`, the reference year and the update date, parsed in `load`; the run fails if the line does not parse, or if the direct match title file's A4 ("November 2017 (Updated April 15, 2020)") gives a different update date, since the index takes the code list's release. The crosswalk's A4 reads "November 2017", and its `release` is `2017-11`. A refresh changes nothing in the Protocol.
+
+**ONS's sidecar URL.** ONS issues each revision of a workbook under a new URL whose file name carries its date (`…excel20260827.xlsx`), or for the relationship tables its month and year (`…july2021.xlsx`). Each workbook is fetched to a fixed path, and `load` reads the release from the `url:` line of the `.arcmeta` sidecar `http_fetch@1` writes beside it, so the release is that of the file actually fetched: the code list's is `2020/2026-08-27` (the edition and Volume 1's date), the index's `v14/2026-08-27` (its version, from cell B2 of the index's INFO sheet, and its date) and the crosswalk's `2021-07`. The run fails if any of them does not parse. A refresh changes the URL in `arcform.yaml`, that workbook's source in the overrides, and every description that quotes the release or a count (see Known gaps).
+
 ## When a source carries text that is not cleared
 
 An issuer's file can carry content the issuer does not own. CMS's HCPCS file is a US Government work except for two parts: the American Dental Association's CDT codes (the D series) and the American Medical Association's CPT. CMS's file carries no CPT code as a row, but it cites CPT codes in its cross-reference field and in some long descriptions. The pattern the HCPCS Protocol follows, for this and any later list with the same problem:
@@ -104,9 +190,9 @@ An issuer's file can carry content the issuer does not own. CMS's HCPCS file is 
 
 ## When SQL is shared between lists
 
-SQL is shared between lists only where two lists share a source quirk. Today there is one case: USITC's outline. The HTS export is an indented outline, not a table of parents, and both lists need it: HTS for its own rows, Schedule B for the heading and subheading text Census does not publish. So `datasets/hts/models/outline.sql`, owned by the HTS Protocol because HTS owns the source, reads USITC's JSON into two tables, `hts_outline` (one row per USITC row with its indent chain) and `hts_levels` (every 2, 4, 6, 8 and 10-digit prefix of a numbered code, with its text and `text_source`). The Schedule B Protocol runs the file by its relative path, which arc 0.2.1 and 0.2.2 were both checked to accept, and reads only those two tables, so their columns are a contract between the two Protocols. What only HTS needs, such as subchapter rows, is built in HTS's own `load.sql`, not in the shared file.
+SQL is shared between lists for two reasons: a source quirk two lists share, and a contract every list of a kind must meet. The second is the two files in `contracts/`, `check_titles.sql` and `check_crosswalk.sql`, which every job-title index and edition crosswalk runs (see "How a Protocol runs the two contracts"); they are shared for the reason `check_code_list.py` is one script, that the same rules hold for every list. The first has one case: USITC's outline. The HTS export is an indented outline, not a table of parents, and both lists need it: HTS for its own rows, Schedule B for the heading and subheading text Census does not publish. So `datasets/hts/models/outline.sql`, owned by the HTS Protocol because HTS owns the source, reads USITC's JSON into two tables, `hts_outline` (one row per USITC row with its indent chain) and `hts_levels` (every 2, 4, 6, 8 and 10-digit prefix of a numbered code, with its text and `text_source`). The Schedule B Protocol runs the file by its relative path, which arc 0.2.1 and 0.2.2 were both checked to accept, and reads only those two tables, so their columns are a contract between the two Protocols. What only HTS needs, such as subchapter rows, is built in HTS's own `load.sql`, not in the shared file.
 
-Every later list derives its own hierarchy in plain SQL in its own `load.sql`. What is reused across all of them is the contract, the check and this guide. A second shared file appears only when two later lists turn out to share a quirk.
+Every later list derives its own hierarchy in plain SQL in its own `load.sql`. What is reused across all of them is the contract, the check and this guide. A second shared file for a source quirk appears only when two later lists turn out to share one.
 
 Two other ways were considered and declined. A library of shared DuckDB macros for every code list reads like dbt-utils: functions that are found only by reading them, and not how a Protocol states what it does. New arcform operations, `nest-by-indent` and `nest-by-prefix`, would be the framework's own place for a reusable step, but laid against the seven lists they would not be used regularly: an indent outline serves HTS alone, and the prefix shape differs list by list (NAICS's ranges, SOC's code pattern, FIPS's fixed widths). They do not earn a place in arc's public catalogue.
 
@@ -153,6 +239,30 @@ Made for the NDC directory, during its build (the operator was away; each is a r
 - **A product's text is composed from the FDA's fields.** The FDA has no single product title, so `description` is the brand name (openFDA's already ends with any suffix), the generic name in brackets where it differs, and the dosage form. `text_source` stays `fda`, since every word is the FDA's.
 - **A package listed twice keeps its earlier start.** Four package NDCs appear twice in one listing with two marketing start dates.
 
+Made for SOC, with the operator during its design:
+
+- **US SOC's `code` keeps BLS's hyphen.** The contract's rule is the form other data carries, and for US occupation data that is BLS's `11-1011`: BLS's OEWS, O*NET and the Department of Labor's filings all carry it. HTS is digits only by the same rule applied to trade data, so the rule did not change; its answer did. UK SOC's `code` is ONS's plain digits, the form the Labour Force Survey carries.
+- **Three tables per issuer: the code list, the job-title index and the edition crosswalk.** An analyst comes to SOC with coded data to label or roll up, with free-text job titles to code, or with data coded to an earlier edition to bridge, and each issuer publishes what each of those needs. The UK crosswalk is in because ONS publishes its own relationship tables.
+- **Only the issuer's own pairings.** Every crosswalk row is a pairing BLS or ONS published. A crosswalk inferred from the titles two editions' indexes share would read as an official concordance and would not be one.
+- **One Protocol per issuer, writing several tables.** A Protocol is sized to the work it carries: one fetch and one load of each file, and arc's skipping of fresh steps rebuilds only what moved. One Protocol per table would fit the publish pipeline and CI as they stand, but would multiply the fetches and manifests and shape the Protocol around the harness rather than the work. Reading the published code list from the lake, for the index and the crosswalk, was declined as well: it ties each build to the lake and to an earlier publish, as Schedule B's design avoided.
+- **Stop before publishing.** SOC is built and its descriptors committed, and it is published by `arc run` alone once arcform's publish step can write to openlake and publish several tables from one Protocol, rather than this work extending the publish seam.
+
+Made for SOC, during its design and build:
+
+- **One shared SQL file per new contract**, in `contracts/`, so the same rules hold for every index and crosswalk (see "When SQL is shared between lists").
+- **Descriptors outside `datasets/*/datapackage.json` until the publish**, so CI's served-object sweeps stay green on an unpublished Protocol, with each self-test's `DescriptorTest` holding them meanwhile.
+- **Both issuers in one change.** Neither publishes from it, so nothing about the UK attribution, which is settled at the publish, needed the UK work held apart.
+- **Ancestor columns on both code lists**, so a roll-up to any level is one GROUP BY.
+- **ONS's 2010 to 2020 unit-group sheet only.** It is the one an analyst uses to move old data forward; the reverse direction and the major, sub-major and minor sheets are later work if wanted.
+- **The coding index's cross-references left out.** 231 entries say "see" another title or ONS's notes instead of giving a code: they point at a title, not a code, and are not index entries. `load` fails the run on any other entry without a code.
+- **BLS's parents by code, held to the sheet.** The first rule written, a detailed occupation's code with its last digit set to 0, failed on `29-1221`, which sits under `29-1210`. The rule built (see "How a code-list Protocol is laid out") gives all 1,447 parents BLS's own structure file, `soc_structure_2018.xlsx`, gives, and the sheet-order check catches a miscoded or misplaced group. A group BLS drops outright is not caught (see Known gaps); catching it would need the structure file as a second source, and was accepted as a limit, since the 2018 edition is fixed and revised rarely.
+- **`description_full` keeps a title repeated across levels.** A broad occupation and its only detailed occupation often share a title ("Chief Executives › Chief Executives"); both stay, because they are different levels, as HTS keeps two outline rows with the same text.
+- **BLS's `(#)` and `(##)` kept in the crosswalk's titles.** BLS's workbook does not define them, but in its file `(#)` ends the title of exactly the 2010 occupations that pair with more than one 2018 occupation, and `(##)` the same for 2018; the field descriptions say so, from the data.
+- **Whitespace collapsed in `corpus` only.** Nine BLS titles carry internal double spaces; `corpus` collapses them for search, and `title` and `entry_id` keep BLS's text.
+- **The index's key is ONS's id, not the title.** No coded entry repeats a title and both qualifiers, but ONS gives every entry a `UNIQUE ID`, and the key should not rest on the text staying unique.
+- **Left out:** O*NET, which is CC BY with a modification notice and trademark rules, and a separate dataset if wanted; the ISCO-08 framework sheet of ONS's index, whose titles are the ILO's (each entry's ISCO-08 code, ONS's own mapping, is carried); and a finetype type for hyphenated SOC codes, which finetype is adding separately. Until it lands, SOC code columns are nominated `representation.identifier.numeric_code`, which `describe` widens, and their overrides declare the `^[0-9]{2}-[0-9]{4}$` shape.
+- **Fixtures cut with `openpyxl`.** The self-tests' workbooks are cut from the issuers' downloads of 2026-11-03, keeping each sheet's name and its title block and header rows as the issuer prints them, so `load`'s header checks and release parsing run against the real layout; ONS's copies keep the issued file names, and the self-test writes each `.arcmeta` sidecar with the real URL, which a test holds to the manifest.
+
 ## Measured on 2026-11-01
 
 Against USITC's `2026HTSRev22` and Census's Schedule B `2026/2026-07-27`:
@@ -165,6 +275,20 @@ Against CMS's HCPCS file for October 2026 (`2026-10/2026-09-23`), on 2026-11-02:
 
 Against openFDA's NDC file of 2026-10-30, on 2026-11-02: `fda/ndc`, 339,885 rows: 5,395 labelers, 115,367 products and 219,123 packages, from 116,528 finished listings.
 
+## Measured on 2026-11-03
+
+Against BLS's 2018 SOC (`2018/2020-04-15`, crosswalk `2017-11`), built by arc 0.2.1 and not published:
+
+- `bls/soc_2018`: 1,447 rows: 23 major groups, 98 minor groups, 459 broad occupations and 867 detailed occupations. All 1,447 parents match BLS's `soc_structure_2018.xlsx`.
+- `bls/soc_2018_titles`: 6,520 titles over 864 detailed occupations, unique across occupations after lowercasing; 2,400 marked illustrative; 9 with internal double spaces. Three detailed occupations have no titles: `11-9039`, `19-2099` and `51-9199`.
+- `bls/soc_2010_to_2018`: 900 pairings of 840 2010 occupations with all 867 2018 ones. `(#)` ends the title of 42 2010 occupations and `(##)` of 31 2018 ones.
+
+Against ONS's SOC 2020 (Volume 1 `2020/2026-08-27`, coding index `v14/2026-08-27`, relationship tables `2021-07`), built by arc 0.2.1 and not published:
+
+- `ons/soc_2020`: 551 rows: 9 major, 26 sub-major, 104 minor and 412 unit groups.
+- `ons/soc_2020_titles`: 32,439 coded entries of the index's 32,670, over all 412 unit groups; the 231 left out are cross-references. 2,690 coded entries carry an additional qualifier and 10,661 an industry qualifier; none repeats a title and both qualifiers.
+- `ons/soc_2010_to_2020`: 714 pairings of 369 2010 unit groups with 412 2020 ones, from a sheet whose data rows also hold the 369 "Total sample" rows that become the base columns. 191 2010 groups pair with more than one 2020 group, and no pairing has all four shares 0.
+
 ## Known gaps
 
 - **finetype's `hs_code` pattern lacks the chapter and heading forms.** It admits 6, 8 and 10 digits but not the 2-digit chapter or 4-digit heading, so `describe` widens it and each dataset's overrides declare the shape `code` holds. This needs fixing in finetype.
@@ -174,3 +298,7 @@ Against openFDA's NDC file of 2026-10-30, on 2026-11-02: `fda/ndc`, 339,885 rows
 - **`describe` records pattern-fit from before an override.** A field whose pattern an override replaces still reports how finetype's own pattern fitted.
 - **arc 0.2.1 does not re-run a step when only a param changes.** After changing `--param year=...`, run with `--force`.
 - **`crosswalk_join.py` sends no User-Agent**, and openlake's edge refuses Python's default one, so the Schedule B Protocol fetches the NAICS object itself in `fetch_naics` and hands the script the local file.
+- **A BLS group dropped outright is not caught.** If BLS removed a broad occupation or minor group from its sheet and left its children, they would fall to the group before it, by code and by sheet position alike, which the sheet cannot tell from a real arrangement such as `29-1221` under `29-1210`. A miscoded or misplaced group, or a missing parent, does fail the run. Catching a drop needs BLS's `soc_structure_2018.xlsx` as a second source.
+- **arc serves fetches from its shared cache.** arc 0.2.1 answered every SOC fetch from its shared fetch cache ("cached: … no transfer"), even with `--force`, so a run does not prove the issuer still serves those bytes. On 2026-11-03 a fresh `curl` of each of the six URLs with the Meridian User-Agent matched the fetched files by sha256.
+- **The SOC descriptors are outside CI's sweeps until the publish.** CI's descriptor, Frictionless, label-agreement and served-object checks read `datasets/*/datapackage.json` only, so they do not see a `<table>.datapackage.json`. The Run's contract checks and the self-tests' `DescriptorTest` hold them meanwhile; the sweeps reach them when the publish settles where a multi-table Protocol's descriptors live.
+- **SOC descriptions quote releases and counts a refresh must update.** Several field and package descriptions quote today's release (`v14/2026-08-27`, `2017-11`) or counts (231 cross-references, 32,439 coded entries, 369 groups, 714 pairings). A refresh that changes them must edit the overrides; each `DescriptorTest` fails if the release the models build is not the one the overrides' `release` description quotes, and if a fetched URL is not among the sources of the tables it feeds, but it does not check the counts.
