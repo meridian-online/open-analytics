@@ -27,7 +27,7 @@ All the BLS files are US Government works in the public domain. All the ONS file
 
 ## Goals
 
-- Two Protocols, `datasets/soc_2018/` (BLS) and `datasets/soc_2020/` (ONS), each fetching its issuer's files once and writing its three tables, each table exported, described, checked and stamped inside the Run.
+- Two Protocols, `datasets/soc_2018/` (BLS) and `datasets/soc_2020/` (ONS), each fetching its issuer's files once and writing its three tables, each table exported, described, checked and stamped inside the Run. Each Protocol directory carries a `README.md` with the generated step list `scripts/check_protocol_readme.py` requires; that is separate from the top-level README's Datasets table, which waits for the publish.
 - Each table carries a descriptor emitted by a finished Run and committed as that Run wrote it.
 - Two new table contracts beside the code-list contract, the job-title index and the edition crosswalk, each checked inside the Run, written up in `docs/code-lists.md` so NAICS's index and concordance follow them.
 - `docs/code-lists.md` records the rulings below and the multi-table Protocol pattern.
@@ -90,7 +90,7 @@ Both follow the code-list contract (`docs/code-lists.md`): the ten core columns,
 
 - **Levels**: `major` (one digit), `sub_major` (two), `minor` (three), `unit` (four). Each code is a prefix of the codes below it, so parents are found by prefix, as in the HS lists.
 - **Text.** `description` is ONS's group title as Volume 1's descriptions sheet writes it; the framework sheet's capitalised forms are not used. The list's own columns carry ONS's group description (`group_description`, on every row), and on unit groups `entry_routes`, and `tasks` and `related_job_titles` as lists of strings, split from ONS's `~ `-bulleted cells. `text_source = 'ons'`.
-- **Release.** ONS names each workbook with the date it was issued (`…excel20260827.xlsx`), and a revision gets a new URL. `release` is `2020/2026-08-27`, read in `load` from the fetched file's name, so it cannot disagree with the file the rows came from. A refresh changes the URL literal in `arcform.yaml` and the source's path in the overrides.
+- **Release.** ONS names each workbook with the date it was issued (`…excel20260827.xlsx`), and a revision gets a new URL. `release` is `2020/2026-08-27`, read in `load` from the URL `http_fetch@1` records in the `.arcmeta` sidecar beside the fetched file, so it cannot disagree with the file the rows came from; each workbook is fetched to a fixed path, so a refresh changes only the URL literal in `arcform.yaml` and the source's path in the overrides.
 - **Attribution.** The descriptor's `licenses` is `OGL-UK-3.0`, and its description carries ONS's attribution statement. How a published file and page carry an OGL notice is being settled separately; whatever it settles is applied at the publish.
 
 ## The job-title index contract
@@ -122,7 +122,7 @@ A descriptor marks the table with `"x-meridian-title-index": {"codeList": "<name
 - **Qualifiers as columns.** ONS codes a title by its qualifiers where they decide the code: `additional_qualifier` (2,700 entries) and `industry_qualifier` (10,675). `title_natural` is ONS's natural word order ("machine assistant" for "Assistant, machine").
 - **The coding fields ONS publishes**: `default_flag` (ONS's `D` column, with its meanings from the file's specification in the field description), `soc_2020_ext` and its title (ONS's extended sub-unit group, `2439/99`), `soc_2010`, `soc_2000` and `soc_1990` (the codes each title had in earlier editions, as ONS records them), `isco_08` (ONS's mapping), `version_added_or_amended` and `change`.
 - **Cross-references are not entries.** 231 index rows have no code and say "see Adviser" or "see also notes": they point at another title, not a code. They are left out, and `load` checks that every row left out is one of them.
-- `release` is the index's version and file date, `v14/2026-08-27`, read from the INFO sheet and the file name; the run fails if either does not parse.
+- `release` is the index's version and file date, `v14/2026-08-27`, read from the INFO sheet and the fetched URL's date, as for the code list; the run fails if either does not parse.
 
 ## The edition crosswalk contract
 
@@ -137,7 +137,7 @@ A crosswalk is a table of the issuer's own pairings between codes of two edition
 | `from_edition`, `to_edition` | VARCHAR, not null | The editions, such as `2010` and `2018`. |
 | `release` | VARCHAR, not null | The crosswalk's own release. |
 
-`(from_code, to_code)` is the primary key. A descriptor marks the table with `"x-meridian-crosswalk": {"from": "<edition>", "to": "<edition>", "toCodeList": "<namespace>/<name>"}`. `check_crosswalk` fails the run on no rows, a missing or misordered core column, a repeated pair, a NULL code, a `to_code` that is not a code at the same level in the named list built in the same Run, a `from_code` of the wrong shape, or more than one `release`. The earlier edition is not hosted, so `from_code` is checked by shape only.
+`(from_code, to_code)` is the primary key. A descriptor marks the table with `"x-meridian-crosswalk": {"from": "<edition>", "to": "<edition>", "toCodeList": "<namespace>/<name>"}`. `check_crosswalk` fails the run on no rows, a missing or misordered core column, a repeated pair, a NULL code, a `to_code` that is not a code at the crosswalk's level (detailed for BLS, unit for ONS, passed in by each Protocol as the title index's level is) in the named list built in the same Run, a `from_code` of the wrong shape, or more than one `release`. The earlier edition is not hosted, so `from_code` is checked by shape only.
 
 ### `bls/soc_2010_to_2018`
 
