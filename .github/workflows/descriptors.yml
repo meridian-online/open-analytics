@@ -708,6 +708,21 @@ jobs:
       - name: the shipped models, against a scratch build directory
         run: python scripts/test_ndc_models.py
 
+  # The title-index and crosswalk contracts the SOC Protocols run as SQL steps, each rule
+  # tried against small in-memory tables: the passing case and one failing case per rule.
+  contracts-sql:
+    name: the title-index and crosswalk contracts refuse each broken rule
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: install duckdb
+        run: python -m pip install --disable-pip-version-check "duckdb==${DUCKDB_VERSION}"
+      - name: the contract checks, against in-memory tables
+        run: python scripts/test_contracts.py
+
   schedule-b-protocol-scripts:
     name: the Schedule B release date and year folder hold
     runs-on: ubuntu-latest
