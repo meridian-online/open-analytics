@@ -37,7 +37,8 @@
 #           build/soc_2010_to_2020.parquet   →  ons/soc_2010_to_2020
 name: soc_2020
 engine: duckdb
-engine_version: ">=1.2"
+# load.sql writes its lambdas as `lambda x: ...`, which DuckDB reads from 1.3.
+engine_version: ">=1.3"
 db: build/soc_2020.db
 
 defaults:

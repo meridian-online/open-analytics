@@ -33,7 +33,8 @@
 #           build/soc_2010_to_2018.parquet   →  bls/soc_2010_to_2018
 name: soc_2018
 engine: duckdb
-engine_version: ">=1.2"
+# Kept in step with ../soc_2020, whose load.sql needs DuckDB 1.3 for `lambda x:`.
+engine_version: ">=1.3"
 db: build/soc_2018.db
 
 defaults:

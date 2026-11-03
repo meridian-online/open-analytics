@@ -649,6 +649,15 @@ class DescriptorTest(unittest.TestCase):
                 self.assertEqual(len(releases), 1)
                 self.assertIn(releases[0][0], overrides["fields"]["release"]["description"])
 
+    def test_the_self_test_sidecars_name_the_manifest_urls(self):
+        # The releases the cases read come from sidecars naming these constants, so a
+        # refresh that changes a URL in the manifest must change them too.
+        self.assertEqual(fetch_urls(PROTOCOL / "arcform.yaml"), {
+            "fetch_volume1": VOLUME1_URL,
+            "fetch_coding_index": INDEX_URL,
+            "fetch_relationship": RELATIONSHIP_URL,
+        })
+
     def test_every_fetched_url_is_a_source_of_the_tables_it_feeds(self):
         urls = fetch_urls(PROTOCOL / "arcform.yaml")
         self.assertEqual(set(urls), set(FEEDS))
