@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Builds run with arc 0.2.1 (`~/scratch/arc-0.2.1/arc`) and DuckDB CLI 1.5.5 (`~/scratch/duckdb-1.5.5/duckdb`) first on `PATH`; the `arc` on `~/.cargo/bin` is 0.1.0 and must not be used.
+- Builds run with the arc 0.2.1 release binary and DuckDB CLI 1.5.5, never the older `arc` on the default `PATH`. The run environment, written `$ARC_ENV` below: `ARC_DUCKDB_BIN` set to the DuckDB 1.5.5 CLI, `FINETYPE_DUCKDB_EXT` set to the finetype extension built for DuckDB 1.5.5, and a `python3` that imports `duckdb==1.5.5` first on `PATH` for the stamp step. The controller supplies the paths.
 - One cargo or arc build at a time on this machine; implementers do not run in parallel.
 - Every fetch sends `User-Agent: "Meridian Protocol (open-analytics; research@meridian.online)"`.
 - No new Python outside tests. New checks are `sql:` steps; `check_code_list.py` and `stamp_descriptor.py` are reused by `uv@1` with their current sha256 pins (`11b06ca7…`, `b2258…`, copy from `datasets/ndc/arcform.yaml`).
@@ -97,7 +97,7 @@
 
 - [ ] **Step 1: Write `arcform.yaml`**: three `http_fetch@1` steps to `build/bls/`; `load`; `code_list`, `titles`, `crosswalk`; per table `parquet_export@1` to `build/stage/<table>.parquet` (zstd, `order_by: "code"` for the list, `"entry_id"` for titles, `"from_code, to_code"` for the crosswalk); per table `datapackage_describe@1` to `build/stage/<table>.described.json`; `check_code_list` (`--levels major,minor,broad,detailed`); `check_inputs_titles` + `check_titles` (`sql: ../../contracts/check_titles.sql`); likewise for the crosswalk; per table `finetype_validate@1`; per table `stamp_descriptor` with `--out build/<table>.parquet --out-descriptor <table>.datapackage.json --carry-created`. Overrides: `licenses` `other-pd`, "Public domain (U.S. Bureau of Labor Statistics)", `https://www.bls.gov/opub/copyright-information.htm`; `sources` the BLS 2018 SOC page and each file; contributors BLS author, Meridian publisher and wrangler; `resource.path` the future `https://openlake.meridian.online/bls/<table>.parquet`; `x-meridian-code-list` levels; `x-meridian-title-index` `{"codeList": "bls/soc_2018"}`; `x-meridian-crosswalk` `{"from": "2010", "to": "2018", "toCodeList": "bls/soc_2018"}`; `code` constraint pattern `^[0-9]{2}-[0-9]{4}$`; a description for every field.
 - [ ] **Step 2: Run the manifest checks**: `python3 scripts/check_protocol_readme.py` and `python3 scripts/test_manifest_one_writer.py` — Expected: both pass, the new manifest counted.
-- [ ] **Step 3: Run the Protocol cold**: `cd datasets/soc_2018 && PATH=~/scratch/duckdb-1.5.5:$PATH ~/scratch/arc-0.2.1/arc run --force` — Expected: outcome `success`, every step reached; about a minute (three small fetches, finetype describe of three tables).
+- [ ] **Step 3: Run the Protocol cold**: `cd datasets/soc_2018 && $ARC_ENV arc run --force` — Expected: outcome `success`, every step reached; about a minute (three small fetches, finetype describe of three tables).
 - [ ] **Step 4: Check the outputs**: row counts 1,447 / 6,520 / 900 (`duckdb -c "select count(*) from 'build/<t>.parquet'"`), and `git status` shows the three descriptors as new files written by the run.
 - [ ] **Step 5: Commit** the Protocol and the three descriptors as the run wrote them: "The BLS SOC 2018 Protocol: code list, job-title index and crosswalk".
 
@@ -147,7 +147,7 @@
 
 - [ ] **Step 1: Write `arcform.yaml`** as Task 4's, fetching the three ONS URLs (spec, "The six tables"; full URLs in the spec's sources) to `build/ons/<file name as published>`; `check_code_list --levels major,sub_major,minor,unit`. Overrides: `licenses` `[{"name": "OGL-UK-3.0", "title": "Open Government Licence v3.0", "path": "https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/"}]`; the description carries "Source: Office for National Statistics licensed under the Open Government Licence v3.0." and says Meridian prepared the tables from ONS's files; ONS as author; `code` pattern `^[0-9]{1,4}$`; `x-meridian-*` keys naming `ons/soc_2020`.
 - [ ] **Step 2: Run** `python3 scripts/check_protocol_readme.py` and `python3 scripts/test_manifest_one_writer.py` — Expected: pass.
-- [ ] **Step 3: Run cold**: `cd datasets/soc_2020 && PATH=~/scratch/duckdb-1.5.5:$PATH ~/scratch/arc-0.2.1/arc run --force` — Expected: `success`; about two minutes (the 3.5 MB index).
+- [ ] **Step 3: Run cold**: `cd datasets/soc_2020 && $ARC_ENV arc run --force` — Expected: `success`; about two minutes (the 3.5 MB index).
 - [ ] **Step 4: Check** row counts 551 / 32,439 / the unit sheet's pairings, and that the run wrote the three descriptors.
 - [ ] **Step 5: Commit** "The ONS SOC 2020 Protocol: code list, coding index and relationship table".
 
