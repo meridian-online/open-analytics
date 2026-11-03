@@ -6,6 +6,11 @@
 -- No rows.
 SELECT error('crosswalk: no rows') FROM (SELECT count(*) AS n FROM contract_crosswalk) WHERE n = 0;
 
+-- The shape and level: exactly one row, neither NULL.
+SELECT error('crosswalk: contract_crosswalk_shape must hold exactly one row with a non-NULL from_pattern and level')
+FROM (SELECT count(*) AS n, count(from_pattern) AS p, count(level) AS l FROM contract_crosswalk_shape)
+WHERE n != 1 OR p != 1 OR l != 1;
+
 -- The core columns, in order, lead the table (extra columns may follow).
 SELECT error('crosswalk: core columns out of order, expected leading ' || ['from_code', 'from_description', 'to_code', 'to_description', 'from_edition', 'to_edition', 'release']::VARCHAR || ', found ' || found::VARCHAR)
 FROM (SELECT list(column_name) AS found FROM (SELECT column_name FROM (DESCRIBE contract_crosswalk) LIMIT 7))
@@ -27,7 +32,8 @@ SELECT error('crosswalk: NULL release') FROM contract_crosswalk WHERE release IS
 -- A to_code that is not a code, at the same level, in the code list built in the same Run.
 SELECT error('crosswalk: to_code not in code list: ' || to_code) FROM (
     SELECT DISTINCT x.to_code FROM contract_crosswalk x
-    WHERE x.to_code IS NOT NULL AND x.to_code NOT IN (SELECT code FROM contract_code_list)
+    WHERE x.to_code IS NOT NULL
+      AND NOT EXISTS (SELECT 1 FROM contract_code_list c WHERE c.code = x.to_code)
     ORDER BY x.to_code LIMIT 1);
 
 SELECT error('crosswalk: to_code at the wrong level: ' || to_code) FROM (

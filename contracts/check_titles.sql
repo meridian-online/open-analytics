@@ -6,6 +6,11 @@
 -- No rows.
 SELECT error('titles: no rows') FROM (SELECT count(*) AS n FROM contract_titles) WHERE n = 0;
 
+-- The level the issuer codes titles to: exactly one row, not NULL.
+SELECT error('titles: contract_title_level must hold exactly one non-NULL level')
+FROM (SELECT count(*) AS n, count(level) AS non_null FROM contract_title_level)
+WHERE n != 1 OR non_null != 1;
+
 -- The core columns, in order, lead the table (extra columns may follow).
 SELECT error('titles: core columns out of order, expected leading ' || ['entry_id', 'title', 'code', 'code_description', 'release', 'text_source', 'corpus']::VARCHAR || ', found ' || found::VARCHAR)
 FROM (SELECT list(column_name) AS found FROM (SELECT column_name FROM (DESCRIBE contract_titles) LIMIT 7))
@@ -25,7 +30,8 @@ SELECT error('titles: NULL release') FROM contract_titles WHERE release IS NULL 
 -- A code that is not in the code list built in the same Run.
 SELECT error('titles: code not in code list: ' || code) FROM (
     SELECT DISTINCT t.code FROM contract_titles t
-    WHERE t.code IS NOT NULL AND t.code NOT IN (SELECT code FROM contract_code_list)
+    WHERE t.code IS NOT NULL
+      AND NOT EXISTS (SELECT 1 FROM contract_code_list c WHERE c.code = t.code)
     ORDER BY t.code LIMIT 1);
 
 -- A code at a level the issuer does not code titles to.

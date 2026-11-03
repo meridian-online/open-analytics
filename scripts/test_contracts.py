@@ -130,6 +130,24 @@ class Titles(unittest.TestCase):
         row = TITLE_ROW2.replace("2020-04-15", "2021-01-01")
         self.fails(titles(rows=(TITLE_ROW, row)), "titles: more than one release")
 
+    def test_titles_null_release(self):
+        row = TITLE_ROW.replace("'2020-04-15'", "NULL")
+        self.fails(titles(rows=(row,)), "titles: NULL release")
+
+    def test_titles_code_list_with_null_code(self):
+        con = titles(rows=(TITLE_ROW.replace("'11-1011', 'Chief", "'11-9999', 'Chief"),))
+        con.execute("CREATE OR REPLACE VIEW contract_code_list AS SELECT * FROM (VALUES "
+                    "(NULL::VARCHAR, 'detailed', 'x'), ('11-1011', 'detailed', 'y')) AS t(code, level, description)")
+        self.fails(con, "titles: code not in code list: 11-9999")
+
+    def test_titles_level_table_must_be_one_non_null_row(self):
+        for body in ("SELECT NULL::VARCHAR AS level",
+                     "SELECT 'detailed' AS level WHERE false",
+                     "SELECT * FROM (VALUES ('detailed'), ('detailed')) AS t(level)"):
+            con = titles()
+            con.execute(f"CREATE OR REPLACE TABLE contract_title_level AS {body}")
+            self.fails(con, "titles: contract_title_level must hold")
+
 
 class Crosswalk(unittest.TestCase):
     def fails(self, con, *fragments):
@@ -175,6 +193,29 @@ class Crosswalk(unittest.TestCase):
     def test_crosswalk_two_releases(self):
         row = XW_ROW2.replace("2017-11", "2018-01")
         self.fails(crosswalk(rows=(XW_ROW, row)), "crosswalk: more than one release")
+
+    def test_crosswalk_null_editions_and_release(self):
+        for col in ("from_edition", "to_edition", "release"):
+            cols = [c.strip() for c in XW_COLS.split(",")]
+            vals = ["'11-1011'", "'d'", "'11-1011'", "'d'", "'2010'", "'2018'", "'r'"]
+            vals[cols.index(col)] = "NULL"
+            self.fails(crosswalk(rows=("(" + ", ".join(vals) + ")",)), f"crosswalk: NULL {col}")
+
+    def test_crosswalk_code_list_with_null_code(self):
+        row = "('11-1011', 'd', '11-9999', 'd', '2010', '2018', 'r')"
+        con = crosswalk(rows=(row,))
+        con.execute("CREATE OR REPLACE VIEW contract_code_list AS SELECT * FROM (VALUES "
+                    "(NULL::VARCHAR, 'detailed', 'x'), ('11-1011', 'detailed', 'y')) AS t(code, level, description)")
+        self.fails(con, "crosswalk: to_code not in code list: 11-9999")
+
+    def test_crosswalk_shape_table_must_be_one_non_null_row(self):
+        for body in ("SELECT NULL::VARCHAR AS from_pattern, 'detailed' AS level",
+                     "SELECT '[0-9]{2}-[0-9]{4}' AS from_pattern, NULL::VARCHAR AS level",
+                     "SELECT '.*' AS from_pattern, 'detailed' AS level WHERE false",
+                     "SELECT * FROM (VALUES ('.*', 'detailed'), ('.*', 'detailed')) AS t(from_pattern, level)"):
+            con = crosswalk()
+            con.execute(f"CREATE OR REPLACE TABLE contract_crosswalk_shape AS {body}")
+            self.fails(con, "crosswalk: contract_crosswalk_shape must hold")
 
 
 if __name__ == "__main__":
