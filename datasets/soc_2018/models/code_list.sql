@@ -14,8 +14,9 @@
 --               characters (NN-NN).
 -- A row below the top that finds no such parent fails the run. So does a broad group
 -- whose parent is not the last minor group above it in BLS's sheet, and a detailed
--- occupation whose parent is not the last broad group above it, so a group BLS drops or
--- miscodes cannot leave its children quietly under the group before it.
+-- occupation whose parent is not the last broad group above it, so a miscoded or
+-- misplaced group is caught. A group BLS drops outright is not: its children then fall
+-- to the group before it, which the sheet cannot tell from a real arrangement.
 --
 -- `description_full` is each ancestor's own title in order, then the row's, joined with
 -- ' › '. Titles repeat where a broad group and its only detailed occupation share one;

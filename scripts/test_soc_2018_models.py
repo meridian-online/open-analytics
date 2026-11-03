@@ -275,16 +275,20 @@ class RefusalTest(unittest.TestCase):
             edit_sheet(path, change)
         self.refuses(recode, "not under it in BLS's sheet order")
 
-    def test_a_miscoded_minor_group_above_a_broad_group_fails(self):
-        # A minor row coded 15-1900 sits between 15-1200 and its broad groups: 15-1210 falls
-        # to 15-1200 by code, but the last minor group above it in the sheet is 15-1900.
-        def insert(path):
+    def test_a_broad_group_out_of_sheet_order_fails(self):
+        # 11-3010 and its occupations moved to the end of the sheet: it falls to 11-3000 by
+        # code, but the last minor group above it in the sheet is 15-1200.
+        def move(path):
             def change(ws):
-                ws.insert_rows(68)
-                for col, value in enumerate(("Minor", "15-1900", "Miscoded", ""), 1):
-                    ws.cell(68, col).value = value
+                rows = [r for r in range(1, ws.max_row + 1)
+                        if str(ws.cell(r, 2).value).startswith("11-301")]
+                moved = [[ws.cell(r, c).value for c in range(1, 5)] for r in rows]
+                for r in reversed(rows):
+                    ws.delete_rows(r)
+                for values in moved:
+                    ws.append(values)
             edit_sheet(path, change)
-        self.refuses(insert, "not under it in BLS's sheet order")
+        self.refuses(move, "broad 11-3010 has parent 11-3000 by code, but is not under it")
 
     def test_dropped_non_first_minor_group_fails_for_want_of_a_parent(self):
         self.refuses(delete_code("11-9000"), "no parent")
