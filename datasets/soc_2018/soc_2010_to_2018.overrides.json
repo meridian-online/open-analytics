@@ -56,7 +56,7 @@
       }
     },
     "from_description": {
-      "description": "The 2010 occupation's title, as BLS prints it in the crosswalk. BLS appends (#) to the title of a 2010 occupation that pairs with more than one 2018 occupation, and the mark is kept."
+      "description": "The 2010 occupation's title, as BLS prints it in the crosswalk. In BLS's file, (#) ends the title of every 2010 occupation that pairs with more than one 2018 occupation (42 of 840) and of no other; BLS's workbook does not define the mark. It is kept as printed."
     },
     "to_code": {
       "description": "A detailed occupation code of the 2018 SOC, a code in bls/soc_2018.",
@@ -67,7 +67,7 @@
       }
     },
     "to_description": {
-      "description": "The 2018 occupation's title, as BLS prints it in the crosswalk. BLS appends (##) to the title of a 2018 occupation that pairs with more than one 2010 occupation, and the mark is kept, so the text can differ from the code's description in bls/soc_2018."
+      "description": "The 2018 occupation's title, as BLS prints it in the crosswalk. In BLS's file, (##) ends the title of every 2018 occupation that pairs with more than one 2010 occupation (31 of 867) and of no other; BLS's workbook does not define the mark. It is kept as printed, so the text can differ from the code's description in bls/soc_2018."
     },
     "from_edition": {
       "description": "The edition from_code belongs to: always 2010.",

@@ -30,9 +30,9 @@
   "name": "soc_2010_to_2018",
   "resources": [
     {
-      "bytes": 33294,
+      "bytes": 33452,
       "format": "parquet",
-      "hash": "sha256:36015251abc50b21a9543423893222e76b84a8acde5613671f14e644702f41c7",
+      "hash": "sha256:c4e9cafdfd71b73dfd7927dac162132be6ede808fd4b782f2db66ec42a6f8e84",
       "mediatype": "application/vnd.apache.parquet",
       "name": "soc_2010_to_2018",
       "path": "https://openlake.meridian.online/bls/soc_2010_to_2018.parquet",
@@ -59,7 +59,7 @@
               "maxLength": 65536,
               "minLength": 1
             },
-            "description": "The 2010 occupation's title, as BLS prints it in the crosswalk. BLS appends (#) to the title of a 2010 occupation that pairs with more than one 2018 occupation, and the mark is kept.",
+            "description": "The 2010 occupation's title, as BLS prints it in the crosswalk. In BLS's file, (#) ends the title of every 2010 occupation that pairs with more than one 2018 occupation (42 of 840) and of no other; BLS's workbook does not define the mark. It is kept as printed.",
             "name": "from_description",
             "type": "string",
             "x-finetype-label": "representation.text.plain_text",
@@ -86,7 +86,7 @@
               "maxLength": 65536,
               "minLength": 1
             },
-            "description": "The 2018 occupation's title, as BLS prints it in the crosswalk. BLS appends (##) to the title of a 2018 occupation that pairs with more than one 2010 occupation, and the mark is kept, so the text can differ from the code's description in bls/soc_2018.",
+            "description": "The 2018 occupation's title, as BLS prints it in the crosswalk. In BLS's file, (##) ends the title of every 2018 occupation that pairs with more than one 2010 occupation (31 of 867) and of no other; BLS's workbook does not define the mark. It is kept as printed, so the text can differ from the code's description in bls/soc_2018.",
             "name": "to_description",
             "type": "string",
             "x-finetype-confidence": 0.6932,
