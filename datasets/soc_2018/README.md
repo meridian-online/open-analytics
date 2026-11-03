@@ -54,7 +54,7 @@ finetype has no type for hyphenated SOC codes, and infers them as Australian ban
 
 ## Boundary (deliberate)
 
-**Publish** is not part of this Protocol, and none of the three tables is published yet. CI's descriptor sweeps read `datasets/*/datapackage.json`, so these `<table>.datapackage.json` files are held to their contracts by the Run's own steps and by `scripts/test_soc_2018_models.py` until they are.
+**Publish** is not part of this Protocol, and none of the three tables is published yet. CI's descriptor sweeps read `datasets/*/datapackage.json`, so these `<table>.datapackage.json` files are not swept against a served object until they are. Meanwhile the Run's own steps hold each table to its contract, and `scripts/test_soc_2018_models.py` holds each committed descriptor to the table the models build: its fields are that table's columns in order, and its primary key, contract declaration (`x-meridian-code-list`, `x-meridian-title-index` or `x-meridian-crosswalk`), `other-pd` licence and field descriptions are the ones its overrides give, with no field undescribed.
 
 ## Run
 
