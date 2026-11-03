@@ -15,7 +15,7 @@ SELECT
   c.description AS code_description,
   (SELECT release FROM bls_release) AS release,
   'bls' AS text_source,
-  lower(strip_accents(t.direct_match_title)) AS corpus,
+  lower(strip_accents(regexp_replace(t.direct_match_title, '\s+', ' ', 'g'))) AS corpus,
   coalesce(t.illustrative = 'x', false) AS illustrative
 FROM bls_titles t
 LEFT JOIN soc_2018_out c ON c.code = t.code

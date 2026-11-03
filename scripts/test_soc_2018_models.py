@@ -236,7 +236,6 @@ class BuildTest(unittest.TestCase):
         self.assertEqual(self.con.execute(
             "SELECT count(*) FILTER (illustrative = 'x') FROM bls_titles").fetchone()[0], 145)
 
-
     def titles(self, where: str = "true") -> list[dict]:
         cur = self.con.execute(f"SELECT * FROM soc_2018_titles_out WHERE {where}")
         names = [d[0] for d in cur.description]
@@ -258,7 +257,6 @@ class BuildTest(unittest.TestCase):
                                  "text_source", "corpus", "illustrative"])
 
     def test_entry_id_form(self):
-        # The fixture holds no 11-1011; the form is `<code>|<title>`.
         # The fixture holds no 11-1011; the form is `<code>|<title>`.
         self.assertEqual(len(self.titles("entry_id = '11-3012|Business Office Manager'")), 1)
         self.assertEqual(self.con.execute(
@@ -283,7 +281,24 @@ class BuildTest(unittest.TestCase):
             "SELECT DISTINCT release, text_source FROM soc_2018_titles_out").fetchall(),
             [("2018/2020-04-15", "bls")])
         self.assertEqual(self.con.execute(
-            "SELECT count(*) FROM soc_2018_titles_out WHERE corpus != lower(strip_accents(title))").fetchone()[0], 0)
+            "SELECT count(*) FROM soc_2018_titles_out WHERE corpus != lower(strip_accents(regexp_replace(title, '\\s+', ' ', 'g')))").fetchone()[0], 0)
+
+    def test_corpus_collapses_whitespace_but_title_keeps_it(self):
+        # The fixture holds no double-spaced title, so make one.
+        def edit(path):
+            def change(ws):
+                for row in range(9, ws.max_row + 1):
+                    if ws.cell(row, 3).value == "Business Office Manager":
+                        ws.cell(row, 3).value = "Business  Office Manager"
+            edit_sheet(path, change)
+        scratch = Run(edit, TITLES)
+        try:
+            scratch.load()
+            self.assertEqual(scratch.con.execute(
+                "SELECT entry_id, title, corpus FROM soc_2018_titles_out WHERE code = '11-3012' AND title LIKE 'Business%Office Manager'"
+            ).fetchall(), [("11-3012|Business  Office Manager", "Business  Office Manager", "business office manager")])
+        finally:
+            scratch.close()
 
     def test_crosswalk_pairs(self):
         self.assertEqual(self.con.execute("SELECT count(*) FROM soc_2010_to_2018_out").fetchone()[0],
