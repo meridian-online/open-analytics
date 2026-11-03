@@ -385,6 +385,22 @@ class RefusalTest(unittest.TestCase):
                     ws.cell(row, 12).value = None
         self.refuses(change, "cross-reference", INDEX, "SOC2020 coding index")
 
+    def test_a_blank_base_on_a_total_sample_row_fails(self):
+        # Row 4 is 1116's "Total sample"; a blank base must not take 1115's value.
+        self.refuses(lambda ws: ws.cell(4, 5).__setattr__("value", None), "base count missing",
+                     RELATIONSHIP, "soc2010-soc2020-map_Unit")
+
+    def test_a_total_sample_row_without_a_group_fails(self):
+        self.refuses(lambda ws: ws.cell(4, 1).__setattr__("value", None), "Total sample",
+                     RELATIONSHIP, "soc2010-soc2020-map_Unit")
+
+    def test_a_pairing_row_with_a_group_fails(self):
+        self.refuses(lambda ws: ws.cell(3, 1).__setattr__("value", "1115: Chief executives and senior officials"),
+                     "has a 2010 group", RELATIONSHIP, "soc2010-soc2020-map_Unit")
+
+    def test_a_cleared_index_version_line_fails(self):
+        self.refuses(lambda ws: ws.cell(2, 2).__setattr__("value", None), "version", INDEX, "INFO")
+
     def test_a_relationship_pairing_before_any_2010_group_fails(self):
         self.refuses(lambda ws: ws.delete_rows(2), "2010", RELATIONSHIP, "soc2010-soc2020-map_Unit")
 

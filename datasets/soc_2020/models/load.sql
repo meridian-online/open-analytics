@@ -96,7 +96,7 @@ SELECT
   CASE WHEN volume1_date IS NULL
        THEN error('ONS Volume 1 release: its sidecar url does not carry a date as "excel<yyyymmdd>": ' || coalesce(volume1_url, 'NULL'))
        ELSE '2020/' || strftime(volume1_date, '%Y-%m-%d') END AS code_list_release,
-  CASE WHEN index_version = ''
+  CASE WHEN coalesce(index_version, '') = ''
        THEN error('ONS coding index version: INFO cell B2 is not "Version <n> Of The Standard Occupational Classification 2020 Index": ' || coalesce(info_line, 'NULL'))
        WHEN index_date IS NULL
        THEN error('ONS coding index release: its sidecar url does not carry a date as "excel<yyyymmdd>": ' || coalesce(index_url, 'NULL'))
@@ -162,7 +162,7 @@ WITH src AS (
 ), shaped AS (
   SELECT *,
     CASE WHEN trim(G) ~ '^[0-9]{4}$' THEN trim(G)
-         WHEN trim(G) = '}}}}' AND regexp_matches(coalesce(trim(L), ''), '^(?i)see')
+         WHEN trim(G) = '}}}}' AND regexp_matches(coalesce(trim(L), ''), '^(?i)see\b')
          THEN NULL
          ELSE error('ONS coding index entry ' || coalesce(A, 'NULL') || ' ("' || coalesce(I, 'NULL')
                     || '") has no unit group code and is not a cross-reference: SOC_2020 ' || coalesce(G, 'NULL')
@@ -189,7 +189,12 @@ FROM shaped
 WHERE unit_code IS NOT NULL;
 
 -- The unit-group sheet of the relationship tables, one row per pairing. A 2010 group's
--- "Total sample" row gives its four base counts, carried onto each of its pairings.
+-- "Total sample" row gives its four base counts, carried onto each of its pairings. Row
+-- order is read_xlsx's scan order, which is the sheet's. Each pairing is joined back to the
+-- "Total sample" row that opened its block, by that row's position, so a blank cell on it
+-- stays NULL and fails the run instead of taking the previous group's value. A pairing
+-- before any "Total sample" row, a "Total sample" row with no group in A, and a pairing
+-- row with a group in A fail the run.
 CREATE OR REPLACE TABLE ons_relationship AS
 WITH src AS (
   SELECT row_number() OVER () AS rn, *
@@ -200,20 +205,20 @@ WITH src AS (
   FROM src
   WHERE coalesce(nullif(trim(A), ''), nullif(trim(B), ''), C, D, E, F, G, H, I, J) IS NOT NULL
 ), filled AS (
-  SELECT *,
-    last_value(CASE WHEN b = 'Total sample' THEN a END IGNORE NULLS) OVER w AS group_2010,
-    last_value(CASE WHEN b = 'Total sample' THEN C END IGNORE NULLS) OVER w AS men_lfs_base,
-    last_value(CASE WHEN b = 'Total sample' THEN E END IGNORE NULLS) OVER w AS men_census_base,
-    last_value(CASE WHEN b = 'Total sample' THEN G END IGNORE NULLS) OVER w AS women_lfs_base,
-    last_value(CASE WHEN b = 'Total sample' THEN I END IGNORE NULLS) OVER w AS women_census_base
+  SELECT *, last_value(CASE WHEN b = 'Total sample' THEN rn END IGNORE NULLS) OVER (ORDER BY rn) AS group_rn
   FROM kept
-  WINDOW w AS (ORDER BY rn)
 ), pairings AS (
-  SELECT * FROM filled WHERE b IS DISTINCT FROM 'Total sample'
+  SELECT p.rn, p.b, p.D, p.F, p.H, p.J,
+    CASE WHEN p.a IS NULL THEN g.a
+         ELSE error('ONS relationship row ' || (p.rn + 1) || ' is a pairing but has a 2010 group in column A: ' || p.a) END AS group_2010,
+    g.C AS men_lfs_base, g.E AS men_census_base, g.G AS women_lfs_base, g.I AS women_census_base
+  FROM filled p
+  LEFT JOIN kept g ON g.rn = p.group_rn
+  WHERE p.b IS DISTINCT FROM 'Total sample'
 )
 SELECT
   regexp_extract(CASE WHEN group_2010 ~ '^[0-9]{4}: .+' THEN group_2010
-                      ELSE error('ONS relationship row ' || (rn + 1) || ' is not under a 2010 unit group "<code>: <title>" with a "Total sample" row') END,
+                      ELSE error('ONS relationship row ' || (rn + 1) || ' is not under a 2010 unit group "<code>: <title>" on a "Total sample" row: ' || coalesce(group_2010, 'NULL')) END,
                  '^([0-9]{4}): (.+)$', 1) AS code_2010,
   regexp_extract(group_2010, '^([0-9]{4}): (.+)$', 2) AS title_2010,
   regexp_extract(CASE WHEN b ~ '^[0-9]{4}: .+' THEN b
