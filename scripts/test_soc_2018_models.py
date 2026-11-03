@@ -23,6 +23,7 @@ Needs duckdb==1.5.5 and openpyxl in the running Python:
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -415,10 +416,31 @@ DESCRIPTORS = (
 )
 
 
+# each fetch step, and the tables whose values come from the file it fetches
+FEEDS = {
+    "fetch_definitions": ("soc_2018", "soc_2018_titles"),
+    "fetch_titles": ("soc_2018_titles",),
+    "fetch_crosswalk": ("soc_2010_to_2018",),
+}
+
+
+def fetch_urls(manifest: Path) -> dict:
+    """Each http_fetch step's url, by step name, read from the manifest's text (CI's
+    self-test job installs no YAML parser)."""
+    urls, step = {}, None
+    for line in manifest.read_text(encoding="utf-8").splitlines():
+        if m := re.match(r"\s*- name: (\S+)\s*$", line):
+            step = m.group(1)
+        elif m := re.match(r"\s+url: (\S+)\s*$", line):
+            urls[step] = m.group(1)
+    return urls
+
+
 class DescriptorTest(unittest.TestCase):
     """The committed `<table>.datapackage.json` files, which CI's descriptor sweeps do not
     read until they are published, held to the tables the models build and to their
-    overrides: field order, primary key, contract declaration, licence and descriptions."""
+    overrides: field order, primary key, contract declaration, licence and descriptions,
+    the release the overrides quote, and the fetched URLs among the sources."""
 
     @classmethod
     def setUpClass(cls):
@@ -475,6 +497,24 @@ class DescriptorTest(unittest.TestCase):
                 for field in fields:
                     self.assertTrue(field.get("description", "").strip(), f"{table}.{field['name']} has no description")
                     self.assertEqual(field["description"], overrides["fields"][field["name"]]["description"])
+
+    def test_the_built_release_is_the_one_the_overrides_quote(self):
+        for table, out, *_ in DESCRIPTORS:
+            with self.subTest(table=table):
+                _, overrides = self.documents(table)
+                releases = self.con.execute(f"SELECT DISTINCT release FROM {out}").fetchall()
+                self.assertEqual(len(releases), 1)
+                self.assertIn(releases[0][0], overrides["fields"]["release"]["description"])
+
+    def test_every_fetched_url_is_a_source_of_the_tables_it_feeds(self):
+        urls = fetch_urls(PROTOCOL / "arcform.yaml")
+        self.assertEqual(set(urls), set(FEEDS))
+        for step, tables in FEEDS.items():
+            for table in tables:
+                with self.subTest(step=step, table=table):
+                    descriptor, overrides = self.documents(table)
+                    self.assertIn(urls[step], [s["path"] for s in overrides["sources"]])
+                    self.assertIn(urls[step], [s["path"] for s in descriptor["sources"]])
 
 
 if __name__ == "__main__":
