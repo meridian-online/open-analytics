@@ -1,0 +1,241 @@
+#!/usr/bin/env python3
+"""Run the SOC 2018 Protocol's BLS SQL models over reduced BLS workbooks and check the result.
+
+The models are `datasets/soc_2018/models/load.sql` and `code_list.sql`. Each case copies
+the fixtures in `scripts/testdata/soc_2018/` into a scratch `build/bls/`, runs `load` and
+`code_list` on one DuckDB connection with the scratch directory as its file search path, as
+the Protocol's `sql:` steps run them, exports the terminal table to `build/stage/` as the
+export step does, and runs `check_code_list.py` over that file.
+
+The fixtures are cut from BLS's SOC 2018 downloads of 2026-11-03 (see the README beside
+them): major groups 11 and 15, the minor groups 11-3000, 11-9000 and 15-1200, and every
+broad group and detailed occupation under them, with BLS's own title block and headers.
+
+Needs duckdb==1.5.5 and openpyxl in the running Python:
+
+    uv run --quiet --with duckdb==1.5.5 --with openpyxl python3 scripts/test_soc_2018_models.py
+"""
+
+from __future__ import annotations
+
+import shutil
+import subprocess
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+import duckdb
+import openpyxl
+
+REPO = Path(__file__).resolve().parent.parent
+MODELS = [REPO / "datasets" / "soc_2018" / "models" / name for name in ("load.sql", "code_list.sql")]
+DATA = Path(__file__).resolve().parent / "testdata" / "soc_2018"
+CHECK = Path(__file__).resolve().parent / "check_code_list.py"
+LEVELS = "major,minor,broad,detailed"
+DEFINITIONS = "soc_2018_definitions.xlsx"
+FILES = (DEFINITIONS, "soc_2018_direct_match_title_file.xlsx", "soc_2010_to_2018_crosswalk.xlsx")
+
+
+class Run:
+    """A scratch Protocol directory whose `build/bls/` holds the three BLS workbooks."""
+
+    def __init__(self, edit=None):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.build = self.root / "build"
+        (self.build / "bls").mkdir(parents=True)
+        (self.build / "stage").mkdir()
+        for name in FILES:
+            shutil.copy(DATA / name, self.build / "bls" / name)
+        if edit:
+            edit(self.build / "bls" / DEFINITIONS)
+        self.con = duckdb.connect()
+        self.con.execute("SET file_search_path = ?", [str(self.root)])
+
+    def load(self) -> None:
+        for model in MODELS:
+            self.con.execute(model.read_text(encoding="utf-8"))
+
+    def export(self) -> Path:
+        out = self.build / "stage" / "soc_2018.parquet"
+        self.con.execute(f"COPY (FROM soc_2018_out ORDER BY code) TO '{out}' (FORMAT parquet)")
+        return out
+
+    def close(self) -> None:
+        self.con.close()
+        self.tmp.cleanup()
+
+
+def edit_sheet(path: Path, change) -> None:
+    wb = openpyxl.load_workbook(path)
+    change(wb.active)
+    wb.save(path)
+
+
+def delete_code(code: str):
+    def edit(path: Path) -> None:
+        def change(ws):
+            for row in range(ws.max_row, 0, -1):
+                if ws.cell(row, 2).value == code:
+                    ws.delete_rows(row)
+        edit_sheet(path, change)
+    return edit
+
+
+class BuildTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.scratch = Run()
+        cls.scratch.load()
+        cls.parquet = cls.scratch.export()
+        cls.con = cls.scratch.con
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.scratch.close()
+
+    def row(self, code: str) -> dict:
+        cur = self.con.execute("SELECT * FROM soc_2018_out WHERE code = ?", [code])
+        names = [d[0] for d in cur.description]
+        found = cur.fetchall()
+        self.assertEqual(len(found), 1, f"{code}: expected one row, found {len(found)}")
+        return dict(zip(names, found[0]))
+
+    def test_code_list_passes_contract(self):
+        proc = subprocess.run([sys.executable, str(CHECK), "--parquet", str(self.parquet),
+                               "--levels", LEVELS], capture_output=True, text=True)
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+
+    def test_columns_lead_with_the_ten_core_columns(self):
+        names = [d[0] for d in self.con.execute("SELECT * FROM soc_2018_out").description]
+        self.assertEqual(names, [
+            "code", "code_display", "level", "depth", "parent_code", "description",
+            "description_full", "release", "text_source", "corpus",
+            "definition", "major_code", "minor_code", "broad_code"])
+
+    def test_parents(self):
+        for code, parent in [("15-1211", "15-1210"), ("15-1210", "15-1200"), ("11-3010", "11-3000"),
+                             ("11-3000", "11-0000"), ("11-0000", None)]:
+            self.assertEqual(self.row(code)["parent_code"], parent, code)
+
+    def test_a_detailed_code_under_a_broad_group_with_a_different_last_digit(self):
+        # BLS's 29-1210 holds 29-1211 to 29-1229; zeroing the last digit would name 29-1220.
+        def add(path):
+            def change(ws):
+                for row in [("Major", "29-0000", "Healthcare Practitioners", ""),
+                            ("Minor", "29-1000", "Diagnosing Practitioners", ""),
+                            ("Broad", "29-1210", "Physicians", ""),
+                            ("Detailed", "29-1211", "Anesthesiologists", "x"),
+                            ("Detailed", "29-1221", "Pediatricians, General", "y"),
+                            ("Broad", "29-1240", "Surgeons", ""),
+                            ("Detailed", "29-1241", "Ophthalmologists", "z")]:
+                    ws.append(list(row))
+            edit_sheet(path, change)
+        scratch = Run(add)
+        try:
+            scratch.load()
+            got = dict(scratch.con.execute(
+                "SELECT code, parent_code FROM soc_2018_out WHERE code LIKE '29-%'").fetchall())
+            self.assertEqual(got["29-1221"], "29-1210")
+            self.assertEqual(got["29-1241"], "29-1240")
+        finally:
+            scratch.close()
+
+    def test_levels_and_depths(self):
+        for code, level, depth in [("11-0000", "major", 0), ("11-3000", "minor", 1),
+                                   ("11-3010", "broad", 2), ("11-3012", "detailed", 3)]:
+            r = self.row(code)
+            self.assertEqual((r["level"], r["depth"]), (level, depth), code)
+
+    def test_ancestors(self):
+        r = self.row("15-1211")
+        self.assertEqual((r["major_code"], r["minor_code"], r["broad_code"]),
+                         ("15-0000", "15-1200", "15-1210"))
+        r = self.row("15-1210")
+        self.assertEqual((r["major_code"], r["minor_code"], r["broad_code"]), ("15-0000", "15-1200", None))
+        r = self.row("15-1200")
+        self.assertEqual((r["major_code"], r["minor_code"], r["broad_code"]), ("15-0000", None, None))
+        r = self.row("15-0000")
+        self.assertEqual((r["major_code"], r["minor_code"], r["broad_code"]), (None, None, None))
+
+    def test_release(self):
+        self.assertEqual(self.con.execute("SELECT DISTINCT release FROM soc_2018_out").fetchall(),
+                         [("2018/2020-04-15",)])
+
+    def test_staging_releases(self):
+        self.assertEqual(self.con.execute("SELECT release, crosswalk_release FROM bls_release").fetchall(),
+                         [("2018/2020-04-15", "2017-11")])
+
+    def test_definition_only_on_detailed(self):
+        rows = self.con.execute(
+            "SELECT level, count(*) FILTER (definition IS NOT NULL), count(*) FROM soc_2018_out GROUP BY level"
+        ).fetchall()
+        for level, with_definition, total in rows:
+            self.assertEqual(with_definition, total if level == "detailed" else 0, level)
+        self.assertIn("detailed", [r[0] for r in rows])
+        self.assertTrue(self.row("11-3012")["definition"].startswith("Plan, direct, or coordinate"))
+
+    def test_code_display_equals_code(self):
+        self.assertEqual(self.con.execute(
+            "SELECT count(*) FROM soc_2018_out WHERE code_display IS DISTINCT FROM code").fetchone()[0], 0)
+
+    def test_text_and_description_full(self):
+        r = self.row("11-3012")
+        self.assertEqual(r["description"], "Administrative Services Managers")
+        self.assertEqual(r["description_full"], " › ".join([
+            "Management Occupations", "Operations Specialties Managers",
+            "Administrative Services and Facilities Managers", "Administrative Services Managers"]))
+        self.assertEqual(self.row("11-0000")["description_full"], "Management Occupations")
+        self.assertEqual(r["corpus"], r["description_full"].lower())
+        self.assertEqual({x[0] for x in self.con.execute("SELECT text_source FROM soc_2018_out").fetchall()},
+                         {"bls"})
+
+    def test_repeated_titles_are_kept(self):
+        # A broad group and its only detailed occupation share a title (ruling R2).
+        r = self.row("15-1211")
+        self.assertEqual(r["description_full"].split(" › ")[-2:],
+                         [self.row("15-1210")["description"], r["description"]])
+        self.assertEqual(len(r["description_full"].split(" › ")), 4)
+
+    def test_staging_tables(self):
+        counts = dict(self.con.execute(
+            "SELECT 'defs', count(*) FROM bls_definitions UNION ALL SELECT 'titles', count(*) FROM bls_titles "
+            "UNION ALL SELECT 'xwalk', count(*) FROM bls_crosswalk").fetchall())
+        self.assertEqual(counts, {"defs": 80, "titles": 308, "xwalk": 53})
+        self.assertEqual(self.con.execute(
+            "SELECT code, title, direct_match_title, illustrative FROM bls_titles "
+            "ORDER BY code, direct_match_title LIMIT 1").fetchone()[0], "11-3012")
+
+
+class RefusalTest(unittest.TestCase):
+    def refuses(self, edit, message: str) -> None:
+        scratch = Run(edit)
+        try:
+            with self.assertRaises(duckdb.Error) as caught:
+                scratch.load()
+            self.assertIn(message, str(caught.exception))
+        finally:
+            scratch.close()
+
+    def test_release_unparseable_fails(self):
+        self.refuses(lambda p: edit_sheet(p, lambda ws: ws.cell(4, 1).__setattr__("value", "Some day")),
+                     "release")
+
+    def test_release_without_update_date_fails(self):
+        self.refuses(lambda p: edit_sheet(p, lambda ws: ws.cell(4, 1).__setattr__(
+            "value", "November 2017 (for reference year January 2018)")), "release")
+
+    def test_moved_header_fails(self):
+        self.refuses(lambda p: edit_sheet(p, lambda ws: ws.cell(8, 2).__setattr__("value", "Code")),
+                     "header")
+
+    def test_broad_without_minor_fails(self):
+        self.refuses(delete_code("11-3000"), "no parent")
+
+    def test_detailed_without_broad_fails(self):
+        self.refuses(delete_code("15-1210"), "no parent")
+
+
+if __name__ == "__main__":
+    unittest.main()
