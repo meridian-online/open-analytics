@@ -94,6 +94,14 @@ class Titles(unittest.TestCase):
         run(con, "check_titles.sql")
         self.assertEqual(con.execute("SELECT rows_checked FROM contract_titles_result").fetchall(), [(1,)])
 
+    def test_titles_columns_not_found_fails(self):
+        # A TEMP view lives outside the current schema, so information_schema finds no
+        # columns for it: the order rule must fail, not pass on a NULL.
+        con = titles()
+        con.execute("DROP VIEW contract_titles")
+        con.execute(f"CREATE TEMP VIEW contract_titles AS SELECT * FROM (VALUES {TITLE_ROW}) AS t({TITLE_COLS})")
+        self.fails(con, "titles: core columns", "no columns in the current schema")
+
     def test_titles_empty(self):
         self.fails(titles(rows=()), "titles: no rows")
 
@@ -160,6 +168,12 @@ class Crosswalk(unittest.TestCase):
         con = crosswalk()
         run(con, "check_crosswalk.sql")
         self.assertEqual(con.execute("SELECT rows_checked FROM contract_crosswalk_result").fetchall(), [(2,)])
+
+    def test_crosswalk_columns_not_found_fails(self):
+        con = crosswalk()
+        con.execute("DROP VIEW contract_crosswalk")
+        con.execute(f"CREATE TEMP VIEW contract_crosswalk AS SELECT * FROM (VALUES {XW_ROW}) AS t({XW_COLS})")
+        self.fails(con, "crosswalk: core columns", "no columns in the current schema")
 
     def test_crosswalk_empty(self):
         self.fails(crosswalk(rows=()), "crosswalk: no rows")

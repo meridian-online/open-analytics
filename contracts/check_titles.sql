@@ -15,11 +15,13 @@ WHERE n != 1 OR non_null != 1;
 -- Read from information_schema, not (DESCRIBE ...): arc's SQL reader cannot parse DESCRIBE
 -- as a subquery, and treats a file it cannot parse as an opaque step whose tables it
 -- cannot see, so it reruns the step on every run.
-SELECT error('titles: core columns out of order, expected leading ' || ['entry_id', 'title', 'code', 'code_description', 'release', 'text_source', 'corpus']::VARCHAR || ', found ' || found::VARCHAR)
+-- IS DISTINCT FROM, so a table it finds no columns for (a TEMP view, in another schema)
+-- fails the rule rather than passing it with found NULL.
+SELECT error('titles: core columns out of order, expected leading ' || ['entry_id', 'title', 'code', 'code_description', 'release', 'text_source', 'corpus']::VARCHAR || ', found ' || coalesce(found::VARCHAR, 'no columns in the current schema'))
 FROM (SELECT list(column_name ORDER BY ordinal_position) AS found FROM information_schema.columns
       WHERE table_catalog = current_database() AND table_schema = current_schema()
         AND table_name = 'contract_titles' AND ordinal_position <= 7)
-WHERE found != ['entry_id', 'title', 'code', 'code_description', 'release', 'text_source', 'corpus'];
+WHERE found IS DISTINCT FROM ['entry_id', 'title', 'code', 'code_description', 'release', 'text_source', 'corpus'];
 
 -- A repeated entry_id.
 SELECT error('titles: repeated entry_id: ' || entry_id) FROM (
