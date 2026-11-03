@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Run the SOC 2018 Protocol's BLS SQL models over reduced BLS workbooks and check the result.
 
-The models are `datasets/soc_2018/models/load.sql` and `code_list.sql`. Each case copies
+The models are `datasets/soc_2018/models/load.sql`, `code_list.sql`, `titles.sql` and
+`crosswalk.sql`; the title index and crosswalk are also run through the shared contract
+checks in `contracts/`, behind the `check_inputs_*.sql` models. Each case copies
 the fixtures in `scripts/testdata/soc_2018/` into a scratch `build/bls/`, runs `load` and
 `code_list` on one DuckDB connection with the scratch directory as its file search path, as
 the Protocol's `sql:` steps run them, exports the terminal table to `build/stage/` as the
@@ -29,7 +31,9 @@ import duckdb
 import openpyxl
 
 REPO = Path(__file__).resolve().parent.parent
-MODELS = [REPO / "datasets" / "soc_2018" / "models" / name for name in ("load.sql", "code_list.sql")]
+MODELS = [REPO / "datasets" / "soc_2018" / "models" / name for name in ("load.sql", "code_list.sql", "titles.sql", "crosswalk.sql")]
+MODELS_DIR = REPO / "datasets" / "soc_2018" / "models"
+CONTRACTS = REPO / "contracts"
 DATA = Path(__file__).resolve().parent / "testdata" / "soc_2018"
 CHECK = Path(__file__).resolve().parent / "check_code_list.py"
 LEVELS = "major,minor,broad,detailed"
@@ -64,6 +68,17 @@ class Run:
         self.con.execute(f"COPY (FROM soc_2018_out ORDER BY code) TO '{out}' (FORMAT parquet)")
         return out
 
+    def export_all(self) -> None:
+        """Export the three out tables to the paths the check_inputs models read."""
+        for table, name in [("soc_2018_out", "soc_2018"), ("soc_2018_titles_out", "soc_2018_titles"),
+                            ("soc_2010_to_2018_out", "soc_2010_to_2018")]:
+            self.con.execute(f"COPY (FROM {table}) TO '{self.build / 'stage' / (name + '.parquet')}' (FORMAT parquet)")
+
+    def check(self, inputs: str, contract: str) -> None:
+        """Run a check_inputs model then a shared contract check; raises duckdb.Error on a broken rule."""
+        self.con.execute((MODELS_DIR / inputs).read_text(encoding="utf-8"))
+        self.con.execute((CONTRACTS / contract).read_text(encoding="utf-8"))
+
     def close(self) -> None:
         self.con.close()
         self.tmp.cleanup()
@@ -91,6 +106,7 @@ class BuildTest(unittest.TestCase):
         cls.scratch = Run()
         cls.scratch.load()
         cls.parquet = cls.scratch.export()
+        cls.scratch.export_all()
         cls.con = cls.scratch.con
 
     @classmethod
@@ -211,7 +227,7 @@ class BuildTest(unittest.TestCase):
         counts = dict(self.con.execute(
             "SELECT 'defs', count(*) FROM bls_definitions UNION ALL SELECT 'titles', count(*) FROM bls_titles "
             "UNION ALL SELECT 'xwalk', count(*) FROM bls_crosswalk").fetchall())
-        self.assertEqual(counts, {"defs": 80, "titles": 308, "xwalk": 53})
+        self.assertEqual(counts, {"defs": 80, "titles": 308, "xwalk": 51})
         self.assertEqual(self.con.execute(
             "SELECT code, direct_match_title, illustrative FROM bls_titles "
             "WHERE direct_match_title IN ('Records Management Director', 'Business Office Manager') "
@@ -219,6 +235,72 @@ class BuildTest(unittest.TestCase):
             [("11-3012", "Business Office Manager", None), ("11-3012", "Records Management Director", "x")])
         self.assertEqual(self.con.execute(
             "SELECT count(*) FILTER (illustrative = 'x') FROM bls_titles").fetchone()[0], 145)
+
+
+    def titles(self, where: str = "true") -> list[dict]:
+        cur = self.con.execute(f"SELECT * FROM soc_2018_titles_out WHERE {where}")
+        names = [d[0] for d in cur.description]
+        return [dict(zip(names, r)) for r in cur.fetchall()]
+
+    def test_titles_pass_contract(self):
+        self.scratch.check("check_inputs_titles.sql", "check_titles.sql")
+        n = self.con.execute("SELECT rows_checked FROM contract_titles_result").fetchone()[0]
+        self.assertEqual(n, 308)
+
+    def test_crosswalk_pass_contract(self):
+        self.scratch.check("check_inputs_crosswalk.sql", "check_crosswalk.sql")
+        n = self.con.execute("SELECT rows_checked FROM contract_crosswalk_result").fetchone()[0]
+        self.assertEqual(n, 51)
+
+    def test_titles_columns(self):
+        names = [d[0] for d in self.con.execute("SELECT * FROM soc_2018_titles_out").description]
+        self.assertEqual(names, ["entry_id", "title", "code", "code_description", "release",
+                                 "text_source", "corpus", "illustrative"])
+
+    def test_entry_id_form(self):
+        # The fixture holds no 11-1011; the form is `<code>|<title>`.
+        # The fixture holds no 11-1011; the form is `<code>|<title>`.
+        self.assertEqual(len(self.titles("entry_id = '11-3012|Business Office Manager'")), 1)
+        self.assertEqual(self.con.execute(
+            "SELECT count(*) FROM soc_2018_titles_out WHERE entry_id != code || '|' || title").fetchone()[0], 0)
+
+    def test_illustrative(self):
+        self.assertEqual(self.con.execute(
+            "SELECT count(*) FILTER (illustrative), count(*) FILTER (NOT illustrative), count(*) FILTER (illustrative IS NULL) "
+            "FROM soc_2018_titles_out").fetchone(), (145, 163, 0))
+        by_title = {r["title"]: r["illustrative"] for r in self.titles("code = '11-3012'")}
+        self.assertIs(by_title["Records Management Director"], True)
+        self.assertIs(by_title["Business Office Manager"], False)
+
+    def test_code_description(self):
+        self.assertEqual(self.con.execute(
+            "SELECT count(*) FROM soc_2018_titles_out t JOIN soc_2018_out c USING (code) "
+            "WHERE t.code_description IS DISTINCT FROM c.description").fetchone()[0], 0)
+        self.assertEqual(self.titles("code = '11-3012'")[0]["code_description"], "Administrative Services Managers")
+
+    def test_titles_text_and_release(self):
+        self.assertEqual(self.con.execute(
+            "SELECT DISTINCT release, text_source FROM soc_2018_titles_out").fetchall(),
+            [("2018/2020-04-15", "bls")])
+        self.assertEqual(self.con.execute(
+            "SELECT count(*) FROM soc_2018_titles_out WHERE corpus != lower(strip_accents(title))").fetchone()[0], 0)
+
+    def test_crosswalk_pairs(self):
+        self.assertEqual(self.con.execute("SELECT count(*) FROM soc_2010_to_2018_out").fetchone()[0],
+                         self.con.execute("SELECT count(*) FROM (SELECT DISTINCT code_2010, code_2018 FROM bls_crosswalk)").fetchone()[0])
+        self.assertEqual(self.con.execute(
+            "SELECT DISTINCT release, from_edition, to_edition FROM soc_2010_to_2018_out").fetchall(),
+            [("2017-11", "2010", "2018")])
+        names = [d[0] for d in self.con.execute("SELECT * FROM soc_2010_to_2018_out").description]
+        self.assertEqual(names, ["from_code", "from_description", "to_code", "to_description",
+                                 "from_edition", "to_edition", "release"])
+
+    def test_crosswalk_descriptions_are_bls_titles(self):
+        self.assertEqual(self.con.execute(
+            "SELECT count(*) FROM soc_2010_to_2018_out x JOIN bls_crosswalk b "
+            "ON b.code_2010 = x.from_code AND b.code_2018 = x.to_code "
+            "WHERE x.from_description IS DISTINCT FROM b.title_2010 OR x.to_description IS DISTINCT FROM b.title_2018"
+        ).fetchone()[0], 0)
 
 
 class RefusalTest(unittest.TestCase):

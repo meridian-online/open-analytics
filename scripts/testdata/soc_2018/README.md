@@ -12,4 +12,4 @@ Each copy keeps the sheet name and the title block and header rows exactly as BL
 - minor groups `11-3000`, `11-9000` and `15-1200`;
 - every broad group and detailed occupation under those three minor groups.
 
-The crosswalk keeps a row when either its 2010 or its 2018 code is one of those occupations, and the title file keeps every direct-match title of them.
+The crosswalk keeps a row when its 2018 code is one of those occupations (its 2010 code may be any, as the earlier edition is not hosted), and the title file keeps every direct-match title of them.
