@@ -1,0 +1,128 @@
+{
+  "$comment": "Self-derived finetype drift contract for ons/soc_2020_titles, checked by the in-engine finetype_validate@1 gate (the model-free `ft_validate` DuckDB table macro). ft_validate MELTS every column to VARCHAR, so this contract uses ONLY the string-surviving JSON-Schema keywords. ENFORCED: the `pattern` on entry_id (ONS's id, lowercase letters and digits), on code (four digits), on soc_2020_ext (four digits, a slash, two digits) and on the earlier editions' and ISCO-08 codes, the shapes soc_2020_titles.overrides.json publishes; the closed `enum` domains on text_source and default_flag; the release pattern; and `minLength`/`maxLength` envelopes on the text. NOT ENFORCED, by design: numeric ranges and booleans (a numeric `type` BACKFIRES to 100% reject once melted to VARCHAR); NULLs (invisible to ft_validate); and object-level `required` (documentation only). Free-text fields carry LOOSE length envelopes with headroom. Derived from build/stage/soc_2020_titles.parquet on ONS's files of 2026-11-03: a pass-through on today's rows, a fail-closed tripwire for future drift (a code of another width, a new default mark, an unparsed release).",
+  "$id": "finetype://soc_2020_titles.parquet",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ons/soc_2020_titles",
+  "type": "object",
+  "properties": {
+    "entry_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 16,
+      "pattern": "^[a-z0-9]+$"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "code": {
+      "type": "string",
+      "minLength": 4,
+      "maxLength": 4,
+      "pattern": "^[0-9]{4}$"
+    },
+    "code_description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "release": {
+      "type": "string",
+      "minLength": 13,
+      "maxLength": 16,
+      "pattern": "^v[0-9]+/[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    },
+    "text_source": {
+      "type": "string",
+      "enum": [
+        "ons"
+      ]
+    },
+    "corpus": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024
+    },
+    "title_natural": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "additional_qualifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "industry_qualifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "default_flag": {
+      "type": "string",
+      "enum": [
+        "O",
+        "I",
+        "A",
+        "Q",
+        "QS",
+        "M"
+      ]
+    },
+    "soc_2020_ext": {
+      "type": "string",
+      "minLength": 7,
+      "maxLength": 7,
+      "pattern": "^[0-9]{4}/[0-9]{2}$"
+    },
+    "soc_2020_ext_title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "soc_2010": {
+      "type": "string",
+      "minLength": 4,
+      "maxLength": 4,
+      "pattern": "^[0-9]{4}$"
+    },
+    "soc_2000": {
+      "type": "string",
+      "minLength": 4,
+      "maxLength": 4,
+      "pattern": "^[0-9]{4}$"
+    },
+    "soc_1990": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 3,
+      "pattern": "^[0-9]{3}$"
+    },
+    "isco_08": {
+      "type": "string",
+      "minLength": 4,
+      "maxLength": 4,
+      "pattern": "^[0-9]{4}$"
+    },
+    "version_added_or_amended": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "change": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    }
+  },
+  "required": [
+    "entry_id",
+    "title",
+    "code",
+    "release",
+    "text_source",
+    "corpus",
+    "soc_2020_ext"
+  ]
+}

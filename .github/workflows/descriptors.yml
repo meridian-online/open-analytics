@@ -727,6 +727,25 @@ jobs:
       - name: the shipped models, against a scratch build directory
         run: python scripts/test_soc_2018_models.py
 
+  # The SOC 2020 Protocol's ONS SQL models, run over reduced ONS workbooks: the code list's
+  # parents by prefix, the coding index's coded entries, the 2010 relationship table with
+  # its shares and base counts, the releases read from the fetch sidecars, the load's
+  # refusals, the code-list check, the title-index and crosswalk contracts on the result,
+  # and the committed descriptors against the built tables. openpyxl edits the fixture
+  # workbooks for the refusal cases.
+  soc-2020-models:
+    name: the SOC 2020 models build the code list, coding index and relationship table
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: install duckdb and openpyxl
+        run: python -m pip install --disable-pip-version-check "duckdb==${DUCKDB_VERSION}" "openpyxl==${OPENPYXL_VERSION}"
+      - name: the shipped models, against a scratch build directory
+        run: python scripts/test_soc_2020_models.py
+
   # The title-index and crosswalk contracts the SOC Protocols run as SQL steps, each rule
   # tried against small in-memory tables: the passing case and one failing case per rule.
   contracts-sql:

@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "resources": {
+    "soc_2020": {
+      "release": {
+        "label": "representation.identifier.alphanumeric_id",
+        "why": "The edition and the date ONS issued Volume 1, 2020/2026-08-27: an identifier for the snapshot, stored as text as every code list's release is. Inferred it is `unknown`; it is not a date, since the year in front is the edition."
+      },
+      "group_description": {
+        "label": "representation.text.plain_text",
+        "why": "ONS's description of a group, sentences up to 1,056 characters. Inferred it is `unknown`, which publishes no length bounds; it is prose."
+      },
+      "major_code": {
+        "label": "representation.identifier.numeric_code",
+        "why": "The SOC 2020 code of the row's major group, one digit, plain digits stored as text (1). Inferred, finetype labels it an integer and the descriptor would type the column as a number, which it is not: it is a classification code whose digits carry meaning, stored as text."
+      }
+    }
+  }
+}

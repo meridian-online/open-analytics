@@ -1,0 +1,64 @@
+{
+  "$comment": "Self-derived finetype drift contract for ons/soc_2010_to_2020, checked by the in-engine finetype_validate@1 gate (the model-free `ft_validate` DuckDB table macro). ft_validate MELTS every column to VARCHAR, so this contract uses ONLY the string-surviving JSON-Schema keywords. ENFORCED: the `pattern` of four digits on from_code and to_code, the shape soc_2010_to_2020.overrides.json publishes; the closed `enum` on from_edition and to_edition; the release pattern; and `minLength`/`maxLength` envelopes on the titles. NOT ENFORCED, by design: numeric ranges and booleans (a numeric `type` BACKFIRES to 100% reject once melted to VARCHAR), here the base counts and shares; NULLs (invisible to ft_validate); and object-level `required` (documentation only). Free-text fields carry LOOSE length envelopes with headroom. Derived from build/stage/soc_2010_to_2020.parquet on ONS's files of 2026-11-03: a pass-through on today's rows, a fail-closed tripwire for future drift (a code of another width, another edition, an unparsed release).",
+  "$id": "finetype://soc_2010_to_2020.parquet",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ons/soc_2010_to_2020",
+  "type": "object",
+  "properties": {
+    "from_code": {
+      "type": "string",
+      "minLength": 4,
+      "maxLength": 4,
+      "pattern": "^[0-9]{4}$"
+    },
+    "from_description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "to_code": {
+      "type": "string",
+      "minLength": 4,
+      "maxLength": 4,
+      "pattern": "^[0-9]{4}$"
+    },
+    "to_description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "from_edition": {
+      "type": "string",
+      "enum": [
+        "2010"
+      ]
+    },
+    "to_edition": {
+      "type": "string",
+      "enum": [
+        "2020"
+      ]
+    },
+    "release": {
+      "type": "string",
+      "minLength": 7,
+      "maxLength": 7,
+      "pattern": "^[0-9]{4}-[0-9]{2}$"
+    }
+  },
+  "required": [
+    "from_code",
+    "to_code",
+    "from_edition",
+    "to_edition",
+    "release",
+    "men_lfs_base",
+    "women_lfs_base",
+    "men_census_base",
+    "women_census_base",
+    "men_lfs_share",
+    "women_lfs_share",
+    "men_census_share",
+    "women_census_share"
+  ]
+}

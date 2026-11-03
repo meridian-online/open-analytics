@@ -9,7 +9,9 @@ names the Protocol fetches to, writes the `.arcmeta` sidecar `http_fetch@1` writ
 each (its `url:` the real ONS URL), runs `load` and `code_list` on one DuckDB connection
 with the scratch directory as its file search path, as the Protocol's `sql:` steps run
 them, exports the terminal tables to `build/stage/` as the export steps do, and runs
-`check_code_list.py` over the code list file.
+`check_code_list.py` over the code list file. `DescriptorTest` holds the three committed
+`<table>.datapackage.json` files to the tables built from the fixtures and to their
+overrides, since CI's descriptor sweeps do not read them before they are published.
 
 The fixtures are cut from ONS's SOC 2020 downloads of 2026-11-03 (see the README beside
 them): major groups 1 and 9 and every group beneath them from Volume 1, with ONS's own
@@ -23,6 +25,7 @@ Needs duckdb==1.5.5 and openpyxl in the running Python:
 
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
 import sys
@@ -532,6 +535,90 @@ class RefusalTest(unittest.TestCase):
 
     def test_a_relationship_pairing_before_any_2010_group_fails(self):
         self.refuses(lambda ws: ws.delete_rows(2), "2010", RELATIONSHIP, "soc2010-soc2020-map_Unit")
+
+
+PROTOCOL = REPO / "datasets" / "soc_2020"
+ATTRIBUTION = "Source: Office for National Statistics licensed under the Open Government Licence v3.0."
+
+# table, the out table the models build, primary key, contract declaration key and value
+DESCRIPTORS = (
+    ("soc_2020", "soc_2020_out", ["code"],
+     "x-meridian-code-list", {"levels": ["major", "sub_major", "minor", "unit"]}),
+    ("soc_2020_titles", "soc_2020_titles_out", ["entry_id"],
+     "x-meridian-title-index", {"codeList": "ons/soc_2020"}),
+    ("soc_2010_to_2020", "soc_2010_to_2020_out", ["from_code", "to_code"],
+     "x-meridian-crosswalk", {"from": "2010", "to": "2020", "toCodeList": "ons/soc_2020"}),
+)
+
+
+class DescriptorTest(unittest.TestCase):
+    """The committed `<table>.datapackage.json` files, which CI's descriptor sweeps do not
+    read until they are published, held to the tables the models build and to their
+    overrides: field order, primary key, contract declaration, licence, attribution and
+    descriptions."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.scratch = Run()
+        cls.scratch.load()
+        cls.con = cls.scratch.con
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.scratch.close()
+
+    def documents(self, table: str) -> tuple[dict, dict]:
+        descriptor = json.loads((PROTOCOL / f"{table}.datapackage.json").read_text(encoding="utf-8"))
+        overrides = json.loads((PROTOCOL / f"{table}.overrides.json").read_text(encoding="utf-8"))
+        return descriptor, overrides
+
+    def test_fields_are_the_out_tables_columns_in_order(self):
+        for table, out, *_ in DESCRIPTORS:
+            with self.subTest(table=table):
+                descriptor, _ = self.documents(table)
+                fields = [f["name"] for f in descriptor["resources"][0]["schema"]["fields"]]
+                columns = [d[0] for d in self.con.execute(f"SELECT * FROM {out} LIMIT 0").description]
+                self.assertEqual(fields, columns)
+
+    def test_primary_key(self):
+        for table, _, key, *_ in DESCRIPTORS:
+            with self.subTest(table=table):
+                descriptor, overrides = self.documents(table)
+                self.assertEqual(descriptor["resources"][0]["schema"]["primaryKey"], key)
+                self.assertEqual(overrides["primaryKey"], key)
+
+    def test_contract_declaration(self):
+        for table, _, _, name, value in DESCRIPTORS:
+            with self.subTest(table=table):
+                descriptor, overrides = self.documents(table)
+                self.assertEqual(descriptor.get(name), value)
+                self.assertEqual(overrides.get(name), value)
+                others = {d[3] for d in DESCRIPTORS} - {name}
+                self.assertFalse(others & descriptor.keys(), f"{table} declares another table's contract")
+
+    def test_licence_is_ogl_and_matches_the_overrides(self):
+        for table, *_ in DESCRIPTORS:
+            with self.subTest(table=table):
+                descriptor, overrides = self.documents(table)
+                self.assertEqual([lic["name"] for lic in descriptor["licenses"]], ["OGL-UK-3.0"])
+                self.assertEqual(descriptor["licenses"], overrides["licenses"])
+
+    def test_description_carries_the_attribution(self):
+        for table, *_ in DESCRIPTORS:
+            with self.subTest(table=table):
+                descriptor, overrides = self.documents(table)
+                self.assertIn(ATTRIBUTION, descriptor["description"])
+                self.assertEqual(descriptor["description"], overrides["description"])
+
+    def test_every_field_has_the_overrides_description(self):
+        for table, *_ in DESCRIPTORS:
+            with self.subTest(table=table):
+                descriptor, overrides = self.documents(table)
+                fields = descriptor["resources"][0]["schema"]["fields"]
+                self.assertEqual([f["name"] for f in fields], list(overrides["fields"]))
+                for field in fields:
+                    self.assertTrue(field.get("description", "").strip(), f"{table}.{field['name']} has no description")
+                    self.assertEqual(field["description"], overrides["fields"][field["name"]]["description"])
 
 
 if __name__ == "__main__":

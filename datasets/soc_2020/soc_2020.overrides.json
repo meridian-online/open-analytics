@@ -1,0 +1,160 @@
+{
+  "name": "soc_2020",
+  "title": "SOC 2020 — Standard Occupational Classification (UK)",
+  "description": "The UK Standard Occupational Classification 2020, the classification of occupations the Office for National Statistics maintains and the Labour Force Survey and Census 2021 code to: one row per major group, sub-major group, minor group and unit group, each under the group above it, with ONS's description of each group and, for each unit group, its typical entry routes, tasks and related job titles. Every row also carries the code of each group above it, so a unit group rolls up to its major group with one GROUP BY. Codes are ONS's plain digits, stored as text (1111), the form the Labour Force Survey carries. Meridian prepared the table from ONS's SOC 2020 Volume 1 workbook. Source: Office for National Statistics licensed under the Open Government Licence v3.0. ons/soc_2020_titles codes the job titles of ONS's coding index to these unit groups, and ons/soc_2010_to_2020 relates the 2010 edition's unit groups to them.",
+  "homepage": "https://meridian.online/datasets/ons/soc_2020",
+  "licenses": [
+    {
+      "name": "OGL-UK-3.0",
+      "title": "Open Government Licence v3.0",
+      "path": "https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/"
+    }
+  ],
+  "sources": [
+    {
+      "title": "SOC 2020 — Office for National Statistics",
+      "path": "https://www.ons.gov.uk/methodology/classificationsandstandards/standardoccupationalclassificationsoc/soc2020"
+    },
+    {
+      "title": "SOC 2020 Volume 1: structure and descriptions of unit groups — Office for National Statistics",
+      "path": "https://www.ons.gov.uk/methodology/classificationsandstandards/standardoccupationalclassificationsoc/soc2020/soc2020volume1structureanddescriptionsofunitgroups"
+    },
+    {
+      "title": "SOC 2020 Volume 1 workbook, issued 27 August 2026 (soc2020volume1structureanddescriptionofunitgroupsexcel20260827.xlsx) — Office for National Statistics",
+      "path": "https://www.ons.gov.uk/file?uri=/methodology/classificationsandstandards/standardoccupationalclassificationsoc/soc2020/soc2020volume1structureanddescriptionsofunitgroups/soc2020volume1structureanddescriptionofunitgroupsexcel20260827.xlsx"
+    }
+  ],
+  "contributors": [
+    {
+      "path": "https://www.ons.gov.uk",
+      "roles": [
+        "author"
+      ],
+      "title": "Office for National Statistics"
+    },
+    {
+      "path": "https://meridian.online",
+      "roles": [
+        "publisher",
+        "wrangler"
+      ],
+      "title": "Meridian"
+    }
+  ],
+  "resource": {
+    "name": "soc_2020",
+    "path": "https://openlake.meridian.online/ons/soc_2020.parquet"
+  },
+  "x-meridian-code-list": {
+    "levels": [
+      "major",
+      "sub_major",
+      "minor",
+      "unit"
+    ]
+  },
+  "fields": {
+    "code": {
+      "description": "The SOC 2020 code as ONS prints it, plain digits stored as text, one digit for each level: a major group 1, a sub-major group 11, a minor group 111, a unit group 1111. This is the form the Labour Force Survey and Census 2021 carry. Each code is its parent's code with one more digit.",
+      "constraints": {
+        "minLength": 1,
+        "maxLength": 4,
+        "pattern": "^[0-9]{1,4}$"
+      }
+    },
+    "code_display": {
+      "description": "The code as ONS prints it, the same as code: ONS's plain digits are also the form other data carries.",
+      "constraints": {
+        "minLength": 1,
+        "maxLength": 4,
+        "pattern": "^[0-9]{1,4}$"
+      }
+    },
+    "level": {
+      "description": "Hierarchy level, as ONS names it: major (a major group, one digit), sub_major (a sub-major group, two digits), minor (a minor group, three digits) or unit (a unit group, four digits, the level the Labour Force Survey and ONS's coding index code to).",
+      "constraints": {
+        "enum": [
+          "major",
+          "sub_major",
+          "minor",
+          "unit"
+        ]
+      }
+    },
+    "depth": {
+      "description": "0 for a major group, 1 for a sub-major group, 2 for a minor group, 3 for a unit group."
+    },
+    "parent_code": {
+      "description": "The code one level up, which is the row's code with its last digit dropped: a unit group's minor group (1111 under 111), a minor group's sub-major group, a sub-major group's major group. NULL for a major group.",
+      "constraints": {
+        "minLength": 1,
+        "maxLength": 3,
+        "pattern": "^[0-9]{1,3}$"
+      }
+    },
+    "description": {
+      "description": "ONS's title for the group, as Volume 1's descriptions sheet writes it, in sentence case (Chief executives and senior officials)."
+    },
+    "description_full": {
+      "description": "The titles of the major, sub-major and minor groups above the row, then the row's own, joined with ' › '. Where a group has the same title as the group above it, as 20 do, the title appears twice, as ONS prints both."
+    },
+    "release": {
+      "description": "The edition and the date ONS issued the Volume 1 workbook, as <year>/<date>: 2020/2026-08-27, read from the date in the URL of the workbook fetched (…excel20260827.xlsx). ONS issues a revised workbook under a new URL, so the date moves when it does.",
+      "constraints": {
+        "minLength": 15,
+        "maxLength": 15,
+        "pattern": "^[0-9]{4}/[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+      }
+    },
+    "text_source": {
+      "description": "Whose text description is: always ons, ONS's own title.",
+      "constraints": {
+        "enum": [
+          "ons"
+        ]
+      }
+    },
+    "corpus": {
+      "description": "Lowercased, accent-stripped description_full: a derived free-text search field, not a source attribute."
+    },
+    "group_description": {
+      "description": "ONS's description of the group in Volume 1: the work its jobs do, and for some groups which jobs it takes in. Set on every row."
+    },
+    "entry_routes": {
+      "description": "ONS's typical entry routes and associated qualifications for a unit group, as Volume 1 writes them. NULL above the unit group level, where ONS prints none."
+    },
+    "tasks": {
+      "description": "The tasks ONS lists for a unit group, as a list of strings: one item for each `~ `-bulleted line of Volume 1's Tasks cell, without the bullet. NULL above the unit group level, where ONS prints none."
+    },
+    "related_job_titles": {
+      "description": "The related job titles ONS lists for a unit group in Volume 1, as a list of strings: one item for each `~ `-bulleted line, without the bullet. NULL above the unit group level, where ONS prints none. ons/soc_2020_titles holds ONS's full coding index of titles."
+    },
+    "major_code": {
+      "description": "The code of the major group the row falls under (one digit), so data coded to any level rolls up to its major group in one GROUP BY. NULL on a major group's own row.",
+      "constraints": {
+        "minLength": 1,
+        "maxLength": 1,
+        "pattern": "^[0-9]$"
+      }
+    },
+    "sub_major_code": {
+      "description": "The code of the sub-major group the row falls under (two digits). NULL on major and sub-major group rows.",
+      "constraints": {
+        "minLength": 2,
+        "maxLength": 2,
+        "pattern": "^[0-9]{2}$"
+      }
+    },
+    "minor_code": {
+      "description": "The code of the minor group a unit group falls under (three digits). NULL on every row above the unit group level.",
+      "constraints": {
+        "minLength": 3,
+        "maxLength": 3,
+        "pattern": "^[0-9]{3}$"
+      }
+    }
+  },
+  "primaryKey": [
+    "code"
+  ]
+}

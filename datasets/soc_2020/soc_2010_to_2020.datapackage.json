@@ -1,0 +1,278 @@
+{
+  "$schema": "https://datapackage.org/profiles/2.0/datapackage.json",
+  "contributors": [
+    {
+      "path": "https://www.ons.gov.uk",
+      "roles": [
+        "author"
+      ],
+      "title": "Office for National Statistics"
+    },
+    {
+      "path": "https://meridian.online",
+      "roles": [
+        "publisher",
+        "wrangler"
+      ],
+      "title": "Meridian"
+    }
+  ],
+  "created": "2026-11-03T03:12:27Z",
+  "description": "The Office for National Statistics' own relationship between the 2010 and 2020 editions of the UK Standard Occupational Classification at the unit group level, for bridging data coded to SOC 2010, such as the Labour Force Survey before 2021: one row per pairing of a 2010 unit group with a 2020 unit group its cases were coded to, 714 pairings from the unit group sheet of ONS's relationship tables of July 2021. ONS built the tables from jobs coded to both editions, in the Labour Force Survey and the 2011 Census, and gives each pairing four shares, for men and for women in each source, with the four case counts of its 2010 group, so counts coded to 2010 can be apportioned to 2020 groups. ONS's \"Total sample\" rows, one for each of 369 2010 groups, become the four base columns rather than rows. Every 2020 code is a unit group in ons/soc_2020, which the run checks; the 2010 edition is not hosted, so the 2010 codes are checked by their shape only. Meridian prepared the table from ONS's relationship tables workbook. Source: Office for National Statistics licensed under the Open Government Licence v3.0.",
+  "homepage": "https://meridian.online/datasets/ons/soc_2010_to_2020",
+  "licenses": [
+    {
+      "name": "OGL-UK-3.0",
+      "path": "https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/",
+      "title": "Open Government Licence v3.0"
+    }
+  ],
+  "name": "soc_2010_to_2020",
+  "resources": [
+    {
+      "bytes": 45671,
+      "format": "parquet",
+      "hash": "sha256:c9f59a549f32931818285d805cfe73afdaf1dd20eb311004b707bac1aa9e7eb6",
+      "mediatype": "application/vnd.apache.parquet",
+      "name": "soc_2010_to_2020",
+      "path": "https://openlake.meridian.online/ons/soc_2010_to_2020.parquet",
+      "schema": {
+        "fields": [
+          {
+            "constraints": {
+              "maxLength": 4,
+              "minLength": 4,
+              "pattern": "^[0-9]{4}$"
+            },
+            "description": "A unit group code of SOC 2010, four digits, as ONS prints it in the relationship tables (1115).",
+            "name": "from_code",
+            "type": "string",
+            "x-finetype-confidence": 0.85,
+            "x-finetype-label": "representation.identifier.numeric_code"
+          },
+          {
+            "constraints": {
+              "maxLength": 65536,
+              "minLength": 1
+            },
+            "description": "The 2010 unit group's title, as ONS prints it in the relationship tables.",
+            "name": "from_description",
+            "type": "string",
+            "x-finetype-confidence": 0.914,
+            "x-finetype-label": "representation.text.plain_text"
+          },
+          {
+            "constraints": {
+              "maxLength": 4,
+              "minLength": 4,
+              "pattern": "^[0-9]{4}$"
+            },
+            "description": "A unit group code of SOC 2020, four digits, a code in ons/soc_2020.",
+            "name": "to_code",
+            "type": "string",
+            "x-finetype-confidence": 0.85,
+            "x-finetype-label": "representation.identifier.numeric_code"
+          },
+          {
+            "constraints": {
+              "maxLength": 65536,
+              "minLength": 1
+            },
+            "description": "The 2020 unit group's title, as ONS prints it in the relationship tables of July 2021. On 48 pairings it differs from the code's description in ons/soc_2020, which is Volume 1's current title: ONS has renamed some unit groups since (1224, Leisure and sports managers, is now Leisure and sports managers and proprietors), and a few differ only in case or punctuation.",
+            "name": "to_description",
+            "type": "string",
+            "x-finetype-confidence": 0.5377,
+            "x-finetype-label": "representation.text.plain_text"
+          },
+          {
+            "constraints": {
+              "enum": [
+                "2010"
+              ]
+            },
+            "description": "The edition from_code belongs to: always 2010.",
+            "name": "from_edition",
+            "type": "string",
+            "x-finetype-enum-domain": {
+              "cohesion": 1.0,
+              "distinct": 1,
+              "domain": [
+                "2010"
+              ],
+              "open": true,
+              "rows": 714
+            },
+            "x-finetype-label": "representation.text.word",
+            "x-finetype-nominated": true
+          },
+          {
+            "constraints": {
+              "enum": [
+                "2020"
+              ]
+            },
+            "description": "The edition to_code belongs to: always 2020.",
+            "name": "to_edition",
+            "type": "string",
+            "x-finetype-enum-domain": {
+              "cohesion": 1.0,
+              "distinct": 1,
+              "domain": [
+                "2020"
+              ],
+              "open": true,
+              "rows": 714
+            },
+            "x-finetype-label": "representation.text.word",
+            "x-finetype-nominated": true
+          },
+          {
+            "constraints": {
+              "maxLength": 7,
+              "minLength": 7,
+              "pattern": "^[0-9]{4}-[0-9]{2}$"
+            },
+            "description": "The relationship tables' own release, the month and year at the end of the URL of the workbook fetched (…july2021.xlsx), as 2021-07.",
+            "name": "release",
+            "type": "string",
+            "x-finetype-label": "representation.identifier.alphanumeric_id",
+            "x-finetype-nominated": true,
+            "x-finetype-pattern-fit": {
+              "canonical": "^[A-Za-z][A-Za-z0-9 /_.#-]*[0-9][A-Za-z0-9 /_.#-]*$|^[0-9][A-Za-z0-9 /_.#-]*[A-Za-z][A-Za-z0-9 /_.#-]*$",
+              "outcome": "widened"
+            }
+          },
+          {
+            "description": "The number of men's cases in the Labour Force Survey (January 2014 to September 2016) coded to the 2010 group, from its \"Total sample\" row in ONS's sheet; the same on each of the group's pairings.",
+            "name": "men_lfs_base",
+            "type": "integer",
+            "x-finetype-confidence": 0.9949,
+            "x-finetype-display": {
+              "number": ",d"
+            },
+            "x-finetype-label": "representation.numeric.integer_number",
+            "x-finetype-unsupported-constraints": {
+              "pattern": "^-?[0-9]+$"
+            }
+          },
+          {
+            "description": "The number of women's cases in the Labour Force Survey (January 2014 to September 2016) coded to the 2010 group, from its \"Total sample\" row in ONS's sheet; the same on each of the group's pairings.",
+            "name": "women_lfs_base",
+            "type": "integer",
+            "x-finetype-confidence": 0.9934,
+            "x-finetype-display": {
+              "number": ",d"
+            },
+            "x-finetype-label": "representation.numeric.integer_number",
+            "x-finetype-unsupported-constraints": {
+              "pattern": "^-?[0-9]+$"
+            }
+          },
+          {
+            "description": "The number of men's cases in the 2011 Census's 1% sample of the economically active in England and Wales coded to the 2010 group, from its \"Total sample\" row in ONS's sheet; the same on each of the group's pairings.",
+            "name": "men_census_base",
+            "type": "integer",
+            "x-finetype-confidence": 0.9999,
+            "x-finetype-display": {
+              "number": ",d"
+            },
+            "x-finetype-label": "representation.numeric.integer_number",
+            "x-finetype-unsupported-constraints": {
+              "pattern": "^-?[0-9]+$"
+            }
+          },
+          {
+            "description": "The number of women's cases in the 2011 Census's 1% sample of the economically active in England and Wales coded to the 2010 group, from its \"Total sample\" row in ONS's sheet; the same on each of the group's pairings.",
+            "name": "women_census_base",
+            "type": "integer",
+            "x-finetype-confidence": 0.9999,
+            "x-finetype-display": {
+              "number": ",d"
+            },
+            "x-finetype-label": "representation.numeric.integer_number",
+            "x-finetype-unsupported-constraints": {
+              "pattern": "^-?[0-9]+$"
+            }
+          },
+          {
+            "description": "The share, from 0 to 1, of the 2010 group's men's cases in the Labour Force Survey that ONS coded to this 2020 group. ONS leaves out pairings to which only a small number of cases were coded, so a 2010 group's shares can add up to a little less than 1; where its base is 0, they are all 0.",
+            "name": "men_lfs_share",
+            "type": "number",
+            "x-finetype-confidence": 1.0,
+            "x-finetype-display": {
+              "number": ","
+            },
+            "x-finetype-label": "representation.numeric.decimal_number",
+            "x-finetype-unsupported-constraints": {
+              "pattern": "^-?[0-9]+(\\.[0-9]+)?([eE][+-]?[0-9]+)?$"
+            }
+          },
+          {
+            "description": "The share, from 0 to 1, of the 2010 group's women's cases in the Labour Force Survey that ONS coded to this 2020 group. ONS leaves out pairings to which only a small number of cases were coded, so a 2010 group's shares can add up to a little less than 1; where its base is 0, they are all 0.",
+            "name": "women_lfs_share",
+            "type": "number",
+            "x-finetype-confidence": 1.0,
+            "x-finetype-display": {
+              "number": ","
+            },
+            "x-finetype-label": "representation.numeric.decimal_number",
+            "x-finetype-unsupported-constraints": {
+              "pattern": "^-?[0-9]+(\\.[0-9]+)?([eE][+-]?[0-9]+)?$"
+            }
+          },
+          {
+            "description": "The share, from 0 to 1, of the 2010 group's men's cases in the 2011 Census sample that ONS coded to this 2020 group. ONS leaves out pairings to which only a small number of cases were coded, so a 2010 group's shares can add up to a little less than 1; where its base is 0, they are all 0.",
+            "name": "men_census_share",
+            "type": "number",
+            "x-finetype-confidence": 0.9384,
+            "x-finetype-display": {
+              "number": ","
+            },
+            "x-finetype-label": "representation.numeric.decimal_number",
+            "x-finetype-unsupported-constraints": {
+              "pattern": "^-?[0-9]+(\\.[0-9]+)?([eE][+-]?[0-9]+)?$"
+            }
+          },
+          {
+            "description": "The share, from 0 to 1, of the 2010 group's women's cases in the 2011 Census sample that ONS coded to this 2020 group. ONS leaves out pairings to which only a small number of cases were coded, so a 2010 group's shares can add up to a little less than 1; where its base is 0, they are all 0.",
+            "name": "women_census_share",
+            "type": "number",
+            "x-finetype-confidence": 0.9908,
+            "x-finetype-display": {
+              "number": ","
+            },
+            "x-finetype-label": "representation.numeric.decimal_number",
+            "x-finetype-unsupported-constraints": {
+              "pattern": "^-?[0-9]+(\\.[0-9]+)?([eE][+-]?[0-9]+)?$"
+            }
+          }
+        ],
+        "primaryKey": [
+          "from_code",
+          "to_code"
+        ]
+      }
+    }
+  ],
+  "sources": [
+    {
+      "path": "https://www.ons.gov.uk/methodology/classificationsandstandards/standardoccupationalclassificationsoc/soc2020",
+      "title": "SOC 2020 — Office for National Statistics"
+    },
+    {
+      "path": "https://www.ons.gov.uk/methodology/classificationsandstandards/standardoccupationalclassificationsoc/soc2020/therelationshipbetweenstandardoccupationalclassification2010andstandardoccupationalclassification2020",
+      "title": "The relationship between Standard Occupational Classification 2010 and Standard Occupational Classification 2020 — Office for National Statistics"
+    },
+    {
+      "path": "https://www.ons.gov.uk/file?uri=/methodology/classificationsandstandards/standardoccupationalclassificationsoc/soc2020/therelationshipbetweenstandardoccupationalclassification2010andstandardoccupationalclassification2020/soc2010soc2020relationshiptablesjuly2021.xlsx",
+      "title": "SOC 2010 to SOC 2020 relationship tables, July 2021 (soc2010soc2020relationshiptablesjuly2021.xlsx) — Office for National Statistics"
+    }
+  ],
+  "title": "SOC 2010 to SOC 2020 relationship (UK)",
+  "x-finetype-version": "0.6.67",
+  "x-meridian-crosswalk": {
+    "from": "2010",
+    "to": "2020",
+    "toCodeList": "ons/soc_2020"
+  }
+}
