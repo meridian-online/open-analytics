@@ -1,0 +1,218 @@
+{
+  "$schema": "https://datapackage.org/profiles/2.0/datapackage.json",
+  "contributors": [
+    {
+      "path": "https://www.bls.gov/soc/",
+      "roles": [
+        "author"
+      ],
+      "title": "U.S. Bureau of Labor Statistics"
+    },
+    {
+      "path": "https://meridian.online",
+      "roles": [
+        "publisher",
+        "wrangler"
+      ],
+      "title": "Meridian"
+    }
+  ],
+  "created": "2026-11-03T03:49:27Z",
+  "description": "The job titles the U.S. Bureau of Labor Statistics codes to each detailed occupation of the 2018 Standard Occupational Classification, for coding free-text job titles from job postings, HR extracts and survey answers: one row per title in BLS's direct match title file, with the code it points at and that code's title in bls/soc_2018. BLS marks some titles as illustrative examples of an occupation rather than direct matches, and illustrative carries the mark. Every code is a detailed occupation in bls/soc_2018, which the run checks against the code list it builds; three detailed occupations (11-9039, 19-2099 and 51-9199) have no titles in BLS's file. No title appears under two codes. BLS's files are U.S. Government works in the public domain.",
+  "homepage": "https://meridian.online/datasets/bls/soc_2018_titles",
+  "licenses": [
+    {
+      "name": "other-pd",
+      "path": "https://www.bls.gov/opub/copyright-information.htm",
+      "title": "Public domain (U.S. Bureau of Labor Statistics)"
+    }
+  ],
+  "name": "soc_2018_titles",
+  "resources": [
+    {
+      "bytes": 199650,
+      "format": "parquet",
+      "hash": "sha256:e3c1382ca1ac9abdd670eeb2fde199b259040a19d89361a6b2a6ee42c711e2cb",
+      "mediatype": "application/vnd.apache.parquet",
+      "name": "soc_2018_titles",
+      "path": "https://openlake.meridian.online/bls/soc_2018_titles.parquet",
+      "schema": {
+        "fields": [
+          {
+            "constraints": {
+              "pattern": "^[0-9]{2}-[0-9]{4}\\|.+$"
+            },
+            "description": "The entry's key, its code and title joined with '|' (11-1011|Admiral). BLS gives its titles no id of its own.",
+            "name": "entry_id",
+            "type": "string",
+            "x-finetype-label": "representation.identifier.alphanumeric_id",
+            "x-finetype-nominated": true,
+            "x-finetype-pattern-fit": {
+              "canonical": "^[A-Za-z][A-Za-z0-9 /_.#-]*[0-9][A-Za-z0-9 /_.#-]*$|^[0-9][A-Za-z0-9 /_.#-]*[A-Za-z][A-Za-z0-9 /_.#-]*$",
+              "outcome": "omitted"
+            }
+          },
+          {
+            "constraints": {
+              "maxLength": 65536,
+              "minLength": 1
+            },
+            "description": "The job title as BLS's direct match title file prints it (Admiral), trimmed.",
+            "name": "title",
+            "type": "string",
+            "x-finetype-confidence": 0.9231,
+            "x-finetype-label": "representation.text.plain_text"
+          },
+          {
+            "constraints": {
+              "maxLength": 7,
+              "minLength": 7,
+              "pattern": "^[0-9]{2}-[0-9]{4}$"
+            },
+            "description": "The detailed occupation BLS codes the title to, in bls/soc_2018's form (11-1011).",
+            "name": "code",
+            "type": "string",
+            "x-finetype-label": "representation.identifier.numeric_code",
+            "x-finetype-nominated": true,
+            "x-finetype-pattern-fit": {
+              "canonical": "^[0-9]+$",
+              "outcome": "widened"
+            }
+          },
+          {
+            "constraints": {
+              "maxLength": 65536,
+              "minLength": 1
+            },
+            "description": "The code's title in bls/soc_2018 (Chief Executives), so a lookup needs no second join.",
+            "name": "code_description",
+            "type": "string",
+            "x-finetype-label": "representation.text.plain_text",
+            "x-finetype-nominated": true
+          },
+          {
+            "constraints": {
+              "maxLength": 15,
+              "minLength": 15,
+              "pattern": "^[0-9]{4}/[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+            },
+            "description": "The release of bls/soc_2018, the code list the titles point at, as <year>/<date>: 2018/2020-04-15. BLS's direct match title file gives the same update date (\"November 2017 (Updated April 15, 2020)\"), and the run fails if the two files' dates differ.",
+            "name": "release",
+            "type": "string",
+            "x-finetype-label": "representation.identifier.alphanumeric_id",
+            "x-finetype-nominated": true,
+            "x-finetype-pattern-fit": {
+              "canonical": "^[A-Za-z][A-Za-z0-9 /_.#-]*[0-9][A-Za-z0-9 /_.#-]*$|^[0-9][A-Za-z0-9 /_.#-]*[A-Za-z][A-Za-z0-9 /_.#-]*$",
+              "outcome": "widened"
+            }
+          },
+          {
+            "constraints": {
+              "enum": [
+                "bls"
+              ]
+            },
+            "description": "Whose text title is: always bls, BLS's own title.",
+            "name": "text_source",
+            "type": "string",
+            "x-finetype-enum-domain": {
+              "cohesion": 1.0,
+              "distinct": 1,
+              "domain": [
+                "bls"
+              ],
+              "open": true,
+              "rows": 6520
+            },
+            "x-finetype-label": "representation.text.word",
+            "x-finetype-nominated": true
+          },
+          {
+            "constraints": {
+              "maxLength": 65536,
+              "minLength": 1
+            },
+            "description": "Lowercased, accent-stripped title, with runs of whitespace collapsed to one space: a derived free-text search field, not a source attribute.",
+            "name": "corpus",
+            "type": "string",
+            "x-finetype-confidence": 0.6147,
+            "x-finetype-label": "representation.text.plain_text"
+          },
+          {
+            "description": "True where BLS marks the title with an x (in either case) as an illustrative example of the occupation rather than a direct match for it; false for a direct match.",
+            "falseValues": [
+              "false",
+              "no",
+              "off",
+              "False",
+              "No",
+              "Off",
+              "FALSE",
+              "NO",
+              "OFF",
+              "disabled",
+              "Disabled",
+              "DISABLED",
+              "inactive",
+              "Inactive",
+              "INACTIVE"
+            ],
+            "name": "illustrative",
+            "trueValues": [
+              "true",
+              "yes",
+              "on",
+              "True",
+              "Yes",
+              "On",
+              "TRUE",
+              "YES",
+              "ON",
+              "enabled",
+              "Enabled",
+              "ENABLED",
+              "active",
+              "Active",
+              "ACTIVE"
+            ],
+            "type": "boolean",
+            "x-finetype-confidence": 0.5668,
+            "x-finetype-enum-domain": {
+              "cohesion": 1.0,
+              "distinct": 2,
+              "domain": [
+                "false",
+                "true"
+              ],
+              "open": true,
+              "rows": 6520
+            },
+            "x-finetype-label": "representation.boolean.terms"
+          }
+        ],
+        "primaryKey": [
+          "entry_id"
+        ]
+      }
+    }
+  ],
+  "sources": [
+    {
+      "path": "https://www.bls.gov/soc/2018/home.htm",
+      "title": "2018 Standard Occupational Classification System — U.S. Bureau of Labor Statistics"
+    },
+    {
+      "path": "https://www.bls.gov/soc/2018/soc_2018_direct_match_title_file.xlsx",
+      "title": "2018 SOC direct match title file (soc_2018_direct_match_title_file.xlsx) — U.S. Bureau of Labor Statistics"
+    },
+    {
+      "path": "https://www.bls.gov/soc/2018/soc_2018_definitions.xlsx",
+      "title": "2018 SOC definitions (soc_2018_definitions.xlsx) — U.S. Bureau of Labor Statistics"
+    }
+  ],
+  "title": "SOC 2018 job titles — direct match titles (U.S.)",
+  "x-finetype-version": "0.6.67",
+  "x-meridian-title-index": {
+    "codeList": "bls/soc_2018"
+  }
+}

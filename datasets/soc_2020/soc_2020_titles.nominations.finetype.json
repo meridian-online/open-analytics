@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "resources": {
+    "soc_2020_titles": {
+      "release": {
+        "label": "representation.identifier.alphanumeric_id",
+        "why": "The index's version and the date ONS issued it, v14/2026-08-27: an identifier for the snapshot, stored as text as every release is. Inferred it is `unknown`."
+      },
+      "additional_qualifier": {
+        "label": "representation.text.plain_text",
+        "why": "ONS's additional qualifying term, a word or short phrase such as qualified or computing/IT. Inferred, finetype labels it an ordinal category, a ranked scale, which it is not; it is free text from ONS's index."
+      },
+      "industry_qualifier": {
+        "label": "representation.text.plain_text",
+        "why": "ONS's industry qualifying term, a short phrase such as health authority: hospital service. Inferred, finetype labels it an entity name, an organisation's or product's name, which it is not; it names an industry."
+      },
+      "soc_2020_ext": {
+        "label": "representation.identifier.numeric_code",
+        "why": "The entry's extended SOC 2020 sub-unit group, four digits, a slash and two digits (1171/02). Inferred it is `unknown`. finetype has no SOC type, so the column is nominated the label for a classification code whose digits carry meaning; its pattern admits digits only, so describe widens it for the slash, and the overrides declare the NNNN/NN shape the column holds."
+      },
+      "soc_2010": {
+        "label": "representation.identifier.numeric_code",
+        "why": "The SOC 2010 unit group ONS records for the entry, four digits, plain digits stored as text (1115). Inferred, finetype labels it an integer and the descriptor would type the column as a number, which it is not: it is a classification code whose digits carry meaning, stored as text."
+      },
+      "soc_2000": {
+        "label": "representation.identifier.numeric_code",
+        "why": "The SOC 2000 unit group ONS records for the entry, four digits, plain digits stored as text (1111). Inferred, finetype labels it an integer and the descriptor would type the column as a number, which it is not: it is a classification code whose digits carry meaning, stored as text."
+      },
+      "soc_1990": {
+        "label": "representation.identifier.numeric_code",
+        "why": "The SOC 90 unit group ONS records for the entry, three digits, plain digits stored as text (100). Inferred, finetype labels it an integer and the descriptor would type the column as a number, which it is not: it is a classification code whose digits carry meaning, stored as text."
+      },
+      "isco_08": {
+        "label": "representation.identifier.numeric_code",
+        "why": "The ISCO-08 unit group ONS gives for the entry, four digits, plain digits stored as text (1112). Inferred, finetype labels it an integer and the descriptor would type the column as a number, which it is not: it is a classification code whose digits carry meaning, stored as text."
+      },
+      "version_added_or_amended": {
+        "label": "representation.text.plain_text",
+        "why": "ONS's note of the index versions that added or amended the entry, such as V8 new or V1 new/V13 amended. Inferred, finetype labels it a rate in basis points, which it is not; it is short free text."
+      }
+    }
+  }
+}

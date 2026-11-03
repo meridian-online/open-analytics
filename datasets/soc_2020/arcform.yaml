@@ -1,0 +1,316 @@
+# The `ons/soc_2020` Protocol — the reproducible *definition* of how the UK Office for
+# National Statistics' Standard Occupational Classification 2020 is ingested from ONS's own
+# workbooks, as three tables: the code list (ons/soc_2020), the coding index of job titles
+# (ons/soc_2020_titles) and the SOC 2010 to SOC 2020 relationship table
+# (ons/soc_2010_to_2020). `arc run` executes this manifest; one Run → one version of each.
+# See ./README.md.
+#
+# CONFIG ONLY. Every step is a first-class `sql:` model or a typed `op:` operator (the
+# arcform catalog). The fetches are http_fetch; the SQL reads ONS's three workbooks into
+# staging tables and builds each table from them; the COPYs are parquet_export;
+# datapackage_describe emits each descriptor; check_code_list holds the code list to the
+# shared code-list contract, and the two contract checks in ../../contracts/ hold the
+# title index and the crosswalk to theirs; finetype_validate gates each table; and
+# stamp_descriptor writes each published Parquet with its descriptor in the footer.
+# Operator code lives in the arcform repo, not here.
+#
+# ONE WRITER PER FILE. The exports and describes work on build/stage/; each table's
+# stamp_descriptor step alone writes its published build/<table>.parquet and its
+# <table>.datapackage.json. Each table's descriptor inputs sit beside this file under
+# the same prefix (<table>.overrides.json, .nominations.finetype.json,
+# .schema.finetype.json).
+#
+# THE RELEASE. ONS names Volume 1 and the coding index with the date each was issued
+# (`...excel20260827.xlsx`) and the relationship tables with their month (`...july2021`),
+# and a revision gets a new URL. Each workbook is fetched to a fixed path, and load.sql
+# reads each release from the `url:` line of the `.arcmeta` sidecar http_fetch writes
+# beside it, so the release is the one in the URL actually fetched. A refresh changes a
+# URL below, that workbook's source entry in the overrides, any description there that
+# quotes today's release or counts, and in ../../scripts/test_soc_2020_models.py that
+# workbook's URL constant (VOLUME1_URL, INDEX_URL or RELATIONSHIP_URL, held to this
+# manifest by a test) and the releases test_release and test_staging_releases expect.
+#
+# BOUNDARY — do NOT fold this into this manifest:
+#   • PUBLISH (content-addressed R2 upload + manifest/catalog pointer flip) is not an
+#     arcform step here. None of the three tables is published yet.
+#
+# Produces: build/soc_2020.parquet           →  ons/soc_2020
+#           build/soc_2020_titles.parquet    →  ons/soc_2020_titles
+#           build/soc_2010_to_2020.parquet   →  ons/soc_2010_to_2020
+name: soc_2020
+engine: duckdb
+# load.sql writes its lambdas as `lambda x: ...`, which DuckDB reads from 1.3.
+engine_version: ">=1.3"
+db: build/soc_2020.db
+
+defaults:
+  retry:
+    max_attempts: 3
+    backoff_sec: 2.0
+
+steps:
+  # ── Fetch: ONS's Volume 1, coding index and 2010 to 2020 relationship tables ────
+  - name: fetch_volume1
+    op: http_fetch@1
+    with:
+      url: https://www.ons.gov.uk/file?uri=/methodology/classificationsandstandards/standardoccupationalclassificationsoc/soc2020/soc2020volume1structureanddescriptionsofunitgroups/soc2020volume1structureanddescriptionofunitgroupsexcel20260827.xlsx
+      out: build/ons/volume1.xlsx
+      headers:
+        User-Agent: "Meridian Protocol (open-analytics; research@meridian.online)"
+
+  - name: fetch_coding_index
+    op: http_fetch@1
+    with:
+      url: https://www.ons.gov.uk/file?uri=/methodology/classificationsandstandards/standardoccupationalclassificationsoc/soc2020/soc2020volume2codingrulesandconventions/soc2020volume2thecodingindexexcel20260827v2.xlsx
+      out: build/ons/coding_index.xlsx
+      headers:
+        User-Agent: "Meridian Protocol (open-analytics; research@meridian.online)"
+
+  - name: fetch_relationship
+    op: http_fetch@1
+    with:
+      url: https://www.ons.gov.uk/file?uri=/methodology/classificationsandstandards/standardoccupationalclassificationsoc/soc2020/therelationshipbetweenstandardoccupationalclassification2010andstandardoccupationalclassification2020/soc2010soc2020relationshiptablesjuly2021.xlsx
+      out: build/ons/relationship_2010_2020.xlsx
+      headers:
+        User-Agent: "Meridian Protocol (open-analytics; research@meridian.online)"
+
+  # ── Load: stage the three workbooks, and read each one's release ────────────────
+  # Fails the run on a header row that has moved, a row it cannot place, or a release
+  # that does not parse. The releases come from the sidecars, so they are inputs too,
+  # and ons_release is an input of each builder below, so a release-only change (a new
+  # URL, the same rows) rebuilds and restamps every table. See the model's header.
+  - name: load
+    sql: models/load.sql
+    produces: [ons_release, ons_groups, ons_index, ons_relationship]
+    depends_on:
+      - build/ons/volume1.xlsx
+      - build/ons/volume1.xlsx.arcmeta
+      - build/ons/coding_index.xlsx
+      - build/ons/coding_index.xlsx.arcmeta
+      - build/ons/relationship_2010_2020.xlsx
+      - build/ons/relationship_2010_2020.xlsx.arcmeta
+
+  # ── Build: one model per table ──────────────────────────────────────────────────
+  # The code list, with each row's parent and ancestors (fails the run on a row with no
+  # parent at the level above); the coding index's coded entries; the relationship table.
+  - name: code_list
+    sql: models/code_list.sql
+    produces: [soc_2020_out]
+
+  - name: titles
+    sql: models/titles.sql
+    depends_on: [soc_2020_out]
+    produces: [soc_2020_titles_out]
+
+  - name: crosswalk
+    sql: models/crosswalk.sql
+    produces: [soc_2010_to_2020_out]
+
+  # ── Export: write the Parquet the later steps read ──────────────────────────────
+  # Each order_by is the table's primary key, a total order → reproducible bytes.
+  - name: export_soc_2020
+    op: parquet_export@1
+    with:
+      input: soc_2020_out
+      dest: build/stage/soc_2020.parquet
+      compression: zstd
+      order_by: "code"
+
+  - name: export_soc_2020_titles
+    op: parquet_export@1
+    with:
+      input: soc_2020_titles_out
+      dest: build/stage/soc_2020_titles.parquet
+      compression: zstd
+      order_by: "entry_id"
+
+  - name: export_soc_2010_to_2020
+    op: parquet_export@1
+    with:
+      input: soc_2010_to_2020_out
+      dest: build/stage/soc_2010_to_2020.parquet
+      compression: zstd
+      order_by: "from_code, to_code"
+
+  # ── Describe: EMIT each descriptor from its built Parquet ───────────────────────
+  # finetype types every column the table's nominations do not declare; its overrides
+  # overlay the curated half (identity, licenses, sources, per-field prose,
+  # primaryKey, the table's contract declaration). Hard-fails on drift.
+  - name: describe_soc_2020
+    op: datapackage_describe@1
+    with:
+      parquet: build/stage/soc_2020.parquet
+      overrides: soc_2020.overrides.json
+      nominations: soc_2020.nominations.finetype.json
+      out: build/stage/soc_2020.described.json
+
+  - name: describe_soc_2020_titles
+    op: datapackage_describe@1
+    with:
+      parquet: build/stage/soc_2020_titles.parquet
+      overrides: soc_2020_titles.overrides.json
+      nominations: soc_2020_titles.nominations.finetype.json
+      out: build/stage/soc_2020_titles.described.json
+
+  - name: describe_soc_2010_to_2020
+    op: datapackage_describe@1
+    with:
+      parquet: build/stage/soc_2010_to_2020.parquet
+      overrides: soc_2010_to_2020.overrides.json
+      nominations: soc_2010_to_2020.nominations.finetype.json
+      out: build/stage/soc_2010_to_2020.described.json
+
+  # ── Contract: hold the code list to the shared code-list columns ────────────────
+  # The script is addressed by its bytes, so editing it is a manifest edit as well:
+  # `shasum -a 256 scripts/check_code_list.py` prints the digest. duckdb is pinned to
+  # DUCKDB_VERSION in .github/workflows/descriptors.yml — keep the two in step.
+  - name: check_code_list
+    op: uv@1
+    with:
+      script: ../../scripts/check_code_list.py
+      sha256: 11b06ca742a70ef483c9626d153d30387ad17f47992a3b4ef3eaf295b1c1e4b8
+      deps:
+        - duckdb==1.5.5
+      args:
+        - --parquet
+        - build/stage/soc_2020.parquet
+        - --levels
+        - major,sub_major,minor,unit
+        - --json
+        - build/code_list_check.json
+      reads:
+        - build/stage/soc_2020.parquet
+      produces:
+        - build/code_list_check.json
+
+  # ── Contract inputs: the code list both contract checks read ────────────────────
+  # The code list exported in this Run, set up once for check_titles and check_crosswalk.
+  - name: check_inputs_code_list
+    sql: models/check_inputs_code_list.sql
+    depends_on: [build/stage/soc_2020.parquet]
+    produces: [contract_code_list]
+
+  # ── Contract: hold the title index to the job-title index contract ──────────────
+  # check_inputs_titles points the shared check at the exported index, at the unit
+  # group level ONS codes its titles to; the check fails the run on any broken rule (see
+  # contracts/README.md).
+  - name: check_inputs_titles
+    sql: models/check_inputs_titles.sql
+    depends_on: [build/stage/soc_2020_titles.parquet]
+    produces: [contract_titles, contract_title_level]
+
+  - name: check_titles
+    sql: ../../contracts/check_titles.sql
+    depends_on: [contract_titles, contract_title_level, contract_code_list]
+    produces: [contract_titles_result]
+
+  # ── Contract: hold the crosswalk to the edition crosswalk contract ──────────────
+  # As for the title index: every 2020 code a unit group in the code list, every 2010
+  # code four digits.
+  - name: check_inputs_crosswalk
+    sql: models/check_inputs_crosswalk.sql
+    depends_on: [build/stage/soc_2010_to_2020.parquet]
+    produces: [contract_crosswalk, contract_crosswalk_shape]
+
+  - name: check_crosswalk
+    sql: ../../contracts/check_crosswalk.sql
+    depends_on: [contract_crosswalk, contract_crosswalk_shape, contract_code_list]
+    produces: [contract_crosswalk_result]
+
+  # ── Validate: GATE each Parquet against its self-derived finetype contract ──────
+  - name: validate_soc_2020
+    op: finetype_validate@1
+    with:
+      parquet: build/stage/soc_2020.parquet
+      schema: soc_2020.schema.finetype.json
+
+  - name: validate_soc_2020_titles
+    op: finetype_validate@1
+    with:
+      parquet: build/stage/soc_2020_titles.parquet
+      schema: soc_2020_titles.schema.finetype.json
+
+  - name: validate_soc_2010_to_2020
+    op: finetype_validate@1
+    with:
+      parquet: build/stage/soc_2010_to_2020.parquet
+      schema: soc_2010_to_2020.schema.finetype.json
+
+  # ── Self-describe: write each published Parquet with its descriptor inside ──────
+  # Each object answers for itself from its URL alone; the embedded copy omits the
+  # resource `bytes` and `hash` and the package's `created`. They run last because
+  # each embeds its FINISHED descriptor.
+  - name: stamp_soc_2020
+    op: uv@1
+    with:
+      script: ../../scripts/stamp_descriptor.py
+      sha256: b22581b77414303312aa5040e70a66ccd96a6bfd1902820e487428441018b9c2
+      deps:
+        - duckdb==1.5.5
+      args:
+        - stamp
+        - --descriptor
+        - build/stage/soc_2020.described.json
+        - --parquet
+        - build/stage/soc_2020.parquet
+        - --out
+        - build/soc_2020.parquet
+        - --out-descriptor
+        - soc_2020.datapackage.json
+        - --carry-created
+      reads:
+        - build/stage/soc_2020.described.json
+        - build/stage/soc_2020.parquet
+      produces:
+        - build/soc_2020.parquet
+        - soc_2020.datapackage.json
+
+  - name: stamp_soc_2020_titles
+    op: uv@1
+    with:
+      script: ../../scripts/stamp_descriptor.py
+      sha256: b22581b77414303312aa5040e70a66ccd96a6bfd1902820e487428441018b9c2
+      deps:
+        - duckdb==1.5.5
+      args:
+        - stamp
+        - --descriptor
+        - build/stage/soc_2020_titles.described.json
+        - --parquet
+        - build/stage/soc_2020_titles.parquet
+        - --out
+        - build/soc_2020_titles.parquet
+        - --out-descriptor
+        - soc_2020_titles.datapackage.json
+        - --carry-created
+      reads:
+        - build/stage/soc_2020_titles.described.json
+        - build/stage/soc_2020_titles.parquet
+      produces:
+        - build/soc_2020_titles.parquet
+        - soc_2020_titles.datapackage.json
+
+  - name: stamp_soc_2010_to_2020
+    op: uv@1
+    with:
+      script: ../../scripts/stamp_descriptor.py
+      sha256: b22581b77414303312aa5040e70a66ccd96a6bfd1902820e487428441018b9c2
+      deps:
+        - duckdb==1.5.5
+      args:
+        - stamp
+        - --descriptor
+        - build/stage/soc_2010_to_2020.described.json
+        - --parquet
+        - build/stage/soc_2010_to_2020.parquet
+        - --out
+        - build/soc_2010_to_2020.parquet
+        - --out-descriptor
+        - soc_2010_to_2020.datapackage.json
+        - --carry-created
+      reads:
+        - build/stage/soc_2010_to_2020.described.json
+        - build/stage/soc_2010_to_2020.parquet
+      produces:
+        - build/soc_2010_to_2020.parquet
+        - soc_2010_to_2020.datapackage.json

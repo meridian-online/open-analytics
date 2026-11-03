@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "resources": {
+    "soc_2018": {
+      "code": {
+        "label": "representation.identifier.numeric_code",
+        "why": "BLS's SOC code at every level, two digits, a hyphen and four digits (11-1011). Inferred, finetype reads it as an Australian bank-state-branch number, which it is not. finetype has no SOC type yet, so the column is nominated the label for a classification code whose digits carry meaning; its pattern admits digits only, so describe widens it for the hyphen, and the overrides declare the NN-NNNN shape the column holds."
+      },
+      "code_display": {
+        "label": "representation.identifier.numeric_code",
+        "why": "BLS's SOC code as BLS prints it, the same as code, two digits, a hyphen and four digits (11-1011). Inferred, finetype reads it as an ordinal date and the descriptor would type the column as a date, which it is not. finetype has no SOC type yet, so the column is nominated the label for a classification code whose digits carry meaning; its pattern admits digits only, so describe widens it for the hyphen, and the overrides declare the NN-NNNN shape the column holds."
+      },
+      "parent_code": {
+        "label": "representation.identifier.numeric_code",
+        "why": "The SOC code of the group one level up, two digits, a hyphen and four digits (11-1011). Inferred, finetype reads it as an Australian bank-state-branch number, which it is not. finetype has no SOC type yet, so the column is nominated the label for a classification code whose digits carry meaning; its pattern admits digits only, so describe widens it for the hyphen, and the overrides declare the NN-NNNN shape the column holds."
+      },
+      "description": {
+        "label": "representation.text.plain_text",
+        "why": "BLS's title for a group or occupation, such as Chief Executives. Inferred, finetype labels it an entity name, an organisation's or product's name, which it is not; it is prose naming work."
+      },
+      "release": {
+        "label": "representation.identifier.alphanumeric_id",
+        "why": "The edition's reference year and BLS's update date, 2018/2020-04-15: an identifier for the snapshot, stored as text as every code list's release is. Inferred it is `unknown`; it is not a date, since the year in front is the edition."
+      },
+      "text_source": {
+        "label": "representation.text.word",
+        "why": "A closed set of one value, bls. Inferred it is `unknown`; the value is one short token."
+      },
+      "definition": {
+        "label": "representation.text.plain_text",
+        "why": "BLS's definition of a detailed occupation, sentences up to 828 characters. Inferred it is `unknown`, which publishes no length bounds; it is prose."
+      },
+      "major_code": {
+        "label": "representation.identifier.numeric_code",
+        "why": "The SOC code of the row's major group, two digits, a hyphen and four digits (11-1011). Inferred, finetype reads it as an Australian bank-state-branch number, which it is not. finetype has no SOC type yet, so the column is nominated the label for a classification code whose digits carry meaning; its pattern admits digits only, so describe widens it for the hyphen, and the overrides declare the NN-NNNN shape the column holds."
+      },
+      "minor_code": {
+        "label": "representation.identifier.numeric_code",
+        "why": "The SOC code of the row's minor group, two digits, a hyphen and four digits (11-1011). Inferred, finetype reads it as an Australian bank-state-branch number, which it is not. finetype has no SOC type yet, so the column is nominated the label for a classification code whose digits carry meaning; its pattern admits digits only, so describe widens it for the hyphen, and the overrides declare the NN-NNNN shape the column holds."
+      },
+      "broad_code": {
+        "label": "representation.identifier.numeric_code",
+        "why": "The SOC code of the row's broad occupation, two digits, a hyphen and four digits (11-1011). Inferred, finetype reads it as an Australian bank-state-branch number, which it is not. finetype has no SOC type yet, so the column is nominated the label for a classification code whose digits carry meaning; its pattern admits digits only, so describe widens it for the hyphen, and the overrides declare the NN-NNNN shape the column holds."
+      }
+    }
+  }
+}

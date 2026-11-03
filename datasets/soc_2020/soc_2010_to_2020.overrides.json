@@ -1,0 +1,129 @@
+{
+  "name": "soc_2010_to_2020",
+  "title": "SOC 2010 to SOC 2020 relationship (UK)",
+  "description": "The Office for National Statistics' own relationship between the 2010 and 2020 editions of the UK Standard Occupational Classification at the unit group level, for bridging data coded to SOC 2010, such as the Labour Force Survey before 2021: one row per pairing of a 2010 unit group with a 2020 unit group its cases were coded to, 714 pairings from the unit group sheet of ONS's relationship tables of July 2021. ONS built the tables from jobs coded to both editions, in the Labour Force Survey and the 2011 Census, and gives each pairing four shares, for men and for women in each source, with the four case counts of its 2010 group, so counts coded to 2010 can be apportioned to 2020 groups. ONS's \"Total sample\" rows, one for each of 369 2010 groups, become the four base columns rather than rows. Every 2020 code is a unit group in ons/soc_2020, which the run checks; the 2010 edition is not hosted, so the 2010 codes are checked by their shape only. Meridian prepared the table from ONS's relationship tables workbook. Source: Office for National Statistics licensed under the Open Government Licence v3.0.",
+  "homepage": "https://meridian.online/datasets/ons/soc_2010_to_2020",
+  "licenses": [
+    {
+      "name": "OGL-UK-3.0",
+      "title": "Open Government Licence v3.0",
+      "path": "https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/"
+    }
+  ],
+  "sources": [
+    {
+      "title": "SOC 2020 — Office for National Statistics",
+      "path": "https://www.ons.gov.uk/methodology/classificationsandstandards/standardoccupationalclassificationsoc/soc2020"
+    },
+    {
+      "title": "The relationship between Standard Occupational Classification 2010 and Standard Occupational Classification 2020 — Office for National Statistics",
+      "path": "https://www.ons.gov.uk/methodology/classificationsandstandards/standardoccupationalclassificationsoc/soc2020/therelationshipbetweenstandardoccupationalclassification2010andstandardoccupationalclassification2020"
+    },
+    {
+      "title": "SOC 2010 to SOC 2020 relationship tables, July 2021 (soc2010soc2020relationshiptablesjuly2021.xlsx) — Office for National Statistics",
+      "path": "https://www.ons.gov.uk/file?uri=/methodology/classificationsandstandards/standardoccupationalclassificationsoc/soc2020/therelationshipbetweenstandardoccupationalclassification2010andstandardoccupationalclassification2020/soc2010soc2020relationshiptablesjuly2021.xlsx"
+    }
+  ],
+  "contributors": [
+    {
+      "path": "https://www.ons.gov.uk",
+      "roles": [
+        "author"
+      ],
+      "title": "Office for National Statistics"
+    },
+    {
+      "path": "https://meridian.online",
+      "roles": [
+        "publisher",
+        "wrangler"
+      ],
+      "title": "Meridian"
+    }
+  ],
+  "resource": {
+    "name": "soc_2010_to_2020",
+    "path": "https://openlake.meridian.online/ons/soc_2010_to_2020.parquet"
+  },
+  "x-meridian-crosswalk": {
+    "from": "2010",
+    "to": "2020",
+    "toCodeList": "ons/soc_2020"
+  },
+  "fields": {
+    "from_code": {
+      "description": "A unit group code of SOC 2010, four digits, as ONS prints it in the relationship tables (1115).",
+      "constraints": {
+        "minLength": 4,
+        "maxLength": 4,
+        "pattern": "^[0-9]{4}$"
+      }
+    },
+    "from_description": {
+      "description": "The 2010 unit group's title, as ONS prints it in the relationship tables."
+    },
+    "to_code": {
+      "description": "A unit group code of SOC 2020, four digits, a code in ons/soc_2020.",
+      "constraints": {
+        "minLength": 4,
+        "maxLength": 4,
+        "pattern": "^[0-9]{4}$"
+      }
+    },
+    "to_description": {
+      "description": "The 2020 unit group's title, as ONS prints it in the relationship tables of July 2021. On 48 pairings it differs from the code's description in ons/soc_2020, which is Volume 1's current title: ONS has renamed some unit groups since (1224, Leisure and sports managers, is now Leisure and sports managers and proprietors), and a few differ only in case or punctuation."
+    },
+    "from_edition": {
+      "description": "The edition from_code belongs to: always 2010.",
+      "constraints": {
+        "enum": [
+          "2010"
+        ]
+      }
+    },
+    "to_edition": {
+      "description": "The edition to_code belongs to: always 2020.",
+      "constraints": {
+        "enum": [
+          "2020"
+        ]
+      }
+    },
+    "release": {
+      "description": "The relationship tables' own release, the month and year at the end of the URL of the workbook fetched (…july2021.xlsx), as 2021-07.",
+      "constraints": {
+        "minLength": 7,
+        "maxLength": 7,
+        "pattern": "^[0-9]{4}-[0-9]{2}$"
+      }
+    },
+    "men_lfs_base": {
+      "description": "The number of men's cases in the Labour Force Survey (January 2014 to September 2016) coded to the 2010 group, from its \"Total sample\" row in ONS's sheet; the same on each of the group's pairings."
+    },
+    "women_lfs_base": {
+      "description": "The number of women's cases in the Labour Force Survey (January 2014 to September 2016) coded to the 2010 group, from its \"Total sample\" row in ONS's sheet; the same on each of the group's pairings."
+    },
+    "men_census_base": {
+      "description": "The number of men's cases in the 2011 Census's 1% sample of the economically active in England and Wales coded to the 2010 group, from its \"Total sample\" row in ONS's sheet; the same on each of the group's pairings."
+    },
+    "women_census_base": {
+      "description": "The number of women's cases in the 2011 Census's 1% sample of the economically active in England and Wales coded to the 2010 group, from its \"Total sample\" row in ONS's sheet; the same on each of the group's pairings."
+    },
+    "men_lfs_share": {
+      "description": "The share, from 0 to 1, of the 2010 group's men's cases in the Labour Force Survey that ONS coded to this 2020 group. ONS leaves out pairings to which only a small number of cases were coded, so a 2010 group's shares can add up to a little less than 1; where its base is 0, they are all 0."
+    },
+    "women_lfs_share": {
+      "description": "The share, from 0 to 1, of the 2010 group's women's cases in the Labour Force Survey that ONS coded to this 2020 group. ONS leaves out pairings to which only a small number of cases were coded, so a 2010 group's shares can add up to a little less than 1; where its base is 0, they are all 0."
+    },
+    "men_census_share": {
+      "description": "The share, from 0 to 1, of the 2010 group's men's cases in the 2011 Census sample that ONS coded to this 2020 group. ONS leaves out pairings to which only a small number of cases were coded, so a 2010 group's shares can add up to a little less than 1; where its base is 0, they are all 0."
+    },
+    "women_census_share": {
+      "description": "The share, from 0 to 1, of the 2010 group's women's cases in the 2011 Census sample that ONS coded to this 2020 group. ONS leaves out pairings to which only a small number of cases were coded, so a 2010 group's shares can add up to a little less than 1; where its base is 0, they are all 0."
+    }
+  },
+  "primaryKey": [
+    "from_code",
+    "to_code"
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "resources": {
+    "soc_2018_titles": {
+      "entry_id": {
+        "label": "representation.identifier.alphanumeric_id",
+        "why": "The entry's key, a SOC code and a job title joined with '|' (11-1011|Admiral). Inferred, finetype labels it plain text at 0.40 confidence; it is an identifier, not prose. The label's pattern does not admit the '|', so describe widens it, and the overrides declare the shape."
+      },
+      "code": {
+        "label": "representation.identifier.numeric_code",
+        "why": "The SOC code of the detailed occupation a title is coded to, two digits, a hyphen and four digits (11-1011). Inferred, finetype reads it as a two-digit-year date and the descriptor would type the column as a date, which it is not. finetype has no SOC type yet, so the column is nominated the label for a classification code whose digits carry meaning; its pattern admits digits only, so describe widens it for the hyphen, and the overrides declare the NN-NNNN shape the column holds."
+      },
+      "code_description": {
+        "label": "representation.text.plain_text",
+        "why": "BLS's title for the detailed occupation, such as Chief Executives. Inferred, finetype labels it an entity name, an organisation's or product's name, which it is not; it is prose naming work."
+      },
+      "release": {
+        "label": "representation.identifier.alphanumeric_id",
+        "why": "The edition's reference year and BLS's update date, 2018/2020-04-15: an identifier for the snapshot, stored as text as every code list's release is. Inferred it is `unknown`; it is not a date, since the year in front is the edition."
+      },
+      "text_source": {
+        "label": "representation.text.word",
+        "why": "A closed set of one value, bls. Inferred it is `unknown`; the value is one short token."
+      }
+    }
+  }
+}

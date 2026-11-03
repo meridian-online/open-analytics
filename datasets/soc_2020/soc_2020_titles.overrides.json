@@ -1,0 +1,174 @@
+{
+  "name": "soc_2020_titles",
+  "title": "SOC 2020 job titles — the ONS coding index (UK)",
+  "description": "The coding index of the UK Standard Occupational Classification 2020, version 14: the job titles the Office for National Statistics codes to each unit group, for coding free-text job titles from job postings, HR extracts and survey answers. One row per coded entry, keyed by ONS's own id, with the unit group it is coded to and that group's title in ons/soc_2020. ONS codes many titles by a qualifier, so each entry carries its additional and industry qualifiers as columns, and a title can appear under several codes, each with different qualifiers; no two entries share a title and both qualifiers. The index's 231 cross-references, which point at another title or at ONS's notes rather than a code, are left out, so 32,439 of its 32,670 entries are kept. Every code is a unit group in ons/soc_2020, which the run checks against the code list it builds. The columns after the title-index columns are ONS's own coding fields: the default-entry mark, the extended SOC sub-unit group, the codes in SOC 2010, SOC 2000, SOC 90 and ISCO-08, and the versions that added or amended each entry. Meridian prepared the table from ONS's coding index workbook, and the code titles from its Volume 1 workbook. Source: Office for National Statistics licensed under the Open Government Licence v3.0.",
+  "homepage": "https://meridian.online/datasets/ons/soc_2020_titles",
+  "licenses": [
+    {
+      "name": "OGL-UK-3.0",
+      "title": "Open Government Licence v3.0",
+      "path": "https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/"
+    }
+  ],
+  "sources": [
+    {
+      "title": "SOC 2020 — Office for National Statistics",
+      "path": "https://www.ons.gov.uk/methodology/classificationsandstandards/standardoccupationalclassificationsoc/soc2020"
+    },
+    {
+      "title": "SOC 2020 Volume 2: the coding index and coding rules and conventions — Office for National Statistics",
+      "path": "https://www.ons.gov.uk/methodology/classificationsandstandards/standardoccupationalclassificationsoc/soc2020/soc2020volume2codingrulesandconventions"
+    },
+    {
+      "title": "SOC 2020 coding index workbook, version 14, issued 27 August 2026 (soc2020volume2thecodingindexexcel20260827v2.xlsx) — Office for National Statistics",
+      "path": "https://www.ons.gov.uk/file?uri=/methodology/classificationsandstandards/standardoccupationalclassificationsoc/soc2020/soc2020volume2codingrulesandconventions/soc2020volume2thecodingindexexcel20260827v2.xlsx"
+    },
+    {
+      "title": "SOC 2020 Volume 1: structure and descriptions of unit groups — Office for National Statistics",
+      "path": "https://www.ons.gov.uk/methodology/classificationsandstandards/standardoccupationalclassificationsoc/soc2020/soc2020volume1structureanddescriptionsofunitgroups"
+    },
+    {
+      "title": "SOC 2020 Volume 1 workbook, issued 27 August 2026 (soc2020volume1structureanddescriptionofunitgroupsexcel20260827.xlsx) — Office for National Statistics",
+      "path": "https://www.ons.gov.uk/file?uri=/methodology/classificationsandstandards/standardoccupationalclassificationsoc/soc2020/soc2020volume1structureanddescriptionsofunitgroups/soc2020volume1structureanddescriptionofunitgroupsexcel20260827.xlsx"
+    }
+  ],
+  "contributors": [
+    {
+      "path": "https://www.ons.gov.uk",
+      "roles": [
+        "author"
+      ],
+      "title": "Office for National Statistics"
+    },
+    {
+      "path": "https://meridian.online",
+      "roles": [
+        "publisher",
+        "wrangler"
+      ],
+      "title": "Meridian"
+    }
+  ],
+  "resource": {
+    "name": "soc_2020_titles",
+    "path": "https://openlake.meridian.online/ons/soc_2020_titles.parquet"
+  },
+  "x-meridian-title-index": {
+    "codeList": "ons/soc_2020"
+  },
+  "fields": {
+    "entry_id": {
+      "description": "ONS's UNIQUE ID for the index entry (a1aa), lowercase letters and digits.",
+      "constraints": {
+        "pattern": "^[a-z0-9]+$"
+      }
+    },
+    "title": {
+      "description": "The job title as ONS's coding index prints it, in index order with the indexing word first (Officer, aids, visual), trimmed."
+    },
+    "code": {
+      "description": "The unit group ONS codes the entry to, in ons/soc_2020's form, four digits (1111).",
+      "constraints": {
+        "minLength": 4,
+        "maxLength": 4,
+        "pattern": "^[0-9]{4}$"
+      }
+    },
+    "code_description": {
+      "description": "The code's title in ons/soc_2020 (Chief executives and senior officials), so a lookup needs no second join."
+    },
+    "release": {
+      "description": "The index's own release, its version and the date ONS issued the workbook, as v<version>/<date>: v14/2026-08-27. The version is read from the workbook's INFO sheet (\"Version 14 Of The Standard Occupational Classification 2020 Index\") and the date from the URL of the workbook fetched (…excel20260827v2.xlsx).",
+      "constraints": {
+        "minLength": 13,
+        "maxLength": 16,
+        "pattern": "^v[0-9]+/[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+      }
+    },
+    "text_source": {
+      "description": "Whose text title is: always ons, ONS's own index entry.",
+      "constraints": {
+        "enum": [
+          "ons"
+        ]
+      }
+    },
+    "corpus": {
+      "description": "Lowercased, accent-stripped title followed by its additional and industry qualifiers, with runs of whitespace collapsed to one space: a derived free-text search field, not a source attribute. The qualifiers are in it because ONS codes many titles by them."
+    },
+    "title_natural": {
+      "description": "The title in natural word order, as ONS gives it (Visual aids officer for Officer, aids, visual)."
+    },
+    "additional_qualifier": {
+      "description": "ONS's additional qualifying term (its ADD column), which decides the code where the title alone does not, such as qualified or computing/IT. NULL where ONS gives none."
+    },
+    "industry_qualifier": {
+      "description": "ONS's industry qualifying term (its IND column), the industry the entry is coded for (health authority: hospital service). NULL where ONS gives none."
+    },
+    "default_flag": {
+      "description": "ONS's D column, which marks a default entry, and on which field, as the coding index's file specification gives them: O a default entry on the occupational qualifier field, I on the industry qualifier field, A on the additional qualifier field, Q a default on a qualified or professional entry, QS a default on a qualified and subject entry, M a default on a mixture of these. NULL on an entry that is not a default.",
+      "constraints": {
+        "enum": [
+          "O",
+          "I",
+          "A",
+          "Q",
+          "QS",
+          "M"
+        ]
+      }
+    },
+    "soc_2020_ext": {
+      "description": "The entry's sub-unit group in ONS's extended SOC 2020 (SOC2020-ext), the unit group's code, a slash and two digits (1171/02). Its first four digits are code.",
+      "constraints": {
+        "minLength": 7,
+        "maxLength": 7,
+        "pattern": "^[0-9]{4}/[0-9]{2}$"
+      }
+    },
+    "soc_2020_ext_title": {
+      "description": "The title of the entry's extended sub-unit group, as the coding index gives it (Health care service managers and directors)."
+    },
+    "soc_2010": {
+      "description": "The SOC 2010 unit group ONS records for the entry, four digits. NULL where ONS writes its '}' marks for no code instead.",
+      "constraints": {
+        "minLength": 4,
+        "maxLength": 4,
+        "pattern": "^[0-9]{4}$"
+      }
+    },
+    "soc_2000": {
+      "description": "The SOC 2000 unit group ONS records for the entry, four digits. NULL where ONS writes its '}' marks for no code instead.",
+      "constraints": {
+        "minLength": 4,
+        "maxLength": 4,
+        "pattern": "^[0-9]{4}$"
+      }
+    },
+    "soc_1990": {
+      "description": "The SOC 90 unit group ONS records for the entry, three digits. NULL where ONS writes its '}' marks for no code instead.",
+      "constraints": {
+        "minLength": 3,
+        "maxLength": 3,
+        "pattern": "^[0-9]{3}$"
+      }
+    },
+    "isco_08": {
+      "description": "The ISCO-08 unit group ONS gives for the entry, based on its SOC 2020 code (ONS's \"ISCO-08 code based on SOC2020\"), four digits. NULL where ONS writes its '}' marks for no code instead.",
+      "constraints": {
+        "minLength": 4,
+        "maxLength": 4,
+        "pattern": "^[0-9]{4}$"
+      }
+    },
+    "version_added_or_amended": {
+      "description": "ONS's VERSNO: the versions of the SOC 2020 index that added or amended the entry, as ONS writes them (V8 new, V1 new/V13 amended). NULL where ONS records neither."
+    },
+    "change": {
+      "description": "ONS's note of what was changed in the entry, as ONS writes it (SOC-ext code was 4129/99, Default code added). NULL where ONS records no change."
+    }
+  },
+  "primaryKey": [
+    "entry_id"
+  ]
+}
