@@ -42,7 +42,7 @@ Four levels, as BLS names them: `major` (depth 0), `minor` (1), `broad` (2) and 
 
 `description` is BLS's title and `definition` BLS's definition, which BLS gives for detailed occupations only. `text_source` is `bls` on every row.
 
-The title index has one row per BLS direct match title, keyed `<code>|<title>` because BLS gives its titles no id; `illustrative` carries BLS's mark for a title that is an illustrative example rather than a direct match. Three detailed occupations have no titles. The crosswalk has one row per pairing BLS publishes, with its titles as BLS prints them, including a `(#)` or `(##)` ending some titles: in BLS's file `(#)` ends exactly the 2010 occupations that pair with more than one 2018 occupation, and `(##)` the 2018 occupations that pair with more than one 2010 occupation, though the workbook does not define the marks. BLS gives no weights.
+The title index has one row per BLS direct match title, keyed `<code>|<title>` because BLS gives its titles no id; `illustrative` carries BLS's mark for a title that is an illustrative example rather than a direct match: BLS marks 2,408 titles, 2,400 with an `x` and 8 with an `X`, both read as true, and `load` fails the run on any other mark. Three detailed occupations have no titles. The crosswalk has one row per pairing BLS publishes, with its titles as BLS prints them, including a `(#)` or `(##)` ending some titles: in BLS's file `(#)` ends exactly the 2010 occupations that pair with more than one 2018 occupation, and `(##)` the 2018 occupations that pair with more than one 2010 occupation, though the workbook does not define the marks. BLS gives no weights.
 
 ## The release
 

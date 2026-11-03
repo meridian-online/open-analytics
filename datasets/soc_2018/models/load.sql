@@ -83,10 +83,16 @@ FROM (
 )
 WHERE coalesce(A, B, C, D) IS NOT NULL;
 
+-- `illustrative` is BLS's mark in column D: an x, lower or upper case (the file of
+-- 2026-11-03 has 2,400 'x' and 8 'X'), is true and an empty cell false. Any other mark
+-- fails the run, since its meaning is unknown.
 CREATE OR REPLACE TABLE bls_titles AS
 SELECT
   trim(A) AS code, trim(B) AS title, trim(C) AS direct_match_title,
-  nullif(trim(D), '') AS illustrative
+  CASE WHEN lower(trim(D)) = 'x' THEN true
+       WHEN nullif(trim(D), '') IS NULL THEN false
+       ELSE error('BLS direct match title file has an Illustrative Example mark other than x: '
+                  || D || ' on ' || coalesce(trim(A), 'NULL') || ' ' || coalesce(trim(C), 'NULL')) END AS illustrative
 FROM read_xlsx('build/bls/soc_2018_direct_match_title_file.xlsx', header = false, all_varchar = true,
                stop_at_empty = false, range = 'A9:D')
 WHERE coalesce(A, B, C, D) IS NOT NULL;

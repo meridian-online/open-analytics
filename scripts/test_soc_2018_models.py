@@ -238,9 +238,9 @@ class BuildTest(unittest.TestCase):
             "SELECT code, direct_match_title, illustrative FROM bls_titles "
             "WHERE direct_match_title IN ('Records Management Director', 'Business Office Manager') "
             "AND code = '11-3012' ORDER BY direct_match_title").fetchall(),
-            [("11-3012", "Business Office Manager", None), ("11-3012", "Records Management Director", "x")])
+            [("11-3012", "Business Office Manager", False), ("11-3012", "Records Management Director", True)])
         self.assertEqual(self.con.execute(
-            "SELECT count(*) FILTER (illustrative = 'x') FROM bls_titles").fetchone()[0], 145)
+            "SELECT count(*) FILTER (illustrative) FROM bls_titles").fetchone()[0], 145)
 
     def titles(self, where: str = "true") -> list[dict]:
         cur = self.con.execute(f"SELECT * FROM soc_2018_titles_out WHERE {where}")
@@ -288,6 +288,25 @@ class BuildTest(unittest.TestCase):
             [("2018/2020-04-15", "bls")])
         self.assertEqual(self.con.execute(
             "SELECT count(*) FROM soc_2018_titles_out WHERE corpus != lower(strip_accents(regexp_replace(title, '\\s+', ' ', 'g')))").fetchone()[0], 0)
+
+    def test_an_upper_case_mark_is_illustrative(self):
+        # BLS's file marks 8 of its titles 'X' rather than 'x'; both mean illustrative.
+        def edit(path):
+            def change(ws):
+                for row in range(9, ws.max_row + 1):
+                    if ws.cell(row, 3).value == "Business Office Manager":
+                        ws.cell(row, 4).value = "X"
+            edit_sheet(path, change)
+        scratch = Run(edit, TITLES)
+        try:
+            scratch.load()
+            self.assertEqual(scratch.con.execute(
+                "SELECT illustrative FROM soc_2018_titles_out WHERE entry_id = '11-3012|Business Office Manager'"
+            ).fetchall(), [(True,)])
+            self.assertEqual(scratch.con.execute(
+                "SELECT count(*) FILTER (illustrative) FROM soc_2018_titles_out").fetchone()[0], 146)
+        finally:
+            scratch.close()
 
     def test_corpus_collapses_whitespace_but_title_keeps_it(self):
         # The fixture holds no double-spaced title, so make one.
@@ -366,6 +385,15 @@ class RefusalTest(unittest.TestCase):
         # The crosswalk's headers are row 9; a row inserted above moves them to row 10.
         self.refuses(lambda p: edit_sheet(p, lambda ws: ws.insert_rows(5)),
                      "crosswalk header", CROSSWALK)
+
+    def test_an_unknown_illustrative_mark_fails(self):
+        def edit(path):
+            def change(ws):
+                for row in range(9, ws.max_row + 1):
+                    if ws.cell(row, 3).value == "Business Office Manager":
+                        ws.cell(row, 4).value = "y"
+            edit_sheet(path, change)
+        self.refuses(edit, "Illustrative Example mark other than x: y", TITLES)
 
     def test_non_first_broad_group_miscoded_fails(self):
         # With 15-1220 recoded 15-1330, 15-1221 falls to 15-1210 by code, but the last broad

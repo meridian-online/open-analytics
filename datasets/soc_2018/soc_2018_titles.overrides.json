@@ -89,7 +89,7 @@
       "description": "Lowercased, accent-stripped title, with runs of whitespace collapsed to one space: a derived free-text search field, not a source attribute."
     },
     "illustrative": {
-      "description": "True where BLS marks the title with an x as an illustrative example of the occupation rather than a direct match for it; false for a direct match."
+      "description": "True where BLS marks the title with an x (in either case) as an illustrative example of the occupation rather than a direct match for it; false for a direct match."
     }
   },
   "primaryKey": [

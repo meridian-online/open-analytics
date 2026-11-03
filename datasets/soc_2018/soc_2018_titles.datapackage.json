@@ -17,7 +17,7 @@
       "title": "Meridian"
     }
   ],
-  "created": "2026-11-03T02:36:56Z",
+  "created": "2026-11-03T03:49:27Z",
   "description": "The job titles the U.S. Bureau of Labor Statistics codes to each detailed occupation of the 2018 Standard Occupational Classification, for coding free-text job titles from job postings, HR extracts and survey answers: one row per title in BLS's direct match title file, with the code it points at and that code's title in bls/soc_2018. BLS marks some titles as illustrative examples of an occupation rather than direct matches, and illustrative carries the mark. Every code is a detailed occupation in bls/soc_2018, which the run checks against the code list it builds; three detailed occupations (11-9039, 19-2099 and 51-9199) have no titles in BLS's file. No title appears under two codes. BLS's files are U.S. Government works in the public domain.",
   "homepage": "https://meridian.online/datasets/bls/soc_2018_titles",
   "licenses": [
@@ -30,9 +30,9 @@
   "name": "soc_2018_titles",
   "resources": [
     {
-      "bytes": 199633,
+      "bytes": 199650,
       "format": "parquet",
-      "hash": "sha256:cdc4cd78c30e61b7e69437ab3819c4670acd6d1463506867c3c5b1bb464dbb65",
+      "hash": "sha256:e3c1382ca1ac9abdd670eeb2fde199b259040a19d89361a6b2a6ee42c711e2cb",
       "mediatype": "application/vnd.apache.parquet",
       "name": "soc_2018_titles",
       "path": "https://openlake.meridian.online/bls/soc_2018_titles.parquet",
@@ -139,7 +139,7 @@
             "x-finetype-label": "representation.text.plain_text"
           },
           {
-            "description": "True where BLS marks the title with an x as an illustrative example of the occupation rather than a direct match for it; false for a direct match.",
+            "description": "True where BLS marks the title with an x (in either case) as an illustrative example of the occupation rather than a direct match for it; false for a direct match.",
             "falseValues": [
               "false",
               "no",
