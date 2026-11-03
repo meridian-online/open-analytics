@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """Run the SOC 2020 Protocol's ONS SQL models over reduced ONS workbooks and check the result.
 
-The models are `datasets/soc_2020/models/load.sql` and `code_list.sql`. Each case copies
+The models are `datasets/soc_2020/models/load.sql`, `code_list.sql`, `titles.sql` and
+`crosswalk.sql`; the title index and crosswalk are also run through the shared contract
+checks in `contracts/`. Each case copies
 the fixtures in `scripts/testdata/soc_2020/` into a scratch `build/ons/` under the fixed
 names the Protocol fetches to, writes the `.arcmeta` sidecar `http_fetch@1` writes beside
 each (its `url:` the real ONS URL), runs `load` and `code_list` on one DuckDB connection
 with the scratch directory as its file search path, as the Protocol's `sql:` steps run
-them, exports the terminal table to `build/stage/` as the export step does, and runs
-`check_code_list.py` over that file.
+them, exports the terminal tables to `build/stage/` as the export steps do, and runs
+`check_code_list.py` over the code list file.
 
 The fixtures are cut from ONS's SOC 2020 downloads of 2026-11-03 (see the README beside
 them): major groups 1 and 9 and every group beneath them from Volume 1, with ONS's own
@@ -32,7 +34,9 @@ import duckdb
 import openpyxl
 
 REPO = Path(__file__).resolve().parent.parent
-MODELS = [REPO / "datasets" / "soc_2020" / "models" / name for name in ("load.sql", "code_list.sql")]
+MODELS_DIR = REPO / "datasets" / "soc_2020" / "models"
+MODELS = [MODELS_DIR / name for name in ("load.sql", "code_list.sql", "titles.sql", "crosswalk.sql")]
+CONTRACTS = REPO / "contracts"
 DATA = Path(__file__).resolve().parent / "testdata" / "soc_2020"
 CHECK = Path(__file__).resolve().parent / "check_code_list.py"
 LEVELS = "major,sub_major,minor,unit"
@@ -84,6 +88,19 @@ class Run:
         self.con.execute(f"COPY (FROM soc_2020_out ORDER BY code) TO '{out}' (FORMAT parquet)")
         return out
 
+    def export_all(self) -> None:
+        """Export the three out tables to the paths the check_inputs models read."""
+        for table, name in [("soc_2020_out", "soc_2020"), ("soc_2020_titles_out", "soc_2020_titles"),
+                            ("soc_2010_to_2020_out", "soc_2010_to_2020")]:
+            self.con.execute(f"COPY (FROM {table}) TO '{self.build / 'stage' / (name + '.parquet')}' (FORMAT parquet)")
+
+    def check(self, inputs: str, contract: str) -> None:
+        """Run the code-list and table check_inputs models, as the Protocol's steps do, then a
+        shared contract check; raises duckdb.Error on a broken rule."""
+        self.con.execute((MODELS_DIR / "check_inputs_code_list.sql").read_text(encoding="utf-8"))
+        self.con.execute((MODELS_DIR / inputs).read_text(encoding="utf-8"))
+        self.con.execute((CONTRACTS / contract).read_text(encoding="utf-8"))
+
     def close(self) -> None:
         self.con.close()
         self.tmp.cleanup()
@@ -112,6 +129,7 @@ class BuildTest(unittest.TestCase):
         cls.scratch = Run()
         cls.scratch.load()
         cls.parquet = cls.scratch.export()
+        cls.scratch.export_all()
         cls.con = cls.scratch.con
 
     @classmethod
@@ -263,6 +281,110 @@ class BuildTest(unittest.TestCase):
             "SELECT count(*) FROM ons_relationship WHERE men_lfs_base IS NULL OR women_census_base IS NULL "
             "OR men_lfs_share IS NULL OR women_census_share IS NULL").fetchone()[0], 0)
 
+    def titles(self, where: str = "true") -> list[dict]:
+        cur = self.con.execute(f"SELECT * FROM soc_2020_titles_out WHERE {where}")
+        names = [d[0] for d in cur.description]
+        return [dict(zip(names, r)) for r in cur.fetchall()]
+
+    def test_titles_pass_contract(self):
+        self.scratch.check("check_inputs_titles.sql", "check_titles.sql")
+        self.assertEqual(self.con.execute("SELECT rows_checked FROM contract_titles_result").fetchone()[0], 188)
+
+    def test_crosswalk_pass_contract(self):
+        self.scratch.check("check_inputs_crosswalk.sql", "check_crosswalk.sql")
+        self.assertEqual(self.con.execute("SELECT rows_checked FROM contract_crosswalk_result").fetchone()[0], 21)
+
+    def test_titles_columns(self):
+        names = [d[0] for d in self.con.execute("SELECT * FROM soc_2020_titles_out").description]
+        self.assertEqual(names, [
+            "entry_id", "title", "code", "code_description", "release", "text_source", "corpus",
+            "title_natural", "additional_qualifier", "industry_qualifier", "default_flag", "soc_2020_ext",
+            "soc_2020_ext_title", "soc_2010", "soc_2000", "soc_1990", "isco_08",
+            "version_added_or_amended", "change"])
+
+    def test_titles_release_text_and_description(self):
+        self.assertEqual(self.con.execute("SELECT DISTINCT release, text_source FROM soc_2020_titles_out").fetchall(),
+                         [("v14/2026-08-27", "ons")])
+        self.assertEqual(self.con.execute(
+            "SELECT count(*) FROM soc_2020_titles_out t JOIN soc_2020_out c USING (code) "
+            "WHERE t.code_description IS DISTINCT FROM c.description").fetchone()[0], 0)
+        self.assertEqual(self.titles("entry_id = 'd5zz'")[0]["code_description"], "Chief executives and senior officials")
+
+    def test_see_rows_dropped(self):
+        # The cross-references (the two "see ..." rows with no code, and their kin) are not entries.
+        self.assertEqual(self.con.execute(
+            "SELECT count(*) FROM soc_2020_titles_out WHERE entry_id IN ('a1pc', 'a2cj', 'e9se', 'd3ak')").fetchone()[0], 0)
+        self.assertEqual(self.con.execute("SELECT count(*) FROM soc_2020_titles_out").fetchone()[0], 188)
+        self.assertEqual(self.con.execute(
+            "SELECT count(*) FROM soc_2020_titles_out WHERE soc_2010 LIKE '%}%'").fetchone()[0], 0)
+
+    def test_repeated_title_kept_by_entry_id(self):
+        # In the real index each repeated title (with both qualifiers) is a cross-reference beside
+        # a coded entry, so only the coded one is a row here. Among coded entries none repeats,
+        # and entry_id, not the title, is the key.
+        self.assertEqual(sorted((r["entry_id"], r["code"]) for r in
+                                self.titles("title IN ('President, vice', 'Operative, cleaning')")),
+                         [("d5zz", "1111"), ("f2sq", "9223")])
+        self.assertEqual(self.con.execute(
+            "SELECT count(*) FROM (SELECT title, additional_qualifier, industry_qualifier FROM soc_2020_titles_out "
+            "GROUP BY ALL HAVING count(*) > 1)").fetchone()[0], 0)
+        self.assertEqual(self.con.execute(
+            "SELECT count(*) FROM (SELECT entry_id FROM soc_2020_titles_out GROUP BY entry_id HAVING count(*) > 1)"
+        ).fetchone()[0], 0)
+
+    def test_ons_fields_carried(self):
+        r = self.titles("entry_id = 'd5zz'")[0]
+        self.assertEqual((r["soc_2010"], r["soc_2000"], r["soc_1990"], r["isco_08"]), ("1115", "1112", "101", "1120"))
+        self.assertEqual((r["default_flag"], r["soc_2020_ext"], r["version_added_or_amended"], r["change"]),
+                         ("M", "1111/99", "V8 amended", "Default code was A"))
+
+    def test_corpus_has_qualifiers(self):
+        rows = self.titles("additional_qualifier IS NOT NULL OR industry_qualifier IS NOT NULL")
+        self.assertTrue(rows)
+        for r in rows:
+            for q in (r["additional_qualifier"], r["industry_qualifier"]):
+                if q:
+                    self.assertIn(" ".join(q.split()).lower(), r["corpus"], r["entry_id"])
+        self.assertEqual(self.con.execute(
+            "SELECT count(*) FROM soc_2020_titles_out WHERE corpus != lower(strip_accents(regexp_replace("
+            "concat_ws(' ', title, additional_qualifier, industry_qualifier), '\\s+', ' ', 'g')))").fetchone()[0], 0)
+
+    def test_crosswalk_columns_and_release(self):
+        names = [d[0] for d in self.con.execute("SELECT * FROM soc_2010_to_2020_out").description]
+        self.assertEqual(names, [
+            "from_code", "from_description", "to_code", "to_description", "from_edition", "to_edition", "release",
+            "men_lfs_base", "women_lfs_base", "men_census_base", "women_census_base",
+            "men_lfs_share", "women_lfs_share", "men_census_share", "women_census_share"])
+        self.assertEqual(self.con.execute(
+            "SELECT DISTINCT release, from_edition, to_edition FROM soc_2010_to_2020_out").fetchall(),
+            [("2021-07", "2010", "2020")])
+
+    def test_crosswalk_release(self):
+        self.assertEqual(self.con.execute("SELECT DISTINCT release FROM soc_2010_to_2020_out").fetchall(), [("2021-07",)])
+
+    def test_crosswalk_bases_on_pairs(self):
+        # Each pairing carries the "Total sample" bases of its own 2010 group; a fill from the
+        # wrong group, or a "Total sample" row left as a pairing, would change these.
+        def bases(code):
+            return self.con.execute(
+                "SELECT DISTINCT men_lfs_base, men_census_base, women_lfs_base, women_census_base "
+                "FROM soc_2010_to_2020_out WHERE from_code = ?", [code]).fetchall()
+        self.assertEqual(bases("1115"), [(361, 808, 99, 213)])
+        self.assertEqual(bases("1116"), [(48, 98, 25, 47)])
+        self.assertEqual(bases("1132"), [(569, 1551, 203, 519)])
+        self.assertEqual(self.con.execute("SELECT count(*) FROM soc_2010_to_2020_out WHERE from_code = '1116'").fetchone()[0], 2)
+        self.assertEqual(self.con.execute(
+            "SELECT count(*) FROM soc_2010_to_2020_out WHERE to_code IS NULL OR to_code = 'Total sample' "
+            "OR from_code NOT SIMILAR TO '[0-9]{4}' OR men_lfs_base IS NULL").fetchone()[0], 0)
+
+    def test_zero_share_pair_kept(self):
+        r = self.con.execute(
+            "SELECT men_lfs_share, men_census_share, women_lfs_share, women_census_share, to_description "
+            "FROM soc_2010_to_2020_out WHERE from_code = '1116' AND to_code = '1111'").fetchall()
+        self.assertEqual(len(r), 1)
+        self.assertEqual((r[0][0], r[0][2], r[0][3], r[0][4]), (0.0, 0.0, 0.0, "Chief executives and senior officials"))
+        self.assertAlmostEqual(r[0][1], 0.01020408163265306)
+
 
 class ReleaseTest(unittest.TestCase):
     def build(self, **kwargs) -> Run:
@@ -383,6 +505,14 @@ class RefusalTest(unittest.TestCase):
             for row in range(2, ws.max_row + 1):
                 if ws.cell(row, 1).value == "a1pc":
                     ws.cell(row, 12).value = None
+        self.refuses(change, "cross-reference", INDEX, "SOC2020 coding index")
+
+    def test_a_see_cell_that_only_starts_with_see_fails(self):
+        # "see" must be a whole word: this row is not a cross-reference, so it may not be left out.
+        def change(ws):
+            for row in range(2, ws.max_row + 1):
+                if ws.cell(row, 1).value == "a1pc":
+                    ws.cell(row, 12).value = "seeing eye dog handler"
         self.refuses(change, "cross-reference", INDEX, "SOC2020 coding index")
 
     def test_a_blank_base_on_a_total_sample_row_fails(self):
