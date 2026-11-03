@@ -89,9 +89,9 @@ class Run:
         return out
 
     def export_all(self) -> None:
-        """Export the three out tables to the paths the check_inputs models read."""
-        for table, name in [("soc_2020_out", "soc_2020"), ("soc_2020_titles_out", "soc_2020_titles"),
-                            ("soc_2010_to_2020_out", "soc_2010_to_2020")]:
+        """Export the titles and crosswalk tables to the paths the check_inputs models read."""
+        # soc_2020_out is already in the file export() wrote, in code order.
+        for table, name in [("soc_2020_titles_out", "soc_2020_titles"), ("soc_2010_to_2020_out", "soc_2010_to_2020")]:
             self.con.execute(f"COPY (FROM {table}) TO '{self.build / 'stage' / (name + '.parquet')}' (FORMAT parquet)")
 
     def check(self, inputs: str, contract: str) -> None:
@@ -359,9 +359,6 @@ class BuildTest(unittest.TestCase):
             "SELECT DISTINCT release, from_edition, to_edition FROM soc_2010_to_2020_out").fetchall(),
             [("2021-07", "2010", "2020")])
 
-    def test_crosswalk_release(self):
-        self.assertEqual(self.con.execute("SELECT DISTINCT release FROM soc_2010_to_2020_out").fetchall(), [("2021-07",)])
-
     def test_crosswalk_bases_on_pairs(self):
         # Each pairing carries the "Total sample" bases of its own 2010 group; a fill from the
         # wrong group, or a "Total sample" row left as a pairing, would change these.
@@ -377,7 +374,9 @@ class BuildTest(unittest.TestCase):
             "SELECT count(*) FROM soc_2010_to_2020_out WHERE to_code IS NULL OR to_code = 'Total sample' "
             "OR from_code NOT SIMILAR TO '[0-9]{4}' OR men_lfs_base IS NULL").fetchone()[0], 0)
 
-    def test_zero_share_pair_kept(self):
+    def test_pair_with_a_zero_share_kept(self):
+        # No pairing in ONS's sheet (fixture or full file) has all four shares 0; this one has
+        # three at 0 and one above it, and must not be dropped for its zeros.
         r = self.con.execute(
             "SELECT men_lfs_share, men_census_share, women_lfs_share, women_census_share, to_description "
             "FROM soc_2010_to_2020_out WHERE from_code = '1116' AND to_code = '1111'").fetchall()
