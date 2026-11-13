@@ -2076,6 +2076,22 @@ class LicenceNoticeSelfTest(unittest.TestCase):
         self.widgets(licences, description=line)
         self.assertOutcome(self.check(), EXIT_OK)
 
+    def test_apache_with_its_notice_passes(self) -> None:
+        line = "Data from X, Copyright (C) 2009 The X Authors, licensed under the Apache License 2.0."
+        licences = [
+            {
+                "name": "Apache-2.0",
+                "path": "https://www.apache.org/licenses/LICENSE-2.0",
+                "x-attribution": line,
+                "x-changes": "Meridian grouped the entries.",
+                "x-licence-text": "Apache License\nVersion 2.0, January 2004",
+            }
+        ]
+        self.widgets(licences, description=f"Codes. {line}")
+        result = self.check()
+        self.assertOutcome(result, EXIT_OK)
+        self.assertNoNotice(result)
+
     def test_apache_without_changes_fails(self) -> None:
         line = "Data from X, Copyright (C) 2009 The X Authors, licensed under the Apache License 2.0."
         licences = [
@@ -2114,7 +2130,7 @@ class LicenceNoticeSelfTest(unittest.TestCase):
         bare = {"name": "CC-BY-4.0", "path": self.CC_BY_PATH}
         self.widgets([cc0, bare], description="Codes.")
         result = self.check()
-        self.assertOutcome(result, EXIT_VIOLATIONS, "licences[1]".replace("licences", "licenses"))
+        self.assertOutcome(result, EXIT_VIOLATIONS, "licenses[1]")
         self.assertNotIn("licenses[0]", result.stdout)
         self.assertEqual(result.stdout.count("x-attribution"), 1)
 
