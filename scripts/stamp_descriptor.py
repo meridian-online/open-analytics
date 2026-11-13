@@ -6,8 +6,7 @@
 # duckdb is NOT declared here on purpose: the manifest step that runs this under
 # `op: uv@1` pins it in `deps:`, and `uv run --script` installs what this block names
 # as well as what the step names, so a second copy would be a second thing to keep in
-# step. The three manifests that still invoke this through `python3` are unaffected —
-# these are comments.
+# step.
 """Put a dataset's descriptor inside the dataset, and read it back out of one URL.
 
 A `datapackage.json` says what a Parquet's columns are, what they may contain,
@@ -25,20 +24,20 @@ runs it with the repository host unreachable to show that.
 
 Two properties are load-bearing and are asserted rather than assumed.
 
-**The data pages do not move.** A stamp rewrites the file through DuckDB, so the
-worry is that it re-encodes the rows and the `order_by` clauses that make an
-export byte-reproducible stop meaning anything. Everything before the footer is
-compared byte for byte between the input and the stamped output, and a stamp that
-moved a single data byte is refused with the original left in place.
+**The data pages do not move.** The `order_by` clauses that make an export
+byte-reproducible would stop meaning anything if the stamp re-encoded the rows. So
+the stamp does not rewrite the file through any engine: it copies everything before
+the footer byte for byte and rewrites only the footer's key/value map, leaving the
+rest of the footer — schema, row groups, `created_by` — as the writer wrote it.
+Everything before the footer is then compared byte for byte between the input and
+the stamped output, and a stamp that moved a single data byte is refused with the
+original left in place. DuckDB reads the stamped footer back before it replaces
+anything, so a footer this script wrote wrong never lands.
 
-The pages CAN move, which is why that comparison is a guard and not a formality.
-The rewrite has to reproduce the layout the file was written with, and the layout
-is not in this script — it is in whatever wrote the file. `edgar_gleif` exports at
-`row_group_size: 50000`, which DuckDB rounds to 51,200; a rewrite at DuckDB's
-default 122,880 re-groups every page and the guard refuses the whole run. So the
-layout is READ OFF THE SOURCE FILE — row-group size and codec both — rather than
-named here. Anything this script hardcodes about the shape of a file it did not
-write is a latent version of that failure.
+It used to rewrite the file with DuckDB's `COPY … KV_METADATA`. That only kept the
+pages where they were when the stamp's DuckDB was the version that wrote the file
+and the layout it was given matched the writer's, and arc 0.2.2 writes with DuckDB
+2.0 while this step pins the reader's 1.5.5, so every such run was refused.
 
 **The embedded copy carries no `bytes` and no `hash`.** A file cannot state its
 own size or its own digest, because stating them changes them — write the size in
@@ -86,7 +85,6 @@ import json
 import os
 import sys
 import tempfile
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -274,73 +272,243 @@ def read_self_description(con, target: str) -> str | None:
     return rows[0][0]
 
 
-@dataclass(frozen=True)
-class Layout:
-    """How a Parquet file was written: rows per row group, and the page codec.
+# ─────────────────────────────────────────────────────────────── the footer
+#
+# The footer is a Thrift `FileMetaData` in the compact protocol. Its key/value map is
+# field 5, a list of `KeyValue {1: string key, 2: optional string value}`. The stamp
+# rewrites that one field and copies every other field's bytes as they were, so the
+# schema, the row groups, the column-chunk offsets and `created_by` are the writer's,
+# whatever wrote the file and whatever DuckDB this runs under.
 
-    Both are read off the file about to be rewritten rather than named here, with
-    one exception the code states where it happens: a file with no column chunks
-    has no codec to read, so the rewrite falls back to zstd. A rewrite that took
-    DuckDB's COPY defaults instead — 122,880 rows, and SNAPPY when no COMPRESSION
-    is given — would re-group and re-compress every page of any file written with
-    anything else, which is not a footer change and is refused.
+KEY_VALUE_METADATA = 5
 
-    `max()` over the row groups is right for a file DuckDB wrote, and only for
-    one. DuckDB rounds a declared size UP to a multiple of its 2048-row vector
-    size, so the size it writes is already a fixed point and feeding it back is
-    idempotent. A Parquet from elsewhere with a non-uniform layout has no single
-    ROW_GROUP_SIZE that reproduces it, so this refuses with the data-pages
-    message rather than stamping it. That is the safe direction and it will still
-    look like a bug to whoever meets it.
+# Compact-protocol type ids.
+T_STOP, T_TRUE, T_FALSE, T_BYTE, T_I16, T_I32, T_I64, T_DOUBLE = 0, 1, 2, 3, 4, 5, 6, 7
+T_BINARY, T_LIST, T_SET, T_MAP, T_STRUCT = 8, 9, 10, 11, 12
+
+
+class FooterError(Exception):
+    """The footer is not compact-protocol Thrift this parser can walk."""
+
+
+def _varint(buf: bytes, pos: int) -> tuple[int, int]:
+    value = shift = 0
+    while True:
+        if pos >= len(buf):
+            raise FooterError("a varint runs past the end of the footer")
+        byte = buf[pos]
+        pos += 1
+        value |= (byte & 0x7F) << shift
+        if not byte & 0x80:
+            return value, pos
+        shift += 7
+        if shift > 63:
+            raise FooterError("a varint is longer than 64 bits")
+
+
+def _write_varint(value: int) -> bytes:
+    out = bytearray()
+    while True:
+        if value < 0x80:
+            out.append(value)
+            return bytes(out)
+        out.append((value & 0x7F) | 0x80)
+        value >>= 7
+
+
+def _zigzag(value: int) -> int:
+    return (value << 1) ^ (value >> 63)
+
+
+def _unzigzag(value: int) -> int:
+    return (value >> 1) ^ -(value & 1)
+
+
+def _field_header(buf: bytes, pos: int, last_id: int) -> tuple[int, int, int]:
+    """(field type, field id, position after the header); type T_STOP ends the struct."""
+    if pos >= len(buf):
+        raise FooterError("a struct runs past the end of the footer")
+    byte = buf[pos]
+    pos += 1
+    kind = byte & 0x0F
+    if kind == T_STOP:
+        return T_STOP, 0, pos
+    delta = byte >> 4
+    if delta:
+        return kind, last_id + delta, pos
+    raw, pos = _varint(buf, pos)
+    return kind, _unzigzag(raw), pos
+
+
+def _skip(buf: bytes, pos: int, kind: int, in_field: bool = True) -> int:
+    """The position after one value of `kind` starting at `pos`."""
+    if kind in (T_TRUE, T_FALSE):
+        # In a field header the value is the type itself; in a list it is one byte.
+        return pos if in_field else pos + 1
+    if kind == T_BYTE:
+        return pos + 1
+    if kind in (T_I16, T_I32, T_I64):
+        return _varint(buf, pos)[1]
+    if kind == T_DOUBLE:
+        return pos + 8
+    if kind == T_BINARY:
+        length, pos = _varint(buf, pos)
+        return pos + length
+    if kind in (T_LIST, T_SET):
+        if pos >= len(buf):
+            raise FooterError("a list runs past the end of the footer")
+        header = buf[pos]
+        pos += 1
+        size, element = header >> 4, header & 0x0F
+        if size == 15:
+            size, pos = _varint(buf, pos)
+        for _ in range(size):
+            pos = _skip(buf, pos, element, in_field=False)
+        return pos
+    if kind == T_MAP:
+        size, pos = _varint(buf, pos)
+        if size:
+            if pos >= len(buf):
+                raise FooterError("a map runs past the end of the footer")
+            types = buf[pos]
+            pos += 1
+            for _ in range(size):
+                pos = _skip(buf, pos, types >> 4, in_field=False)
+                pos = _skip(buf, pos, types & 0x0F, in_field=False)
+        return pos
+    if kind == T_STRUCT:
+        last_id = 0
+        while True:
+            field_kind, last_id, pos = _field_header(buf, pos, last_id)
+            if field_kind == T_STOP:
+                return pos
+            pos = _skip(buf, pos, field_kind)
+    raise FooterError(f"type {kind} is not a compact-protocol type")
+
+
+def _fields(buf: bytes) -> list[tuple[int, int, bytes]]:
+    """(field id, type, value bytes) for each top-level field, in file order.
+
+    Refuses a footer it cannot walk to exactly its declared end: bytes it did not
+    account for are bytes it would not know how to carry.
     """
+    fields: list[tuple[int, int, bytes]] = []
+    pos = last_id = 0
+    while True:
+        kind, last_id, after_header = _field_header(buf, pos, last_id)
+        if kind == T_STOP:
+            if after_header != len(buf):
+                raise FooterError(f"{len(buf) - after_header} bytes follow the end of the metadata")
+            return fields
+        end = _skip(buf, after_header, kind)
+        if end > len(buf):
+            raise FooterError("a field runs past the end of the footer")
+        fields.append((last_id, kind, buf[after_header:end]))
+        pos = end
 
-    row_group_size: int | None
-    compression: str
+
+def _key_value_entries(value: bytes) -> list[tuple[bytes, bytes]]:
+    """(key, the entry's raw struct bytes) for each entry of a key/value list."""
+    if not value:
+        raise FooterError("the key/value list is empty bytes")
+    header = value[0]
+    size, element = header >> 4, header & 0x0F
+    pos = 1
+    if size == 15:
+        size, pos = _varint(value, pos)
+    if size and element != T_STRUCT:
+        raise FooterError(f"the key/value list holds type {element}, not structs")
+    entries: list[tuple[bytes, bytes]] = []
+    for _ in range(size):
+        start, key, last_id = pos, None, 0
+        while True:
+            kind, last_id, pos = _field_header(value, pos, last_id)
+            if kind == T_STOP:
+                break
+            if last_id == 1 and kind == T_BINARY:
+                length, at = _varint(value, pos)
+                key = value[at : at + length]
+            pos = _skip(value, pos, kind)
+        if key is None:
+            raise FooterError("a key/value entry has no key")
+        entries.append((key, value[start:pos]))
+    if pos != len(value):
+        raise FooterError("the key/value list does not end where its entries do")
+    return entries
 
 
-def source_layout(con, source: Path) -> Layout:
-    """Read the row-group size and codec out of `source`'s own footer.
+def _binary_field(field_id: int, last_id: int, data: bytes) -> bytes:
+    return bytes([((field_id - last_id) << 4) | T_BINARY]) + _write_varint(len(data)) + data
 
-    `max(row_group_num_rows)` rather than the first row group's: the last one is a
-    remainder, and DuckDB rounds a declared size up to a multiple of its vector
-    size (a declared 50,000 is written as 51,200), so the widest group is the size
-    that was actually in force.
+
+def with_key_value(footer: bytes, key: str, text: str) -> bytes:
+    """`footer` with `key` set to `text` in its key/value map, and nothing else changed.
+
+    An entry already under `key` is replaced and the new one goes last, so stamping a
+    stamped file writes the same bytes again. Every other entry keeps its place.
     """
     try:
-        row = con.execute(
-            "SELECT max(row_group_num_rows), list(DISTINCT compression) FROM parquet_metadata(?)",
-            [str(source)],
-        ).fetchone()
-    except Exception as exc:
-        raise StampError(f"cannot read the layout of {source}: {exc}") from exc
+        fields = _fields(footer)
+        current = next((value for fid, _, value in fields if fid == KEY_VALUE_METADATA), None)
+        entries = _key_value_entries(current) if current is not None else []
+    except FooterError as exc:
+        raise StampError(f"cannot parse the footer: {exc}") from exc
 
-    row_group_size, codecs = (row or (None, None))
-    codecs = sorted(codecs or [])
-    if len(codecs) > 1:
-        raise StampError(
-            f"{source} mixes {len(codecs)} Parquet codecs ({', '.join(codecs)}). One COPY writes "
-            "one codec, so this file was not written by one, and rewriting it would re-compress "
-            "pages this step must leave alone."
-        )
-    # An empty file has no column chunks and so no observable codec. It also has no
-    # data pages to move, so the choice cannot change the bytes being protected.
-    compression = codecs[0].lower() if codecs else "zstd"
-    return Layout(int(row_group_size) if row_group_size else None, compression)
+    encoded_key = key.encode("utf-8")
+    kept = [raw for entry_key, raw in entries if entry_key != encoded_key]
+    kept.append(_binary_field(1, 0, encoded_key) + _binary_field(2, 1, text.encode("utf-8")) + b"\x00")
+    header = bytes([(len(kept) << 4) | T_STRUCT]) if len(kept) < 15 else bytes([0xF0 | T_STRUCT]) + _write_varint(len(kept))
+    new_value = header + b"".join(kept)
+
+    rebuilt = [(fid, kind, value) for fid, kind, value in fields if fid != KEY_VALUE_METADATA]
+    rebuilt.append((KEY_VALUE_METADATA, T_LIST, new_value))
+    rebuilt.sort(key=lambda field: field[0])
+
+    out = bytearray()
+    last_id = 0
+    for fid, kind, value in rebuilt:
+        delta = fid - last_id
+        if 0 < delta <= 15:
+            out.append((delta << 4) | kind)
+        else:
+            out.append(kind)
+            out += _write_varint(_zigzag(fid))
+        out += value
+        last_id = fid
+    out.append(T_STOP)
+    return bytes(out)
 
 
 def stamp_parquet(con, source: Path, destination: Path, text: str) -> None:
-    """Write `source` to `destination` with `text` in the footer, data untouched."""
-    literal = text.replace("'", "''")
-    key = DESCRIPTOR_KEY.replace("'", "''")
-    layout = source_layout(con, source)
-    options = ["FORMAT parquet", f"COMPRESSION {layout.compression}"]
-    if layout.row_group_size:
-        options.append(f"ROW_GROUP_SIZE {layout.row_group_size}")
-    options.append(f"KV_METADATA {{'{key}': '{literal}'}}")
-    sql = f"COPY (SELECT * FROM read_parquet(?)) TO '{destination}' ({', '.join(options)})"
+    """Write `source` to `destination` with `text` in the footer, data untouched.
+
+    Everything before the footer is copied byte for byte and only the footer's
+    key/value map is rewritten, so no engine re-encodes a page. `con` is unused here
+    and kept so the stamp's steps share one signature; DuckDB reads the result back.
+    """
+    del con
+    offset = footer_offset(source)
     try:
-        con.execute(sql, [str(source)])
-    except Exception as exc:
+        size = source.stat().st_size
+        with source.open("rb") as handle:
+            handle.seek(offset)
+            footer = handle.read(size - 8 - offset)
+    except OSError as exc:
+        raise StampError(f"cannot read {source}: {exc}") from exc
+    new_footer = with_key_value(footer, DESCRIPTOR_KEY, text)
+    try:
+        with source.open("rb") as reader, destination.open("wb") as writer:
+            remaining = offset
+            while remaining:
+                chunk = reader.read(min(CHUNK, remaining))
+                if not chunk:
+                    raise StampError(f"{source} ended before its footer")
+                writer.write(chunk)
+                remaining -= len(chunk)
+            writer.write(new_footer)
+            writer.write(len(new_footer).to_bytes(4, "little"))
+            writer.write(PARQUET_MAGIC)
+    except OSError as exc:
         raise StampError(f"cannot stamp {source}: {exc}") from exc
 
 

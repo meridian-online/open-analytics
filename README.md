@@ -204,6 +204,8 @@ clause that makes each export reproducible still decides the data bytes and a
 stamp that moved one is refused with the original left in place. `read` is the
 consumer's half.
 
+The stamp does not re-encode the file. It copies everything before the footer and rewrites only the footer's key/value map, keeping the writer's other entries and its `created_by`, and DuckDB reads the result back before it replaces anything. An earlier stamp rewrote the file through DuckDB's `COPY`, which kept the data pages only when the stamp's DuckDB was the version that wrote them: arc 0.2.2 writes with DuckDB 2.0 while the stamp step pins duckdb 1.5.5, and the publish build writes with DuckDB 1.5.6, so no single pin served both. That rewrite also replaced `created_by` with the stamp's own version, so a published footer named the stamp's DuckDB rather than the writer's; it now names the writer.
+
 `scripts/check_protocol_readme.py` reads a fourth direction — from the manifest
 into the README beside it. Each `datasets/*/README.md` carries its step list in a
 generated block, and the check regenerates that block from the parsed

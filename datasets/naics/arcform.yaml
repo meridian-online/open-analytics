@@ -2,10 +2,8 @@
 # industry-classification Dataset is ingested from the official U.S. Census file.
 # `arc run` executes this manifest; one Run → one Dataset version. See ./README.md.
 #
-# MOSTLY-CONFIG. Every step but one is a first-class `sql:` model or a typed `op:`
-# operator (the arcform catalog). The exception is named here rather than left for a
-# reader to discover: `stamp_descriptor` is a `command:` step. This comment used to say
-# there were none, which stopped being true the moment that step landed. The curl fetch
+# ALL-CONFIG. Every step is a first-class `sql:` model or a typed `op:` operator (the
+# arcform catalog); `stamp_descriptor` runs its script through `op: uv@1`. The curl fetch
 # is http_fetch; the terminal COPY is parquet_export; datapackage_describe emits the
 # descriptor from the built Parquet; finetype_validate gates it. (The Census workbook is
 # an .xlsx — load.sql reads it directly via DuckDB's `excel` extension, so no external
@@ -113,8 +111,34 @@ steps:
   # Everything before the footer is compared byte for byte, so the order_by above still
   # decides the data bytes and a stamp that moved one is refused with the original left
   # in place. Re-running the step is a no-op to the byte.
+  #
+  # `op: uv@1` rather than a bare `python3`: the readback imports duckdb, and a
+  # `python3` without it failed the step. uv resolves the interpreter and the package
+  # itself. It rewrites, in place, the Parquet `export_naics` wrote and the
+  # datapackage.json `describe` wrote, so each of those files has two writers; giving
+  # each one writer, as edgar_gleif and the code lists do, is a separate restructure.
   - name: stamp_descriptor
-    command: "python3 ../../scripts/stamp_descriptor.py stamp --descriptor datapackage.json --parquet build/naics.parquet"
+    op: uv@1
+    with:
+      script: ../../scripts/stamp_descriptor.py
+      # `shasum -a 256 scripts/stamp_descriptor.py` prints this.
+      sha256: a9356ac8d5412d94a940ebeef1e2508eaed6b77f1d923ada88edbacccf9d9b81
+      # Pinned to DUCKDB_VERSION in .github/workflows/descriptors.yml. The stamp
+      # rewrites no data page, so this need not be the DuckDB that wrote the Parquet.
+      deps:
+        - duckdb==1.5.5
+      args:
+        - stamp
+        - --descriptor
+        - datapackage.json
+        - --parquet
+        - build/naics.parquet
+      reads:
+        - datapackage.json
+        - build/naics.parquet
+      produces:
+        - datapackage.json
+        - build/naics.parquet
 
   # publish: the out-of-repo publish pipeline reads build/naics.parquet + the emitted
   # datapackage.json (boundary — not an arc step). See README.

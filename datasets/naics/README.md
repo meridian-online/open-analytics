@@ -35,14 +35,13 @@ Produces `build/naics.parquet`.
 
 ## Run
 
-Needs the `arc` binary and `duckdb` (with the `excel` extension), plus `curl` for the
-fetch: `arc run`.
+Needs the `arc` binary, `duckdb` (with the `excel` extension), `uv` (for the stamp), and `finetype` with its DuckDB extension (`FINETYPE_DUCKDB_EXT`), plus `curl` for the fetch: `arc run`.
 
 ## The step list
 
 <!-- protocol-steps: generated from arcform.yaml by scripts/check_protocol_readme.py — do not edit this block by hand -->
 
-7 steps, of which 1 runs through an opaque `command:`/shell step: `stamp_descriptor`. A shell step is invisible to the engine's staleness model and carries its interpreter and dependency pins inline, so what this Protocol guarantees stops short of it. Each shell step's row carries a fingerprint of its command line, so an edit to the line changes this block without the line being printed here.
+All 7 steps are `sql:` models or typed `op:` operators from the arcform catalog. This Protocol runs no opaque `command:`/shell step.
 
 | # | Step | How it runs |
 |---|---|---|
@@ -52,6 +51,6 @@ fetch: `arc run`.
 | 4 | `export_naics` | `op: parquet_export@1` |
 | 5 | `describe` | `op: datapackage_describe@1` |
 | 6 | `validate` | `op: finetype_validate@1` |
-| 7 | `stamp_descriptor` | `command:` (shell, sha256 `cf3861cfb58b`) |
+| 7 | `stamp_descriptor` | `op: uv@1` |
 
 <!-- /protocol-steps -->

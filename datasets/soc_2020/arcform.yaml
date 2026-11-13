@@ -244,7 +244,7 @@ steps:
     op: uv@1
     with:
       script: ../../scripts/stamp_descriptor.py
-      sha256: b22581b77414303312aa5040e70a66ccd96a6bfd1902820e487428441018b9c2
+      sha256: a9356ac8d5412d94a940ebeef1e2508eaed6b77f1d923ada88edbacccf9d9b81
       deps:
         - duckdb==1.5.5
       args:
@@ -269,7 +269,7 @@ steps:
     op: uv@1
     with:
       script: ../../scripts/stamp_descriptor.py
-      sha256: b22581b77414303312aa5040e70a66ccd96a6bfd1902820e487428441018b9c2
+      sha256: a9356ac8d5412d94a940ebeef1e2508eaed6b77f1d923ada88edbacccf9d9b81
       deps:
         - duckdb==1.5.5
       args:
@@ -294,7 +294,7 @@ steps:
     op: uv@1
     with:
       script: ../../scripts/stamp_descriptor.py
-      sha256: b22581b77414303312aa5040e70a66ccd96a6bfd1902820e487428441018b9c2
+      sha256: a9356ac8d5412d94a940ebeef1e2508eaed6b77f1d923ada88edbacccf9d9b81
       deps:
         - duckdb==1.5.5
       args:

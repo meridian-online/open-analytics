@@ -51,6 +51,13 @@ import stamp_descriptor as sd  # noqa: E402 - the module under test, found besid
 
 STAMPER = Path(__file__).with_name("stamp_descriptor.py")
 
+# A small Parquet the DuckDB 2.0.0 CLI wrote: 5,000 rows in three row groups, zstd, and
+# one key/value entry (`writer-note`) of its own. Written once and kept, because CI
+# installs one DuckDB and the case needs a file a different one wrote.
+WRITTEN_BY_ANOTHER_DUCKDB = (
+    Path(__file__).resolve().parent / "testdata" / "stamp_descriptor" / "written-by-duckdb-2.0.0.parquet"
+)
+
 EXIT_OK = 0
 EXIT_DISAGREEMENT = 1
 EXIT_ERROR = 2
@@ -326,6 +333,67 @@ class StampDescriptorSelfTest(unittest.TestCase):
 
         self.assertEqual(data_section(parquet), before, "the stamp re-compressed the data pages")
         self.assertEqual(parquet_layout(parquet)[1], {"GZIP"}, "the stamp changed the codec")
+
+    def test_a_parquet_another_duckdb_version_wrote_keeps_its_data_pages(self) -> None:
+        """The stamp runs under one DuckDB and the file may have been written by another.
+
+        arc 0.2.2 writes with DuckDB 2.0; the stamp step pins the duckdb Python package
+        to this repository's reader pin. A stamp that rewrote the file re-encoded it
+        under the stamp's DuckDB, and 1.5.5 does not lay pages out the way 2.0 does,
+        so every such run was refused. The fixture is a file DuckDB 2.0.0 wrote, with a
+        key/value entry of its own, and the case holds whatever DuckDB runs it.
+        """
+        import duckdb
+
+        descriptor, parquet = build_dataset(self.root)
+        parquet.write_bytes(WRITTEN_BY_ANOTHER_DUCKDB.read_bytes())
+        before = data_section(parquet)
+        con = duckdb.connect()
+        writer = con.execute("SELECT created_by FROM parquet_file_metadata(?)", [str(parquet)]).fetchall()
+        self.assertIn("v2.0.0", writer[0][0], "the fixture is not the DuckDB 2.0.0 file it claims to be")
+
+        self.assertOutcome(
+            run_cli("stamp", "--descriptor", str(descriptor), "--parquet", str(parquet)), EXIT_OK
+        )
+
+        self.assertEqual(data_section(parquet), before, "the stamp moved a data byte")
+        self.assertEqual(
+            con.execute("SELECT created_by FROM parquet_file_metadata(?)", [str(parquet)]).fetchall(),
+            writer,
+            "the footer no longer names the engine that wrote the data",
+        )
+        entries = dict(
+            con.execute(
+                "SELECT decode(key), decode(value) FROM parquet_kv_metadata(?)", [str(parquet)]
+            ).fetchall()
+        )
+        self.assertEqual(entries.get("writer-note"), "kept by the stamp", "the stamp dropped the writer's entry")
+        self.assertEqual(json.loads(entries[sd.DESCRIPTOR_KEY])["name"], "widgets")
+        self.assertEqual(
+            con.execute("SELECT count(*), count(DISTINCT label) FROM read_parquet(?)", [str(parquet)]).fetchall(),
+            [(5000, 97)],
+        )
+        con.close()
+
+        once = parquet.read_bytes()
+        self.assertOutcome(
+            run_cli("stamp", "--descriptor", str(descriptor), "--parquet", str(parquet)), EXIT_OK
+        )
+        self.assertEqual(parquet.read_bytes(), once, "a second stamp moved the object")
+
+    def test_a_footer_this_cannot_parse_is_refused_with_the_file_untouched(self) -> None:
+        descriptor, parquet = build_dataset(self.root)
+        raw = bytearray(parquet.read_bytes())
+        footer_length = int.from_bytes(raw[-8:-4], "little")
+        # A field header of type 13, which the compact protocol does not define.
+        raw[len(raw) - 8 - footer_length] = 0x1D
+        parquet.write_bytes(bytes(raw))
+        self.assertOutcome(
+            run_cli("stamp", "--descriptor", str(descriptor), "--parquet", str(parquet)),
+            EXIT_ERROR,
+            "cannot parse the footer",
+        )
+        self.assertEqual(parquet.read_bytes(), bytes(raw), "a refused stamp must leave the file alone")
 
     def test_a_stamp_that_moved_the_data_is_refused(self) -> None:
         """The guard above is only worth having if it fires. This is it firing."""
