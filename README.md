@@ -161,6 +161,8 @@ licensor's text is right. It does not read the other direction — a description
 states a restriction its identifier lacks — because a vocabulary check cannot tell
 "restricted" from "not restricted".
 
+Rule 10 holds a licence that asks a copy to carry a notice to carrying it. `datasets/licence-notices.json` says, per licence identifier, what that licence asks; a descriptor's `licenses[]` entry then carries the attribution line as `x-attribution`, what Meridian changed as `x-changes` and the licence's text as `x-licence-text`, as its licence requires, and the package `description` repeats the attribution line. It reads every descriptor in `datasets/`, unpublished ones included, so a descriptor stops before it publishes; a licence identifier the table does not list is refused, so a new licence cannot publish unread. [`docs/licence-notices.md`](docs/licence-notices.md) is the guide: what each licence asks, where the notice travels and the lines each source carries.
+
 `scripts/publish_dataset.py` reads in the other direction — from the endpoint
 back into the descriptor. `verify` re-reads every published object in full and
 refuses when a descriptor and its endpoint disagree on either `bytes` or `hash`.
@@ -331,5 +333,7 @@ corrections are published in place.
 
 Code and descriptors in this repository are MIT-licensed. The datasets
 themselves are **not** covered by this repository's license — each carries its
-own open license (CC0 or public domain today), stated in its descriptor and on
-its dataset page.
+own open license, stated in its descriptor and on its dataset page. The
+licenses vary (public domain, CC0, and some that ask for a notice to travel
+with every copy); [`docs/licence-notices.md`](docs/licence-notices.md) says how
+a descriptor carries that notice.
