@@ -42,13 +42,13 @@ USITC's export has no chapter rows, and its chapter and section titles live only
 
 ## Run
 
-Needs the `arc` binary, `duckdb`, `uv` (for `check_code_list`), `finetype` with its DuckDB extension (`FINETYPE_DUCKDB_EXT`), and a `python3` that can import `duckdb` for the stamp: `arc run`. The full run over USITC's 12.6 MB export takes about 30 seconds in DuckDB.
+Needs the `arc` binary, `duckdb`, `uv` (for `check_code_list` and the stamp), and `finetype` with its DuckDB extension (`FINETYPE_DUCKDB_EXT`): `arc run`. The full run over USITC's 12.6 MB export takes about 30 seconds in DuckDB.
 
 ## The step list
 
 <!-- protocol-steps: generated from arcform.yaml by scripts/check_protocol_readme.py — do not edit this block by hand -->
 
-11 steps, of which 1 runs through an opaque `command:`/shell step: `stamp_descriptor`. A shell step is invisible to the engine's staleness model and carries its interpreter and dependency pins inline, so what this Protocol guarantees stops short of it. Each shell step's row carries a fingerprint of its command line, so an edit to the line changes this block without the line being printed here.
+All 11 steps are `sql:` models or typed `op:` operators from the arcform catalog. This Protocol runs no opaque `command:`/shell step.
 
 | # | Step | How it runs |
 |---|---|---|
@@ -62,6 +62,6 @@ Needs the `arc` binary, `duckdb`, `uv` (for `check_code_list`), `finetype` with 
 | 8 | `describe` | `op: datapackage_describe@1` |
 | 9 | `check_code_list` | `op: uv@1` |
 | 10 | `validate` | `op: finetype_validate@1` |
-| 11 | `stamp_descriptor` | `command:` (shell, sha256 `2be155648ced`) |
+| 11 | `stamp_descriptor` | `op: uv@1` |
 
 <!-- /protocol-steps -->
