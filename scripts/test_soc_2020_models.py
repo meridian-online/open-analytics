@@ -618,6 +618,16 @@ class DescriptorTest(unittest.TestCase):
                 self.assertEqual([lic["name"] for lic in descriptor["licenses"]], ["OGL-UK-3.0"])
                 self.assertEqual(descriptor["licenses"], overrides["licenses"])
 
+    def test_licence_carries_the_ons_notice(self):
+        for table, *_ in DESCRIPTORS:
+            with self.subTest(table=table):
+                descriptor, _ = self.documents(table)
+                licence = descriptor["licenses"][0]
+                self.assertEqual(licence.get("x-attribution"), ATTRIBUTION)
+                changes = licence.get("x-changes")
+                self.assertIsInstance(changes, str)
+                self.assertTrue(changes.strip().startswith("Meridian"), changes)
+
     def test_description_carries_the_attribution(self):
         for table, *_ in DESCRIPTORS:
             with self.subTest(table=table):

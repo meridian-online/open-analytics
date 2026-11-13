@@ -1,0 +1,42 @@
+{
+  "OGL-UK-3.0": {
+    "clause": "You must acknowledge the source of the Information in your product or application by including or linking to any attribution statement specified by the Information Provider(s) and, where possible, provide a link to this licence.",
+    "path": "https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/",
+    "attribution": true,
+    "names_licence": "Open Government Licence v3.0"
+  },
+  "Unicode-3.0": {
+    "clause": "Permission is hereby granted ... provided that either (a) this copyright and permission notice appear with all copies of the Data Files or Software, or (b) this copyright and permission notice appear in associated Documentation.",
+    "path": "https://www.unicode.org/license.txt",
+    "attribution": true,
+    "copyright": true,
+    "names_licence": "Unicode License v3",
+    "text_marker": "UNICODE LICENSE V3"
+  },
+  "Apache-2.0": {
+    "clause": "You must give any other recipients of the Work or Derivative Works a copy of this License; and You must cause any modified files to carry prominent notices stating that You changed the files; and You must retain, in the Source form of any Derivative Works that You distribute, all copyright, patent, trademark, and attribution notices from the Source form of the Work.",
+    "path": "https://www.apache.org/licenses/LICENSE-2.0",
+    "attribution": true,
+    "copyright": true,
+    "names_licence": "Apache License 2.0",
+    "changes": true,
+    "text_marker": "Version 2.0, January 2004"
+  },
+  "CC-BY-4.0": {
+    "clause": "If You Share the Licensed Material, You must retain identification of the creator(s), a copyright notice, a notice that refers to this Public License, and indicate if You modified the Licensed Material and retain an indication of any previous modifications.",
+    "path": "https://creativecommons.org/licenses/by/4.0/",
+    "attribution": true,
+    "copyright": true,
+    "names_licence": "CC BY 4.0",
+    "changes": true
+  },
+  "CC0-1.0": {
+    "clause": "The person who associated a work with this deed has dedicated the work to the public domain by waiving all of his or her rights to the work worldwide under copyright law; it asks nothing of a copy."
+  },
+  "other-pd": {
+    "clause": "A work in the public domain asks nothing of a copy."
+  },
+  "notspecified": {
+    "clause": "The source asserts no licence, so there is no licence notice to carry; rule 9 holds that the absence is recorded."
+  }
+}

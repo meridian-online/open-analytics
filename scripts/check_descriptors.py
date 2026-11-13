@@ -89,6 +89,30 @@ And over every descriptor in `datasets/` AND in `examples/`:
                      nowhere, so rules 1 to 8 have no object to read, and the catalogue
                      is the table for `datasets/`.
 
+And over every descriptor in `datasets/`, unpublished ones included:
+
+ 10. licence notice
+                   — a licence that asks a copy to carry a notice is held to carrying it.
+                     `licence-notices.json`, beside the descriptors, says per identifier
+                     what its licence asks: a link to the licence, an attribution line, a
+                     copyright mark, the licence's name, a statement of changes, the
+                     licence's own text. The descriptor states each on the `licenses[]`
+                     entry itself, as `x-attribution`, `x-changes` and `x-licence-text`,
+                     and the package `description` repeats the attribution verbatim, so
+                     the notice is read with the data and not only in the entry. A notice
+                     at package level does not count: the entry names the licence, so the
+                     entry carries what it asks. Only an entry that asks is held, so a
+                     CC0 entry beside a CC BY one is not. An identifier the table does
+                     not read is refused, so a new licence cannot pass by being unknown.
+                     `clause` in the table is the reading of the licence, not a quotation.
+                     Like rule 9 it reads the descriptor alone, and so reads the
+                     unpublished `<name>.datapackage.json` beside a dataset's own. Rule 9
+                     does not read those, so for them this rule also reports a missing
+                     `licenses`, a non-object entry and a nameless entry;
+                     `examples/` is not held to it. A table that is missing,
+                     unparseable, or carries a key this script does not know is exit 2:
+                     a rule that reads nothing must not read as a pass.
+
 Exit codes are distinct on purpose, because a status alone cannot tell a refusal
 apart from a crash:
 
@@ -243,9 +267,12 @@ def remote_size(url: str) -> int | None:
 def load_descriptor(path: Path) -> dict[str, Any]:
     try:
         with path.open(encoding="utf-8") as handle:
-            return json.load(handle)
+            document = json.load(handle)
     except (OSError, json.JSONDecodeError) as exc:
         raise CheckError(f"{path}: cannot read descriptor: {exc}") from exc
+    if not isinstance(document, dict):
+        raise CheckError(f"{path}: cannot read descriptor: the document must be a JSON object")
+    return document
 
 
 def physical_types(con, path: str) -> dict[str, str]:
@@ -1435,6 +1462,11 @@ def check_catalogue(
 
 LICENCE_IDENTIFIER_RULE = "licence.identifier"
 LICENCE_RESTRICTION_RULE = "licence.restriction"
+LICENCE_NOTICE_RULE = "licence.notice"
+
+# What a table entry may ask of a descriptor. Anything else is a table this script cannot read.
+NOTICE_TEXT_KEYS = ("clause", "path", "names_licence", "text_marker")
+NOTICE_FLAG_KEYS = ("attribution", "copyright", "changes")
 
 # A sentence states a commercial-use restriction when it holds both a word about
 # commerce and a word of restriction. "Commercial" alone is not enough: it is also
@@ -1523,6 +1555,154 @@ def check_licence(package: str, descriptor: dict[str, Any]) -> list[Violation]:
     return []
 
 
+def load_notice_table(path: Path) -> dict[str, dict[str, Any]]:
+    """The licence-notices table, or a CheckError: an unreadable table must not read as a pass."""
+    try:
+        table = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        raise CheckError(f"no licence notice table at {path}") from None
+    except (OSError, json.JSONDecodeError) as exc:
+        raise CheckError(f"{path}: cannot read the licence notice table: {exc}") from exc
+    if not isinstance(table, dict) or not table:
+        raise CheckError(f"{path}: the licence notice table must be an object keyed by licence identifier")
+    for identifier, requirements in table.items():
+        if not isinstance(requirements, dict):
+            raise CheckError(f"{path}: {identifier!r} must be an object of requirements")
+        unknown = sorted(set(requirements) - {*NOTICE_TEXT_KEYS, *NOTICE_FLAG_KEYS})
+        if unknown:
+            raise CheckError(f"{path}: {identifier!r} has requirement key(s) this check does not read: {unknown}")
+        clause = requirements.get("clause")
+        if not isinstance(clause, str) or not clause.strip():
+            raise CheckError(f"{path}: {identifier!r} must state in `clause` what the licence asks, as read from its text")
+        for key in NOTICE_TEXT_KEYS:
+            if key in requirements and not (isinstance(requirements[key], str) and requirements[key].strip()):
+                raise CheckError(f"{path}: {identifier!r}.{key} must be non-empty text")
+        for key in NOTICE_FLAG_KEYS:
+            if key in requirements and not isinstance(requirements[key], bool):
+                raise CheckError(f"{path}: {identifier!r}.{key} must be true or false")
+    return table
+
+
+def _entry_text(entry: dict[str, Any], key: str) -> str:
+    value = entry.get(key)
+    return value.strip() if isinstance(value, str) else ""
+
+
+def _not_a_string(entry: dict[str, Any], key: str) -> bool:
+    """True when the entry holds `key` with a value that is not text."""
+    return key in entry and not isinstance(entry[key], str)
+
+
+def check_licence_notice(package: str, descriptor: dict[str, Any], table: dict[str, dict[str, Any]]) -> list[Violation]:
+    """Rule 10: each licence entry that asks a copy to carry a notice carries it.
+
+    Reads the descriptor and the table, nothing else. The notice must sit on the
+    `licenses[]` entry it belongs to; keys at package level are not read.
+
+    Rule 9 reads only the published `datapackage.json` (and `examples/`), so for an
+    unpublished `<name>.datapackage.json` this rule reports a missing `licenses`, a
+    non-object entry and a nameless entry itself. For a published one, rule 9 does.
+    """
+    reports_shape = Path(package).name != "datapackage.json"
+    licences = descriptor.get("licenses")
+    if not isinstance(licences, list) or not licences:
+        if reports_shape:
+            return [
+                Violation(
+                    package,
+                    "(package)",
+                    "licenses",
+                    LICENCE_NOTICE_RULE,
+                    "carries no licence entry: `licenses` must be a list holding an entry with a non-empty "
+                    "`name`, so what the licence asks of a copy can be read",
+                )
+            ]
+        return []  # rule 9 reports a descriptor with no licence
+    description = descriptor.get("description")
+    description = description if isinstance(description, str) else ""
+    violations: list[Violation] = []
+
+    for index, entry in enumerate(licences):
+        name = entry.get("name") if isinstance(entry, dict) else None
+        if not isinstance(name, str) or not name.strip():
+            if reports_shape:
+                kind = "is not an object" if not isinstance(entry, dict) else "has no non-empty `name`"
+                violations.append(
+                    Violation(
+                        package,
+                        "(package)",
+                        f"licenses[{index}]",
+                        LICENCE_NOTICE_RULE,
+                        f"{kind}: each licence entry must be an object naming its licence, so what it asks of "
+                        "a copy can be read",
+                    )
+                )
+            continue  # rule 9 reports it for a published descriptor
+        identifier = name.strip()
+        where = f"licenses[{index}] ({identifier})"
+
+        def refuse(field: str, detail: str, where: str = where) -> None:
+            violations.append(Violation(package, "(package)", f"{where}.{field}", LICENCE_NOTICE_RULE, detail))
+
+        requirements = table.get(identifier)
+        if requirements is None:
+            refuse(
+                "name",
+                f"licence identifier {identifier!r} is not one licence-notices.json reads, so what it asks of a "
+                "copy is unknown. Add it to licence-notices.json with the notice its licence asks for, as read "
+                "from the licence text, or use an identifier it reads",
+            )
+            continue
+        clause = f" (what the licence asks, as read from its text: {requirements['clause']})"
+
+        path = requirements.get("path")
+        if path and _entry_text(entry, "path") != path:
+            refuse("path", f"must be {path!r}, so a reader can reach what the licence asks{clause}")
+
+        if requirements.get("attribution"):
+            attribution = _entry_text(entry, "x-attribution")
+            if _not_a_string(entry, "x-attribution"):
+                refuse("x-attribution", f"is not a string: the licence asks for an attribution line{clause}")
+            elif not attribution:
+                refuse("x-attribution", f"is missing or blank: the licence asks for an attribution line{clause}")
+            else:
+                names = requirements.get("names_licence")
+                if names and names not in attribution:
+                    refuse("x-attribution", f"must name the licence as {names!r}{clause}")
+                if requirements.get("copyright") and not (
+                    "\u00a9" in attribution or "copyright" in attribution.lower()
+                ):
+                    refuse("x-attribution", f"must carry a copyright mark (\u00a9 or the word Copyright){clause}")
+                if attribution not in description:
+                    refuse(
+                        "description",
+                        "must repeat the entry's x-attribution verbatim, so the attribution is read with the "
+                        f"data and not only in the licence entry: {attribution!r}",
+                    )
+
+        if requirements.get("changes") and _not_a_string(entry, "x-changes"):
+            refuse("x-changes", f"is not a string: the licence asks that a change to the work be stated{clause}")
+        elif requirements.get("changes") and not _entry_text(entry, "x-changes"):
+            refuse("x-changes", f"is missing or blank: the licence asks that a change to the work be stated{clause}")
+
+        marker = requirements.get("text_marker")
+        if marker:
+            text = _entry_text(entry, "x-licence-text")
+            if _not_a_string(entry, "x-licence-text"):
+                refuse("x-licence-text", f"is not a string: the licence asks for its own text to travel{clause}")
+            elif not text:
+                refuse("x-licence-text", f"is missing or blank: the licence asks for its own text to travel{clause}")
+            elif marker not in text:
+                refuse("x-licence-text", f"does not hold the licence's text: it lacks {marker!r}{clause}")
+
+    return violations
+
+
+def discover_all_descriptors(datasets_dir: Path) -> list[Path]:
+    """Every descriptor under `datasets/`: published `datapackage.json` and unpublished `<name>.datapackage.json`."""
+    return sorted({*datasets_dir.glob("*/datapackage.json"), *datasets_dir.glob("*/*.datapackage.json")})
+
+
 def discover_examples(examples_dir: Path, only: Iterable[str] | None, *, required: bool) -> list[Path]:
     """The descriptors under `examples/`, narrowed by `--only` the way `discover` narrows datasets.
 
@@ -1570,6 +1750,12 @@ def main(argv: list[str] | None = None) -> int:
         "descriptors, so a rename cannot leave the rule checking nothing. --only narrows these by slug too, but "
         "a slug must still exist under --datasets-dir: one that exists only here is refused.",
     )
+    parser.add_argument(
+        "--notice-table",
+        type=Path,
+        metavar="FILE",
+        help="what each licence asks a copy to carry, for rule 10 (default: licence-notices.json in --datasets-dir)",
+    )
     parser.add_argument("--json", metavar="FILE", type=Path, help="also write the findings as JSON")
     parser.add_argument(
         "--readme",
@@ -1614,6 +1800,19 @@ def main(argv: list[str] | None = None) -> int:
     try:
         example_paths = discover_examples(examples_dir, args.only, required=args.examples_dir is not None)
         example_packages = {str(path): load_descriptor(path) for path in example_paths}
+    except CheckError as exc:
+        print(f"descriptor check: {exc}", file=sys.stderr)
+        return EXIT_ERROR
+
+    notice_table_path = (
+        args.notice_table if args.notice_table is not None else args.datasets_dir / "licence-notices.json"
+    )
+    try:
+        notice_table = load_notice_table(notice_table_path)
+        notice_paths = discover_all_descriptors(args.datasets_dir)
+        if args.only:
+            notice_paths = [path for path in notice_paths if path.parent.name in set(args.only)]
+        notice_packages = {str(path): load_descriptor(path) for path in notice_paths}
     except CheckError as exc:
         print(f"descriptor check: {exc}", file=sys.stderr)
         return EXIT_ERROR
@@ -1672,6 +1871,11 @@ def main(argv: list[str] | None = None) -> int:
     licence_read_datasets = [Path(package).parent.name for kind, package, _ in licence_targets if kind == "datasets"]
     licence_read_examples = [Path(package).parent.name for kind, package, _ in licence_targets if kind == "examples"]
 
+    # Rule 10 reads the unpublished `<name>.datapackage.json` too, descriptor-only.
+    for package, descriptor in notice_packages.items():
+        violations.extend(check_licence_notice(package, descriptor, notice_table))
+    notice_read = [str(Path(package).relative_to(args.datasets_dir)) for package in notice_packages]
+
     readme_path = args.readme if args.readme is not None else args.datasets_dir.parent / "README.md"
     try:
         catalogue_violations, catalogue_rows = check_catalogue(
@@ -1705,6 +1909,7 @@ def main(argv: list[str] | None = None) -> int:
                         "datasets": licence_read_datasets,
                         "examples": licence_read_examples,
                     },
+                    "notice_read": notice_read,
                     "violations": [asdict(v) for v in violations if v.blocking],
                     "pending": [asdict(v) for v in violations if not v.blocking],
                 },
@@ -1719,6 +1924,8 @@ def main(argv: list[str] | None = None) -> int:
         + (f" ({', '.join(self_described)})" if self_described else "")
         + f"; {catalogue_rows} catalogue row count(s) measured against the objects they link to"
         + f"; {licence_read}"
+        + f"; licence notice rule read {len(notice_read)} descriptor(s) against {notice_table_path.name} "
+        + f"({', '.join(notice_read) or 'none'})"
     )
     pending = [v for v in violations if not v.blocking]
     violations = [v for v in violations if v.blocking]

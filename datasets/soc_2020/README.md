@@ -36,7 +36,7 @@ Produces `build/soc_2020.parquet`, `build/soc_2020_titles.parquet` and `build/so
 
 ONS publishes SOC 2020 at <https://www.ons.gov.uk/methodology/classificationsandstandards/standardoccupationalclassificationsoc/soc2020>. The Protocol reads three workbooks from it: Volume 1 (`soc2020volume1structureanddescriptionofunitgroupsexcel20260827.xlsx`), the coding index from Volume 2 (`soc2020volume2thecodingindexexcel20260827v2.xlsx`, version 14) and the relationship tables (`soc2010soc2020relationshiptablesjuly2021.xlsx`). `load` reads every sheet as text from an explicit range and fails the run if a header row is not the text it was measured as, so a workbook whose layout has moved stops the run instead of staging the wrong cells.
 
-Source: Office for National Statistics licensed under the Open Government Licence v3.0. Each descriptor's `licenses` is `OGL-UK-3.0`, and its description carries that attribution and says that Meridian prepared the table from ONS's files.
+Source: Office for National Statistics licensed under the Open Government Licence v3.0. Each descriptor's `licenses` is `OGL-UK-3.0`, and its description carries that attribution and says that Meridian prepared the table from ONS's files. The licence entry carries the same attribution as `x-attribution` and what Meridian did to the source as `x-changes`; [`docs/licence-notices.md`](../../docs/licence-notices.md) says why and how rule 10 holds them.
 
 ## Levels, codes and text
 

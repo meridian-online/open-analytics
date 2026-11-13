@@ -17,22 +17,24 @@
       "title": "Meridian"
     }
   ],
-  "created": "2026-11-03T03:12:26Z",
+  "created": "2026-11-13T19:28:43Z",
   "description": "The UK Standard Occupational Classification 2020, the classification of occupations the Office for National Statistics maintains and the Labour Force Survey and Census 2021 code to: one row per major group, sub-major group, minor group and unit group, each under the group above it, with ONS's description of each group and, for each unit group, its typical entry routes, tasks and related job titles. Every row also carries the code of each group above it, so a unit group rolls up to its major group with one GROUP BY. Codes are ONS's plain digits, stored as text (1111), the form the Labour Force Survey carries. Meridian prepared the table from ONS's SOC 2020 Volume 1 workbook. Source: Office for National Statistics licensed under the Open Government Licence v3.0. ons/soc_2020_titles codes the job titles of ONS's coding index to these unit groups, and ons/soc_2010_to_2020 relates the 2010 edition's unit groups to them.",
   "homepage": "https://meridian.online/datasets/ons/soc_2020",
   "licenses": [
     {
       "name": "OGL-UK-3.0",
       "path": "https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/",
-      "title": "Open Government Licence v3.0"
+      "title": "Open Government Licence v3.0",
+      "x-attribution": "Source: Office for National Statistics licensed under the Open Government Licence v3.0.",
+      "x-changes": "Meridian prepared this table from ONS's SOC 2020 Volume 1 workbook: one row per group with its parent and ancestors, ONS's text split into lists where ONS bullets it, and a release column."
     }
   ],
   "name": "soc_2020",
   "resources": [
     {
-      "bytes": 204995,
+      "bytes": 205320,
       "format": "parquet",
-      "hash": "sha256:cf95f9f615922376e0e3f7128b69e88e9bbd319749dfdb065bd587d34c4d628f",
+      "hash": "sha256:2d74fd2a74ceaecc1cc9c5e71109ab816df1b7481079d30d1d857cb5d97a4aa4",
       "mediatype": "application/vnd.apache.parquet",
       "name": "soc_2020",
       "path": "https://openlake.meridian.online/ons/soc_2020.parquet",

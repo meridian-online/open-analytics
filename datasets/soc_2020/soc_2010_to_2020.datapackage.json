@@ -17,22 +17,24 @@
       "title": "Meridian"
     }
   ],
-  "created": "2026-11-03T03:12:27Z",
+  "created": "2026-11-13T19:28:44Z",
   "description": "The Office for National Statistics' own relationship between the 2010 and 2020 editions of the UK Standard Occupational Classification at the unit group level, for bridging data coded to SOC 2010, such as the Labour Force Survey before 2021: one row per pairing of a 2010 unit group with a 2020 unit group its cases were coded to, 714 pairings from the unit group sheet of ONS's relationship tables of July 2021. ONS built the tables from jobs coded to both editions, in the Labour Force Survey and the 2011 Census, and gives each pairing four shares, for men and for women in each source, with the four case counts of its 2010 group, so counts coded to 2010 can be apportioned to 2020 groups. ONS's \"Total sample\" rows, one for each of 369 2010 groups, become the four base columns rather than rows. Every 2020 code is a unit group in ons/soc_2020, which the run checks; the 2010 edition is not hosted, so the 2010 codes are checked by their shape only. Meridian prepared the table from ONS's relationship tables workbook. Source: Office for National Statistics licensed under the Open Government Licence v3.0.",
   "homepage": "https://meridian.online/datasets/ons/soc_2010_to_2020",
   "licenses": [
     {
       "name": "OGL-UK-3.0",
       "path": "https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/",
-      "title": "Open Government Licence v3.0"
+      "title": "Open Government Licence v3.0",
+      "x-attribution": "Source: Office for National Statistics licensed under the Open Government Licence v3.0.",
+      "x-changes": "Meridian prepared this table from ONS's SOC 2010 to SOC 2020 relationship tables: one row per pairing of a 2010 unit group with a 2020 one, with ONS's shares and base counts, and a release column."
     }
   ],
   "name": "soc_2010_to_2020",
   "resources": [
     {
-      "bytes": 45671,
+      "bytes": 46004,
       "format": "parquet",
-      "hash": "sha256:c9f59a549f32931818285d805cfe73afdaf1dd20eb311004b707bac1aa9e7eb6",
+      "hash": "sha256:02487575d217c8bbbba5950d32367965efef52bc48518984e3379545758efb03",
       "mediatype": "application/vnd.apache.parquet",
       "name": "soc_2010_to_2020",
       "path": "https://openlake.meridian.online/ons/soc_2010_to_2020.parquet",
