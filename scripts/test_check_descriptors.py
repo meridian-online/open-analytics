@@ -61,6 +61,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -73,6 +74,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import stamp_descriptor as sd  # noqa: E402 - found beside this file
 
 CHECKER = Path(__file__).with_name("check_descriptors.py")
+NOTICE_TABLE = Path(__file__).resolve().parent.parent / "datasets" / "licence-notices.json"
 
 # The licence every fixture carries unless a case says otherwise: rule 9 reads
 # `datasets/` too, so a fixture with none would fail it before reaching what it tests.
@@ -227,6 +229,8 @@ class DescriptorCheckSelfTest(unittest.TestCase):
         self.addCleanup(self._tmp.cleanup)
         self.datasets = Path(self._tmp.name) / "datasets"
         self.datasets.mkdir(parents=True)
+        # Rule 10 reads the table beside the descriptors; every fixture gets the repository's.
+        shutil.copy(NOTICE_TABLE, self.datasets / "licence-notices.json")
         # Not created here: the checker's default is `examples/` beside `datasets/`, and a
         # case that wants none must find none. `write_example` creates it on first use.
         self.examples = Path(self._tmp.name) / "examples"
@@ -1916,6 +1920,290 @@ class DescriptorCheckSelfTest(unittest.TestCase):
             json.loads(findings.read_text(encoding="utf-8"))["licence_read"],
             {"datasets": ["widgets"], "examples": ["gadgets"]},
         )
+
+
+class LicenceNoticeSelfTest(unittest.TestCase):
+    """Rule 10: a licence entry that asks a copy to carry a notice carries it, on the entry."""
+
+    ATTRIBUTION = "Source: Office for National Statistics licensed under the Open Government Licence v3.0."
+    OGL_PATH = "https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/"
+    CC_BY_PATH = "https://creativecommons.org/licenses/by/4.0/"
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory(prefix="licence-notice-")
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+        self.datasets = self.root / "datasets"
+        self.datasets.mkdir()
+        self.examples = self.root / "examples"
+        shutil.copy(NOTICE_TABLE, self.datasets / "licence-notices.json")
+
+    def widgets(self, licenses: Any, description: str | None = None, slug: str = "widgets") -> Path:
+        return write_package(
+            self.datasets,
+            slug,
+            select_sql="SELECT * FROM (VALUES ('AB'), ('CD')) t(code)",
+            fields=[{"name": "code", "type": "string"}],
+            licenses=licenses,
+            description=description,
+        )
+
+    def ogl(self, **overrides: Any) -> list[dict[str, Any]]:
+        entry: dict[str, Any] = {
+            "name": "OGL-UK-3.0",
+            "path": self.OGL_PATH,
+            "x-attribution": self.ATTRIBUTION,
+        }
+        entry.update(overrides)
+        return [{k: v for k, v in entry.items() if v is not None}]
+
+    def cc_by(self, **overrides: Any) -> dict[str, Any]:
+        entry: dict[str, Any] = {
+            "name": "CC-BY-4.0",
+            "path": self.CC_BY_PATH,
+            "x-attribution": "Data \u00a9 2020 Example Org, licensed under CC BY 4.0.",
+            "x-changes": "Meridian sorted the entries.",
+        }
+        entry.update(overrides)
+        return {k: v for k, v in entry.items() if v is not None}
+
+    def check(self, *extra: str) -> subprocess.CompletedProcess[str]:
+        return run_check(self.datasets, *extra)
+
+    def assertOutcome(  # noqa: N802 - unittest naming
+        self,
+        result: subprocess.CompletedProcess[str],
+        expected_exit: int,
+        *needles: str,
+    ) -> None:
+        output = result.stdout + result.stderr
+        self.assertEqual(
+            result.returncode,
+            expected_exit,
+            f"expected exit {expected_exit}, got {result.returncode}\n{output}",
+        )
+        for needle in needles:
+            self.assertIn(needle, output, f"output did not name {needle!r}\n{output}")
+
+    def assertNoNotice(self, result: subprocess.CompletedProcess[str]) -> None:  # noqa: N802
+        self.assertNotIn("licence.notice", result.stdout + result.stderr)
+
+    def test_ogl_with_its_notice_passes(self) -> None:
+        self.widgets(self.ogl(), description=f"Codes. {self.ATTRIBUTION}")
+        result = self.check()
+        self.assertOutcome(result, EXIT_OK)
+        self.assertNoNotice(result)
+        self.assertIn("licence notice rule read 1 descriptor(s)", result.stdout)
+
+    def test_ogl_without_attribution_fails(self) -> None:
+        self.widgets(self.ogl(**{"x-attribution": None}), description=self.ATTRIBUTION)
+        self.assertOutcome(self.check(), EXIT_VIOLATIONS, "licence.notice", "x-attribution")
+
+    def test_blank_attribution_fails(self) -> None:
+        self.widgets(self.ogl(**{"x-attribution": "  "}), description=self.ATTRIBUTION)
+        self.assertOutcome(
+            self.check(),
+            EXIT_VIOLATIONS,
+            "licence.notice",
+            "x-attribution",
+            "missing or blank",
+        )
+
+    def test_attribution_not_naming_the_licence_fails(self) -> None:
+        line = "Source: Office for National Statistics."
+        self.widgets(self.ogl(**{"x-attribution": line}), description=line)
+        self.assertOutcome(
+            self.check(),
+            EXIT_VIOLATIONS,
+            "licence.notice",
+            "Open Government Licence v3.0",
+        )
+
+    def test_description_without_the_attribution_fails(self) -> None:
+        self.widgets(self.ogl(), description="Codes.")
+        self.assertOutcome(self.check(), EXIT_VIOLATIONS, "licence.notice", "description")
+
+    def test_description_with_the_attribution_changed_by_a_character_fails(
+        self,
+    ) -> None:
+        self.widgets(self.ogl(), description=self.ATTRIBUTION.replace("Source:", "Source;"))
+        self.assertOutcome(self.check(), EXIT_VIOLATIONS, "licence.notice", "description")
+
+    def test_wrong_licence_path_fails(self) -> None:
+        self.widgets(self.ogl(path="https://example.test/ogl"), description=self.ATTRIBUTION)
+        self.assertOutcome(self.check(), EXIT_VIOLATIONS, "licence.notice", ".path")
+
+    def unicode_entry(self, **overrides: Any) -> list[dict[str, Any]]:
+        entry: dict[str, Any] = {
+            "name": "Unicode-3.0",
+            "path": "https://www.unicode.org/license.txt",
+            "x-attribution": "Names from CLDR, \u00a9 1991-2025 Unicode, Inc., under the Unicode License v3.",
+            "x-licence-text": "UNICODE LICENSE V3\n\nCOPYRIGHT AND PERMISSION NOTICE ...",
+        }
+        entry.update(overrides)
+        return [{k: v for k, v in entry.items() if v is not None}]
+
+    def test_unicode_with_its_notice_passes(self) -> None:
+        licences = self.unicode_entry()
+        self.widgets(licences, description=licences[0]["x-attribution"])
+        self.assertOutcome(self.check(), EXIT_OK)
+
+    def test_unicode_without_licence_text_fails(self) -> None:
+        licences = self.unicode_entry(**{"x-licence-text": None})
+        self.widgets(licences, description=licences[0]["x-attribution"])
+        self.assertOutcome(self.check(), EXIT_VIOLATIONS, "licence.notice", "x-licence-text")
+
+    def test_unicode_text_without_marker_fails(self) -> None:
+        licences = self.unicode_entry(**{"x-licence-text": "Some other text"})
+        self.widgets(licences, description=licences[0]["x-attribution"])
+        self.assertOutcome(
+            self.check(),
+            EXIT_VIOLATIONS,
+            "licence.notice",
+            "x-licence-text",
+            "UNICODE LICENSE V3",
+        )
+
+    def test_unicode_attribution_without_copyright_fails(self) -> None:
+        line = "Names from CLDR under the Unicode License v3."
+        licences = self.unicode_entry(**{"x-attribution": line})
+        self.widgets(licences, description=line)
+        self.assertOutcome(self.check(), EXIT_VIOLATIONS, "licence.notice", "copyright mark")
+
+    def test_copyright_word_counts_as_the_mark(self) -> None:
+        line = "Names from CLDR, copyright Unicode, Inc., under the Unicode License v3."
+        licences = self.unicode_entry(**{"x-attribution": line})
+        self.widgets(licences, description=line)
+        self.assertOutcome(self.check(), EXIT_OK)
+
+    def test_apache_without_changes_fails(self) -> None:
+        line = "Data from X, Copyright (C) 2009 The X Authors, licensed under the Apache License 2.0."
+        licences = [
+            {
+                "name": "Apache-2.0",
+                "path": "https://www.apache.org/licenses/LICENSE-2.0",
+                "x-attribution": line,
+                "x-licence-text": "Apache License\nVersion 2.0, January 2004",
+            }
+        ]
+        self.widgets(licences, description=line)
+        self.assertOutcome(self.check(), EXIT_VIOLATIONS, "licence.notice", "x-changes")
+
+    def test_cc_by_without_changes_fails(self) -> None:
+        entry = self.cc_by(**{"x-changes": None})
+        self.widgets([entry], description=entry["x-attribution"])
+        self.assertOutcome(self.check(), EXIT_VIOLATIONS, "licence.notice", "x-changes")
+
+    def test_unread_identifier_fails(self) -> None:
+        self.widgets([{"name": "MPL-2.0", "path": "https://www.mozilla.org/MPL/2.0/"}])
+        self.assertOutcome(
+            self.check(),
+            EXIT_VIOLATIONS,
+            "licence.notice",
+            "MPL-2.0",
+            "licence-notices.json",
+        )
+
+    def test_only_the_entry_that_asks_is_held(self) -> None:
+        cc0 = PERMISSIVE_LICENCE[0]
+        entry = self.cc_by()
+        self.widgets([cc0, entry], description=entry["x-attribution"])
+        result = self.check()
+        self.assertOutcome(result, EXIT_OK)
+        self.assertNoNotice(result)
+        bare = {"name": "CC-BY-4.0", "path": self.CC_BY_PATH}
+        self.widgets([cc0, bare], description="Codes.")
+        result = self.check()
+        self.assertOutcome(result, EXIT_VIOLATIONS, "licences[1]".replace("licences", "licenses"))
+        self.assertNotIn("licenses[0]", result.stdout)
+        self.assertEqual(result.stdout.count("x-attribution"), 1)
+
+    def test_package_level_notice_does_not_count(self) -> None:
+        self.widgets(self.ogl(**{"x-attribution": None}), description=self.ATTRIBUTION)
+        descriptor = self.datasets / "widgets" / "datapackage.json"
+        document = json.loads(descriptor.read_text(encoding="utf-8"))
+        document["x-attribution"] = self.ATTRIBUTION
+        descriptor.write_text(json.dumps(document), encoding="utf-8")
+        self.assertOutcome(
+            self.check(),
+            EXIT_VIOLATIONS,
+            "licence.notice",
+            "licenses[0] (OGL-UK-3.0).x-attribution",
+        )
+
+    def test_unpublished_table_descriptor_is_read(self) -> None:
+        self.widgets(PERMISSIVE_LICENCE)
+        soc = self.datasets / "soc_x"
+        soc.mkdir()
+        (soc / "soc_x.datapackage.json").write_text(
+            json.dumps(
+                {
+                    "name": "soc_x",
+                    "licenses": [{"name": "OGL-UK-3.0", "path": self.OGL_PATH}],
+                    "resources": [{"name": "soc_x", "path": "build/soc_x.parquet"}],
+                }
+            ),
+            encoding="utf-8",
+        )
+        self.assertOutcome(
+            self.check(),
+            EXIT_VIOLATIONS,
+            "licence.notice",
+            "soc_x.datapackage.json",
+            "x-attribution",
+        )
+
+    def test_examples_are_not_held(self) -> None:
+        self.widgets(PERMISSIVE_LICENCE)
+        write_example(
+            self.examples,
+            "gadgets",
+            licenses=[{"name": "CC-BY-4.0", "path": self.CC_BY_PATH}],
+        )
+        result = self.check()
+        self.assertOutcome(result, EXIT_OK)
+        self.assertNoNotice(result)
+
+    def test_the_json_findings_name_what_the_notice_rule_read(self) -> None:
+        self.widgets(PERMISSIVE_LICENCE)
+        findings = self.root / "findings.json"
+        self.assertOutcome(self.check("--json", str(findings)), EXIT_OK)
+        self.assertEqual(
+            json.loads(findings.read_text(encoding="utf-8"))["notice_read"],
+            ["widgets/datapackage.json"],
+        )
+
+    def test_missing_table_exits_2(self) -> None:
+        self.widgets(PERMISSIVE_LICENCE)
+        (self.datasets / "licence-notices.json").unlink()
+        self.assertOutcome(self.check(), EXIT_ERROR, "licence notice table")
+
+    def test_unparseable_table_exits_2(self) -> None:
+        self.widgets(PERMISSIVE_LICENCE)
+        (self.datasets / "licence-notices.json").write_text("{not json", encoding="utf-8")
+        self.assertOutcome(self.check(), EXIT_ERROR, "licence-notices.json")
+
+    def test_table_with_unknown_key_exits_2(self) -> None:
+        self.widgets(PERMISSIVE_LICENCE)
+        (self.datasets / "licence-notices.json").write_text(
+            json.dumps({"CC0-1.0": {"clause": "x", "attributon": True}}),
+            encoding="utf-8",
+        )
+        self.assertOutcome(self.check(), EXIT_ERROR, "attributon")
+
+    def test_table_entry_without_clause_exits_2(self) -> None:
+        self.widgets(PERMISSIVE_LICENCE)
+        (self.datasets / "licence-notices.json").write_text(
+            json.dumps({"CC0-1.0": {"attribution": False}}), encoding="utf-8"
+        )
+        self.assertOutcome(self.check(), EXIT_ERROR, "clause")
+
+    def test_notice_table_flag_names_another_table(self) -> None:
+        self.widgets(PERMISSIVE_LICENCE)
+        other = self.root / "elsewhere.json"
+        shutil.copy(NOTICE_TABLE, other)
+        (self.datasets / "licence-notices.json").unlink()
+        self.assertOutcome(self.check("--notice-table", str(other)), EXIT_OK)
 
 
 if __name__ == "__main__":
