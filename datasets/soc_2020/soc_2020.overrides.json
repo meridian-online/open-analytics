@@ -7,7 +7,9 @@
     {
       "name": "OGL-UK-3.0",
       "title": "Open Government Licence v3.0",
-      "path": "https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/"
+      "path": "https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/",
+      "x-attribution": "Source: Office for National Statistics licensed under the Open Government Licence v3.0.",
+      "x-changes": "Meridian prepared this table from ONS's SOC 2020 Volume 1 workbook: one row per group with its parent and ancestors, ONS's text split into lists where ONS bullets it, and a release column."
     }
   ],
   "sources": [
