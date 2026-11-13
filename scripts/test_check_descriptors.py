@@ -2169,6 +2169,36 @@ class LicenceNoticeSelfTest(unittest.TestCase):
             "x-attribution",
         )
 
+    def unpublished(self, document: Any) -> None:
+        self.widgets(PERMISSIVE_LICENCE)
+        soc = self.datasets / "soc_x"
+        soc.mkdir()
+        (soc / "soc_x.datapackage.json").write_text(json.dumps(document), encoding="utf-8")
+
+    def test_unpublished_descriptor_without_licenses_fails(self) -> None:
+        self.unpublished({"name": "soc_x", "resources": [{"name": "soc_x", "path": "build/soc_x.parquet"}]})
+        self.assertOutcome(self.check(), EXIT_VIOLATIONS, "licence.notice", "soc_x.datapackage.json", "licenses")
+
+    def test_unpublished_descriptor_with_nameless_entry_fails(self) -> None:
+        self.unpublished(
+            {
+                "name": "soc_x",
+                "licenses": [{"title": "x"}, "CC0-1.0"],
+                "resources": [{"name": "soc_x", "path": "build/soc_x.parquet"}],
+            }
+        )
+        self.assertOutcome(
+            self.check(), EXIT_VIOLATIONS, "licence.notice", "licenses[0]", "licenses[1]", "is not an object"
+        )
+
+    def test_non_object_descriptor_exits_2(self) -> None:
+        self.unpublished(["not", "an", "object"])
+        self.assertOutcome(self.check(), EXIT_ERROR, "soc_x.datapackage.json", "JSON object")
+
+    def test_non_string_notice_is_not_a_string(self) -> None:
+        self.widgets(self.ogl(**{"x-attribution": 7}), description=self.ATTRIBUTION)
+        self.assertOutcome(self.check(), EXIT_VIOLATIONS, "licence.notice", "x-attribution", "is not a string")
+
     def test_examples_are_not_held(self) -> None:
         self.widgets(PERMISSIVE_LICENCE)
         write_example(

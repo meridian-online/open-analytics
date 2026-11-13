@@ -104,8 +104,11 @@ And over every descriptor in `datasets/`, unpublished ones included:
                      entry carries what it asks. Only an entry that asks is held, so a
                      CC0 entry beside a CC BY one is not. An identifier the table does
                      not read is refused, so a new licence cannot pass by being unknown.
+                     `clause` in the table is the reading of the licence, not a quotation.
                      Like rule 9 it reads the descriptor alone, and so reads the
-                     unpublished `<name>.datapackage.json` beside a dataset's own;
+                     unpublished `<name>.datapackage.json` beside a dataset's own. Rule 9
+                     does not read those, so for them this rule also reports a missing
+                     `licenses`, a non-object entry and a nameless entry;
                      `examples/` is not held to it. A table that is missing,
                      unparseable, or carries a key this script does not know is exit 2:
                      a rule that reads nothing must not read as a pass.
@@ -264,9 +267,12 @@ def remote_size(url: str) -> int | None:
 def load_descriptor(path: Path) -> dict[str, Any]:
     try:
         with path.open(encoding="utf-8") as handle:
-            return json.load(handle)
+            document = json.load(handle)
     except (OSError, json.JSONDecodeError) as exc:
         raise CheckError(f"{path}: cannot read descriptor: {exc}") from exc
+    if not isinstance(document, dict):
+        raise CheckError(f"{path}: cannot read descriptor: the document must be a JSON object")
+    return document
 
 
 def physical_types(con, path: str) -> dict[str, str]:
@@ -1567,7 +1573,7 @@ def load_notice_table(path: Path) -> dict[str, dict[str, Any]]:
             raise CheckError(f"{path}: {identifier!r} has requirement key(s) this check does not read: {unknown}")
         clause = requirements.get("clause")
         if not isinstance(clause, str) or not clause.strip():
-            raise CheckError(f"{path}: {identifier!r} must quote the licence text it is read from in `clause`")
+            raise CheckError(f"{path}: {identifier!r} must state in `clause` what the licence asks, as read from its text")
         for key in NOTICE_TEXT_KEYS:
             if key in requirements and not (isinstance(requirements[key], str) and requirements[key].strip()):
                 raise CheckError(f"{path}: {identifier!r}.{key} must be non-empty text")
@@ -1582,14 +1588,35 @@ def _entry_text(entry: dict[str, Any], key: str) -> str:
     return value.strip() if isinstance(value, str) else ""
 
 
+def _not_a_string(entry: dict[str, Any], key: str) -> bool:
+    """True when the entry holds `key` with a value that is not text."""
+    return key in entry and not isinstance(entry[key], str)
+
+
 def check_licence_notice(package: str, descriptor: dict[str, Any], table: dict[str, dict[str, Any]]) -> list[Violation]:
     """Rule 10: each licence entry that asks a copy to carry a notice carries it.
 
     Reads the descriptor and the table, nothing else. The notice must sit on the
     `licenses[]` entry it belongs to; keys at package level are not read.
+
+    Rule 9 reads only the published `datapackage.json` (and `examples/`), so for an
+    unpublished `<name>.datapackage.json` this rule reports a missing `licenses`, a
+    non-object entry and a nameless entry itself. For a published one, rule 9 does.
     """
+    reports_shape = Path(package).name != "datapackage.json"
     licences = descriptor.get("licenses")
-    if not isinstance(licences, list):
+    if not isinstance(licences, list) or not licences:
+        if reports_shape:
+            return [
+                Violation(
+                    package,
+                    "(package)",
+                    "licenses",
+                    LICENCE_NOTICE_RULE,
+                    "carries no licence entry: `licenses` must be a list holding an entry with a non-empty "
+                    "`name`, so what the licence asks of a copy can be read",
+                )
+            ]
         return []  # rule 9 reports a descriptor with no licence
     description = descriptor.get("description")
     description = description if isinstance(description, str) else ""
@@ -1598,7 +1625,19 @@ def check_licence_notice(package: str, descriptor: dict[str, Any], table: dict[s
     for index, entry in enumerate(licences):
         name = entry.get("name") if isinstance(entry, dict) else None
         if not isinstance(name, str) or not name.strip():
-            continue  # rule 9
+            if reports_shape:
+                kind = "is not an object" if not isinstance(entry, dict) else "has no non-empty `name`"
+                violations.append(
+                    Violation(
+                        package,
+                        "(package)",
+                        f"licenses[{index}]",
+                        LICENCE_NOTICE_RULE,
+                        f"{kind}: each licence entry must be an object naming its licence, so what it asks of "
+                        "a copy can be read",
+                    )
+                )
+            continue  # rule 9 reports it for a published descriptor
         identifier = name.strip()
         where = f"licenses[{index}] ({identifier})"
 
@@ -1610,11 +1649,11 @@ def check_licence_notice(package: str, descriptor: dict[str, Any], table: dict[s
             refuse(
                 "name",
                 f"licence identifier {identifier!r} is not one licence-notices.json reads, so what it asks of a "
-                "copy is unknown. Add it to licence-notices.json with the notice its licence asks for, quoting "
-                "the licence text, or use an identifier it reads",
+                "copy is unknown. Add it to licence-notices.json with the notice its licence asks for, as read "
+                "from the licence text, or use an identifier it reads",
             )
             continue
-        clause = f" (the licence asks: {requirements['clause']})"
+        clause = f" (what the licence asks, as read from its text: {requirements['clause']})"
 
         path = requirements.get("path")
         if path and _entry_text(entry, "path") != path:
@@ -1622,7 +1661,9 @@ def check_licence_notice(package: str, descriptor: dict[str, Any], table: dict[s
 
         if requirements.get("attribution"):
             attribution = _entry_text(entry, "x-attribution")
-            if not attribution:
+            if _not_a_string(entry, "x-attribution"):
+                refuse("x-attribution", f"is not a string: the licence asks for an attribution line{clause}")
+            elif not attribution:
                 refuse("x-attribution", f"is missing or blank: the licence asks for an attribution line{clause}")
             else:
                 names = requirements.get("names_licence")
@@ -1639,13 +1680,17 @@ def check_licence_notice(package: str, descriptor: dict[str, Any], table: dict[s
                         f"data and not only in the licence entry: {attribution!r}",
                     )
 
-        if requirements.get("changes") and not _entry_text(entry, "x-changes"):
+        if requirements.get("changes") and _not_a_string(entry, "x-changes"):
+            refuse("x-changes", f"is not a string: the licence asks that a change to the work be stated{clause}")
+        elif requirements.get("changes") and not _entry_text(entry, "x-changes"):
             refuse("x-changes", f"is missing or blank: the licence asks that a change to the work be stated{clause}")
 
         marker = requirements.get("text_marker")
         if marker:
             text = _entry_text(entry, "x-licence-text")
-            if not text:
+            if _not_a_string(entry, "x-licence-text"):
+                refuse("x-licence-text", f"is not a string: the licence asks for its own text to travel{clause}")
+            elif not text:
                 refuse("x-licence-text", f"is missing or blank: the licence asks for its own text to travel{clause}")
             elif marker not in text:
                 refuse("x-licence-text", f"does not hold the licence's text: it lacks {marker!r}{clause}")
