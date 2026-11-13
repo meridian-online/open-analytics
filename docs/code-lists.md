@@ -202,7 +202,7 @@ Two other ways were considered and declined. A library of shared DuckDB macros f
 
 Made with the operator during the design:
 
-- **Rates verbatim as text, not parsed.** USITC's rates mix percentages, specific duties and compound forms; a parser is later work if it is wanted. Each rate column's description says the rate is as printed and that chapter 99 provisions reached through footnotes (Section 301, 232 and others) can add duties.
+- **Rates verbatim as text, not parsed.** USITC's rates mix percentages, specific duties and compound forms; a parser is later work if it is wanted. Each rate column's description says the rate is as printed and that chapter 99 provisions (Section 301, 232 and others) can add duties to a line whether or not its footnotes name them.
 - **Every level present as a row.** Both lists carry every chapter, heading and subheading their codes imply, HTS included: USITC prints a single-subdivision heading only through its longer code (heading `0409` appears only as `0409.00.00`, "Natural honey"), and the best-asset rule applies to that gap as much as to Schedule B's.
 - **Digits-only `code`, the issuer's dotted form beside it.** Other data carries these codes both ways, and digits-only joins without a rewrite.
 - **Parents by prefix, indent only for the path.** `parent_code` is the code one level up, which is always in the ladder, so `depth` is the level's position. USITC's indent is used only to build `description_full`.
