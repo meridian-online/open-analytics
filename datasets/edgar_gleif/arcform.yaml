@@ -415,11 +415,9 @@ steps:
     op: uv@1
     with:
       script: ../../scripts/stamp_descriptor.py
-      # `shasum -a 256 scripts/stamp_descriptor.py` prints this. The script is shared
-      # with the edgar, gleif and naics manifests, which still call it through
-      # `command:` and are not pinned to its bytes; editing it there is a manifest edit
-      # here.
-      sha256: b22581b77414303312aa5040e70a66ccd96a6bfd1902820e487428441018b9c2
+      # `shasum -a 256 scripts/stamp_descriptor.py` prints this. Every manifest that
+      # stamps pins the same script by these bytes, so editing it is an edit to each.
+      sha256: a9356ac8d5412d94a940ebeef1e2508eaed6b77f1d923ada88edbacccf9d9b81
       # This step imports duckdb, and until now ran under whatever bare `python3` was on
       # PATH — the same exposure `derive_join_coverage` was already carrying when it
       # failed three retries mid-republish on a machine whose `python3` had no duckdb.

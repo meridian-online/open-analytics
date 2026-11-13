@@ -36,14 +36,13 @@ Produces `build/gleif.parquet`.
 
 ## Run
 
-Needs the `arc` binary and `duckdb`, plus `curl`, `jq` and `unzip` for the fetch:
-`arc run`.
+Needs the `arc` binary, `duckdb`, `uv` (for the stamp) and `finetype` (for `describe` and `stamp_version`), plus `curl`, `jq` and `unzip` for the fetch: `arc run`.
 
 ## The step list
 
 <!-- protocol-steps: generated from arcform.yaml by scripts/check_protocol_readme.py — do not edit this block by hand -->
 
-7 steps, of which 3 run through an opaque `command:`/shell step: `fetch_gleif`, `stamp_version`, `stamp_descriptor`. A shell step is invisible to the engine's staleness model and carries its interpreter and dependency pins inline, so what this Protocol guarantees stops short of it. Each shell step's row carries a fingerprint of its command line, so an edit to the line changes this block without the line being printed here.
+7 steps, of which 2 run through an opaque `command:`/shell step: `fetch_gleif`, `stamp_version`. A shell step is invisible to the engine's staleness model and carries its interpreter and dependency pins inline, so what this Protocol guarantees stops short of it. Each shell step's row carries a fingerprint of its command line, so an edit to the line changes this block without the line being printed here.
 
 | # | Step | How it runs |
 |---|---|---|
@@ -53,6 +52,6 @@ Needs the `arc` binary and `duckdb`, plus `curl`, `jq` and `unzip` for the fetch
 | 4 | `export_gleif` | `op: parquet_export@1` |
 | 5 | `describe` | `op: datapackage_describe@1` |
 | 6 | `stamp_version` | `command:` (shell, sha256 `68794fb4cbe9`) |
-| 7 | `stamp_descriptor` | `command:` (shell, sha256 `1a191f854e62`) |
+| 7 | `stamp_descriptor` | `op: uv@1` |
 
 <!-- /protocol-steps -->
