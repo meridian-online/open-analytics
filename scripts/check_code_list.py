@@ -248,7 +248,9 @@ def main(argv: list[str] | None = None) -> int:
             prefix, sep, directory = spec.partition("=")
             if not sep or not prefix or not directory:
                 raise RuntimeError(f"--resolve-root {spec!r} is not PREFIX=DIR")
-            roots.append((prefix, Path(directory)))
+            # A prefix names a directory, so it matches whole path segments: without the
+            # slash, .../usitc would also capture .../usitc-archive/...
+            roots.append((prefix if prefix.endswith("/") else prefix + "/", Path(directory)))
 
         report = {}
         for name, path, base, levels in work:

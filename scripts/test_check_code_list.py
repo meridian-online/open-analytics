@@ -197,6 +197,19 @@ class Case(unittest.TestCase):
             "--resolve-root", f"https://openlake.meridian.online={served}")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    def test_resolve_root_prefix_matches_whole_path_segments(self):
+        # A prefix without a trailing slash names a directory, not a string start:
+        # .../usitc must not capture .../usitc-archive/..., which the next root maps.
+        served, archive = self.dir / "served", self.dir / "archive"
+        served.mkdir()
+        archive.mkdir()
+        self.write(ladder(), name="x.parquet").rename(archive / "hts.parquet")
+        result = self.run_check(
+            "--parquet", "https://openlake.meridian.online/usitc-archive/hts.parquet", "--levels", LEVELS,
+            "--resolve-root", f"https://openlake.meridian.online/usitc={served}",
+            "--resolve-root", f"https://openlake.meridian.online/usitc-archive={archive}")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_url_path_mapped_but_absent_exit_2(self):
         self.descriptor({"levels": LEVELS.split(",")},
                         resource_path="https://openlake.meridian.online/usitc/hts.parquet")

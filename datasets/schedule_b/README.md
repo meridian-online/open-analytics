@@ -21,7 +21,7 @@ Schedule B, the U.S. Census Bureau's classification of exported goods: every ten
 7. **package** (`models/package.sql`) — add the search `corpus`, hand off the terminal table.
 8. **export** — write the unstamped zstd Parquet to `build/stage/`, ordered by `code`.
 9. **describe** — emit the staged descriptor from the Parquet, typed by finetype with `nominations.finetype.json` and `descriptor.overrides.json` applied.
-10. **fetch_naics and derive_join_coverage** — fetch the published `census/naics_2022` object and measure the NAICS join against it (below).
+10. **derive_join_coverage** — measure the NAICS join against the published `census/naics_2022` object (below).
 11. **check_code_list** — hold the Parquet to the shared code-list contract (`scripts/check_code_list.py`): the core columns, a parent one level up for every row, `depth` as the level's position.
 12. **validate** — gate the Parquet against `schema.finetype.json`.
 13. **stamp_descriptor** — write the finished descriptor into the Parquet's footer, and write the published `build/schedule_b.parquet` and `datapackage.json`. It is the only writer of both.
@@ -51,9 +51,7 @@ USITC serves only its current HTS revision, so around a new HS edition (the next
 
 ## The NAICS join
 
-`naics` is declared as a join to `census/naics_2022`'s `code` in the descriptor's `x-joins`, on commodity rows, not as a `schema.foreignKeys` entry: some of Census's codes are not 2022 NAICS codes. Some end in X (`33641X`), which Census's layout does not define and which reads, from the codes' shape, as digits left unspecified; Census also uses its own `910000`, `930000` and `990000` on lines such as waste and scrap, used goods and chapter 98's provisions. `derive_join_coverage` runs `../edgar_gleif/scripts/crosswalk_join.py --write` over the staged build and the fetched NAICS object, and writes `coverage` (commodity rows, and how many match), `measuredAgainst` (the NAICS object's SHA-256) and the first sentence of `cardinality` into the descriptor. CI's `joins-run-against-their-data` job runs the same script without `--write` against the published objects. On 2026-11-01, 9,464 of 9,779 commodity lines match.
-
-The NAICS object is fetched by the Protocol rather than by the script, because openlake's edge refuses Python's default User-Agent.
+`naics` is declared as a join to `census/naics_2022`'s `code` in the descriptor's `x-joins`, on commodity rows, not as a `schema.foreignKeys` entry: some of Census's codes are not 2022 NAICS codes. Some end in X (`33641X`), which Census's layout does not define and which reads, from the codes' shape, as digits left unspecified; Census also uses its own `910000`, `930000` and `990000` on lines such as waste and scrap, used goods and chapter 98's provisions. `derive_join_coverage` runs `../edgar_gleif/scripts/crosswalk_join.py --write` over the staged build and the published NAICS object, which the script downloads once and both hashes and measures, and writes `coverage` (commodity rows, and how many match), `measuredAgainst` (the NAICS object's SHA-256) and the first sentence of `cardinality` into the descriptor. CI's `joins-run-against-their-data` job runs the same script without `--write` against the published objects. On 2026-11-01, 9,464 of 9,779 commodity lines match.
 
 ## The agricultural flag
 
@@ -79,7 +77,7 @@ Needs the `arc` binary, `duckdb`, `uv` (for the four Python steps) and `finetype
 
 <!-- protocol-steps: generated from arcform.yaml by scripts/check_protocol_readme.py — do not edit this block by hand -->
 
-All 17 steps are `sql:` models or typed `op:` operators from the arcform catalog. This Protocol runs no opaque `command:`/shell step.
+All 16 steps are `sql:` models or typed `op:` operators from the arcform catalog. This Protocol runs no opaque `command:`/shell step.
 
 | # | Step | How it runs |
 |---|---|---|
@@ -95,10 +93,9 @@ All 17 steps are `sql:` models or typed `op:` operators from the arcform catalog
 | 10 | `package` | `sql: models/package.sql` |
 | 11 | `export_schedule_b` | `op: parquet_export@1` |
 | 12 | `describe` | `op: datapackage_describe@1` |
-| 13 | `fetch_naics` | `op: http_fetch@1` |
-| 14 | `derive_join_coverage` | `op: uv@1` |
-| 15 | `check_code_list` | `op: uv@1` |
-| 16 | `validate` | `op: finetype_validate@1` |
-| 17 | `stamp_descriptor` | `op: uv@1` |
+| 13 | `derive_join_coverage` | `op: uv@1` |
+| 14 | `check_code_list` | `op: uv@1` |
+| 15 | `validate` | `op: finetype_validate@1` |
+| 16 | `stamp_descriptor` | `op: uv@1` |
 
 <!-- /protocol-steps -->
