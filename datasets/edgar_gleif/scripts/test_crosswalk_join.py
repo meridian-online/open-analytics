@@ -30,16 +30,19 @@ the shipped runner but no case here reddens when they are deleted.
 
 No case touches the network: every fixture resource is a relative path next to its
 descriptor, so this runs offline and cannot be flaky for a reason that has nothing
-to do with the runner.
+to do with the runner. The one download case serves its object from a loopback
+server this test starts.
 """
 
 from __future__ import annotations
 
 import hashlib
+import http.server
 import json
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from typing import Any
@@ -636,6 +639,41 @@ class CrosswalkJoinSelfTest(unittest.TestCase):
             EXIT_ERROR,
             "cannot download s3://bucket/right.parquet to hash it: only http(s) objects are downloaded",
         )
+
+    def test_write_downloads_with_the_meridian_user_agent(self) -> None:
+        """openlake refuses Python's default User-Agent with 403, so WRITE must send its own."""
+        body = (self.datasets / "right" / "right.parquet").read_bytes()
+        agents: list[str] = []
+
+        class Lake(http.server.BaseHTTPRequestHandler):
+            def do_GET(self) -> None:  # noqa: N802 - the name http.server dispatches on
+                agent = self.headers.get("User-Agent", "")
+                agents.append(agent)
+                if not agent.startswith("Meridian Protocol"):
+                    self.send_error(403)
+                    return
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *args: Any) -> None:
+                pass
+
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Lake)
+        self.addCleanup(server.server_close)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.shutdown)
+
+        path = self.datasets / "right" / "datapackage.json"
+        descriptor = json.loads(path.read_text(encoding="utf-8"))
+        descriptor["resources"][0]["path"] = f"http://127.0.0.1:{server.server_port}/right.parquet"
+        path.write_text(json.dumps(descriptor, indent=2) + "\n", encoding="utf-8")
+        self.lay_left(include_coverage=False)
+        self.assertOutcome(
+            run_join(self.datasets, "--write"), EXIT_OK, "coverage written: rows 3  matched 2", self.right_hash()
+        )
+        self.assertEqual(agents, ["Meridian Protocol (open-analytics; research@meridian.online)"])
 
     def test_malformed_measured_against_refuses(self) -> None:
         self.lay_left(measuredAgainst="3dc65776711ebb9a")

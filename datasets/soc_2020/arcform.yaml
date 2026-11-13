@@ -168,7 +168,7 @@ steps:
     op: uv@1
     with:
       script: ../../scripts/check_code_list.py
-      sha256: 11b06ca742a70ef483c9626d153d30387ad17f47992a3b4ef3eaf295b1c1e4b8
+      sha256: a6d4fd3c42aca53591f7f94bfef625f9c4f503b2d4331b64bea8103db88f7102
       deps:
         - duckdb==1.5.5
       args:

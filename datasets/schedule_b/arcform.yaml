@@ -172,20 +172,6 @@ steps:
       nominations: nominations.finetype.json
       out: build/stage/described.json
 
-  # ── Fetch: the published census/naics_2022 object the NAICS join is measured on ─
-  # crosswalk_join.py would download it itself, but openlake's edge refuses Python's
-  # default User-Agent (403), so the object is fetched here, with the Protocol's own,
-  # and handed to the measurement as a local file. The measurement records its SHA-256
-  # as `measuredAgainst`, which CI's re-measurement reads against the `hash`
-  # datasets/naics/datapackage.json declares.
-  - name: fetch_naics
-    op: http_fetch@1
-    with:
-      url: https://openlake.meridian.online/census/naics_2022.parquet
-      out: build/naics_2022.parquet
-      headers:
-        User-Agent: "Meridian Protocol (open-analytics; research@meridian.online)"
-
   # ── Derive: measure the NAICS join's coverage from THIS build ───────────────────
   # descriptor.overrides.json declares the join (naics → census/naics_2022's code, on
   # commodity rows) without `coverage`; crosswalk_join.py --write measures how many
@@ -193,8 +179,11 @@ steps:
   # object it measured against, and writes both into build/stage/measured.json. Run
   # with no `--write`, the same script is CI's check against the published objects.
   # `--local` points this package's own resource at the staged build, which has not
-  # been published, and the `naics` resource at the copy fetch_naics made of the
-  # published object, so the hash and the figures come from the same bytes.
+  # been published. The script downloads the published census/naics_2022 object once,
+  # with the Protocol's User-Agent, and hashes and measures that one copy, so the hash
+  # it records as `measuredAgainst` names the bytes the figures came from. CI's
+  # re-measurement reads that hash against the one datasets/naics/datapackage.json
+  # declares.
   #
   # `shasum -a 256 datasets/edgar_gleif/scripts/crosswalk_join.py` prints the digest.
   # duckdb is pinned to DUCKDB_VERSION in .github/workflows/descriptors.yml — keep the
@@ -203,7 +192,7 @@ steps:
     op: uv@1
     with:
       script: ../edgar_gleif/scripts/crosswalk_join.py
-      sha256: 32d3f503eada072ff8b9258e4e219802fb7012b82e3435643c169d56dc7ffea6
+      sha256: d16e99e888ea74206d930214d8ccf8b9ad377327a6f9026b1487a70e611eab26
       deps:
         - duckdb==1.5.5
       args:
@@ -218,15 +207,12 @@ steps:
         - build/stage/measured.json
         - --local
         - schedule_b=build/stage/schedule_b.parquet
-        - --local
-        - naics=build/naics_2022.parquet
       # The script indexes every sibling descriptor by resource name to resolve the
       # reference, so which object `naics` names depends on all of them. It globs
       # datasets/*/datapackage.json; whoever adds a dataset adds its descriptor here,
       # or arc will not re-run this step when that file changes.
       reads:
         - build/stage/schedule_b.parquet
-        - build/naics_2022.parquet
         - build/stage/described.json
         - ../../datasets/edgar/datapackage.json
         - ../../datasets/edgar_gleif/datapackage.json
@@ -244,7 +230,7 @@ steps:
     op: uv@1
     with:
       script: ../../scripts/check_code_list.py
-      sha256: 11b06ca742a70ef483c9626d153d30387ad17f47992a3b4ef3eaf295b1c1e4b8
+      sha256: a6d4fd3c42aca53591f7f94bfef625f9c4f503b2d4331b64bea8103db88f7102
       deps:
         - duckdb==1.5.5
       args:

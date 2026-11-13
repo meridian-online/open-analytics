@@ -131,6 +131,9 @@ REQUIRED_COVERAGE_KEYS = {"rows", "matched"}
 MEASURED_AGAINST = re.compile(r"^sha256:[0-9a-f]{64}$")
 # Seconds a stalled read of a referenced object may wait before WRITE gives up on it.
 DOWNLOAD_TIMEOUT = 300
+# The User-Agent every Protocol's fetches send. openlake's edge refuses Python's
+# default one with 403, so a download without it never reaches the object.
+USER_AGENT = "Meridian Protocol (open-analytics; research@meridian.online)"
 
 
 class JoinError(Exception):
@@ -180,8 +183,9 @@ def download(url: str, directory: str) -> str:
     if not re.match(r"^https?://", url, re.IGNORECASE):
         raise JoinError(f"cannot download {url} to hash it: only http(s) objects are downloaded")
     target = Path(directory) / (url.rstrip("/").rsplit("/", 1)[-1] or "object.parquet")
+    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})  # noqa: S310
     try:
-        with urllib.request.urlopen(url, timeout=DOWNLOAD_TIMEOUT) as response, target.open("wb") as out:  # noqa: S310
+        with urllib.request.urlopen(request, timeout=DOWNLOAD_TIMEOUT) as response, target.open("wb") as out:  # noqa: S310
             shutil.copyfileobj(response, out)
     except OSError as exc:
         raise JoinError(f"could not download {url}: {exc}") from exc
