@@ -17,7 +17,7 @@
       "title": "Meridian"
     }
   ],
-  "created": "2026-11-03T02:36:56Z",
+  "created": "2026-11-14T09:51:56Z",
   "description": "The 2018 Standard Occupational Classification, the U.S. federal statistical standard for classifying workers by occupation: one row per major group, minor group, broad occupation and detailed occupation, each under the group above it, with BLS's definition of each detailed occupation. Every row also carries the code of each group above it, so a detailed occupation rolls up to its major group with one GROUP BY. Codes keep BLS's hyphen (11-1011), the form the Occupational Employment and Wage Statistics, O*NET and the Department of Labor's filings carry. Read from the definitions workbook the U.S. Bureau of Labor Statistics publishes on behalf of the Office of Management and Budget and the Standard Occupational Classification Policy Committee; BLS's files are U.S. Government works in the public domain. bls/soc_2018_titles codes BLS's job titles to these occupations, and bls/soc_2010_to_2018 pairs the 2010 edition's codes with them.",
   "homepage": "https://meridian.online/datasets/bls/soc_2018",
   "licenses": [
@@ -30,9 +30,9 @@
   "name": "soc_2018",
   "resources": [
     {
-      "bytes": 150277,
+      "bytes": 150127,
       "format": "parquet",
-      "hash": "sha256:1120b4f2f0dad0d727c392fb301211177106e07ab1a1983e111d59d07f5c9ac7",
+      "hash": "sha256:0b8a64d1b41328c97715f522d4c7192cdba9083d6cb693eeacd690510936fec0",
       "mediatype": "application/vnd.apache.parquet",
       "name": "soc_2018",
       "path": "https://openlake.meridian.online/bls/soc_2018.parquet",

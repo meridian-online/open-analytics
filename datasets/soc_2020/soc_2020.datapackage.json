@@ -17,7 +17,7 @@
       "title": "Meridian"
     }
   ],
-  "created": "2026-11-13T19:28:43Z",
+  "created": "2026-11-14T09:52:07Z",
   "description": "The UK Standard Occupational Classification 2020, the classification of occupations the Office for National Statistics maintains and the Labour Force Survey and Census 2021 code to: one row per major group, sub-major group, minor group and unit group, each under the group above it, with ONS's description of each group and, for each unit group, its typical entry routes, tasks and related job titles. Every row also carries the code of each group above it, so a unit group rolls up to its major group with one GROUP BY. Codes are ONS's plain digits, stored as text (1111), the form the Labour Force Survey carries. Meridian prepared the table from ONS's SOC 2020 Volume 1 workbook. Source: Office for National Statistics licensed under the Open Government Licence v3.0. ons/soc_2020_titles codes the job titles of ONS's coding index to these unit groups, and ons/soc_2010_to_2020 relates the 2010 edition's unit groups to them.",
   "homepage": "https://meridian.online/datasets/ons/soc_2020",
   "licenses": [
@@ -32,9 +32,9 @@
   "name": "soc_2020",
   "resources": [
     {
-      "bytes": 205320,
+      "bytes": 205316,
       "format": "parquet",
-      "hash": "sha256:2d74fd2a74ceaecc1cc9c5e71109ab816df1b7481079d30d1d857cb5d97a4aa4",
+      "hash": "sha256:e3ffe61d985733df5816783208c90f8fdecbb61f7d89cc23b675fb0cd63ee762",
       "mediatype": "application/vnd.apache.parquet",
       "name": "soc_2020",
       "path": "https://openlake.meridian.online/ons/soc_2020.parquet",
