@@ -32,11 +32,13 @@
 #
 # PUBLISH. The last step, `publish` (ducklake_write), writes the three tables into the
 # shared open lake as one snapshot: the catalog, the data files and each table's
-# readable Parquet copy on R2 (public at https://openlake.meridian.online/). To publish:
-# `cp .env.example .env`, fill in the three R2 variables, `arc run --publish`. Without all
-# three variables the step publishes into build/lake/ instead and the run stays green, and
-# `arc run --publish` then fails. Readers need DuckDB 2.0 or later. It reads only what the
-# stamp steps wrote, so it runs after them.
+# readable Parquet copy on R2 (public at https://openlake.meridian.online/). With all
+# three R2 variables set, from .env or the environment, EVERY `arc run` publishes into
+# the live lake; `arc run --publish` only makes a missing credential fail the run instead
+# of publishing into build/lake/. For local work keep .env absent and the variables unset.
+# Keep the credential outside this folder and export it for the publishing command only.
+# Readers need DuckDB 2.0 or later. It reads only what the stamp steps wrote, so it runs
+# after them.
 #
 # Produces: build/soc_2020.parquet           →  ons/soc_2020
 #           build/soc_2020_titles.parquet    →  ons/soc_2020_titles
@@ -323,7 +325,8 @@ steps:
 
   # ── Publish: the three tables into the open lake, one snapshot ───────────────────
   # Runs on every `arc run`. With R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY and R2_ACCOUNT_ID
-  # all set it publishes live; otherwise into build/lake/, and `arc run --publish` fails.
+  # all set, every run publishes live; otherwise into build/lake/, and `arc run --publish`
+  # fails instead.
   - name: publish
     op: ducklake_write@1
     with:

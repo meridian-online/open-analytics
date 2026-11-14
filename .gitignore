@@ -3,3 +3,5 @@
 # Kata per-machine overrides
 .kata.local.toml
 .env
+.env.*
+!.env.example
