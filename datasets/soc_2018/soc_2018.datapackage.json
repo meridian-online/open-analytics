@@ -32,7 +32,7 @@
     {
       "bytes": 150277,
       "format": "parquet",
-      "hash": "sha256:b3ee7b5f3e30fd7341dcaf33c71ab1f35111830c83846586f1eeb882ea8a1ff7",
+      "hash": "sha256:1120b4f2f0dad0d727c392fb301211177106e07ab1a1983e111d59d07f5c9ac7",
       "mediatype": "application/vnd.apache.parquet",
       "name": "soc_2018",
       "path": "https://openlake.meridian.online/bls/soc_2018.parquet",
