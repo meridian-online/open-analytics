@@ -24,9 +24,13 @@
 # so `release` is read from the files in load.sql and nothing here changes when BLS
 # updates one.
 #
-# BOUNDARY — do NOT fold this into this manifest:
-#   • PUBLISH (content-addressed R2 upload + manifest/catalog pointer flip) is not an
-#     arcform step here. None of the three tables is published yet.
+# PUBLISH. The last step, `publish` (ducklake_write), writes the three tables into the
+# shared open lake as one snapshot: the catalog, the data files and each table's
+# readable Parquet copy on R2 (public at https://openlake.meridian.online/). To publish:
+# `cp .env.example .env`, fill in the three R2 variables, `arc run --publish`. Without all
+# three variables the step publishes into build/lake/ instead and the run stays green, and
+# `arc run --publish` then fails. Readers need DuckDB 2.0 or later. It reads only what the
+# stamp steps wrote, so it runs after them.
 #
 # Produces: build/soc_2018.parquet           →  bls/soc_2018
 #           build/soc_2018_titles.parquet    →  bls/soc_2018_titles
@@ -36,6 +40,8 @@ engine: duckdb
 # Kept in step with ../soc_2020, which pins the DuckDB that arc links (2.0), the writer of its published Parquet.
 engine_version: ">=2.0"
 db: build/soc_2018.db
+# The R2 write credential, if a .env is present (see .env.example); the process environment also counts.
+dotenv: [.env]
 
 defaults:
   retry:
@@ -227,8 +233,8 @@ steps:
 
   # ── Self-describe: write each published Parquet with its descriptor inside ──────
   # Each object answers for itself from its URL alone; the embedded copy omits the
-  # resource `bytes` and `hash` and the package's `created`. They run last because
-  # each embeds its FINISHED descriptor.
+  # resource `bytes` and `hash` and the package's `created`. They run after the steps that shape a table, because each
+  # embeds its FINISHED descriptor.
   - name: stamp_soc_2018
     op: uv@1
     with:
@@ -303,3 +309,36 @@ steps:
       produces:
         - build/soc_2010_to_2018.parquet
         - soc_2010_to_2018.datapackage.json
+
+  # ── Publish: the three tables into the open lake, one snapshot ───────────────────
+  # Runs on every `arc run`. With R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY and R2_ACCOUNT_ID
+  # all set it publishes live; otherwise into build/lake/, and `arc run --publish` fails.
+  - name: publish
+    op: ducklake_write@1
+    with:
+      public_base: https://openlake.meridian.online/
+      catalog: catalog/open.ducklake
+      data_path: lake/
+      runs: runs/
+      manifest: manifest.json
+      local_catalog: build/lake/open.ducklake
+      tables:
+        - table: bls.soc_2018
+          from: build/soc_2018.parquet
+          descriptor: soc_2018.datapackage.json
+          readable_copy: bls/soc_2018.parquet
+        - table: bls.soc_2018_titles
+          from: build/soc_2018_titles.parquet
+          descriptor: soc_2018_titles.datapackage.json
+          readable_copy: bls/soc_2018_titles.parquet
+        - table: bls.soc_2010_to_2018
+          from: build/soc_2010_to_2018.parquet
+          descriptor: soc_2010_to_2018.datapackage.json
+          readable_copy: bls/soc_2010_to_2018.parquet
+      credential:
+        type: r2
+        bucket: meridian-open
+        env:
+          key_id: R2_ACCESS_KEY_ID
+          secret: R2_SECRET_ACCESS_KEY
+          account_id: R2_ACCOUNT_ID

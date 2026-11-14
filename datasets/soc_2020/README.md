@@ -8,7 +8,7 @@ The UK Office for National Statistics' Standard Occupational Classification 2020
 | `soc_2020_titles` | `ons/soc_2020_titles` | job-title index: the coded entries of ONS's coding index, each pointing at a unit group | 32,439 |
 | `soc_2010_to_2020` | `ons/soc_2010_to_2020` | edition crosswalk: ONS's pairings of 2010 unit groups with 2020 ones, with ONS's shares and base counts | 714 |
 
-None of the three is published yet, and none is in `../registry.json`. This directory holds their facets:
+None of the three is in `../registry.json`. This directory holds their facets:
 
 | File | Facet | Answers |
 |---|---|---|
@@ -29,6 +29,7 @@ None of the three is published yet, and none is in `../registry.json`. This dire
 7. **check_titles**, **check_crosswalk** — hold the title index and the crosswalk to their contracts (`contracts/check_titles.sql`, `contracts/check_crosswalk.sql`), each after `check_inputs_code_list` points both at the code list exported in the same Run and a `check_inputs_*` model points it at its exported table and the level ONS codes to: every title and every 2020 code must be a unit group in that code list.
 8. **validate** — gate each Parquet against its `<table>.schema.finetype.json`.
 9. **stamp** — write each published `build/<table>.parquet` with its finished descriptor in the footer, and `<table>.datapackage.json` beside the manifest.
+10. **publish** (`ducklake_write`) — write the three tables into the open lake as one snapshot, each upserted on its key, with each descriptor in the lake's `meta` schema and a readable Parquet copy per table at `ons/<table>.parquet`.
 
 Produces `build/soc_2020.parquet`, `build/soc_2020_titles.parquet` and `build/soc_2010_to_2020.parquet`.
 
@@ -56,9 +57,9 @@ ONS issues each revision of a workbook under a new URL, and the URL carries its 
 
 finetype infers the code list's codes as numeric codes, but the one-digit `major_code` and the title index's SOC 2010, SOC 2000, SOC 90 and ISCO-08 codes as integers, and the extended sub-unit group (`1171/02`) as unknown. Those columns are nominated `representation.identifier.numeric_code`, which `describe` widens for the slash in the sub-unit group, and their overrides declare each code's shape, which the drift schema enforces.
 
-## Boundary (deliberate)
+## Publish
 
-**Publish** is not part of this Protocol, and none of the three tables is published yet. CI's descriptor sweeps read `datasets/*/datapackage.json`, so these `<table>.datapackage.json` files are not swept against a served object until they are. Meanwhile the Run's own steps hold each table to its contract, and `scripts/test_soc_2020_models.py` holds each committed descriptor to the table the models build: its fields are that table's columns in order, and its primary key, contract declaration (`x-meridian-code-list`, `x-meridian-title-index` or `x-meridian-crosswalk`), `OGL-UK-3.0` licence, attribution and field descriptions are the ones its overrides give, with no field undescribed.
+The last step publishes the three tables into the open lake (<https://openlake.meridian.online/>), a DuckLake catalog on R2 that readers attach over https without a credential. To publish, `cp .env.example .env`, fill in `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` and `R2_ACCOUNT_ID`, and run `arc run --publish`. `.env` is gitignored. A plain `arc run` with any of the three unset still succeeds: the step says it published locally, names the missing variables, and writes a lake into `build/lake/open.ducklake` that attaches and reads back offline. `arc run --publish` fails instead of falling back. Readers need DuckDB 2.0 or later. An unchanged rebuild commits nothing. The Run's own steps hold each table to its contract, and `scripts/test_soc_2020_models.py` holds each committed descriptor to the table the models build.
 
 ## Run
 
@@ -68,7 +69,7 @@ Needs the `arc` binary, `duckdb` with its `excel` extension, `uv` (for `check_co
 
 <!-- protocol-steps: generated from arcform.yaml by scripts/check_protocol_readme.py — do not edit this block by hand -->
 
-All 25 steps are `sql:` models or typed `op:` operators from the arcform catalog. This Protocol runs no opaque `command:`/shell step.
+All 26 steps are `sql:` models or typed `op:` operators from the arcform catalog. This Protocol runs no opaque `command:`/shell step.
 
 | # | Step | How it runs |
 |---|---|---|
@@ -97,5 +98,6 @@ All 25 steps are `sql:` models or typed `op:` operators from the arcform catalog
 | 23 | `stamp_soc_2020` | `op: uv@1` |
 | 24 | `stamp_soc_2020_titles` | `op: uv@1` |
 | 25 | `stamp_soc_2010_to_2020` | `op: uv@1` |
+| 26 | `publish` | `op: ducklake_write@1` |
 
 <!-- /protocol-steps -->
