@@ -1365,6 +1365,62 @@ class DescriptorCheckSelfTest(unittest.TestCase):
         )
         self.assertOutcome(run_check(self.datasets), EXIT_OK, "1 catalogue row count(s) measured")
 
+    def per_table_catalogue_row(self, stated: str) -> None:
+        """A Protocol with several tables: `<name>.datapackage.json` beside its recipe, linked from the catalogue."""
+        write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT i AS n FROM range(3) t(i)",
+            fields=[{"name": "n", "type": "integer"}],
+            catalogue="3",
+        )
+        multi = self.datasets / "multi"
+        rows = write_parquet(multi / "things.parquet", "SELECT i AS n FROM range(7) t(i)")
+        self.assertEqual(rows, 7)
+        document = {
+            "name": "things",
+            "title": "things",
+            "licenses": PERMISSIVE_LICENCE,
+            "resources": [{"name": "things", "format": "parquet", "path": "things.parquet"}],
+        }
+        (multi / "things.datapackage.json").write_text(json.dumps(document), encoding="utf-8")
+        with self.readme().open("a", encoding="utf-8") as handle:
+            handle.write(f"| things | {stated} | CC0-1.0 | [x](datasets/multi/things.datapackage.json) |\n")
+
+    def test_catalogue_row_linking_a_per_table_descriptor_is_measured(self) -> None:
+        self.per_table_catalogue_row("7")
+        self.assertOutcome(run_check(self.datasets), EXIT_OK, "2 catalogue row count(s) measured")
+
+    def test_catalogue_row_linking_a_per_table_descriptor_fails_on_a_wrong_figure(self) -> None:
+        self.per_table_catalogue_row("8")
+        self.assertOutcome(run_check(self.datasets), EXIT_VIOLATIONS, "catalogue.rows", "states 8")
+
+    def test_catalogue_row_linking_a_descriptor_outside_the_datasets_directory_is_an_error(self) -> None:
+        self.per_table_catalogue_row("7")
+        docs = self.datasets.parent / "docs"
+        docs.mkdir()
+        (docs / "x.datapackage.json").write_text(
+            json.dumps({"resources": [{"path": "x.parquet"}]}), encoding="utf-8"
+        )
+        with self.readme().open("a", encoding="utf-8") as handle:
+            handle.write("| x | 1 | CC0-1.0 | [x](docs/x.datapackage.json) |\n")
+        self.assertOutcome(run_check(self.datasets), EXIT_ERROR, "outside the datasets directory")
+
+    def test_removing_a_per_table_catalogue_row_is_reported_missing(self) -> None:
+        self.per_table_catalogue_row("7")
+        text = self.readme().read_text(encoding="utf-8")
+        self.readme().write_text(
+            "".join(line for line in text.splitlines(True) if "things.datapackage.json" not in line),
+            encoding="utf-8",
+        )
+        self.assertOutcome(
+            run_check(self.datasets), EXIT_VIOLATIONS, "catalogue.missing", "things.datapackage.json"
+        )
+
+    def test_only_narrows_a_per_table_catalogue_row_by_its_directory(self) -> None:
+        self.per_table_catalogue_row("8")
+        self.assertOutcome(run_check(self.datasets, "--only", "widgets"), EXIT_OK)
+
     def test_catalogue_figure_understating_the_object_fails(self) -> None:
         write_package(
             self.datasets,

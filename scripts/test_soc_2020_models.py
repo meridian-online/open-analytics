@@ -18,9 +18,9 @@ them): major groups 1 and 9 and every group beneath them from Volume 1, with ONS
 headers; index rows for their unit groups from the coding index; and the relationship
 blocks whose every 2020 group is one of them.
 
-Needs duckdb==1.5.5 and openpyxl in the running Python:
+Needs duckdb==2.0.0 and openpyxl in the running Python:
 
-    uv run --quiet --with duckdb==1.5.5 --with openpyxl python3 scripts/test_soc_2020_models.py
+    uv run --quiet --with duckdb==2.0.0 --with openpyxl python3 scripts/test_soc_2020_models.py
 """
 
 from __future__ import annotations

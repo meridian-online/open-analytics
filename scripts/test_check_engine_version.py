@@ -89,6 +89,37 @@ def patch_created_by_to_disagree(target: Path) -> tuple[str, str]:
     return original, patched
 
 
+def set_footer_version(target: Path, version: str) -> None:
+    """Rewrite the version in `target`'s real `created_by` to `version`, same length.
+
+    Both versions are single-digit X.Y.Z so no footer offset moves.
+    """
+    original = real_created_by(target)
+    match = re.search(r"\d+\.\d+\.\d+", original)
+    assert match is not None and len(match.group(0)) == len(version), (original, version)
+    patched = original[: match.start()] + version + original[match.end() :]
+    raw = target.read_bytes()
+    assert raw.count(original.encode()) == 1
+    target.write_bytes(raw.replace(original.encode(), patched.encode(), 1))
+
+
+def write_protocol(package_dir: Path, pins: list[str]) -> None:
+    """An `arcform.yaml` whose `stamp_descriptor.py` steps each pin the given duckdb deps.
+
+    A `check_code_list.py` step pinning a different duckdb sits beside them: only the
+    stamp steps write the published Parquet, so only they may set the expected writer.
+    """
+    steps = ["steps:", "  - name: check", "    op: uv@1", "    with:",
+             "      script: ../../scripts/check_code_list.py", "      deps:", "        - duckdb==9.9.9"]
+    for index, pin in enumerate(pins):
+        steps += [f"  - name: stamp_{index}", "    op: uv@1", "    with:",
+                  "      script: ../../scripts/stamp_descriptor.py", "      deps:"]
+        if pin:
+            steps.append(f"        - {pin}")
+        steps += ["      args:", "        - stamp"]
+    (package_dir / "arcform.yaml").write_text("name: fixture\n" + "\n".join(steps) + "\n", encoding="utf-8")
+
+
 def write_package(root: Path, slug: str) -> Path:
     package_dir = root / slug
     parquet = package_dir / f"{slug}.parquet"
@@ -245,7 +276,7 @@ class EngineVersionCheckSelfTest(unittest.TestCase):
         # saying "written by <the pin>; pinned to <the writer>" satisfied every one of
         # them. That report sends a reader to change the wrong thing.
         self.assertIn(f"was written by DuckDB {patched_version}", result.stdout)
-        self.assertIn(f"this check is pinned to DuckDB {original_version}", result.stdout)
+        self.assertIn(f"this check's DUCKDB_VERSION fallback is DuckDB {original_version}", result.stdout)
         # The point of AC3b: this vocabulary, not the one `check_descriptors.py` uses
         # for an actual data defect.
         #
@@ -552,6 +583,37 @@ class EngineVersionCheckSelfTest(unittest.TestCase):
             "that guards against it is now vacuous — take the new wording from that file",
         )
 
+    def test_each_dataset_held_to_its_protocols_stamp_pin(self) -> None:
+        """The footer is held to the duckdb its own Protocol's stamp step pins, not to
+        the one global `DUCKDB_VERSION`, so a Protocol can move to a new DuckDB without
+        republishing every other dataset. The pin stands in for the writer's version
+        while a moved Protocol pins the same DuckDB that arc links.
+        """
+        descriptor = write_package(self.datasets, "pinned")
+        parquet = descriptor.parent / "pinned.parquet"
+        set_footer_version(parquet, "1.5.5")
+        write_protocol(descriptor.parent, ["duckdb==1.5.5", "duckdb==1.5.5"])
+        # Run as 2.0.0: the Protocol's own pin, not the check's, is what the footer meets.
+        self.assertOutcome(
+            run_check(self.datasets, env={"DUCKDB_VERSION": "2.0.0"}), EXIT_OK, "were written by"
+        )
+
+        set_footer_version(parquet, "1.5.6")
+        result = run_check(self.datasets, env={"DUCKDB_VERSION": "2.0.0"})
+        self.assertOutcome(result, EXIT_MISMATCH, "WRITER/READER ENGINE MISMATCH")
+        self.assertIn("was written by DuckDB 1.5.6", result.stdout)
+        self.assertIn("its Protocol pins DuckDB 1.5.5", result.stdout)
+
+        # A Protocol that pins nothing falls back to DUCKDB_VERSION.
+        write_protocol(descriptor.parent, [""])
+        self.assertOutcome(run_check(self.datasets, env={"DUCKDB_VERSION": "1.5.6"}), EXIT_OK)
+        self.assertOutcome(run_check(self.datasets, env={"DUCKDB_VERSION": "2.0.0"}), EXIT_MISMATCH, "2.0.0")
+
+    def test_a_protocol_whose_stamp_pins_disagree_is_an_error(self) -> None:
+        descriptor = write_package(self.datasets, "split")
+        write_protocol(descriptor.parent, ["duckdb==1.5.5", "duckdb==2.0.0"])
+        self.assertOutcome(run_check(self.datasets), EXIT_ERROR, "1.5.5", "2.0.0", "split")
+
     def test_mismatch_still_reddens_when_the_pin_itself_differs_from_the_footer(self) -> None:
         """The same disagreement, produced the other way: an untouched footer held
         to a pin nothing on disk wrote. Exercises `reader_pin()` reading
@@ -600,6 +662,48 @@ class EngineVersionCheckSelfTest(unittest.TestCase):
         self.assertEqual(report["reader_pin"], "0.0.0")
         self.assertEqual(len(report["mismatches"]), 1)
         self.assertEqual(report["mismatches"][0]["reader_pin"], "0.0.0")
+
+    def test_per_table_descriptors_are_read(self) -> None:
+        """A Protocol that publishes several tables keeps one `<table>.datapackage.json`
+        per table beside its `arcform.yaml`, and no `datapackage.json`. Each of those
+        footers is read and held to that Protocol's pin, so a skewed one reddens and is
+        named by its own descriptor, and `--only <slug>` reaches it.
+        """
+        package_dir = self.datasets / "multi"
+        for table in ("alpha", "beta"):
+            parquet = package_dir / f"{table}.parquet"
+            write_parquet(parquet, "SELECT i AS n FROM range(3) t(i)")
+            (package_dir / f"{table}.datapackage.json").write_text(
+                json.dumps(
+                    {
+                        "name": table,
+                        "resources": [
+                            {
+                                "name": table,
+                                "format": "parquet",
+                                "path": parquet.name,
+                                "schema": {"fields": [{"name": "n", "type": "integer"}]},
+                            }
+                        ],
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+        written = re.search(r"(\d+\.\d+\.\d+)", real_created_by(package_dir / "alpha.parquet")).group(1)
+        write_protocol(package_dir, [f"duckdb=={written}", f"duckdb=={written}"])
+
+        agreeing = run_check(self.datasets, "--only", "multi", env={"DUCKDB_VERSION": "0.0.0"})
+        self.assertOutcome(agreeing, EXIT_OK, "2 resource(s) across 2 descriptor(s)", "multi/alpha", "multi/beta")
+
+        _original, patched = patch_created_by_to_disagree(package_dir / "beta.parquet")
+        patched_version = re.search(r"(\d+\.\d+\.\d+)", patched).group(1)
+        skewed = run_check(self.datasets, "--only", "multi", env={"DUCKDB_VERSION": "0.0.0"})
+        self.assertOutcome(skewed, EXIT_MISMATCH, "WRITER/READER ENGINE MISMATCH", "beta.datapackage.json")
+        self.assertIn(f"was written by DuckDB {patched_version}; its Protocol pins DuckDB {written}", skewed.stdout)
+        self.assertIn("beta.datapackage.json :: beta", skewed.stdout)
+        self.assertNotIn("alpha.datapackage.json :: alpha", skewed.stdout)
 
     def test_no_datasets_is_an_error(self) -> None:
         self.assertOutcome(run_check(self.datasets), EXIT_ERROR, "no datasets/*/datapackage.json")

@@ -7,6 +7,8 @@
     "usitc": "Datasets issued by the U.S. International Trade Commission.",
     "cms": "Datasets issued by the Centers for Medicare & Medicaid Services.",
     "fda": "Datasets issued by the U.S. Food and Drug Administration.",
+    "bls": "Datasets issued by the U.S. Bureau of Labor Statistics.",
+    "ons": "Datasets issued by the Office for National Statistics.",
     "library": "Meridian's curated set: core datasets with no issuing organisation, and data Meridian makes itself.",
     "source": "Held for the compatibility views at the old names `source.gleif`, `source.edgar` and `source.naics`.",
     "crosswalk": "Held for the compatibility view at the old name `crosswalk.edgar_gleif`."
@@ -63,6 +65,16 @@
     "library": {
       "kind": "library",
       "note": "Meridian's curated set: core datasets with no issuing organisation to hold a namespace for, and data Meridian makes itself."
+    },
+    "bls": {
+      "kind": "held",
+      "issuer": "U.S. Bureau of Labor Statistics",
+      "claimed": false
+    },
+    "ons": {
+      "kind": "held",
+      "issuer": "Office for National Statistics",
+      "claimed": false
     }
   },
   "reserved": [
@@ -77,6 +89,8 @@
     "usgs",
     "nyc_tlc",
     "epoch_ai",
+    "bls",
+    "ons",
     "main",
     "source",
     "crosswalk",
@@ -177,6 +191,66 @@
       "manifest": "https://openlake.meridian.online/manifest.json",
       "doi": null,
       "protocol": "datasets/ndc/arcform.yaml"
+    },
+    {
+      "uid": "420ba67b-2880-4c8c-b5e8-b53d201b92ff",
+      "schema": "bls",
+      "name": "soc_2018",
+      "title": "SOC 2018 — Standard Occupational Classification (U.S.)",
+      "aliases": [],
+      "manifest": "https://openlake.meridian.online/manifest.json",
+      "doi": null,
+      "protocol": "datasets/soc_2018/arcform.yaml"
+    },
+    {
+      "uid": "c329669e-6db5-44cc-ac11-1e785a9e4855",
+      "schema": "bls",
+      "name": "soc_2018_titles",
+      "title": "SOC 2018 job titles — direct match titles (U.S.)",
+      "aliases": [],
+      "manifest": "https://openlake.meridian.online/manifest.json",
+      "doi": null,
+      "protocol": "datasets/soc_2018/arcform.yaml"
+    },
+    {
+      "uid": "1f56502f-5032-4790-9164-b7adc0442d59",
+      "schema": "bls",
+      "name": "soc_2010_to_2018",
+      "title": "SOC 2010 to 2018 crosswalk (U.S.)",
+      "aliases": [],
+      "manifest": "https://openlake.meridian.online/manifest.json",
+      "doi": null,
+      "protocol": "datasets/soc_2018/arcform.yaml"
+    },
+    {
+      "uid": "6ebcb58b-5bf2-4a99-a28f-8cdcd22e7ff8",
+      "schema": "ons",
+      "name": "soc_2020",
+      "title": "SOC 2020 — Standard Occupational Classification (UK)",
+      "aliases": [],
+      "manifest": "https://openlake.meridian.online/manifest.json",
+      "doi": null,
+      "protocol": "datasets/soc_2020/arcform.yaml"
+    },
+    {
+      "uid": "a30beb3d-44a9-4f07-8dd1-a86d39a2e8c6",
+      "schema": "ons",
+      "name": "soc_2020_titles",
+      "title": "SOC 2020 job titles — the ONS coding index (UK)",
+      "aliases": [],
+      "manifest": "https://openlake.meridian.online/manifest.json",
+      "doi": null,
+      "protocol": "datasets/soc_2020/arcform.yaml"
+    },
+    {
+      "uid": "3f7f5d4e-5a53-458a-b912-029598d80480",
+      "schema": "ons",
+      "name": "soc_2010_to_2020",
+      "title": "SOC 2010 to SOC 2020 relationship (UK)",
+      "aliases": [],
+      "manifest": "https://openlake.meridian.online/manifest.json",
+      "doi": null,
+      "protocol": "datasets/soc_2020/arcform.yaml"
     }
   ]
 }

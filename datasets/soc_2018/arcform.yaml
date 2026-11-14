@@ -24,18 +24,26 @@
 # so `release` is read from the files in load.sql and nothing here changes when BLS
 # updates one.
 #
-# BOUNDARY — do NOT fold this into this manifest:
-#   • PUBLISH (content-addressed R2 upload + manifest/catalog pointer flip) is not an
-#     arcform step here. None of the three tables is published yet.
+# PUBLISH. The last step, `publish` (ducklake_write), writes the three tables into the
+# shared open lake as one snapshot: the catalog, the data files and each table's
+# readable Parquet copy on R2 (public at https://openlake.meridian.online/). With all
+# three R2 variables set, from .env or the environment, EVERY `arc run` publishes into
+# the live lake; `arc run --publish` only makes a missing credential fail the run instead
+# of publishing into build/lake/. For local work keep .env absent and the variables unset.
+# Keep the credential outside this folder and export it for the publishing command only.
+# Readers need DuckDB 2.0 or later. It reads only what the stamp steps wrote, so it runs
+# after them.
 #
 # Produces: build/soc_2018.parquet           →  bls/soc_2018
 #           build/soc_2018_titles.parquet    →  bls/soc_2018_titles
 #           build/soc_2010_to_2018.parquet   →  bls/soc_2010_to_2018
 name: soc_2018
 engine: duckdb
-# Kept in step with ../soc_2020, whose load.sql needs DuckDB 1.3 for `lambda x:`.
-engine_version: ">=1.3"
+# Kept in step with ../soc_2020, which pins the DuckDB that arc links (2.0), the writer of its published Parquet.
+engine_version: ">=2.0"
 db: build/soc_2018.db
+# The R2 write credential, if a .env is present (see .env.example); the process environment also counts.
+dotenv: [.env]
 
 defaults:
   retry:
@@ -152,14 +160,14 @@ steps:
   # ── Contract: hold the code list to the shared code-list columns ────────────────
   # The script is addressed by its bytes, so editing it is a manifest edit as well:
   # `shasum -a 256 scripts/check_code_list.py` prints the digest. duckdb is pinned to
-  # DUCKDB_VERSION in .github/workflows/descriptors.yml — keep the two in step.
+  # the same version as the stamp steps below, which engine_version above names.
   - name: check_code_list
     op: uv@1
     with:
       script: ../../scripts/check_code_list.py
       sha256: a6d4fd3c42aca53591f7f94bfef625f9c4f503b2d4331b64bea8103db88f7102
       deps:
-        - duckdb==1.5.5
+        - duckdb==2.0.0
       args:
         - --parquet
         - build/stage/soc_2018.parquet
@@ -227,15 +235,15 @@ steps:
 
   # ── Self-describe: write each published Parquet with its descriptor inside ──────
   # Each object answers for itself from its URL alone; the embedded copy omits the
-  # resource `bytes` and `hash` and the package's `created`. They run last because
-  # each embeds its FINISHED descriptor.
+  # resource `bytes` and `hash` and the package's `created`. They run after the steps that shape a table, because each
+  # embeds its FINISHED descriptor.
   - name: stamp_soc_2018
     op: uv@1
     with:
       script: ../../scripts/stamp_descriptor.py
       sha256: a9356ac8d5412d94a940ebeef1e2508eaed6b77f1d923ada88edbacccf9d9b81
       deps:
-        - duckdb==1.5.5
+        - duckdb==2.0.0
       args:
         - stamp
         - --descriptor
@@ -260,7 +268,7 @@ steps:
       script: ../../scripts/stamp_descriptor.py
       sha256: a9356ac8d5412d94a940ebeef1e2508eaed6b77f1d923ada88edbacccf9d9b81
       deps:
-        - duckdb==1.5.5
+        - duckdb==2.0.0
       args:
         - stamp
         - --descriptor
@@ -285,7 +293,7 @@ steps:
       script: ../../scripts/stamp_descriptor.py
       sha256: a9356ac8d5412d94a940ebeef1e2508eaed6b77f1d923ada88edbacccf9d9b81
       deps:
-        - duckdb==1.5.5
+        - duckdb==2.0.0
       args:
         - stamp
         - --descriptor
@@ -303,3 +311,37 @@ steps:
       produces:
         - build/soc_2010_to_2018.parquet
         - soc_2010_to_2018.datapackage.json
+
+  # ── Publish: the three tables into the open lake, one snapshot ───────────────────
+  # Runs on every `arc run`. With R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY and R2_ACCOUNT_ID
+  # all set, every run publishes live; otherwise into build/lake/, and `arc run --publish`
+  # fails instead.
+  - name: publish
+    op: ducklake_write@1
+    with:
+      public_base: https://openlake.meridian.online/
+      catalog: catalog/open.ducklake
+      data_path: lake/
+      runs: runs/
+      manifest: manifest.json
+      local_catalog: build/lake/open.ducklake
+      tables:
+        - table: bls.soc_2018
+          from: build/soc_2018.parquet
+          descriptor: soc_2018.datapackage.json
+          readable_copy: bls/soc_2018.parquet
+        - table: bls.soc_2018_titles
+          from: build/soc_2018_titles.parquet
+          descriptor: soc_2018_titles.datapackage.json
+          readable_copy: bls/soc_2018_titles.parquet
+        - table: bls.soc_2010_to_2018
+          from: build/soc_2010_to_2018.parquet
+          descriptor: soc_2010_to_2018.datapackage.json
+          readable_copy: bls/soc_2010_to_2018.parquet
+      credential:
+        type: r2
+        bucket: meridian-open
+        env:
+          key_id: R2_ACCESS_KEY_ID
+          secret: R2_SECRET_ACCESS_KEY
+          account_id: R2_ACCOUNT_ID

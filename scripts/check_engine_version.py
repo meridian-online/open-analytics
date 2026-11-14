@@ -1,12 +1,21 @@
 #!/usr/bin/env python3
 """Hold the engine that wrote each published Parquet to the engine this check runs as.
 
-Every `datasets/<slug>/datapackage.json` resource is a Parquet object. Parquet's
-footer carries a `created_by` field the writer sets itself — for DuckDB it reads
+Every resource of `datasets/<slug>/datapackage.json`, and of each per-table
+`datasets/<slug>/<table>.datapackage.json` a Protocol that publishes several tables
+keeps instead, is a Parquet object. Parquet's footer carries a `created_by` field
+the writer sets itself — for DuckDB it reads
 `DuckDB version vX.Y.Z (build ...)` — so the file is honest about what wrote it even
 when nothing else is. This script reads that field back out of every published
 resource with `parquet_file_metadata()` (a footer read, not a download) and holds it
-to `DUCKDB_VERSION`, the version this very check just had installed.
+to the DuckDB its own Protocol pins: the `duckdb==X.Y.Z` in the `stamp_descriptor.py`
+steps of `datasets/<slug>/arcform.yaml`, which are the steps that write the published
+Parquet. All such pins in one Protocol must agree, else the check exits 2 naming them.
+A Protocol that pins none falls back to `DUCKDB_VERSION`, the version this very check
+just had installed. The pin stands in for the writer's version, which is only sound
+while a Protocol that has moved to a new DuckDB pins the same DuckDB that arc links;
+each Protocol's pin therefore moves when it moves onto the publish step, and the
+footers it wrote move with it.
 
 Why this exists: the descriptor check in `check_descriptors.py` proves a descriptor
 agrees with the bytes it describes, on the assumption that reading those bytes back
@@ -33,7 +42,7 @@ Exit codes, matching check_descriptors.py's convention:
      pinned to
   1  at least one writer/reader engine mismatch — named with both versions
   2  the check could not run: unreadable resource, missing/unparseable created_by,
-     or no datasets found
+     a Protocol whose stamp steps pin different DuckDB versions, or no datasets found
 
 `--datasets-dir` and `--only` mirror check_descriptors.py so the two can be pointed
 at the same fixture tree in a test; this script otherwise shares no code and no
@@ -72,12 +81,13 @@ class Mismatch:
     path: str
     writer_version: str
     reader_pin: str
+    pin_source: str
 
     def line(self) -> str:
         return (
             f"{self.package} :: {self.resource}\n"
             f"    engine.version: WRITER/READER ENGINE MISMATCH (not a data disagreement) — "
-            f"{self.path} was written by DuckDB {self.writer_version}; this check is pinned to "
+            f"{self.path} was written by DuckDB {self.writer_version}; {self.pin_source} "
             f"DuckDB {self.reader_pin}. The bytes may be entirely correct; the engine that wrote "
             f"them is not the engine judging them."
         )
@@ -93,7 +103,12 @@ def resolve_path(descriptor_path: Path, raw: str) -> tuple[str, bool]:
 
 
 def discover(datasets_dir: Path, only: Iterable[str] | None) -> list[Path]:
-    paths = sorted(datasets_dir.glob("*/datapackage.json"))
+    """Every descriptor of a published dataset: `<slug>/datapackage.json` for a Protocol
+    that publishes one package, and `<slug>/<table>.datapackage.json` for each table of a
+    Protocol that publishes several. `--only` selects by `<slug>`, so it reaches both."""
+    paths = sorted(
+        set(datasets_dir.glob("*/datapackage.json")) | set(datasets_dir.glob("*/*.datapackage.json"))
+    )
     if only:
         wanted = set(only)
         paths = [path for path in paths if path.parent.name in wanted]
@@ -101,8 +116,15 @@ def discover(datasets_dir: Path, only: Iterable[str] | None) -> list[Path]:
         if missing:
             raise CheckError(f"no descriptor for dataset(s): {', '.join(sorted(missing))}")
     if not paths:
-        raise CheckError(f"no datasets/*/datapackage.json under {datasets_dir}")
+        raise CheckError(f"no datasets/*/datapackage.json or datasets/*/*.datapackage.json under {datasets_dir}")
     return paths
+
+
+def descriptor_label(path: Path) -> str:
+    """`<slug>` for a package descriptor, `<slug>/<table>` for a per-table one."""
+    if path.name == "datapackage.json":
+        return path.parent.name
+    return f"{path.parent.name}/{path.name.removesuffix('.datapackage.json')}"
 
 
 def load_descriptor(path: Path) -> dict:
@@ -132,6 +154,51 @@ def parse_writer_version(created_by: str, path: str) -> str:
             "this check knows how to parse"
         )
     return match.group(1)
+
+
+# Splits the Protocol into steps. Assumes the two-space step indentation every
+# arcform.yaml here uses; any other indentation makes no step match, so no pin is found
+# and the footer meets the DUCKDB_VERSION fallback, which surfaces as a footer mismatch
+# rather than a silent pass.
+STAMP_STEP = re.compile(r"^  - name:", re.MULTILINE)
+DUCKDB_DEP = re.compile(r"^\s*-\s*duckdb==(\S+?)\s*$", re.MULTILINE)
+
+
+def expected_version(dataset_dir: Path, default: str) -> tuple[str, str]:
+    """(version, source) this dataset's footer is held to: its Protocol's pin, else `default`.
+
+    `source` is the phrase the mismatch message uses to say where the version came from.
+    """
+    pinned = protocol_pin(dataset_dir)
+    if pinned:
+        return pinned, "its Protocol pins"
+    return default, "this check's DUCKDB_VERSION fallback is"
+
+
+def protocol_pin(dataset_dir: Path) -> str | None:
+    """The DuckDB version this dataset's own Protocol pins for its writing steps, or None.
+
+    Reads `<dataset_dir>/arcform.yaml` as text (the workflow installs no YAML library)
+    and collects the `duckdb==X` dependency of every step running `stamp_descriptor.py`.
+    Disagreeing pins are an error rather than a pick; none at all returns None.
+    """
+    protocol = dataset_dir / "arcform.yaml"
+    if not protocol.exists():
+        return None
+    try:
+        text = protocol.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise CheckError(f"{protocol}: cannot read Protocol: {exc}") from exc
+    pins: list[str] = []
+    for step in STAMP_STEP.split(text):
+        if "stamp_descriptor.py" in step:
+            pins.extend(DUCKDB_DEP.findall(step))
+    if len(set(pins)) > 1:
+        raise CheckError(
+            f"{protocol}: its stamp_descriptor.py steps pin different DuckDB versions "
+            f"({', '.join(sorted(set(pins)))}); they all write published Parquet and must agree"
+        )
+    return pins[0] if pins else None
 
 
 def reader_pin() -> str:
@@ -185,13 +252,14 @@ def every_declared_resource_was_read(checked: int, declared: int, n_descriptors:
         )
 
 
-def check_resources(con, descriptor_paths: list[Path], pin: str) -> tuple[list[Mismatch], int]:
+def check_resources(con, descriptor_paths: list[Path], default: str) -> tuple[list[Mismatch], int]:
     mismatches: list[Mismatch] = []
     checked = 0
     declared = 0
     for descriptor_path in descriptor_paths:
         package = str(descriptor_path)
         descriptor = load_descriptor(descriptor_path)
+        pin, source = expected_version(descriptor_path.parent, default)
         resources = descriptor.get("resources") or []
         if not resources:
             raise CheckError(f"{package}: declares no resources")
@@ -216,7 +284,7 @@ def check_resources(con, descriptor_paths: list[Path], pin: str) -> tuple[list[M
                 raise CheckError(f"{package}: {exc}") from exc
             checked += 1
             if written != pin:
-                mismatches.append(Mismatch(package, resource.get("name", ""), path, written, pin))
+                mismatches.append(Mismatch(package, resource.get("name", ""), path, written, pin, source))
     every_declared_resource_was_read(checked, declared, len(descriptor_paths))
     return mismatches, checked
 
@@ -249,7 +317,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"engine version check: {exc}", file=sys.stderr)
         return EXIT_ERROR
 
-    checked_names = ", ".join(path.parent.name for path in descriptor_paths)
+    checked_names = ", ".join(descriptor_label(path) for path in descriptor_paths)
     if args.json:
         args.json.write_text(
             json.dumps(
@@ -268,7 +336,7 @@ def main(argv: list[str] | None = None) -> int:
     if not mismatches:
         print(
             f"engine version check: {checked} resource(s) across {len(descriptor_paths)} descriptor(s) "
-            f"({checked_names}) were written by the DuckDB this check is pinned to ({pin})"
+            f"({checked_names}) were written by the DuckDB this check is pinned to (each Protocol's own pin, else {pin})"
         )
         return EXIT_OK
 

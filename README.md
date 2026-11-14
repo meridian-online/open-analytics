@@ -12,9 +12,11 @@ ATTACH 'ducklake:https://openlake.meridian.online/catalog/open.ducklake' AS meri
 SELECT * FROM meridian.gleif.lei LIMIT 10;
 ```
 
-A dataset's address is `<namespace>/<name>`: `gleif/lei`, `sec/company_tickers_exchange`, `census/naics_2022`, `census/schedule_b`, `usitc/hts`, `cms/hcpcs`, `fda/ndc` and `library/edgar_lei`, which are the SQL names `meridian.gleif.lei` and so on and the file URLs `https://openlake.meridian.online/<namespace>/<name>.parquet`. The old flat files stay readable but are frozen at the move and no longer refreshed, so read current data from the new URLs. The old SQL names (`source.gleif`, `source.edgar`, `source.naics`, `crosswalk.edgar_gleif`) keep working as views for a window after the move, then retire along with the old flat files.
+A dataset's address is `<namespace>/<name>`: `gleif/lei`, `sec/company_tickers_exchange`, `census/naics_2022`, `census/schedule_b`, `usitc/hts`, `cms/hcpcs`, `fda/ndc`, `library/edgar_lei`, `bls/soc_2018`, `bls/soc_2018_titles`, `bls/soc_2010_to_2018`, `ons/soc_2020`, `ons/soc_2020_titles` and `ons/soc_2010_to_2020`, which are the SQL names `meridian.gleif.lei` and so on and the file URLs `https://openlake.meridian.online/<namespace>/<name>.parquet`. The old flat files stay readable but are frozen at the move and no longer refreshed, so read current data from the new URLs. The old SQL names (`source.gleif`, `source.edgar`, `source.naics`, `crosswalk.edgar_gleif`) keep working as views for a window after the move, then retire along with the old flat files.
 
-Or read a single file directly:
+Attaching the catalogue needs DuckDB 2.0 or later. The SOC datasets are published into the lake by their own Protocol's last step, and the other eight move to that step one at a time; [`docs/publishing.md`](docs/publishing.md) says how a Protocol publishes, and how the lake was cut over to it on 2026-11-14.
+
+Or read a single file directly, on any DuckDB:
 
 ```sql
 SELECT * FROM read_parquet('https://openlake.meridian.online/census/naics_2022.parquet');
@@ -68,6 +70,12 @@ copies to each other.
 | Schedule B — U.S. Export Classification Codes | 16,727 | Public domain | [U.S. Census Bureau](https://www.census.gov/foreign-trade/schedules/b/index.html) | [datapackage.json](datasets/schedule_b/datapackage.json) |
 | HCPCS Level II — Healthcare Common Procedure Coding System | 8,770 | Public domain | [CMS](https://www.cms.gov/medicare/coding-billing/healthcare-common-procedure-system) | [datapackage.json](datasets/hcpcs/datapackage.json) |
 | NDC Directory — National Drug Code | 340K | CC0-1.0 | [FDA](https://www.fda.gov/drugs/drug-approvals-and-databases/national-drug-code-directory) | [datapackage.json](datasets/ndc/datapackage.json) |
+| SOC 2018 — Standard Occupational Classification (U.S.) | 1,447 | Public domain | [BLS](https://www.bls.gov/soc/2018/home.htm) | [soc_2018.datapackage.json](datasets/soc_2018/soc_2018.datapackage.json) |
+| SOC 2018 job titles — direct match titles (U.S.) | 6,520 | Public domain | [BLS](https://www.bls.gov/soc/2018/home.htm) | [soc_2018_titles.datapackage.json](datasets/soc_2018/soc_2018_titles.datapackage.json) |
+| SOC 2010 to 2018 crosswalk (U.S.) | 900 | Public domain | [BLS](https://www.bls.gov/soc/2018/home.htm) | [soc_2010_to_2018.datapackage.json](datasets/soc_2018/soc_2010_to_2018.datapackage.json) |
+| SOC 2020 — Standard Occupational Classification (UK) | 551 | OGL v3.0 ("Source: Office for National Statistics licensed under the Open Government Licence v3.0.") | [ONS](https://www.ons.gov.uk/methodology/classificationsandstandards/standardoccupationalclassificationsoc/soc2020) | [soc_2020.datapackage.json](datasets/soc_2020/soc_2020.datapackage.json) |
+| SOC 2020 job titles — the ONS coding index (UK) | 32,439 | OGL v3.0 ("Source: Office for National Statistics licensed under the Open Government Licence v3.0.") | [ONS](https://www.ons.gov.uk/methodology/classificationsandstandards/standardoccupationalclassificationsoc/soc2020) | [soc_2020_titles.datapackage.json](datasets/soc_2020/soc_2020_titles.datapackage.json) |
+| SOC 2010 to SOC 2020 relationship (UK) | 714 | OGL v3.0 ("Source: Office for National Statistics licensed under the Open Government Licence v3.0.") | [ONS](https://www.ons.gov.uk/methodology/classificationsandstandards/standardoccupationalclassificationsoc/soc2020) | [soc_2010_to_2020.datapackage.json](datasets/soc_2020/soc_2010_to_2020.datapackage.json) |
 
 The **Rows** figures are counted from the published objects themselves on every
 run of the checks below, not maintained by hand.

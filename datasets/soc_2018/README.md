@@ -8,7 +8,7 @@ The U.S. Bureau of Labor Statistics' 2018 Standard Occupational Classification, 
 | `soc_2018_titles` | `bls/soc_2018_titles` | job-title index: BLS's direct match titles, each pointing at a detailed occupation | 6,520 |
 | `soc_2010_to_2018` | `bls/soc_2010_to_2018` | edition crosswalk: BLS's pairings of 2010 detailed occupations with 2018 ones | 900 |
 
-None of the three is published yet, and none is in `../registry.json`. This directory holds their facets:
+All three are registered in `../registry.json`. This directory holds their facets:
 
 | File | Facet | Answers |
 |---|---|---|
@@ -29,6 +29,7 @@ None of the three is published yet, and none is in `../registry.json`. This dire
 7. **check_titles**, **check_crosswalk** — hold the title index and the crosswalk to their contracts (`contracts/check_titles.sql`, `contracts/check_crosswalk.sql`), each after `check_inputs_code_list` points both at the code list exported in the same Run and a `check_inputs_*` model points it at its exported table and the level BLS codes to: every title and every 2018 code must be a detailed occupation in that code list.
 8. **validate** — gate each Parquet against its `<table>.schema.finetype.json`.
 9. **stamp** — write each published `build/<table>.parquet` with its finished descriptor in the footer, and `<table>.datapackage.json` beside the manifest.
+10. **publish** (`ducklake_write`) — write the three tables into the open lake as one snapshot, each upserted on its key, with each descriptor in the lake's `meta` schema and a readable Parquet copy per table at `bls/<table>.parquet`.
 
 Produces `build/soc_2018.parquet`, `build/soc_2018_titles.parquet` and `build/soc_2010_to_2018.parquet`.
 
@@ -52,9 +53,9 @@ BLS's 2018 SOC is a fixed edition, revised in place under the same URLs. The def
 
 finetype has no type for hyphenated SOC codes, and infers them as Australian bank-state-branch numbers or as dates. Each code column is nominated `representation.identifier.numeric_code`, which `describe` widens for the hyphen, and its overrides declare the `^[0-9]{2}-[0-9]{4}$` shape, which the drift schema enforces.
 
-## Boundary (deliberate)
+## Publish
 
-**Publish** is not part of this Protocol, and none of the three tables is published yet. CI's descriptor sweeps read `datasets/*/datapackage.json`, so these `<table>.datapackage.json` files are not swept against a served object until they are. Meanwhile the Run's own steps hold each table to its contract, and `scripts/test_soc_2018_models.py` holds each committed descriptor to the table the models build: its fields are that table's columns in order, and its primary key, contract declaration (`x-meridian-code-list`, `x-meridian-title-index` or `x-meridian-crosswalk`), `other-pd` licence and field descriptions are the ones its overrides give, with no field undescribed.
+The last step publishes the three tables into the open lake (<https://openlake.meridian.online/>), a DuckLake catalog on R2 that readers attach over https without a credential. With all three of `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` and `R2_ACCOUNT_ID` set, from a `.env` here (`cp .env.example .env`, fill it in; `.env` and its variants are gitignored) or from the environment, every `arc run` publishes into the live lake. `arc run --publish` only makes a missing credential fail the run instead of falling back. With any of the three unset, a plain `arc run` still succeeds: the step says it published locally, names the missing variables, and writes a lake into `build/lake/open.ducklake` that attaches and reads back offline. For local work, keep `.env` absent and the variables unset. Better still, keep the credential in a file outside the Protocol folder and export it only for the publishing command, in a subshell: `(set -a; . /path/outside/repo/openlake.env; set +a; arc run --publish)`. Readers need DuckDB 2.0 or later. An unchanged rebuild commits nothing. [`docs/publishing.md`](../../docs/publishing.md) says what a publisher needs first (finetype's DuckDB 2.0 extension in `FINETYPE_DUCKDB_EXT`, and a forced local rebuild after an engine move) and how the open lake was cut over to this step. The Run's own steps hold each table to its contract, and `scripts/test_soc_2018_models.py` holds each committed descriptor to the table the models build.
 
 ## Run
 
@@ -64,7 +65,7 @@ Needs the `arc` binary, `duckdb` with its `excel` extension, `uv` (for `check_co
 
 <!-- protocol-steps: generated from arcform.yaml by scripts/check_protocol_readme.py — do not edit this block by hand -->
 
-All 25 steps are `sql:` models or typed `op:` operators from the arcform catalog. This Protocol runs no opaque `command:`/shell step.
+All 26 steps are `sql:` models or typed `op:` operators from the arcform catalog. This Protocol runs no opaque `command:`/shell step.
 
 | # | Step | How it runs |
 |---|---|---|
@@ -93,5 +94,6 @@ All 25 steps are `sql:` models or typed `op:` operators from the arcform catalog
 | 23 | `stamp_soc_2018` | `op: uv@1` |
 | 24 | `stamp_soc_2018_titles` | `op: uv@1` |
 | 25 | `stamp_soc_2010_to_2018` | `op: uv@1` |
+| 26 | `publish` | `op: ducklake_write@1` |
 
 <!-- /protocol-steps -->

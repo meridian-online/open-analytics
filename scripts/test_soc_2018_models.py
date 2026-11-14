@@ -15,9 +15,9 @@ The fixtures are cut from BLS's SOC 2018 downloads of 2026-11-03 (see the README
 them): major groups 11 and 15, the minor groups 11-3000, 11-9000 and 15-1200, and every
 broad group and detailed occupation under them, with BLS's own title block and headers.
 
-Needs duckdb==1.5.5 and openpyxl in the running Python:
+Needs duckdb==2.0.0 and openpyxl in the running Python:
 
-    uv run --quiet --with duckdb==1.5.5 --with openpyxl python3 scripts/test_soc_2018_models.py
+    uv run --quiet --with duckdb==2.0.0 --with openpyxl python3 scripts/test_soc_2018_models.py
 """
 
 from __future__ import annotations

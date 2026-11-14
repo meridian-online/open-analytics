@@ -17,7 +17,7 @@
       "title": "Meridian"
     }
   ],
-  "created": "2026-11-13T19:28:43Z",
+  "created": "2026-11-14T09:52:08Z",
   "description": "The coding index of the UK Standard Occupational Classification 2020, version 14: the job titles the Office for National Statistics codes to each unit group, for coding free-text job titles from job postings, HR extracts and survey answers. One row per coded entry, keyed by ONS's own id, with the unit group it is coded to and that group's title in ons/soc_2020. ONS codes many titles by a qualifier, so each entry carries its additional and industry qualifiers as columns, and a title can appear under several codes, each with different qualifiers; no two entries share a title and both qualifiers. The index's 231 cross-references, which point at another title or at ONS's notes rather than a code, are left out, so 32,439 of its 32,670 entries are kept. Every code is a unit group in ons/soc_2020, which the run checks against the code list it builds. The columns after the title-index columns are ONS's own coding fields: the default-entry mark, the extended SOC sub-unit group, the codes in SOC 2010, SOC 2000, SOC 90 and ISCO-08, and the versions that added or amended each entry. Meridian prepared the table from ONS's coding index workbook, and the code titles from its Volume 1 workbook. Source: Office for National Statistics licensed under the Open Government Licence v3.0.",
   "homepage": "https://meridian.online/datasets/ons/soc_2020_titles",
   "licenses": [
@@ -32,9 +32,9 @@
   "name": "soc_2020_titles",
   "resources": [
     {
-      "bytes": 972370,
+      "bytes": 972532,
       "format": "parquet",
-      "hash": "sha256:317ef1acc03b1809450d2ed02e09ebfba08704a600594330b291ebf56b7802ed",
+      "hash": "sha256:62a3fabc8d66846a864e30f4ee3f20723ef8429bbaceb996fbd05229638fd2a7",
       "mediatype": "application/vnd.apache.parquet",
       "name": "soc_2020_titles",
       "path": "https://openlake.meridian.online/ons/soc_2020_titles.parquet",

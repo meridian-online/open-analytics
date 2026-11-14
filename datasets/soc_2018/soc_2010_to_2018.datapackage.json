@@ -17,7 +17,7 @@
       "title": "Meridian"
     }
   ],
-  "created": "2026-11-03T02:36:57Z",
+  "created": "2026-11-14T09:51:57Z",
   "description": "The U.S. Bureau of Labor Statistics' own crosswalk from the 2010 Standard Occupational Classification to the 2018 edition, at the detailed occupation level, for bridging data coded to 2010, such as OEWS before 2021: one row per pairing of a 2010 code with a 2018 code, as BLS publishes it. A 2010 occupation BLS split appears once for each 2018 occupation it went to, and a 2018 occupation formed from several 2010 occupations once for each of them; BLS gives no weights for apportioning counts between them. Every 2018 code is a detailed occupation in bls/soc_2018, which the run checks; the 2010 edition is not hosted, so the 2010 codes are checked by their shape only. BLS's files are U.S. Government works in the public domain.",
   "homepage": "https://meridian.online/datasets/bls/soc_2010_to_2018",
   "licenses": [
@@ -30,9 +30,9 @@
   "name": "soc_2010_to_2018",
   "resources": [
     {
-      "bytes": 33452,
+      "bytes": 33455,
       "format": "parquet",
-      "hash": "sha256:c4e9cafdfd71b73dfd7927dac162132be6ede808fd4b782f2db66ec42a6f8e84",
+      "hash": "sha256:8b7bad125118f0fbc5e5a99ac9851378bcf6641162219335cd28cc740332e722",
       "mediatype": "application/vnd.apache.parquet",
       "name": "soc_2010_to_2018",
       "path": "https://openlake.meridian.online/bls/soc_2010_to_2018.parquet",
