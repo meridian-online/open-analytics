@@ -119,7 +119,7 @@ Repo `~/github/meridian-online/web`, branch `lake-duckdb-2`, from `origin/main`,
 
 **Files:** untracked only: `datasets/soc_2018_rehearsal/`, `datasets/soc_2020_rehearsal/` (copies), the `.env` files, and a read-back script in the session scratchpad, `check_lake.py`.
 
-**Interfaces:** Produces `check_lake.py --catalog <url-or-path> --expect-soc <counts.json> --expect-existing <manifest url>`, exit 0 when: the six SOC tables exist with the given row counts; each of the eight existing datasets in the live manifest reads through the catalogue with the manifest's `rows`; every view in the old catalogue exists; `meta.descriptors` holds the six SOC tables; `ons.soc_2020`'s descriptor carries ONS's attribution line. Runs with DuckDB 2.0, no credentials.
+**Interfaces:** Produces `check_lake.py --catalog <url-or-path> [--expect-soc <counts.json>]` (only the tables the JSON lists are checked; absent, no SOC table is checked) --expect-existing <manifest url>`, exit 0 when: the six SOC tables exist with the given row counts; each of the eight existing datasets in the live manifest reads through the catalogue with the manifest's `rows`; every view in the old catalogue exists; `meta.descriptors` holds the six SOC tables; `ons.soc_2020`'s descriptor carries ONS's attribution line. Runs with DuckDB 2.0, no credentials.
 
 - [ ] **Step 1:** Flag the issue needs-human; Hugh creates an R2 token for `meridian-open` and fills `datasets/soc_2018/.env` (and a copy for `soc_2020`). Confirm `git status` does not show `.env`.
 - [ ] **Step 2:** `$ARC lake rebase --from https://openlake.meridian.online/catalog/open.ducklake --out <scratch>/rehearsal.ducklake --data-path https://openlake.meridian.online/lake-test/lake/ --upload https://openlake.meridian.online/lake-test/catalog/open.ducklake --bucket meridian-open --credential-env r2:key_id=R2_ACCESS_KEY_ID,secret=R2_SECRET_ACCESS_KEY,account_id=R2_ACCOUNT_ID` (variables exported from the `.env` for this command only).
@@ -130,8 +130,9 @@ Repo `~/github/meridian-online/web`, branch `lake-duckdb-2`, from `origin/main`,
 
 ### Task 8: Live cutover (needs Hugh's merges and go-aheads)
 
+- [ ] **Step 0:** Before any live write: `roborev review --branch --wait` on this branch; fix or answer every Medium-and-above finding and close it, so the live publish runs reviewed code.
 - [ ] **Step 1:** Infra and web pull requests merged (Hugh). Confirm on `main` of each.
-- [ ] **Step 2:** Record the live catalogue's ETag (`curl -sI`), then `$ARC lake rebase --from https://openlake.meridian.online/catalog/open.ducklake --out <scratch>/open.ducklake --data-path https://openlake.meridian.online/lake/`. `check_lake.py --catalog <scratch>/open.ducklake --expect-soc <none>`: exit 0 for the eight.
+- [ ] **Step 2:** Record the live catalogue's ETag through the S3 API (`head-object`, not the public https response, which a CDN may alter), then `$ARC lake rebase --from https://openlake.meridian.online/catalog/open.ducklake --out <scratch>/open.ducklake --data-path https://openlake.meridian.online/lake/`. `check_lake.py --catalog <scratch>/open.ducklake --expect-soc <none>`: exit 0 for the eight.
 - [ ] **Step 3 (go-ahead):** Upload `<scratch>/open.ducklake` to `catalog/open.ducklake` with `If-Match: <recorded ETag>` through the S3 API (aws CLI `s3api put-object --if-match`, endpoint `https://<account>.r2.cloudflarestorage.com`, or curl `--aws-sigv4`). A 412 stops the cutover. Then `check_lake.py` against the live https catalogue: exit 0. Monitor workflow run on infra `main` (`gh workflow run openlake-uptime.yml`): green.
 - [ ] **Step 4 (go-ahead):** `$ARC run --publish` in `datasets/soc_2018`. `check_lake.py` with the three BLS counts: exit 0. Comment on the SOC hosting issue that `bls/soc_2018`, `bls/soc_2018_titles` and `bls/soc_2010_to_2018` are live.
 - [ ] **Step 5 (go-ahead):** Same for `datasets/soc_2020`; comment that the three ONS tables are live.
@@ -140,8 +141,9 @@ Repo `~/github/meridian-online/web`, branch `lake-duckdb-2`, from `origin/main`,
 ### Task 9: Fold, review, ready
 
 - [ ] **Step 1:** Write `docs/publishing.md`: how a Protocol publishes (the step, the local fallback, `.env`/`.env.example`, `--publish`, DuckDB 2.0 for readers), the cutover of 2026-11-14 and its order with reasons, Hugh's rulings (the cutover in this session; rehearsed first; the agent runs writes with a go-ahead per production write), and what remains (the eight Protocols, retiring infra's scripts, web reading the catalogue). Link it from `README.md` and the two SOC READMEs.
+- [ ] **Step 1b:** Extend `scripts/check_engine_version.py`'s discovery to per-table descriptors (`datasets/*/*.datapackage.json`), now that SOC's readable copies exist, with a test; run it against the shipped datasets: exit 0.
 - [ ] **Step 2:** Delete this plan and the spec from the branch.
-- [ ] **Step 3:** `roborev review --branch --wait`; fix or answer each Medium-and-above finding; close it. `gh pr create`; `gh pr checks <pr> --watch`. Link the pull request to the issue in Forge. Description: CI test totals and the rulings. Report it ready and stop.
+- [ ] **Step 3:** `roborev review --branch --wait` (covering the fold, since Task 8 Step 0 reviewed the rest); fix or answer each Medium-and-above finding; close it. `gh pr create`; `gh pr checks <pr> --watch`. Link the pull request to the issue in Forge. Description: CI test totals and the rulings. Report it ready and stop.
 
 ## Self-review notes
 
