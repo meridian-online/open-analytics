@@ -114,25 +114,25 @@ fields AS (
          t.long_description,
          nullif(rtrim(substr(f.line, 92, 28)), '') AS short_description,
          list_filter([substr(f.line, 120, 2), substr(f.line, 122, 2),
-                      substr(f.line, 124, 2), substr(f.line, 126, 2)], x -> trim(x) <> '')
+                      substr(f.line, 124, 2), substr(f.line, 126, 2)], lambda x: trim(x) <> '')
            AS pricing_indicators,
          nullif(trim(substr(f.line, 128, 1)), '') AS multiple_pricing_indicator,
          list_filter([trim(substr(f.line, 181, 3)), trim(substr(f.line, 184, 3)),
                       trim(substr(f.line, 187, 3)), trim(substr(f.line, 190, 3)),
                       trim(substr(f.line, 193, 3)), trim(substr(f.line, 196, 3)),
-                      trim(substr(f.line, 199, 3)), trim(substr(f.line, 202, 3))], x -> x <> '')
+                      trim(substr(f.line, 199, 3)), trim(substr(f.line, 202, 3))], lambda x: x <> '')
            AS lab_certification_codes,
          -- A cross-reference to a CPT code (starts with a digit) or a CDT code (D) is
          -- not carried.
          list_filter([trim(substr(f.line, 205, 5)), trim(substr(f.line, 210, 5)),
                       trim(substr(f.line, 215, 5)), trim(substr(f.line, 220, 5)),
                       trim(substr(f.line, 225, 5))],
-                     x -> regexp_full_match(x, '[A-CE-Z][0-9]{4}')) AS cross_reference_codes,
+                     lambda x: regexp_full_match(x, '[A-CE-Z][0-9]{4}')) AS cross_reference_codes,
          nullif(trim(substr(f.line, 230, 1)), '') AS coverage_code,
          nullif(trim(substr(f.line, 231, 2)), '') AS asc_payment_group,
          nullif(trim(substr(f.line, 257, 3)), '') AS betos,
          list_filter([substr(f.line, 261, 1), substr(f.line, 262, 1), substr(f.line, 263, 1),
-                      substr(f.line, 264, 1), substr(f.line, 265, 1)], x -> trim(x) <> '')
+                      substr(f.line, 264, 1), substr(f.line, 265, 1)], lambda x: trim(x) <> '')
            AS type_of_service,
          nullif(trim(substr(f.line, 293, 1)), '') AS action_code
   FROM first_records f

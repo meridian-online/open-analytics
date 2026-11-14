@@ -6,7 +6,14 @@ footer carries a `created_by` field the writer sets itself — for DuckDB it rea
 `DuckDB version vX.Y.Z (build ...)` — so the file is honest about what wrote it even
 when nothing else is. This script reads that field back out of every published
 resource with `parquet_file_metadata()` (a footer read, not a download) and holds it
-to `DUCKDB_VERSION`, the version this very check just had installed.
+to the DuckDB its own Protocol pins: the `duckdb==X.Y.Z` in the `stamp_descriptor.py`
+steps of `datasets/<slug>/arcform.yaml`, which are the steps that write the published
+Parquet. All such pins in one Protocol must agree, else the check exits 2 naming them.
+A Protocol that pins none falls back to `DUCKDB_VERSION`, the version this very check
+just had installed. The pin stands in for the writer's version, which is only sound
+while a Protocol that has moved to a new DuckDB pins the same DuckDB that arc links;
+each Protocol's pin therefore moves when it moves onto the publish step, and the
+footers it wrote move with it.
 
 Why this exists: the descriptor check in `check_descriptors.py` proves a descriptor
 agrees with the bytes it describes, on the assumption that reading those bytes back
@@ -33,7 +40,7 @@ Exit codes, matching check_descriptors.py's convention:
      pinned to
   1  at least one writer/reader engine mismatch — named with both versions
   2  the check could not run: unreadable resource, missing/unparseable created_by,
-     or no datasets found
+     a Protocol whose stamp steps pin different DuckDB versions, or no datasets found
 
 `--datasets-dir` and `--only` mirror check_descriptors.py so the two can be pointed
 at the same fixture tree in a test; this script otherwise shares no code and no
@@ -134,6 +141,36 @@ def parse_writer_version(created_by: str, path: str) -> str:
     return match.group(1)
 
 
+STAMP_STEP = re.compile(r"^  - name:", re.MULTILINE)
+DUCKDB_DEP = re.compile(r"^\s*-\s*duckdb==(\S+?)\s*$", re.MULTILINE)
+
+
+def expected_version(dataset_dir: Path, default: str) -> str:
+    """The DuckDB version this dataset's own Protocol pins for its writing steps.
+
+    Reads `<dataset_dir>/arcform.yaml` as text (the workflow installs no YAML library)
+    and collects the `duckdb==X` dependency of every step running `stamp_descriptor.py`.
+    Disagreeing pins are an error rather than a pick; none at all returns `default`.
+    """
+    protocol = dataset_dir / "arcform.yaml"
+    if not protocol.exists():
+        return default
+    try:
+        text = protocol.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise CheckError(f"{protocol}: cannot read Protocol: {exc}") from exc
+    pins: list[str] = []
+    for step in STAMP_STEP.split(text):
+        if "stamp_descriptor.py" in step:
+            pins.extend(DUCKDB_DEP.findall(step))
+    if len(set(pins)) > 1:
+        raise CheckError(
+            f"{protocol}: its stamp_descriptor.py steps pin different DuckDB versions "
+            f"({', '.join(sorted(set(pins)))}); they all write published Parquet and must agree"
+        )
+    return pins[0] if pins else default
+
+
 def reader_pin() -> str:
     """The DuckDB version this check itself is pinned to.
 
@@ -185,13 +222,14 @@ def every_declared_resource_was_read(checked: int, declared: int, n_descriptors:
         )
 
 
-def check_resources(con, descriptor_paths: list[Path], pin: str) -> tuple[list[Mismatch], int]:
+def check_resources(con, descriptor_paths: list[Path], default: str) -> tuple[list[Mismatch], int]:
     mismatches: list[Mismatch] = []
     checked = 0
     declared = 0
     for descriptor_path in descriptor_paths:
         package = str(descriptor_path)
         descriptor = load_descriptor(descriptor_path)
+        pin = expected_version(descriptor_path.parent, default)
         resources = descriptor.get("resources") or []
         if not resources:
             raise CheckError(f"{package}: declares no resources")
@@ -268,7 +306,7 @@ def main(argv: list[str] | None = None) -> int:
     if not mismatches:
         print(
             f"engine version check: {checked} resource(s) across {len(descriptor_paths)} descriptor(s) "
-            f"({checked_names}) were written by the DuckDB this check is pinned to ({pin})"
+            f"({checked_names}) were written by the DuckDB this check is pinned to (each Protocol's own pin, else {pin})"
         )
         return EXIT_OK
 

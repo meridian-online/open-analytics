@@ -16,7 +16,7 @@ counts AS (
     count(*) FILTER (WHERE NOT regexp_full_match(code, '[A-Z][0-9]{4}')) AS bad_shape,
     count(*) FILTER (WHERE code LIKE 'D%') AS dental_codes,
     count(*) FILTER (WHERE len(list_filter(coalesce(cross_reference_codes, []),
-                                           x -> NOT regexp_full_match(x, '[A-CE-Z][0-9]{4}'))) > 0)
+                                           lambda x: NOT regexp_full_match(x, '[A-CE-Z][0-9]{4}'))) > 0)
       AS bad_cross_references,
     count(*) FILTER (WHERE regexp_matches(concat_ws(' ', description, description_full,
                                                     short_description, corpus),

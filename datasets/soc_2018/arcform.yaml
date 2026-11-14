@@ -33,8 +33,8 @@
 #           build/soc_2010_to_2018.parquet   →  bls/soc_2010_to_2018
 name: soc_2018
 engine: duckdb
-# Kept in step with ../soc_2020, whose load.sql needs DuckDB 1.3 for `lambda x:`.
-engine_version: ">=1.3"
+# Kept in step with ../soc_2020, which pins the DuckDB that arc links (2.0), the writer of its published Parquet.
+engine_version: ">=2.0"
 db: build/soc_2018.db
 
 defaults:
@@ -152,14 +152,14 @@ steps:
   # ── Contract: hold the code list to the shared code-list columns ────────────────
   # The script is addressed by its bytes, so editing it is a manifest edit as well:
   # `shasum -a 256 scripts/check_code_list.py` prints the digest. duckdb is pinned to
-  # DUCKDB_VERSION in .github/workflows/descriptors.yml — keep the two in step.
+  # the same version as the stamp steps below, which engine_version above names.
   - name: check_code_list
     op: uv@1
     with:
       script: ../../scripts/check_code_list.py
       sha256: a6d4fd3c42aca53591f7f94bfef625f9c4f503b2d4331b64bea8103db88f7102
       deps:
-        - duckdb==1.5.5
+        - duckdb==2.0.0
       args:
         - --parquet
         - build/stage/soc_2018.parquet
@@ -235,7 +235,7 @@ steps:
       script: ../../scripts/stamp_descriptor.py
       sha256: a9356ac8d5412d94a940ebeef1e2508eaed6b77f1d923ada88edbacccf9d9b81
       deps:
-        - duckdb==1.5.5
+        - duckdb==2.0.0
       args:
         - stamp
         - --descriptor
@@ -260,7 +260,7 @@ steps:
       script: ../../scripts/stamp_descriptor.py
       sha256: a9356ac8d5412d94a940ebeef1e2508eaed6b77f1d923ada88edbacccf9d9b81
       deps:
-        - duckdb==1.5.5
+        - duckdb==2.0.0
       args:
         - stamp
         - --descriptor
@@ -285,7 +285,7 @@ steps:
       script: ../../scripts/stamp_descriptor.py
       sha256: a9356ac8d5412d94a940ebeef1e2508eaed6b77f1d923ada88edbacccf9d9b81
       deps:
-        - duckdb==1.5.5
+        - duckdb==2.0.0
       args:
         - stamp
         - --descriptor

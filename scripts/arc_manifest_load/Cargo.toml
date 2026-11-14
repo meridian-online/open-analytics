@@ -8,9 +8,8 @@
 # brightfield's: brightfield loads these same manifests through its own pinned `arc`,
 # and two pins that drift give two answers to "is this manifest valid".
 #
-# BUMPING: move four literals together, the `arc` rev below, the `sqlparser` patch rev
-# below it, `ARC_REV` in .github/workflows/descriptors.yml, and Cargo.lock
-# (`cargo update -p arc`). The workflow's `arc-manifest-load` job refuses a Cargo.lock
+# BUMPING: move three literals together, the `arc` rev below, `ARC_REV` in
+# .github/workflows/descriptors.yml, and Cargo.lock (`cargo update -p arcform`). The workflow's `arc-manifest-load` job refuses a Cargo.lock
 # whose arcform sources are not all at `ARC_REV`.
 [package]
 name = "arc-manifest-load"
@@ -30,12 +29,8 @@ publish = false
 # every manifest that fetches with `unknown operator 'http_fetch'` while `arc run`
 # accepts the same file. Loading still opens no connection. `opendal` stays off,
 # because the `arc` binary leaves it off too. This is brightfield's feature set.
+# The crate is named `arcform` at this revision; `package` keeps the `arc::` path the
+# loader's source uses. `arc` parses SQL with its own `arcform-sqlparser`, which now
+# resolves from crates.io, so this crate carries no `[patch]` table.
 # `arc` links DuckDB as well, which is why the workflow installs libduckdb.
-arc = { git = "https://github.com/meridian-online/arcform", rev = "f0561cd255e010e12a6ae82edc0b70785c3d19fc", default-features = false, features = ["http-fetch"] }
-
-# `arc` parses SQL with a vendored sqlparser fork wired through its own
-# `[patch.crates-io]`, and patch tables do not propagate through dependencies, so this
-# crate carries the same patch or `arc` does not compile. Same repository and rev as
-# the `arc` pin: Cargo finds `vendor/sqlparser-0.55.0` in that checkout.
-[patch.crates-io]
-sqlparser = { git = "https://github.com/meridian-online/arcform", rev = "f0561cd255e010e12a6ae82edc0b70785c3d19fc" }
+arc = { package = "arcform", git = "https://github.com/meridian-online/arcform", rev = "40473103aba2c901d49e6fe175abe4bc99ddacbf", default-features = false, features = ["http-fetch"] }
