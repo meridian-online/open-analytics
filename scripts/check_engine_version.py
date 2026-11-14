@@ -79,12 +79,13 @@ class Mismatch:
     path: str
     writer_version: str
     reader_pin: str
+    pin_source: str = "this check is pinned to"
 
     def line(self) -> str:
         return (
             f"{self.package} :: {self.resource}\n"
             f"    engine.version: WRITER/READER ENGINE MISMATCH (not a data disagreement) — "
-            f"{self.path} was written by DuckDB {self.writer_version}; this check is pinned to "
+            f"{self.path} was written by DuckDB {self.writer_version}; {self.pin_source} "
             f"DuckDB {self.reader_pin}. The bytes may be entirely correct; the engine that wrote "
             f"them is not the engine judging them."
         )
@@ -141,20 +142,29 @@ def parse_writer_version(created_by: str, path: str) -> str:
     return match.group(1)
 
 
+# Splits the Protocol into steps. Assumes the two-space step indentation every
+# arcform.yaml here uses; any other indentation makes no step match, so no pin is found
+# and the footer meets the DUCKDB_VERSION fallback, which surfaces as a footer mismatch
+# rather than a silent pass.
 STAMP_STEP = re.compile(r"^  - name:", re.MULTILINE)
 DUCKDB_DEP = re.compile(r"^\s*-\s*duckdb==(\S+?)\s*$", re.MULTILINE)
 
 
 def expected_version(dataset_dir: Path, default: str) -> str:
-    """The DuckDB version this dataset's own Protocol pins for its writing steps.
+    """The DuckDB version this dataset's footer is held to: its Protocol's pin, else `default`."""
+    return protocol_pin(dataset_dir) or default
+
+
+def protocol_pin(dataset_dir: Path) -> str | None:
+    """The DuckDB version this dataset's own Protocol pins for its writing steps, or None.
 
     Reads `<dataset_dir>/arcform.yaml` as text (the workflow installs no YAML library)
     and collects the `duckdb==X` dependency of every step running `stamp_descriptor.py`.
-    Disagreeing pins are an error rather than a pick; none at all returns `default`.
+    Disagreeing pins are an error rather than a pick; none at all returns None.
     """
     protocol = dataset_dir / "arcform.yaml"
     if not protocol.exists():
-        return default
+        return None
     try:
         text = protocol.read_text(encoding="utf-8")
     except OSError as exc:
@@ -168,7 +178,7 @@ def expected_version(dataset_dir: Path, default: str) -> str:
             f"{protocol}: its stamp_descriptor.py steps pin different DuckDB versions "
             f"({', '.join(sorted(set(pins)))}); they all write published Parquet and must agree"
         )
-    return pins[0] if pins else default
+    return pins[0] if pins else None
 
 
 def reader_pin() -> str:
@@ -229,7 +239,9 @@ def check_resources(con, descriptor_paths: list[Path], default: str) -> tuple[li
     for descriptor_path in descriptor_paths:
         package = str(descriptor_path)
         descriptor = load_descriptor(descriptor_path)
-        pin = expected_version(descriptor_path.parent, default)
+        protocol = protocol_pin(descriptor_path.parent)
+        pin = protocol or default
+        source = "its Protocol pins" if protocol else "this check's DUCKDB_VERSION fallback is"
         resources = descriptor.get("resources") or []
         if not resources:
             raise CheckError(f"{package}: declares no resources")
@@ -254,7 +266,7 @@ def check_resources(con, descriptor_paths: list[Path], default: str) -> tuple[li
                 raise CheckError(f"{package}: {exc}") from exc
             checked += 1
             if written != pin:
-                mismatches.append(Mismatch(package, resource.get("name", ""), path, written, pin))
+                mismatches.append(Mismatch(package, resource.get("name", ""), path, written, pin, source))
     every_declared_resource_was_read(checked, declared, len(descriptor_paths))
     return mismatches, checked
 

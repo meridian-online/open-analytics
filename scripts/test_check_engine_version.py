@@ -276,7 +276,7 @@ class EngineVersionCheckSelfTest(unittest.TestCase):
         # saying "written by <the pin>; pinned to <the writer>" satisfied every one of
         # them. That report sends a reader to change the wrong thing.
         self.assertIn(f"was written by DuckDB {patched_version}", result.stdout)
-        self.assertIn(f"this check is pinned to DuckDB {original_version}", result.stdout)
+        self.assertIn(f"this check's DUCKDB_VERSION fallback is DuckDB {original_version}", result.stdout)
         # The point of AC3b: this vocabulary, not the one `check_descriptors.py` uses
         # for an actual data defect.
         #
@@ -602,7 +602,7 @@ class EngineVersionCheckSelfTest(unittest.TestCase):
         result = run_check(self.datasets, env={"DUCKDB_VERSION": "2.0.0"})
         self.assertOutcome(result, EXIT_MISMATCH, "WRITER/READER ENGINE MISMATCH")
         self.assertIn("was written by DuckDB 1.5.6", result.stdout)
-        self.assertIn("pinned to DuckDB 1.5.5", result.stdout)
+        self.assertIn("its Protocol pins DuckDB 1.5.5", result.stdout)
 
         # A Protocol that pins nothing falls back to DUCKDB_VERSION.
         write_protocol(descriptor.parent, [""])

@@ -30,7 +30,8 @@ publish = false
 # accepts the same file. Loading still opens no connection. `opendal` stays off,
 # because the `arc` binary leaves it off too. This is brightfield's feature set.
 # The crate is named `arcform` at this revision; `package` keeps the `arc::` path the
-# loader's source uses. `arc` parses SQL with its own `arcform-sqlparser`, which now
-# resolves from crates.io, so this crate carries no `[patch]` table.
+# loader's source uses. `arc` parses SQL with its own `arcform-sqlparser`, which
+# Cargo takes from the same arcform git revision as a dependency of `arc`, so no
+# `[patch]` table is needed; the workflow's `ARC_REV` lock check covers that source too.
 # `arc` links DuckDB as well, which is why the workflow installs libduckdb.
 arc = { package = "arcform", git = "https://github.com/meridian-online/arcform", rev = "40473103aba2c901d49e6fe175abe4bc99ddacbf", default-features = false, features = ["http-fetch"] }
