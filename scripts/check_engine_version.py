@@ -79,7 +79,7 @@ class Mismatch:
     path: str
     writer_version: str
     reader_pin: str
-    pin_source: str = "this check is pinned to"
+    pin_source: str
 
     def line(self) -> str:
         return (
@@ -150,9 +150,15 @@ STAMP_STEP = re.compile(r"^  - name:", re.MULTILINE)
 DUCKDB_DEP = re.compile(r"^\s*-\s*duckdb==(\S+?)\s*$", re.MULTILINE)
 
 
-def expected_version(dataset_dir: Path, default: str) -> str:
-    """The DuckDB version this dataset's footer is held to: its Protocol's pin, else `default`."""
-    return protocol_pin(dataset_dir) or default
+def expected_version(dataset_dir: Path, default: str) -> tuple[str, str]:
+    """(version, source) this dataset's footer is held to: its Protocol's pin, else `default`.
+
+    `source` is the phrase the mismatch message uses to say where the version came from.
+    """
+    pinned = protocol_pin(dataset_dir)
+    if pinned:
+        return pinned, "its Protocol pins"
+    return default, "this check's DUCKDB_VERSION fallback is"
 
 
 def protocol_pin(dataset_dir: Path) -> str | None:
@@ -239,9 +245,7 @@ def check_resources(con, descriptor_paths: list[Path], default: str) -> tuple[li
     for descriptor_path in descriptor_paths:
         package = str(descriptor_path)
         descriptor = load_descriptor(descriptor_path)
-        protocol = protocol_pin(descriptor_path.parent)
-        pin = protocol or default
-        source = "its Protocol pins" if protocol else "this check's DUCKDB_VERSION fallback is"
+        pin, source = expected_version(descriptor_path.parent, default)
         resources = descriptor.get("resources") or []
         if not resources:
             raise CheckError(f"{package}: declares no resources")
