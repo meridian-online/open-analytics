@@ -279,13 +279,13 @@ Against openFDA's NDC file of 2026-10-30, on 2026-11-02: `fda/ndc`, 339,885 rows
 
 ## Measured on 2026-11-03
 
-Against BLS's 2018 SOC (`2018/2020-04-15`, crosswalk `2017-11`), built by arc 0.2.1 and not published:
+Against BLS's 2018 SOC (`2018/2020-04-15`, crosswalk `2017-11`), built by arc 0.2.1 before it was published (the published tables carry the same rows):
 
 - `bls/soc_2018`: 1,447 rows: 23 major groups, 98 minor groups, 459 broad occupations and 867 detailed occupations. Each of the 1,424 rows below the major groups has the parent BLS's `soc_structure_2018.xlsx` gives; the 23 major groups have none.
 - `bls/soc_2018_titles`: 6,520 titles over 864 detailed occupations, unique across occupations after lowercasing; 2,408 marked illustrative (2,400 marked `x` and 8 `X` in BLS's file); 9 with internal double spaces. Three detailed occupations have no titles: `11-9039`, `19-2099` and `51-9199`.
 - `bls/soc_2010_to_2018`: 900 pairings of 840 2010 occupations with all 867 2018 ones. `(#)` ends the title of 42 2010 occupations and `(##)` of 31 2018 ones.
 
-Against ONS's SOC 2020 (Volume 1 `2020/2026-08-27`, coding index `v14/2026-08-27`, relationship tables `2021-07`), built by arc 0.2.1 and not published:
+Against ONS's SOC 2020 (Volume 1 `2020/2026-08-27`, coding index `v14/2026-08-27`, relationship tables `2021-07`), built by arc 0.2.1 before it was published (the published tables carry the same rows):
 
 - `ons/soc_2020`: 551 rows: 9 major, 26 sub-major, 104 minor and 412 unit groups.
 - `ons/soc_2020_titles`: 32,439 coded entries of the index's 32,670, over all 412 unit groups; the 231 left out are cross-references. 2,690 coded entries carry an additional qualifier and 10,661 an industry qualifier; none repeats a title and both qualifiers.
