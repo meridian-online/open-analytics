@@ -102,6 +102,18 @@ If the rebased catalogue fails its check, nothing is uploaded. If the upload is 
 
 `docs/` gains the publish path's account (how a Protocol publishes, the local fallback, the `.env`, `--publish`, the cutover and why it ran in this order), with Hugh's two rulings from this brainstorm, folded in before the branch is called ready.
 
+### Who runs what, and when the pull requests merge
+
+Hugh ruled on 2026-11-14 that the agent runs every write to `meridian-open` with his token from the `.env`: the rehearsal without stopping, and each production write (the conditional catalogue upload, each SOC publish) only after his go-ahead for that write. The infra and web pull requests are merged by Hugh before the live rebase. The live SOC publish runs from this branch, so this repo's pull request is made ready, and merged, after SOC is live; the docs fold writes the cutover up as done.
+
+### The manifest's top-level fields
+
+arc's manifest writer sets only `catalog.url`. The live manifest's `updated`, `catalog.sha256_16` and `catalog.published` were infra's and stop moving at the cutover. Nothing in web reads them; only infra's monitor does, for its freshness warning. The infra pull request moves the monitor's freshness check to the catalogue's newest snapshot time (read through its DuckDB 2.0 `ATTACH`), and its pointer check to `catalog.url` alone. The stale fields are left in the manifest, which retires when web reads the catalogue. (The builder's call, reversible.)
+
+### The manifest-load job's Rust build
+
+Moving `ARC_REV` rebuilds `scripts/arc_manifest_load` against DuckDB 2.0. That build is not run locally, keeping this session to one Rust build; CI checks it, so the commit that moves `ARC_REV` is pushed early and its CI result read before the work that depends on it. (The builder's call.)
+
 ## Left to the builder
 
 - The exact DuckDB 2.0 patch version, taken from what arc at `4047310` links.
