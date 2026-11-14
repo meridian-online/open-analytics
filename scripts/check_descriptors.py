@@ -1379,6 +1379,11 @@ def check_catalogue(
         if only is not None and descriptor_path.parent.name not in only:
             continue
         document = by_path.get(descriptor_path)
+        if document is None and descriptor_path.name.endswith(".datapackage.json") and descriptor_path.is_file():
+            # A Protocol with several tables keeps one `<name>.datapackage.json` per table beside
+            # its recipe, and the catalogue links each of them. The object checks read only
+            # `*/datapackage.json`, so a per-table descriptor is read here, for its resource.
+            document = load_descriptor(descriptor_path)
         if document is None:
             raise CheckError(
                 f"{readme_path}: line {row.index + 1} of the catalogue links to {row.descriptor}, "
