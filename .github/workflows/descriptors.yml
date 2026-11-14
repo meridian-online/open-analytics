@@ -228,7 +228,7 @@ env:
   # The `arc` revision `arc-manifest-load` links, by git rev because `arc` has no
   # release channel. It is brightfield's pin: brightfield loads these same manifests
   # through its own `arc`, and two pins that drift give two answers to whether a manifest
-  # is valid. scripts/arc_manifest_load/Cargo.toml carries the rev twice and says how to
+  # is valid. scripts/arc_manifest_load/Cargo.toml carries the rev once and says how to
   # move all three literals together; `arc-manifest-load` refuses a Cargo.lock whose
   # arcform sources are not all at this rev, and `--locked` refuses a Cargo.toml the lock
   # does not match.
