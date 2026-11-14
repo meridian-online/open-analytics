@@ -1352,6 +1352,7 @@ def check_catalogue(
     packages: dict[str, dict[str, Any]],
     only: set[str] | None,
     write: bool,
+    datasets_dir: Path | None = None,
 ) -> tuple[list[Violation], int]:
     """Hold every catalogue row count to the object that row links to.
 
@@ -1380,6 +1381,11 @@ def check_catalogue(
             continue
         document = by_path.get(descriptor_path)
         if document is None and descriptor_path.name.endswith(".datapackage.json") and descriptor_path.is_file():
+            if datasets_dir is None or not descriptor_path.is_relative_to(datasets_dir.resolve()):
+                raise CheckError(
+                    f"{readme_path}: line {row.index + 1} of the catalogue links to {row.descriptor}, "
+                    "which is outside the datasets directory, so it is not a descriptor of a dataset here"
+                )
             # A Protocol with several tables keeps one `<name>.datapackage.json` per table beside
             # its recipe, and the catalogue links each of them. The object checks read only
             # `*/datapackage.json`, so a per-table descriptor is read here, for its resource.
@@ -1444,7 +1450,9 @@ def check_catalogue(
                 )
 
     if only is None:
-        for descriptor_path in descriptor_paths:
+        # Per-table descriptors (`datasets/<protocol>/<name>.datapackage.json`) are datasets too.
+        per_table = sorted(datasets_dir.glob("*/*.datapackage.json")) if datasets_dir is not None else []
+        for descriptor_path in [*descriptor_paths, *per_table]:
             if descriptor_path.resolve() not in listed:
                 violations.append(
                     Violation(
@@ -1890,6 +1898,7 @@ def main(argv: list[str] | None = None) -> int:
             packages,
             set(args.only) if args.only else None,
             args.write_catalogue,
+            args.datasets_dir,
         )
         violations.extend(catalogue_violations)
     except CheckError as exc:

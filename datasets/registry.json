@@ -7,6 +7,8 @@
     "usitc": "Datasets issued by the U.S. International Trade Commission.",
     "cms": "Datasets issued by the Centers for Medicare & Medicaid Services.",
     "fda": "Datasets issued by the U.S. Food and Drug Administration.",
+    "bls": "Datasets issued by the U.S. Bureau of Labor Statistics.",
+    "ons": "Datasets issued by the Office for National Statistics.",
     "library": "Meridian's curated set: core datasets with no issuing organisation, and data Meridian makes itself.",
     "source": "Held for the compatibility views at the old names `source.gleif`, `source.edgar` and `source.naics`.",
     "crosswalk": "Held for the compatibility view at the old name `crosswalk.edgar_gleif`."

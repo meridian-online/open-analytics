@@ -1395,6 +1395,32 @@ class DescriptorCheckSelfTest(unittest.TestCase):
         self.per_table_catalogue_row("8")
         self.assertOutcome(run_check(self.datasets), EXIT_VIOLATIONS, "catalogue.rows", "states 8")
 
+    def test_catalogue_row_linking_a_descriptor_outside_the_datasets_directory_is_an_error(self) -> None:
+        self.per_table_catalogue_row("7")
+        docs = self.datasets.parent / "docs"
+        docs.mkdir()
+        (docs / "x.datapackage.json").write_text(
+            json.dumps({"resources": [{"path": "x.parquet"}]}), encoding="utf-8"
+        )
+        with self.readme().open("a", encoding="utf-8") as handle:
+            handle.write("| x | 1 | CC0-1.0 | [x](docs/x.datapackage.json) |\n")
+        self.assertOutcome(run_check(self.datasets), EXIT_ERROR, "outside the datasets directory")
+
+    def test_removing_a_per_table_catalogue_row_is_reported_missing(self) -> None:
+        self.per_table_catalogue_row("7")
+        text = self.readme().read_text(encoding="utf-8")
+        self.readme().write_text(
+            "".join(line for line in text.splitlines(True) if "things.datapackage.json" not in line),
+            encoding="utf-8",
+        )
+        self.assertOutcome(
+            run_check(self.datasets), EXIT_VIOLATIONS, "catalogue.missing", "things.datapackage.json"
+        )
+
+    def test_only_narrows_a_per_table_catalogue_row_by_its_directory(self) -> None:
+        self.per_table_catalogue_row("8")
+        self.assertOutcome(run_check(self.datasets, "--only", "widgets"), EXIT_OK)
+
     def test_catalogue_figure_understating_the_object_fails(self) -> None:
         write_package(
             self.datasets,
