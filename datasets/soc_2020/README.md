@@ -8,7 +8,7 @@ The UK Office for National Statistics' Standard Occupational Classification 2020
 | `soc_2020_titles` | `ons/soc_2020_titles` | job-title index: the coded entries of ONS's coding index, each pointing at a unit group | 32,439 |
 | `soc_2010_to_2020` | `ons/soc_2010_to_2020` | edition crosswalk: ONS's pairings of 2010 unit groups with 2020 ones, with ONS's shares and base counts | 714 |
 
-None of the three is in `../registry.json`. This directory holds their facets:
+All three are registered in `../registry.json`. This directory holds their facets:
 
 | File | Facet | Answers |
 |---|---|---|
@@ -59,7 +59,7 @@ finetype infers the code list's codes as numeric codes, but the one-digit `major
 
 ## Publish
 
-The last step publishes the three tables into the open lake (<https://openlake.meridian.online/>), a DuckLake catalog on R2 that readers attach over https without a credential. With all three of `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` and `R2_ACCOUNT_ID` set, from a `.env` here (`cp .env.example .env`, fill it in; `.env` and its variants are gitignored) or from the environment, every `arc run` publishes into the live lake. `arc run --publish` only makes a missing credential fail the run instead of falling back. With any of the three unset, a plain `arc run` still succeeds: the step says it published locally, names the missing variables, and writes a lake into `build/lake/open.ducklake` that attaches and reads back offline. For local work, keep `.env` absent and the variables unset. Better still, keep the credential in a file outside the Protocol folder and export it only for the publishing command, in a subshell: `(set -a; . /path/outside/repo/openlake.env; set +a; arc run --publish)`. Readers need DuckDB 2.0 or later. An unchanged rebuild commits nothing. The Run's own steps hold each table to its contract, and `scripts/test_soc_2020_models.py` holds each committed descriptor to the table the models build.
+The last step publishes the three tables into the open lake (<https://openlake.meridian.online/>), a DuckLake catalog on R2 that readers attach over https without a credential. With all three of `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` and `R2_ACCOUNT_ID` set, from a `.env` here (`cp .env.example .env`, fill it in; `.env` and its variants are gitignored) or from the environment, every `arc run` publishes into the live lake. `arc run --publish` only makes a missing credential fail the run instead of falling back. With any of the three unset, a plain `arc run` still succeeds: the step says it published locally, names the missing variables, and writes a lake into `build/lake/open.ducklake` that attaches and reads back offline. For local work, keep `.env` absent and the variables unset. Better still, keep the credential in a file outside the Protocol folder and export it only for the publishing command, in a subshell: `(set -a; . /path/outside/repo/openlake.env; set +a; arc run --publish)`. Readers need DuckDB 2.0 or later. An unchanged rebuild commits nothing. [`docs/publishing.md`](../../docs/publishing.md) says what a publisher needs first (finetype's DuckDB 2.0 extension in `FINETYPE_DUCKDB_EXT`, and a forced local rebuild after an engine move) and how the open lake was cut over to this step. The Run's own steps hold each table to its contract, and `scripts/test_soc_2020_models.py` holds each committed descriptor to the table the models build.
 
 ## Run
 

@@ -14,7 +14,9 @@ SELECT * FROM meridian.gleif.lei LIMIT 10;
 
 A dataset's address is `<namespace>/<name>`: `gleif/lei`, `sec/company_tickers_exchange`, `census/naics_2022`, `census/schedule_b`, `usitc/hts`, `cms/hcpcs`, `fda/ndc`, `library/edgar_lei`, `bls/soc_2018`, `bls/soc_2018_titles`, `bls/soc_2010_to_2018`, `ons/soc_2020`, `ons/soc_2020_titles` and `ons/soc_2010_to_2020`, which are the SQL names `meridian.gleif.lei` and so on and the file URLs `https://openlake.meridian.online/<namespace>/<name>.parquet`. The old flat files stay readable but are frozen at the move and no longer refreshed, so read current data from the new URLs. The old SQL names (`source.gleif`, `source.edgar`, `source.naics`, `crosswalk.edgar_gleif`) keep working as views for a window after the move, then retire along with the old flat files.
 
-Or read a single file directly:
+Attaching the catalogue needs DuckDB 2.0 or later. The SOC datasets are published into the lake by their own Protocol's last step, and the other eight move to that step one at a time; [`docs/publishing.md`](docs/publishing.md) says how a Protocol publishes, and how the lake was cut over to it on 2026-11-14.
+
+Or read a single file directly, on any DuckDB:
 
 ```sql
 SELECT * FROM read_parquet('https://openlake.meridian.online/census/naics_2022.parquet');

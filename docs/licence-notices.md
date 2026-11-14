@@ -32,16 +32,16 @@ The package `description` must also contain the `x-attribution` line verbatim, s
 ## Where it travels
 
 - **The download.** The Parquet footer carries the whole descriptor, and the self-described half of `check_descriptors.py` holds the footer to the repo copy, treating only `description`, `title` and `$comment` as prose. The notice keys are not prose, so a footer that lacks or differs from the repo's notice is a disagreement. Nothing new is needed.
-- **The lake.** arcform's lake publish is meant to write the whole descriptor into the lake's `meta.descriptors` table and the package description as the table comment, so the notice and the attribution line will arrive there with it. That publish has not landed yet. This repo does not read the lake and does not check this; it is how the lake publish is meant to work.
+- **The lake.** arcform's lake publish writes the whole descriptor into the lake's `meta.descriptors` table and the package description as the table comment, so the notice and the attribution line arrive there with it. The SOC 2020 tables' were read back from the live catalogue at their first publish on 2026-11-14 (see [`docs/publishing.md`](publishing.md)). This repo's CI does not read the lake and does not check this.
 - **The page.** The dataset page will show each licence entry's `x-attribution` and `x-changes`, with the entry's `path` as a link to the licence. That change is still to come. The page lives in the website repo and transcribes descriptor fields by hand, held to the descriptors by that repo's parity test, so the page and its test change there.
 
 ## Each source's lines
 
 Each source's lines go in its Protocol's overrides, on the `licenses` entry, and the description repeats the attribution.
 
-### SOC 2020 (in its descriptors, not yet published)
+### SOC 2020
 
-`x-attribution` is the same on all three descriptors: "Source: Office for National Statistics licensed under the Open Government Licence v3.0." `x-changes` says what Meridian did for each table, as committed in `datasets/soc_2020/*.overrides.json`. Not yet published: SOC 2020 publishes through the lake publish once that lands.
+`x-attribution` is the same on all three descriptors: "Source: Office for National Statistics licensed under the Open Government Licence v3.0." `x-changes` says what Meridian did for each table, as committed in `datasets/soc_2020/*.overrides.json`. Published through the lake publish on 2026-11-14.
 
 ### CLDR codes (country, subdivision, currency)
 
