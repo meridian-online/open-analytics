@@ -60,7 +60,7 @@ Each SOC `arcform.yaml` gains `dotenv: [.env]` and a last step, `publish`, of `o
 - `tables`: the three stamped Parquet files the stamp steps write (`build/<table>.parquet`) with their descriptors (`<table>.datapackage.json`), as `bls.soc_2018` and so on, each with `readable_copy: <namespace>/<name>.parquet`.
 - `credential`: `type: r2`, `bucket: meridian-open`, `env` naming `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_ACCOUNT_ID`.
 
-The header's BOUNDARY note, which says publishing is not an arcform step, is replaced by a note on the publish step: what it writes, where, and that it publishes locally without the credential. Each Protocol's README describes the new step and how to publish (a `.env` with the three variables, then `arc run --publish`). `.env` is added to the root `.gitignore`, and an `.env.example` naming the three variables (no values) sits beside each Protocol. `scripts/check_protocol_readme.py` and the manifest-load job must accept the new step; whatever they need changes with it.
+The header's BOUNDARY note, which says publishing is not an arcform step, is replaced by a note on the publish step: what it writes, where, and that it publishes locally without the credential. Each Protocol's README describes the new step and how to publish (the three variables exported for that command only, then `arc run --publish`; with all three set, any `arc run` publishes live, so a filled `.env` is not kept in the Protocol folder). `.env` is added to the root `.gitignore`, and an `.env.example` naming the three variables (no values) sits beside each Protocol. `scripts/check_protocol_readme.py` and the manifest-load job must accept the new step; whatever they need changes with it.
 
 The primary key each table is upserted on comes from its descriptor's `primaryKey`, as the step reads it: `code` for the code lists, `entry_id` for the title indexes, `from_code, to_code` for the crosswalks.
 
@@ -76,7 +76,7 @@ The primary key each table is upserted on comes from its descriptor's `primaryKe
 
 ### The rehearsal
 
-With Hugh's new token in a `.env`:
+With Hugh's new token in a file outside the repo, exported only for each publishing command:
 
 1. Build `arc` from arcform's `main` (`cargo install --path . --features mcp,bundled-duckdb`, or as arcform's release notes say), and check `arc --version` and that `ducklake_write@1` is in its catalogue.
 2. `arc lake rebase --from https://openlake.meridian.online/catalog/open.ducklake --out <scratch>/rehearsal.ducklake --data-path https://openlake.meridian.online/lake-test/lake/ --upload https://openlake.meridian.online/lake-test/catalog/open.ducklake --bucket meridian-open --credential-env r2:…`. The eight existing tables are registered at their current https addresses, so they read through the test catalogue unchanged.
@@ -104,7 +104,7 @@ If the rebased catalogue fails its check, nothing is uploaded. If the upload is 
 
 ### Who runs what, and when the pull requests merge
 
-Hugh ruled on 2026-11-14 that the agent runs every write to `meridian-open` with his token from the `.env`: the rehearsal without stopping, and each production write (the conditional catalogue upload, each SOC publish) only after his go-ahead for that write. The infra and web pull requests are merged by Hugh before the live rebase. The live SOC publish runs from this branch, so this repo's pull request is made ready, and merged, after SOC is live; the docs fold writes the cutover up as done.
+Hugh ruled on 2026-11-14 that the agent runs every write to `meridian-open` with his token, kept outside the repo and exported only for each publishing command: the rehearsal without stopping, and each production write (the conditional catalogue upload, each SOC publish) only after his go-ahead for that write. The infra and web pull requests are merged by Hugh before the live rebase. The live SOC publish runs from this branch, so this repo's pull request is made ready, and merged, after SOC is live; the docs fold writes the cutover up as done.
 
 ### The manifest's top-level fields
 
