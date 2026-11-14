@@ -23,7 +23,8 @@
 # disagreement between descriptor and data, and the refusal it caused was resolved
 # by hand. The Parquet footer's own `created_by` field names the engine that wrote
 # it, so `engine-version-matches-the-pin` reads that back for every published
-# resource and holds it to the DuckDB its own Protocol pins (the `stamp_descriptor.py`
+# resource (of each `datasets/*/datapackage.json`, and of each per-table
+# `datasets/*/<table>.datapackage.json`) and holds it to the DuckDB its own Protocol pins (the `stamp_descriptor.py`
 # steps of its `arcform.yaml`), else to `DUCKDB_VERSION` below, naming both versions when they
 # differ and saying plainly that the disagreement is about engines, not data.
 # `engine-version-self-test` proves it first, the same way the pair above does: on a

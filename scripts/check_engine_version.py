@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Hold the engine that wrote each published Parquet to the engine this check runs as.
 
-Every `datasets/<slug>/datapackage.json` resource is a Parquet object. Parquet's
-footer carries a `created_by` field the writer sets itself — for DuckDB it reads
+Every resource of `datasets/<slug>/datapackage.json`, and of each per-table
+`datasets/<slug>/<table>.datapackage.json` a Protocol that publishes several tables
+keeps instead, is a Parquet object. Parquet's footer carries a `created_by` field
+the writer sets itself — for DuckDB it reads
 `DuckDB version vX.Y.Z (build ...)` — so the file is honest about what wrote it even
 when nothing else is. This script reads that field back out of every published
 resource with `parquet_file_metadata()` (a footer read, not a download) and holds it
@@ -101,7 +103,12 @@ def resolve_path(descriptor_path: Path, raw: str) -> tuple[str, bool]:
 
 
 def discover(datasets_dir: Path, only: Iterable[str] | None) -> list[Path]:
-    paths = sorted(datasets_dir.glob("*/datapackage.json"))
+    """Every descriptor of a published dataset: `<slug>/datapackage.json` for a Protocol
+    that publishes one package, and `<slug>/<table>.datapackage.json` for each table of a
+    Protocol that publishes several. `--only` selects by `<slug>`, so it reaches both."""
+    paths = sorted(
+        set(datasets_dir.glob("*/datapackage.json")) | set(datasets_dir.glob("*/*.datapackage.json"))
+    )
     if only:
         wanted = set(only)
         paths = [path for path in paths if path.parent.name in wanted]
@@ -109,8 +116,15 @@ def discover(datasets_dir: Path, only: Iterable[str] | None) -> list[Path]:
         if missing:
             raise CheckError(f"no descriptor for dataset(s): {', '.join(sorted(missing))}")
     if not paths:
-        raise CheckError(f"no datasets/*/datapackage.json under {datasets_dir}")
+        raise CheckError(f"no datasets/*/datapackage.json or datasets/*/*.datapackage.json under {datasets_dir}")
     return paths
+
+
+def descriptor_label(path: Path) -> str:
+    """`<slug>` for a package descriptor, `<slug>/<table>` for a per-table one."""
+    if path.name == "datapackage.json":
+        return path.parent.name
+    return f"{path.parent.name}/{path.name.removesuffix('.datapackage.json')}"
 
 
 def load_descriptor(path: Path) -> dict:
@@ -303,7 +317,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"engine version check: {exc}", file=sys.stderr)
         return EXIT_ERROR
 
-    checked_names = ", ".join(path.parent.name for path in descriptor_paths)
+    checked_names = ", ".join(descriptor_label(path) for path in descriptor_paths)
     if args.json:
         args.json.write_text(
             json.dumps(

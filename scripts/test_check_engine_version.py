@@ -663,6 +663,48 @@ class EngineVersionCheckSelfTest(unittest.TestCase):
         self.assertEqual(len(report["mismatches"]), 1)
         self.assertEqual(report["mismatches"][0]["reader_pin"], "0.0.0")
 
+    def test_per_table_descriptors_are_read(self) -> None:
+        """A Protocol that publishes several tables keeps one `<table>.datapackage.json`
+        per table beside its `arcform.yaml`, and no `datapackage.json`. Each of those
+        footers is read and held to that Protocol's pin, so a skewed one reddens and is
+        named by its own descriptor, and `--only <slug>` reaches it.
+        """
+        package_dir = self.datasets / "multi"
+        for table in ("alpha", "beta"):
+            parquet = package_dir / f"{table}.parquet"
+            write_parquet(parquet, "SELECT i AS n FROM range(3) t(i)")
+            (package_dir / f"{table}.datapackage.json").write_text(
+                json.dumps(
+                    {
+                        "name": table,
+                        "resources": [
+                            {
+                                "name": table,
+                                "format": "parquet",
+                                "path": parquet.name,
+                                "schema": {"fields": [{"name": "n", "type": "integer"}]},
+                            }
+                        ],
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+        written = re.search(r"(\d+\.\d+\.\d+)", real_created_by(package_dir / "alpha.parquet")).group(1)
+        write_protocol(package_dir, [f"duckdb=={written}", f"duckdb=={written}"])
+
+        agreeing = run_check(self.datasets, "--only", "multi", env={"DUCKDB_VERSION": "0.0.0"})
+        self.assertOutcome(agreeing, EXIT_OK, "2 resource(s) across 2 descriptor(s)", "multi/alpha", "multi/beta")
+
+        _original, patched = patch_created_by_to_disagree(package_dir / "beta.parquet")
+        patched_version = re.search(r"(\d+\.\d+\.\d+)", patched).group(1)
+        skewed = run_check(self.datasets, "--only", "multi", env={"DUCKDB_VERSION": "0.0.0"})
+        self.assertOutcome(skewed, EXIT_MISMATCH, "WRITER/READER ENGINE MISMATCH", "beta.datapackage.json")
+        self.assertIn(f"was written by DuckDB {patched_version}; its Protocol pins DuckDB {written}", skewed.stdout)
+        self.assertIn("beta.datapackage.json :: beta", skewed.stdout)
+        self.assertNotIn("alpha.datapackage.json :: alpha", skewed.stdout)
+
     def test_no_datasets_is_an_error(self) -> None:
         self.assertOutcome(run_check(self.datasets), EXIT_ERROR, "no datasets/*/datapackage.json")
 
