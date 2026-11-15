@@ -69,7 +69,7 @@ steps:
   - name: fetch_coding_index
     op: http_fetch@1
     with:
-      url: https://www.ons.gov.uk/file?uri=/methodology/classificationsandstandards/standardoccupationalclassificationsoc/soc2020/soc2020volume2codingrulesandconventions/soc2020volume2thecodingindexexcel20260827v2.xlsx
+      url: https://www.ons.gov.uk/file?uri=/methodology/classificationsandstandards/standardoccupationalclassificationsoc/soc2020/soc2020volume2codingrulesandconventions/soc2020volume2thecodingindexexcel20260827v3.xlsx
       out: build/ons/coding_index.xlsx
       headers:
         User-Agent: "Meridian Protocol (open-analytics; research@meridian.online)"

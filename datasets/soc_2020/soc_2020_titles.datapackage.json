@@ -17,7 +17,7 @@
       "title": "Meridian"
     }
   ],
-  "created": "2026-11-14T09:52:08Z",
+  "created": "2026-11-15T11:55:49Z",
   "description": "The coding index of the UK Standard Occupational Classification 2020, version 14: the job titles the Office for National Statistics codes to each unit group, for coding free-text job titles from job postings, HR extracts and survey answers. One row per coded entry, keyed by ONS's own id, with the unit group it is coded to and that group's title in ons/soc_2020. ONS codes many titles by a qualifier, so each entry carries its additional and industry qualifiers as columns, and a title can appear under several codes, each with different qualifiers; no two entries share a title and both qualifiers. The index's 231 cross-references, which point at another title or at ONS's notes rather than a code, are left out, so 32,439 of its 32,670 entries are kept. Every code is a unit group in ons/soc_2020, which the run checks against the code list it builds. The columns after the title-index columns are ONS's own coding fields: the default-entry mark, the extended SOC sub-unit group, the codes in SOC 2010, SOC 2000, SOC 90 and ISCO-08, and the versions that added or amended each entry. Meridian prepared the table from ONS's coding index workbook, and the code titles from its Volume 1 workbook. Source: Office for National Statistics licensed under the Open Government Licence v3.0.",
   "homepage": "https://meridian.online/datasets/ons/soc_2020_titles",
   "licenses": [
@@ -32,9 +32,9 @@
   "name": "soc_2020_titles",
   "resources": [
     {
-      "bytes": 972532,
+      "bytes": 972670,
       "format": "parquet",
-      "hash": "sha256:62a3fabc8d66846a864e30f4ee3f20723ef8429bbaceb996fbd05229638fd2a7",
+      "hash": "sha256:eb18bc6987a5acb9746dfc11da86d892170c15b2901c0835ebdd8d8db760b20a",
       "mediatype": "application/vnd.apache.parquet",
       "name": "soc_2020_titles",
       "path": "https://openlake.meridian.online/ons/soc_2020_titles.parquet",
@@ -86,11 +86,11 @@
           },
           {
             "constraints": {
-              "maxLength": 16,
+              "maxLength": 20,
               "minLength": 13,
-              "pattern": "^v[0-9]+/[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+              "pattern": "^v[0-9]+/[0-9]{4}-[0-9]{2}-[0-9]{2}(/v[0-9]+)?$"
             },
-            "description": "The index's own release, its version and the date ONS issued the workbook, as v<version>/<date>: v14/2026-08-27. The version is read from the workbook's INFO sheet (\"Version 14 Of The Standard Occupational Classification 2020 Index\") and the date from the URL of the workbook fetched (…excel20260827v2.xlsx).",
+            "description": "The index's own release, its version, the date ONS issued the workbook and, when ONS has reissued it under the same date, the reissue's revision, as v<version>/<date>/<revision>: v14/2026-08-27/v3. The version is read from the workbook's INFO sheet (\"Version 14 Of The Standard Occupational Classification 2020 Index\"), and the date and revision from the URL of the workbook fetched (…excel20260827v3.xlsx); a file name with no revision gives v<version>/<date>.",
             "name": "release",
             "type": "string",
             "x-finetype-label": "representation.identifier.alphanumeric_id",
@@ -175,7 +175,7 @@
             "description": "ONS's D column, which marks a default entry, and on which field, as the coding index's file specification gives them: O a default entry on the occupational qualifier field, I on the industry qualifier field, A on the additional qualifier field, Q a default on a qualified or professional entry, QS a default on a qualified and subject entry, M a default on a mixture of these. NULL on an entry that is not a default.",
             "name": "default_flag",
             "type": "string",
-            "x-finetype-confidence": 0.6172,
+            "x-finetype-confidence": 0.3427,
             "x-finetype-enum-domain": {
               "cohesion": 1.0,
               "distinct": 6,
@@ -188,7 +188,7 @@
                 "QS"
               ],
               "open": true,
-              "rows": 3022
+              "rows": 3023
             },
             "x-finetype-label": "representation.text.word"
           },
@@ -306,8 +306,8 @@
       "title": "SOC 2020 Volume 2: the coding index and coding rules and conventions — Office for National Statistics"
     },
     {
-      "path": "https://www.ons.gov.uk/file?uri=/methodology/classificationsandstandards/standardoccupationalclassificationsoc/soc2020/soc2020volume2codingrulesandconventions/soc2020volume2thecodingindexexcel20260827v2.xlsx",
-      "title": "SOC 2020 coding index workbook, version 14, issued 27 August 2026 (soc2020volume2thecodingindexexcel20260827v2.xlsx) — Office for National Statistics"
+      "path": "https://www.ons.gov.uk/file?uri=/methodology/classificationsandstandards/standardoccupationalclassificationsoc/soc2020/soc2020volume2codingrulesandconventions/soc2020volume2thecodingindexexcel20260827v3.xlsx",
+      "title": "SOC 2020 coding index workbook, version 14, issued 27 August 2026, reissued as v3 (soc2020volume2thecodingindexexcel20260827v3.xlsx) — Office for National Statistics"
     },
     {
       "path": "https://www.ons.gov.uk/methodology/classificationsandstandards/standardoccupationalclassificationsoc/soc2020/soc2020volume1structureanddescriptionsofunitgroups",

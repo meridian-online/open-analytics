@@ -75,8 +75,10 @@ FROM read_xlsx('build/ons/relationship_2010_2020.xlsx', sheet = 'soc2010-soc2020
 
 -- The releases. Volume 1 and the coding index carry the date they were issued in their
 -- file names (`...excel20260827.xlsx`; a revision gets a new URL); the index's version is
--- on its INFO sheet. The relationship tables carry the month and year at the end of the
--- name (`...july2021.xlsx`).
+-- on its INFO sheet. ONS reissues a corrected index under the same date with a revision
+-- suffix (`...excel20260827v3.xlsx`), so the index's release carries that suffix as a third
+-- part when the file name has one (`v14/2026-08-27/v3`), and v3 is told from v2. The
+-- relationship tables carry the month and year at the end of the name (`...july2021.xlsx`).
 CREATE OR REPLACE TABLE ons_release AS
 WITH sidecars AS (
   SELECT
@@ -89,6 +91,7 @@ WITH sidecars AS (
   SELECT *,
     try_strptime(regexp_extract(volume1_url, 'excel([0-9]{8})', 1), '%Y%m%d') AS volume1_date,
     try_strptime(regexp_extract(index_url, 'excel([0-9]{8})', 1), '%Y%m%d') AS index_date,
+    regexp_extract(index_url, 'excel[0-9]{8}(v[0-9]+)\.xlsx$', 1) AS index_revision,
     regexp_extract(info_line, '^Version ([0-9]+) Of The Standard Occupational Classification 2020 Index', 1) AS index_version,
     list_position(list_value('january', 'february', 'march', 'april', 'may', 'june', 'july', 'august',
                    'september', 'october', 'november', 'december'),
@@ -108,7 +111,8 @@ SELECT
        THEN error('ONS coding index release: build/ons/coding_index.xlsx.arcmeta is missing or has no url: line')
        WHEN index_date IS NULL
        THEN error('ONS coding index release: its sidecar url does not carry a date as "excel<yyyymmdd>": ' || coalesce(index_url, 'NULL'))
-       ELSE 'v' || index_version || '/' || strftime(index_date, '%Y-%m-%d') END AS index_release,
+       ELSE 'v' || index_version || '/' || strftime(index_date, '%Y-%m-%d')
+            || CASE WHEN index_revision = '' THEN '' ELSE '/' || index_revision END END AS index_release,
   CASE WHEN relationship_url IS NULL
        THEN error('ONS relationship tables release: build/ons/relationship_2010_2020.xlsx.arcmeta is missing or has no url: line')
        WHEN relationship_month IS NULL OR relationship_month = 0
