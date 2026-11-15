@@ -66,7 +66,7 @@ The same sequence, the rebase of the real catalogue and both SOC publishes into 
 - **This session carried the cutover**, with the SOC publish, rather than SOC publishing into an interim catalogue to be merged later: the open lake is one catalogue, and a reader should attach once.
 - **The cutover was rehearsed under a test prefix before the live lake was touched**, because `arc lake rebase` had never run on the real catalogue, and a fault there would first have appeared in the catalogue every dataset is read through.
 - **The agent ran the writes to `meridian-open`**, with the credential kept outside the repository and exported only for each publishing command: the rehearsal straight through, and each production write (the conditional catalogue upload, each SOC publish) only after Hugh's go-ahead for that write.
-- **The four hosted code lists move one at a time, each in its own pull request**, in the order NDC, HCPCS, HTS, Schedule B, NDC first because it changes fastest. Each pull request is branched from the one before, so a publish waits only on its own review, and one combined pull request would have put four live writes behind one review.
+- **The four hosted code lists move one at a time**, in the order NDC, HCPCS, HTS, Schedule B, NDC first because it changes fastest, each list reviewed and published on its own. **They merge as they go.** Publishing from a branch reddens every branch that lacks that restamp, so NDC and HCPCS merge together, in HCPCS's pull request, and HTS and Schedule B each branch from `main` after the previous merge, so every pull request is green when it merges.
 - **Each live write waits for Hugh's go-ahead for that write**, as SOC's did.
 
 ## NDC, the first existing dataset to move
