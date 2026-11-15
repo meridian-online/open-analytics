@@ -25,7 +25,6 @@ Schedule B, the U.S. Census Bureau's classification of exported goods: every ten
 11. **check_code_list** — hold the Parquet to the shared code-list contract (`scripts/check_code_list.py`): the core columns, a parent one level up for every row, `depth` as the level's position.
 12. **validate** — gate the Parquet against `schema.finetype.json`.
 13. **stamp_descriptor** — write the finished descriptor into the Parquet's footer, and write the published `build/schedule_b.parquet` and `datapackage.json`. It is the only writer of both.
-
 14. **publish** — upsert `census.schedule_b` into the open lake on `code`, with its descriptor in the lake's `meta` schema and the readable copy at `census/schedule_b.parquet` (see *Publish*).
 
 Produces `build/schedule_b.parquet`.
