@@ -285,10 +285,10 @@ Against BLS's 2018 SOC (`2018/2020-04-15`, crosswalk `2017-11`), built by arc 0.
 - `bls/soc_2018_titles`: 6,520 titles over 864 detailed occupations, unique across occupations after lowercasing; 2,408 marked illustrative (2,400 marked `x` and 8 `X` in BLS's file); 9 with internal double spaces. Three detailed occupations have no titles: `11-9039`, `19-2099` and `51-9199`.
 - `bls/soc_2010_to_2018`: 900 pairings of 840 2010 occupations with all 867 2018 ones. `(#)` ends the title of 42 2010 occupations and `(##)` of 31 2018 ones.
 
-Against ONS's SOC 2020 (Volume 1 `2020/2026-08-27`, coding index `v14/2026-08-27`, relationship tables `2021-07`), built by arc 0.2.1 before it was published (the published tables carry the same rows):
+Against ONS's SOC 2020 (Volume 1 `2020/2026-08-27`, coding index `v14/2026-08-27/v3`, relationship tables `2021-07`). The code list and crosswalk were counted on the arc 0.2.1 build before their first publish, and the published tables carry the same rows; the index was re-counted on 2026-11-15 from the v3 build by arc main (4047310), which republishes it after merge:
 
 - `ons/soc_2020`: 551 rows: 9 major, 26 sub-major, 104 minor and 412 unit groups.
-- `ons/soc_2020_titles`: 32,439 coded entries of the index's 32,670, over all 412 unit groups; the 231 left out are cross-references. 2,690 coded entries carry an additional qualifier and 10,661 an industry qualifier; none repeats a title and both qualifiers.
+- `ons/soc_2020_titles`: 32,439 coded entries of the index's 32,670, over all 412 unit groups; the 231 left out are cross-references. 2,689 coded entries carry an additional qualifier and 10,662 an industry qualifier (2,690 and 10,661 in v2, before ONS moved one entry's qualifier from the one to the other); none repeats a title and both qualifiers.
 - `ons/soc_2010_to_2020`: 714 pairings of 369 2010 unit groups with 412 2020 ones, from a sheet whose data rows also hold the 369 "Total sample" rows that become the base columns. 191 2010 groups pair with more than one 2020 group, and no pairing has all four shares 0.
 
 ## Known gaps
