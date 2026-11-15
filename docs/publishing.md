@@ -66,10 +66,28 @@ The same sequence, the rebase of the real catalogue and both SOC publishes into 
 - **This session carried the cutover**, with the SOC publish, rather than SOC publishing into an interim catalogue to be merged later: the open lake is one catalogue, and a reader should attach once.
 - **The cutover was rehearsed under a test prefix before the live lake was touched**, because `arc lake rebase` had never run on the real catalogue, and a fault there would first have appeared in the catalogue every dataset is read through.
 - **The agent ran the writes to `meridian-open`**, with the credential kept outside the repository and exported only for each publishing command: the rehearsal straight through, and each production write (the conditional catalogue upload, each SOC publish) only after Hugh's go-ahead for that write.
+- **The four hosted code lists move one at a time**, in the order NDC, HCPCS, HTS, Schedule B, NDC first because it changes fastest, each list reviewed and published on its own. **They merge as they go.** Publishing from a branch reddens every branch that lacks that restamp, so NDC and HCPCS merge together, in HCPCS's pull request, and HTS and Schedule B each branch from `main` after the previous merge, so every pull request is green when it merges.
+- **Each live write waits for Hugh's go-ahead for that write**, as SOC's did.
+
+## NDC, the first existing dataset to move
+
+`datasets/ndc` (`fda/ndc`) moved onto the step on 2026-11-15, and that publish was its fortnightly refresh. It was the first Protocol to publish into a table already in the lake: `fda.ndc` had been carried into the rebased catalogue in snapshot 1, so the step upserted into it rather than creating it. Snapshot 4 inserted 1,647 rows, updated 338,546 and deleted 1,339, leaving 340,193. Nearly every row updated because each carries `release`, openFDA's last-updated date, which moved; the deletions are listings openFDA no longer carries. The readable copy moved from its content-addressed key to the fixed `fda/ndc.parquet`, and its `manifest.json` entry with it. A re-run reported nothing changed.
+
+Three things came up that the next move will meet:
+
+- **A table already in the lake must keep its shape.** The step refuses a table whose columns were dropped, retyped or reordered (`on_schema_change: fail`, the default), and the rebuilt Parquet is only compared with the live table at publish time. `scripts/check_lake_shape.py` applies the same rule beforehand, and also stops on a row count more than 10% from the live table's: `python scripts/check_lake_shape.py --catalog https://openlake.meridian.online/catalog/open.ducklake --table fda.ndc --parquet datasets/ndc/build/ndc.parquet` prints `shape ok: fda.ndc 32 columns, rows 339885 -> 340193`. The tables the rebase carried have no rows in `meta.fields`, so arc has no stored key to compare and the descriptor's `primaryKey` becomes the key.
+- **finetype's inference moved under DuckDB 2.0.** `describe` types each column from a sample, and on DuckDB 2.0 the sample read NDC's `depth` (0, 1, 2) as a word and `marketing_category` (ANDA, NDA, BLA) as month names, though the committed descriptor had them as an integer and text. It did so on finetype 0.6.64, 0.6.66 and 0.6.67 alike, so the version was not the cause. Both columns are now nominated in `nominations.finetype.json`, which keeps the labels they had. The descriptor records the version of the `finetype` binary on PATH as `x-finetype-version`, so `FINETYPE_DUCKDB_EXT` should point at an extension of the same version: DuckDB 2.0's community repository serves 0.6.66, and 0.6.67's extension is built from finetype's `v0.6.67` tag with `make build-extension`, which needs its `extension-ci-tools` submodule.
+- **The CDN served the old readable copy after the publish.** arc uploads a readable copy with no `cache-control`, the zone caches everything for as long as the origin allows, and an edge copy of `fda/ndc.parquet` cached before the publish went on serving the old bytes, for up to Cloudflare's default edge TTL. The catalogue was not affected, since its data files are new keys. Until arc sets a revalidating `cache-control` on readable copies, check a readable copy's hash from the origin (a request with a query string bypasses the edge copy) and expect the plain URL to lag.
+
+## HCPCS
+
+`datasets/hcpcs` (`cms/hcpcs`) moved on 2026-11-15, after NDC. CMS's file was still October's quarter (`2026-10/2026-09-23`), so snapshot 5 changed no rows: it added the table's descriptor to `meta`, and the readable copy moved to the fixed `cms/hcpcs.parquet`, rebuilt by DuckDB 2.0. The rebuilt descriptor kept every label, so nothing was nominated. A re-run reported nothing changed.
+
+**Publishing from a branch reddens the branches below it.** CI holds every descriptor on a branch to the object the lake serves now. Once HCPCS published from its branch, the HCPCS descriptor on NDC's branch, still the one from 2 November, no longer matched the live object, so NDC's pull request cannot pass that check again on its own. Only a branch that carries every published restamp is green.
 
 ## What is left
 
-- **The other eight open Protocols move one at a time**: naics, edgar, gleif, edgar_gleif, hts, schedule_b, hcpcs and ndc. Each keeps serving what it has, through the rebased catalogue and its readable copy, but none can be republished until it moves, since infra's publish is stopped. Each moves its own DuckDB pin to 2.0 when it moves, and the engine check holds its footers to that pin.
+- **The other six open Protocols move one at a time**: hts and schedule_b next, then naics, edgar, gleif and edgar_gleif. Each keeps serving what it has, through the rebased catalogue and its readable copy, but none can be republished until it moves, since infra's publish is stopped. Each moves its own DuckDB pin to 2.0 when it moves, and the engine check holds its footers to that pin.
 - **infra's publish scripts and workflow are deleted** once all of them have moved. Until then they refuse to run.
 - **The website reads the catalogue** instead of `manifest.json`, at which point the manifest and its stale fields retire. The SOC dataset pages come with that work.
 
@@ -80,5 +98,6 @@ What SOC needed, and what the next Protocol will:
 1. Add `dotenv: [.env]`, the `publish` step after the stamp steps, and an `.env.example` beside the manifest. Replace any note in the manifest that says publishing happens outside it.
 2. Move the Protocol's DuckDB pins (`engine_version` and the `uv@1` steps' `duckdb==`) to the DuckDB arc links, 2.0.0 today.
 3. Run `arc run --force` with no credential set, with `FINETYPE_DUCKDB_EXT` pointing at the 2.0 extension, and check the local lake in `build/lake/open.ducklake`. Commit the restamped descriptors.
-4. Export the credential for one command and run `arc run --publish`. Then check the tables through the live catalogue, and their readable copies.
-5. Regenerate the README's step list (`scripts/check_protocol_readme.py --write`) and describe the publish step in the README.
+4. If the table is already in the lake, run `scripts/check_lake_shape.py` against the live catalogue and stop on anything but `shape ok`.
+5. Export the credential for one command and run `arc run --publish`. Then check the tables through the live catalogue, and their readable copies.
+6. Regenerate the README's step list (`scripts/check_protocol_readme.py --write`) and describe the publish step in the README.

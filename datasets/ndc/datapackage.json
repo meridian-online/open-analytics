@@ -17,7 +17,7 @@
       "title": "Meridian"
     }
   ],
-  "created": "2026-11-02T07:26:59Z",
+  "created": "2026-11-15T00:22:40Z",
   "description": "The FDA's National Drug Code directory: the codes that identify each finished drug sold in the United States, as one row per labeler, product and package, with each package under its product and each product under its labeler. Each product row carries the FDA's fields for it: brand and generic name, dosage form, routes, active ingredients and strengths, pharmacologic classes, DEA schedule, marketing category and application number, and marketing dates; each package row carries its description and dates, and its product's fields. Read from openFDA's NDC download, which the FDA releases under CC0; unfinished drugs (bulk ingredients and drugs for further processing) are not included. The FDA updates the directory daily and Meridian refreshes this dataset fortnightly, so release gives the date the data is as of. The listings are submitted by the labelers, and the FDA does not verify them: a code's presence in the directory does not mean the FDA has approved the drug. Brand names can be trademarks, which CC0 does not waive.",
   "homepage": "https://meridian.online/datasets/fda/ndc",
   "licenses": [
@@ -30,9 +30,9 @@
   "name": "ndc",
   "resources": [
     {
-      "bytes": 23090081,
+      "bytes": 23118453,
       "format": "parquet",
-      "hash": "sha256:ad13ac8e61517ec08af5d1d7d50c34cd4deaf0bb5f97ddb7d48944d0d4613444",
+      "hash": "sha256:59e4de4076ab30cd97f1e56f49ee13df9826db06712f59c58d2d682ec934b0fa",
       "mediatype": "application/vnd.apache.parquet",
       "name": "ndc",
       "path": "https://openlake.meridian.online/fda/ndc.parquet",
@@ -90,7 +90,7 @@
                 "product"
               ],
               "open": true,
-              "rows": 339885
+              "rows": 340193
             },
             "x-finetype-label": "representation.text.word",
             "x-finetype-nominated": true
@@ -99,11 +99,11 @@
             "description": "0 for a labeler, 1 for a product, 2 for a package.",
             "name": "depth",
             "type": "integer",
-            "x-finetype-confidence": 0.5682,
             "x-finetype-display": {
               "number": ",d"
             },
             "x-finetype-label": "representation.numeric.integer_number",
+            "x-finetype-nominated": true,
             "x-finetype-unsupported-constraints": {
               "pattern": "^-?[0-9]+$"
             }
@@ -139,7 +139,7 @@
             "description": "The labeler's name, the product's text and the package's description, joined with ' › ', down to the row's own level.",
             "name": "description_full",
             "type": "string",
-            "x-finetype-confidence": 0.9564,
+            "x-finetype-confidence": 0.967,
             "x-finetype-label": "representation.text.plain_text"
           },
           {
@@ -174,7 +174,7 @@
                 "fda"
               ],
               "open": true,
-              "rows": 339885
+              "rows": 340193
             },
             "x-finetype-label": "representation.text.word",
             "x-finetype-nominated": true
@@ -187,7 +187,7 @@
             "description": "Lowercased, accent-stripped description_full: a derived free-text search field, not a source attribute.",
             "name": "corpus",
             "type": "string",
-            "x-finetype-confidence": 0.9994,
+            "x-finetype-confidence": 0.9989,
             "x-finetype-label": "representation.text.plain_text"
           },
           {
@@ -198,7 +198,7 @@
             "description": "The labeler's name. On a labeler row, the name its listings give most often; on a product or package row, the name that product's listing gives, which can differ in spelling or legal form from the labeler row's.",
             "name": "labeler_name",
             "type": "string",
-            "x-finetype-confidence": 0.9997,
+            "x-finetype-confidence": 0.9942,
             "x-finetype-label": "representation.text.entity_name"
           },
           {
@@ -209,7 +209,7 @@
             "description": "The FDA's product type, such as HUMAN PRESCRIPTION DRUG, HUMAN OTC DRUG, VACCINE or PLASMA DERIVATIVE. NULL on a labeler row.",
             "name": "product_type",
             "type": "string",
-            "x-finetype-confidence": 0.6566,
+            "x-finetype-confidence": 0.8809,
             "x-finetype-enum-domain": {
               "cohesion": 0.42899999022483826,
               "distinct": 7,
@@ -223,7 +223,7 @@
                 "VACCINE"
               ],
               "open": true,
-              "rows": 334490
+              "rows": 334788
             },
             "x-finetype-label": "representation.text.entity_name"
           },
@@ -235,7 +235,7 @@
             "description": "The proprietary name the labeler gives the product, ending with brand_name_suffix where there is one. NULL on a labeler row and on the few products listed without one.",
             "name": "brand_name",
             "type": "string",
-            "x-finetype-confidence": 0.9887,
+            "x-finetype-confidence": 0.9989,
             "x-finetype-label": "representation.text.entity_name"
           },
           {
@@ -246,7 +246,7 @@
             "description": "The suffix that ends the proprietary name, such as XR or R, which brand_name already includes. NULL where the listing gives none.",
             "name": "brand_name_suffix",
             "type": "string",
-            "x-finetype-confidence": 0.9989,
+            "x-finetype-confidence": 0.9635,
             "x-finetype-label": "representation.text.entity_name"
           },
           {
@@ -285,7 +285,7 @@
             "description": "The active ingredients, as a list of name and strength (TIRZEPATIDE, 2.5 mg/.5mL), as the labeler lists them. NULL on a labeler row and where the listing gives none.",
             "name": "active_ingredients",
             "type": "array",
-            "x-finetype-confidence": 0.9988,
+            "x-finetype-confidence": 1.0,
             "x-finetype-label": "container.object.json_array",
             "x-finetype-unsupported-constraints": {
               "pattern": "^\\[.*\\]$"
@@ -295,7 +295,7 @@
             "description": "The FDA's established pharmacologic classes for the product's ingredients, as a list, each marked with its kind: [EPC] established pharmacologic class, [MoA] mechanism of action, [PE] physiologic effect, [CS] chemical structure. NULL where the FDA gives none.",
             "name": "pharm_classes",
             "type": "array",
-            "x-finetype-confidence": 1.0,
+            "x-finetype-confidence": 0.9,
             "x-finetype-label": "container.object.json_array",
             "x-finetype-unsupported-constraints": {
               "pattern": "^\\[.*\\]$"
@@ -325,7 +325,7 @@
                 "CV"
               ],
               "open": true,
-              "rows": 16820
+              "rows": 16752
             },
             "x-finetype-label": "representation.text.word"
           },
@@ -337,7 +337,6 @@
             "description": "The FDA's marketing category, the basis on which the product is marketed, such as NDA, ANDA, BLA, OTC MONOGRAPH DRUG or UNAPPROVED HOMEOPATHIC. NULL on a labeler row.",
             "name": "marketing_category",
             "type": "string",
-            "x-finetype-confidence": 0.4459,
             "x-finetype-enum-domain": {
               "cohesion": 0.5,
               "distinct": 12,
@@ -356,9 +355,10 @@
                 "UNAPPROVED MEDICAL GAS"
               ],
               "open": true,
-              "rows": 334490
+              "rows": 334788
             },
             "x-finetype-label": "representation.text.word",
+            "x-finetype-nominated": true,
             "x-finetype-pattern-fit": {
               "canonical": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$",
               "outcome": "omitted"
@@ -368,7 +368,7 @@
             "description": "The application or monograph the product is marketed under, such as NDA217806, ANDA078245, BLA018780 or M017. NULL where the marketing category has none.",
             "name": "application_number",
             "type": "string",
-            "x-finetype-confidence": 0.5354,
+            "x-finetype-confidence": 0.8263,
             "x-finetype-label": "representation.identifier.alphanumeric_id",
             "x-finetype-pattern-fit": {
               "canonical": "^[A-Za-z][A-Za-z0-9 /_.#-]*[0-9][A-Za-z0-9 /_.#-]*$|^[0-9][A-Za-z0-9 /_.#-]*[A-Za-z][A-Za-z0-9 /_.#-]*$",
@@ -517,7 +517,7 @@
               "ACTIVE"
             ],
             "type": "boolean",
-            "x-finetype-confidence": 0.9994,
+            "x-finetype-confidence": 0.9992,
             "x-finetype-enum-domain": {
               "cohesion": 1.0,
               "distinct": 2,
@@ -526,7 +526,7 @@
                 "true"
               ],
               "open": true,
-              "rows": 219123
+              "rows": 219257
             },
             "x-finetype-label": "representation.boolean.terms"
           },
