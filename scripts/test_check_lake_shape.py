@@ -14,7 +14,7 @@ import duckdb
 CHECKER = Path(__file__).with_name("check_lake_shape.py")
 sys.path.insert(0, str(CHECKER.parent))
 
-from check_lake_shape import shape_difference
+from check_lake_shape import shape_difference  # noqa: E402
 
 
 class ShapeRule(unittest.TestCase):
@@ -112,8 +112,7 @@ class Cli(unittest.TestCase):
             )
             r = self.run_cli(lake, wide)
             self.assertEqual(r.returncode, 1)
-            self.assertIn("n", r.stdout + r.stderr)
-            self.assertIn("BIGINT", r.stdout + r.stderr)
+            self.assertIn("column n was INTEGER, is now BIGINT", r.stdout + r.stderr)
 
             more = pq(
                 "more.parquet",
@@ -126,6 +125,27 @@ class Cli(unittest.TestCase):
             r = self.run_cli(lake, same, table="s.absent")
             self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
             self.assertIn("new table", r.stdout)
+
+    def test_complex_types_agree(self) -> None:
+        select = (
+            "SELECT 'c' AS code, 1.50::DECIMAL(10,2) AS price, "
+            "[{'name': 'x', 'strength': '5'}]::STRUCT(name VARCHAR, strength VARCHAR)[] AS ing, "
+            "['a', 'b']::VARCHAR[] AS tags"
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            lake = root / "t.ducklake"
+            parquet = root / "c.parquet"
+            con = duckdb.connect()
+            con.execute("INSTALL ducklake; LOAD ducklake")
+            con.execute(f"ATTACH 'ducklake:{lake}' AS l (DATA_PATH '{root / 'data'}/')")
+            con.execute("CREATE SCHEMA l.s")
+            con.execute(f"CREATE TABLE l.s.t AS {select}")
+            con.execute("DETACH l")
+            con.execute(f"COPY ({select}) TO '{parquet}' (FORMAT parquet)")
+            r = self.run_cli(lake, parquet)
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            self.assertIn("shape ok: s.t 4 columns", r.stdout)
 
 
 if __name__ == "__main__":

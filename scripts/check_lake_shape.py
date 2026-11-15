@@ -5,7 +5,9 @@
 changed type, a column added before the last existing one, or a reorder. New columns at
 the end are fine. This script applies the same rule (arc's `schema_difference`) to the
 live table and the Parquet about to replace it, and also holds the row count to a
-limit, so a refusal or a surprising size is caught before the live run.
+limit, so a refusal or a surprising size is caught before the live run. The check covers
+columns and row count. arc also refuses a changed key, which this does not check; the
+tables it guards were carried by a rebase and have no stored key.
 
     check_lake_shape.py --catalog <ducklake url or path> --table <schema.name> \
         --parquet <path> [--max-row-change 0.10]
@@ -77,21 +79,20 @@ def main() -> int:
                 [schema, name],
             ).fetchall()
         ]
-        incoming = [
-            (r[0], r[1])
-            for r in con.execute(
-                "DESCRIBE SELECT * FROM read_parquet(?)", [args.parquet]
-            ).fetchall()
-        ]
-        new_rows = con.execute(
-            "SELECT count(*) FROM read_parquet(?)", [args.parquet]
-        ).fetchone()[0]
+        con.execute(
+            "CREATE TEMP TABLE incoming_rows AS FROM read_parquet(?)", [args.parquet]
+        )
+        incoming = con.execute(
+            "SELECT column_name, data_type FROM duckdb_columns() "
+            "WHERE database_name = 'temp' AND table_name = 'incoming_rows' "
+            "ORDER BY column_index"
+        ).fetchall()
+        new_rows = con.execute("SELECT count(*) FROM incoming_rows").fetchone()[0]
         if not existing:
             print(f"new table: {args.table} {len(incoming)} columns, rows {new_rows}")
             return 0
-        live_rows = con.execute(
-            f'SELECT count(*) FROM lake."{schema}"."{name}"'
-        ).fetchone()[0]
+        quoted = f'lake."{schema.replace(chr(34), chr(34) * 2)}"."{name.replace(chr(34), chr(34) * 2)}"'
+        live_rows = con.execute(f"SELECT count(*) FROM {quoted}").fetchone()[0]
     except duckdb.Error as e:
         print(f"could not run the check: {e}", file=sys.stderr)
         return 2
