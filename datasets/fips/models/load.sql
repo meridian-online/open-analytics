@@ -21,8 +21,8 @@
 -- not by its position in the scan, and a header that has changed fails the run. The run
 -- also fails on: a file name whose vintage does not parse, two ANSI vintages that differ,
 -- a line with the wrong number of fields or a code of the wrong shape, a repeated code,
--- a county whose state is not in the state file, and a county both files list under a
--- different name or GNIS code (a rename is decided by a person, not published under the
+-- a county whose state is not in the state file or whose state abbreviation differs from
+-- it, and a county both files list under a different name or GNIS code (a rename is decided by a person, not published under the
 -- older name).
 
 CREATE OR REPLACE TABLE fips AS
@@ -152,12 +152,17 @@ county_states_known AS (
         UNION ALL
         SELECT code FROM gazetteer WHERE substr(code, 1, 2) NOT IN (SELECT state_code FROM ansi_states))
 ),
-gazetteer_states_agree AS (
+-- A county's abbreviation, in either county file, is its state's in the state file, so
+-- every county row's state_abbr equals its parent state's.
+abbreviations_agree AS (
   SELECT CASE WHEN count(*) > 0
-              THEN error('Gazetteer state abbreviation differs from the ANSI state file: ' || min(g.code))
+              THEN error('county state abbreviation differs from the ANSI state file: ' || min(code))
               ELSE true END AS ok
-  FROM gazetteer g JOIN ansi_states s ON substr(g.code, 1, 2) = s.state_code
-  WHERE g.state_abbr <> s.state_abbr
+  FROM (SELECT a.code FROM ansi_counties a JOIN ansi_states s USING (state_code)
+        WHERE a.state_abbr <> s.state_abbr
+        UNION ALL
+        SELECT g.code FROM gazetteer g JOIN ansi_states s ON substr(g.code, 1, 2) = s.state_code
+        WHERE g.state_abbr <> s.state_abbr)
 ),
 names_agree AS (
   SELECT CASE WHEN count(*) FILTER (WHERE a.name <> g.name) > 0
@@ -180,7 +185,7 @@ unique_codes AS (
 ),
 checks AS (
   SELECT c.ok AND s.ok AND n.ok AND u.ok AS ok
-  FROM county_states_known c, gazetteer_states_agree s, names_agree n, unique_codes u
+  FROM county_states_known c, abbreviations_agree s, names_agree n, unique_codes u
 ),
 states AS (
   SELECT
