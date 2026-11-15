@@ -23,9 +23,9 @@ record count set to the eight records kept:
 
 openFDA's data is released under CC0, so the records are committed as openFDA gives them.
 
-Needs duckdb==1.5.5 in the running Python:
+Needs duckdb==2.0.0 in the running Python:
 
-    uv run --quiet --with duckdb==1.5.5 python3 scripts/test_ndc_models.py
+    uv run --quiet --with duckdb==2.0.0 python3 scripts/test_ndc_models.py
 """
 
 from __future__ import annotations
