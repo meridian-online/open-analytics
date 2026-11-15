@@ -37,9 +37,9 @@
   "name": "schedule_b",
   "resources": [
     {
-      "bytes": 1317430,
+      "bytes": 1317433,
       "format": "parquet",
-      "hash": "sha256:edce3f0a3a3fe0f2138b03a611fed29812e54b0592eeb3d5c156c00463babe99",
+      "hash": "sha256:706579d1186f9480c6be9689eb936fbc5eb890a4e8c4e0ab73083a4af43cae8d",
       "mediatype": "application/vnd.apache.parquet",
       "name": "schedule_b",
       "path": "https://openlake.meridian.online/census/schedule_b.parquet",
@@ -248,7 +248,7 @@
             "name": "sitc",
             "type": "string",
             "x-finetype-label": "representation.identifier.alphanumeric_id",
-            "x-finetype-locale": "IT",
+            "x-finetype-locale": "EN_US",
             "x-finetype-nominated": true,
             "x-finetype-pattern-fit": {
               "canonical": "^[A-Za-z][A-Za-z0-9 /_.#-]*[0-9][A-Za-z0-9 /_.#-]*$|^[0-9][A-Za-z0-9 /_.#-]*[A-Za-z][A-Za-z0-9 /_.#-]*$",
