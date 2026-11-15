@@ -91,9 +91,15 @@ Three things came up that the next move will meet:
 
 HTS's `stamp_descriptor` rewrites `datapackage.json` in place and does not pass `--carry-created`, so every run, even one that publishes nothing, rewrites the descriptor's `created`. Commit the descriptor from the run that published, and expect `created` alone to move on later runs, until HTS takes the one-writer layout the other lists have.
 
+## Schedule B
+
+`datasets/schedule_b` (`census/schedule_b`) moved on 2026-11-15, after HTS had merged, and with it all four hosted code lists are on the step. Census's file was unchanged (`release` stays `2026/2026-07-27`, 16,727 rows, 21 columns), but every row carries `hts_release`, the USITC revision it was matched against, so snapshot 7 updated every row from `2026HTSRev22` to `2026HTSRev23`. As with HTS, the shape check's `16727 -> 16727` does not show that; compare `hts_release` with the live table's.
+
+**The sitc locale annotation moves between rebuilds.** finetype labels `sitc` `representation.identifier.alphanumeric_id` on every run, and that label is nominated, but the locale it reports from its sample has come back as `HR`, `IT` and `EN_US` on successive rebuilds of the same data. The descriptor's `x-finetype-locale` travels in the Parquet footer, so a forced rebuild changes the readable copy's bytes and hash with no row changed. A `--force` run followed by `--publish` therefore commits a snapshot that rewrites only the stored descriptor and replaces the readable copy (snapshot 8, `+0 ~0 -0`); a plain re-run after it reported nothing changed. Commit the descriptor from the last run that published, and do not force a rebuild between the publish and the commit.
+
 ## What is left
 
-- **The other five open Protocols move one at a time**: schedule_b next, then naics, edgar, gleif and edgar_gleif. Each keeps serving what it has, through the rebased catalogue and its readable copy, but none can be republished until it moves, since infra's publish is stopped. Each moves its own DuckDB pin to 2.0 when it moves, and the engine check holds its footers to that pin.
+- **The other four open Protocols move one at a time**: naics, edgar, gleif and edgar_gleif. Each keeps serving what it has, through the rebased catalogue and its readable copy, but none can be republished until it moves, since infra's publish is stopped. Each moves its own DuckDB pin to 2.0 when it moves, and the engine check holds its footers to that pin.
 - **infra's publish scripts and workflow are deleted** once all of them have moved. Until then they refuse to run.
 - **The website reads the catalogue** instead of `manifest.json`, at which point the manifest and its stale fields retire. The SOC dataset pages come with that work.
 

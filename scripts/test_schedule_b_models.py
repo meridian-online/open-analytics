@@ -35,9 +35,9 @@ USITC text, which Schedule B's chapter 98 must not take; two more made-up Census
 9803100010 and 9803100020, give a subheading with several lines under it and no USITC
 text.
 
-Needs duckdb==1.5.5 in the running Python:
+Needs duckdb==2.0.0 in the running Python:
 
-    uv run --quiet --with duckdb==1.5.5 python3 scripts/test_schedule_b_models.py
+    uv run --quiet --with duckdb==2.0.0 python3 scripts/test_schedule_b_models.py
 """
 
 from __future__ import annotations

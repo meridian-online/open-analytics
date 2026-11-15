@@ -19,16 +19,23 @@
 # build/schedule_b.parquet and datapackage.json. A step that rewrote an earlier step's
 # file would leave that step stale on every run.
 #
-# BOUNDARY — do NOT fold this into this manifest:
-#   • PUBLISH (content-addressed R2 upload + manifest/catalog pointer flip) stays in
-#     the out-of-repo publish pipeline and READS this Protocol's terminal output,
-#     build/schedule_b.parquet + the emitted datapackage.json. It is not an arcform step.
+# PUBLISH. The last step, `publish` (ducklake_write), writes the table into the shared
+# open lake as one snapshot: the catalog, the data file and the table's readable Parquet
+# copy on R2 (public at https://openlake.meridian.online/). With all three R2 variables
+# set, from .env or the environment, EVERY `arc run` publishes into the live lake;
+# `arc run --publish` only makes a missing credential fail the run instead of publishing
+# into build/lake/. For local work keep .env absent and the variables unset. Keep the
+# credential outside this folder and export it for the publishing command only. Readers
+# need DuckDB 2.0 or later. It reads only what stamp_descriptor wrote, so it runs after it.
 #
 # Produces: build/schedule_b.parquet  →  published as census/schedule_b
 name: schedule_b
 engine: duckdb
-engine_version: ">=1.2"
+# Kept in step with ../soc_2018, which pins the DuckDB that arc links (2.0), the writer of its published Parquet.
+engine_version: ">=2.0"
 db: build/schedule_b.db
+# The R2 write credential, if a .env is present (see .env.example); the process environment also counts.
+dotenv: [.env]
 
 params:
   # Census's year folder. load.sql reads it as ARC_PARAM_YEAR for `release` and for the
@@ -186,15 +193,15 @@ steps:
   # declares.
   #
   # `shasum -a 256 datasets/edgar_gleif/scripts/crosswalk_join.py` prints the digest.
-  # duckdb is pinned to DUCKDB_VERSION in .github/workflows/descriptors.yml — keep the
-  # two in step.
+  # duckdb is pinned to the same version as the stamp step below, which engine_version
+  # above names.
   - name: derive_join_coverage
     op: uv@1
     with:
       script: ../edgar_gleif/scripts/crosswalk_join.py
       sha256: d16e99e888ea74206d930214d8ccf8b9ad377327a6f9026b1487a70e611eab26
       deps:
-        - duckdb==1.5.5
+        - duckdb==2.0.0
       args:
         - --write
         - --package
@@ -232,7 +239,7 @@ steps:
       script: ../../scripts/check_code_list.py
       sha256: a6d4fd3c42aca53591f7f94bfef625f9c4f503b2d4331b64bea8103db88f7102
       deps:
-        - duckdb==1.5.5
+        - duckdb==2.0.0
       args:
         - --parquet
         - build/stage/schedule_b.parquet
@@ -268,7 +275,7 @@ steps:
       script: ../../scripts/stamp_descriptor.py
       sha256: a9356ac8d5412d94a940ebeef1e2508eaed6b77f1d923ada88edbacccf9d9b81
       deps:
-        - duckdb==1.5.5
+        - duckdb==2.0.0
       args:
         - stamp
         - --descriptor
@@ -287,5 +294,28 @@ steps:
         - build/schedule_b.parquet
         - datapackage.json
 
-  # publish: the out-of-repo publish pipeline reads build/schedule_b.parquet + the
-  # emitted datapackage.json (boundary — not an arc step). See README.
+  # ── Publish: the table into the open lake, one snapshot ─────────────────────────
+  # Runs on every `arc run`. With R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY and R2_ACCOUNT_ID
+  # all set, every run publishes live; otherwise into build/lake/, and `arc run --publish`
+  # fails instead.
+  - name: publish
+    op: ducklake_write@1
+    with:
+      public_base: https://openlake.meridian.online/
+      catalog: catalog/open.ducklake
+      data_path: lake/
+      runs: runs/
+      manifest: manifest.json
+      local_catalog: build/lake/open.ducklake
+      tables:
+        - table: census.schedule_b
+          from: build/schedule_b.parquet
+          descriptor: datapackage.json
+          readable_copy: census/schedule_b.parquet
+      credential:
+        type: r2
+        bucket: meridian-open
+        env:
+          key_id: R2_ACCESS_KEY_ID
+          secret: R2_SECRET_ACCESS_KEY
+          account_id: R2_ACCOUNT_ID
