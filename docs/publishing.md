@@ -85,9 +85,15 @@ Three things came up that the next move will meet:
 
 **Publishing from a branch reddens the branches below it.** CI holds every descriptor on a branch to the object the lake serves now. Once HCPCS published from its branch, the HCPCS descriptor on NDC's branch, still the one from 2 November, no longer matched the live object, so NDC's pull request cannot pass that check again on its own. Only a branch that carries every published restamp is green.
 
+## HTS
+
+`datasets/hts` (`usitc/hts`) moved on 2026-11-15, after NDC and HCPCS had merged. The live table held USITC's revision `2026HTSRev22`; the rebuild fetched `2026HTSRev23`. Snapshot 6 updated all 42,036 rows, since every row carries `release`, and seven of them changed text: chapter 99 provisions 9903.88.69, 9903.88.70 and 9903.91.12 to 9903.91.16, three of which moved an effective date from 10 November 2026 to 10 January 2027. The row count did not move, so the shape check's `42036 -> 42036` did not show the new revision; compare `release` with the live table's to see one. No label moved and nothing was nominated. A re-run reported nothing changed.
+
+HTS's `stamp_descriptor` rewrites `datapackage.json` in place and does not pass `--carry-created`, so every run, even one that publishes nothing, rewrites the descriptor's `created`. Commit the descriptor from the run that published, and expect `created` alone to move on later runs, until HTS takes the one-writer layout the other lists have.
+
 ## What is left
 
-- **The other six open Protocols move one at a time**: hts and schedule_b next, then naics, edgar, gleif and edgar_gleif. Each keeps serving what it has, through the rebased catalogue and its readable copy, but none can be republished until it moves, since infra's publish is stopped. Each moves its own DuckDB pin to 2.0 when it moves, and the engine check holds its footers to that pin.
+- **The other five open Protocols move one at a time**: schedule_b next, then naics, edgar, gleif and edgar_gleif. Each keeps serving what it has, through the rebased catalogue and its readable copy, but none can be republished until it moves, since infra's publish is stopped. Each moves its own DuckDB pin to 2.0 when it moves, and the engine check holds its footers to that pin.
 - **infra's publish scripts and workflow are deleted** once all of them have moved. Until then they refuse to run.
 - **The website reads the catalogue** instead of `manifest.json`, at which point the manifest and its stale fields retire. The SOC dataset pages come with that work.
 
