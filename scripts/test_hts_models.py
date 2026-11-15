@@ -21,9 +21,9 @@ at indent 0, directly under chapter 03, with heading 0301 moved to indent 1 bene
 and a provision 9824.01.01 with two 9824.02 lines indented beneath it, a layout chapter
 98 uses (9823.03.02 and onward sit under 9823.03.01).
 
-Needs duckdb==1.5.5 in the running Python:
+Needs duckdb==2.0.0 in the running Python:
 
-    uv run --quiet --with duckdb==1.5.5 python3 scripts/test_hts_models.py
+    uv run --quiet --with duckdb==2.0.0 python3 scripts/test_hts_models.py
 """
 
 from __future__ import annotations

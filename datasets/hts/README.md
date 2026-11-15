@@ -21,6 +21,7 @@ The Harmonized Tariff Schedule of the United States, issued by the U.S. Internat
 7. **check_code_list** — hold the Parquet to the shared code-list contract (`scripts/check_code_list.py`): the core columns, a parent one level up for every row, `depth` as the level's position.
 8. **validate** — gate the Parquet against `schema.finetype.json`.
 9. **stamp_descriptor** — write the finished descriptor into the Parquet's own footer.
+10. **publish** — upsert `usitc.hts` into the open lake on `code`, with its descriptor in the lake's `meta` schema and the readable copy at `usitc/hts.parquet` (see *Publish*).
 
 Produces `build/hts.parquet`.
 
@@ -36,9 +37,11 @@ USITC's export has no chapter rows, and its chapter and section titles live only
 
 `code` is nominated as finetype's `geography.transportation.hs_code`. Inferred from the values it is `unknown` at 0.49 confidence, since a two-digit chapter and a ten-digit line share no shape. The label's canonical pattern, `^\d{4}\.?\d{2}(\.?\d{2}){0,2}$`, admits digits-only codes of 6, 8 and 10 digits but not the 2-digit chapter or 4-digit heading forms, which this dataset holds; `describe` widens it with `|^[0-9]{2}$|^[0-9]{4}$` (pattern-fit `widened` in the descriptor), and `schema.finetype.json` does the same. On `code` itself, `descriptor.overrides.json` then declares the shape the column holds, digits only at 2, 4, 6, 8 or 10 digits and bounded 2 to 10, so the published pattern refuses dotted forms and lengths no level has; `code_display`, which is dotted, keeps the widened pattern. `rate_from_code` is declared as 6, 8 or 10 digits, since only a subheading, tariff line or statistical line prints rates. The canonical pattern lacking the chapter and heading forms is a mismatch for a finetype issue. `nominations.finetype.json` gives the reason for each nomination.
 
-## Boundary (deliberate)
+## Publish
 
-**Publish** — the content-addressed R2 upload + `manifest.json` / catalog pointer flip — stays in the out-of-repo publish pipeline. It *reads* this Protocol's terminal output `build/hts.parquet` and the emitted `datapackage.json`; it is not an arcform step.
+The last step publishes `usitc.hts` into the open lake (<https://openlake.meridian.online/>), a DuckLake catalog on R2 that readers attach over https without a credential, and writes its readable copy, one Parquet file at <https://openlake.meridian.online/usitc/hts.parquet>. Each publish upserts the table on `code`: codes USITC adds are inserted, changed codes updated, and codes it no longer lists deleted, all in one snapshot a reader can time-travel back through. With all three of `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` and `R2_ACCOUNT_ID` set, from a `.env` here (`cp .env.example .env`, fill it in; `.env` and its variants are gitignored) or from the environment, every `arc run` publishes into the live lake. `arc run --publish` only makes a missing credential fail the run instead of falling back. With any of the three unset, a plain `arc run` still succeeds: the step says it published locally, names the missing variables, and writes a lake into `build/lake/open.ducklake` that attaches and reads back offline. For local work, keep `.env` absent and the variables unset. Better still, keep the credential in a file outside the Protocol folder and export it only for the publishing command, in a subshell: `(set -a; . /path/outside/repo/openlake.env; set +a; arc run --publish)`. Readers need DuckDB 2.0 or later. An unchanged rebuild commits nothing.
+
+`usitc.hts` is already in the lake, so before a live publish check that the rebuilt table still has the live table's shape: `python scripts/check_lake_shape.py --catalog https://openlake.meridian.online/catalog/open.ducklake --table usitc.hts --parquet datasets/hts/build/hts.parquet` from the repository root must print `shape ok`. [`docs/publishing.md`](../../docs/publishing.md) says what else a publisher needs first.
 
 ## Run
 
@@ -48,7 +51,7 @@ Needs the `arc` binary, `duckdb`, `uv` (for `check_code_list` and the stamp), an
 
 <!-- protocol-steps: generated from arcform.yaml by scripts/check_protocol_readme.py — do not edit this block by hand -->
 
-All 11 steps are `sql:` models or typed `op:` operators from the arcform catalog. This Protocol runs no opaque `command:`/shell step.
+All 12 steps are `sql:` models or typed `op:` operators from the arcform catalog. This Protocol runs no opaque `command:`/shell step.
 
 | # | Step | How it runs |
 |---|---|---|
@@ -63,5 +66,6 @@ All 11 steps are `sql:` models or typed `op:` operators from the arcform catalog
 | 9 | `check_code_list` | `op: uv@1` |
 | 10 | `validate` | `op: finetype_validate@1` |
 | 11 | `stamp_descriptor` | `op: uv@1` |
+| 12 | `publish` | `op: ducklake_write@1` |
 
 <!-- /protocol-steps -->

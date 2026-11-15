@@ -17,7 +17,7 @@
       "title": "Meridian"
     }
   ],
-  "created": "2026-11-01T11:47:54Z",
+  "created": "2026-11-15T09:04:55Z",
   "description": "The Harmonized Tariff Schedule of the United States, issued by the U.S. International Trade Commission: every chapter, heading, subheading, tariff line and statistical line as a row with its parent, with each line's duty rates, units and footnotes as USITC prints them.",
   "homepage": "https://meridian.online/datasets/usitc/hts",
   "licenses": [
@@ -30,9 +30,9 @@
   "name": "hts",
   "resources": [
     {
-      "bytes": 2097557,
+      "bytes": 2096468,
       "format": "parquet",
-      "hash": "sha256:557934da0b286c8a6d4b926d4fd8a06ec9275cfd2617dd323ebfea5bab081936",
+      "hash": "sha256:6d5ca5c7536ea883fc736373d71c5102cbc04ab5d15ff9437ed4d97fc470cd7d",
       "mediatype": "application/vnd.apache.parquet",
       "name": "hts",
       "path": "https://openlake.meridian.online/usitc/hts.parquet",
