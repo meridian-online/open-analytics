@@ -1,0 +1,150 @@
+# The census/fips Protocol's tests, run by `arc test` from this folder (see README.md).
+#
+# Fixtures, in testdata/ (see testdata/README.md): cut-down copies of Census's three
+# files, keeping seven states and their counties. The ANSI and Gazetteer files are
+# pipe-delimited text; their fixtures are named .csv so a break can rewrite them, and
+# arc places each at the .txt path the fetch writes. gazetteer.zip holds the Gazetteer
+# fixture under Census's member name, so the pass case runs extract_gazetteer itself; a
+# test that breaks the Gazetteer gives extract_gazetteer its own fixture as well.
+#
+# Expected in the fixture: 7 states and 31 counties, 22 from the ANSI list and Connecticut's
+# 9 planning regions from the Gazetteer.
+#
+# check_code_list is a uv step, so a refusal of its own could be matched only by
+# "step 'check_code_list' failed (exit code n)"; the contract it holds is tested by
+# scripts/test_check_code_list.py, and the pass case shows this table meets it.
+
+- name: the fixture builds the code list
+  risk: a FIPS table published with Connecticut's codes, the Island Areas or the current flag wrong
+  fixtures:
+    fetch_states: testdata/national_state.csv
+    fetch_counties: testdata/national_county.csv
+    fetch_gazetteer: testdata/gazetteer.zip
+  checks:
+    # Row counts by level, source and current.
+    - >-
+      SELECT level, text_source, current, count(*) AS n FROM fips_out GROUP BY ALL
+      EXCEPT
+      SELECT * FROM (VALUES ('state', 'census_ansi', true, 5), ('state', 'census_ansi', NULL, 2),
+        ('county', 'census_ansi', true, 8), ('county', 'census_ansi', false, 8),
+        ('county', 'census_ansi', NULL, 6), ('county', 'census_gazetteer', true, 9))
+    - SELECT * FROM (SELECT count(*) AS n FROM fips_out) WHERE n <> 38
+    # Connecticut's eight old counties are not current; its nine planning regions are.
+    - >-
+      SELECT code FROM fips_out WHERE state_code = '09' AND level = 'county'
+        AND ((code BETWEEN '09001' AND '09015') <> (current = false))
+    - >-
+      SELECT code FROM fips_out WHERE code BETWEEN '09110' AND '09190'
+        AND (text_source <> 'census_gazetteer' OR class_code IS NOT NULL
+             OR functional_status IS NOT NULL OR county_code <> substr(code, 3, 3))
+    # The Island Areas and Minor Outlying Islands are outside the Gazetteer: current is NULL.
+    - SELECT code FROM fips_out WHERE state_code IN ('60', '74') AND current IS NOT NULL
+    # The release names both vintages, on every row.
+    - SELECT DISTINCT release FROM fips_out WHERE release IS DISTINCT FROM 'ANSI 2020, Gazetteer 2026'
+    # Shapes and parents.
+    - >-
+      SELECT code FROM fips_out
+      WHERE (level = 'state' AND (length(code) <> 2 OR parent_code IS NOT NULL OR county_code IS NOT NULL
+                                  OR depth <> 0 OR state_code <> code))
+         OR (level = 'county' AND (length(code) <> 5 OR parent_code <> substr(code, 1, 2)
+                                   OR depth <> 1 OR state_code <> parent_code))
+    - >-
+      SELECT code FROM fips_out WHERE parent_code IS NOT NULL
+        AND parent_code NOT IN (SELECT code FROM fips_out WHERE level = 'state')
+    # Text: an accented name kept, the full name in context, the corpus stripped.
+    - >-
+      SELECT * FROM fips_out WHERE code = '35013'
+        AND (description <> 'Doña Ana County' OR description_full <> 'New Mexico › Doña Ana County'
+             OR corpus <> 'new mexico › dona ana county')
+    - SELECT code FROM fips_out WHERE code = '60020' AND description <> 'Manu''a District'
+    # Census's own fields carried through.
+    - >-
+      SELECT * FROM fips_out WHERE code = '01001'
+        AND (state_abbr <> 'AL' OR gnis_code <> '00161526' OR class_code <> 'H1'
+             OR functional_status <> 'A' OR current IS NOT true)
+    - SELECT code FROM fips_out WHERE code = '11' AND (state_abbr <> 'DC' OR gnis_code <> '01702382')
+
+- name: a county only the Gazetteer lists is added
+  risk: Census adds a county-equivalent in a later vintage and the table leaves it out, so current data fails to join
+  fixtures:
+    fetch_states: testdata/national_state.csv
+    fetch_counties: testdata/national_county.csv
+    fetch_gazetteer: testdata/gazetteer.zip
+    extract_gazetteer: testdata/gazetteer_counties.csv
+  break:
+    extract_gazetteer: >-
+      INSERT INTO fixture SELECT 'AL', '01999', '0500000US01999', '09999999', 'Test County',
+        '1', '1', '1', '1', '1', '1'
+  checks:
+    - >-
+      SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM fips_out WHERE code = '01999'
+        AND text_source = 'census_gazetteer' AND current AND description_full = 'Alabama › Test County')
+
+- name: a changed state header is refused
+  risk: Census reorders or renames the state file's columns and names or codes load into the wrong fields
+  fixtures:
+    fetch_states: testdata/national_state.csv
+    fetch_counties: testdata/national_county.csv
+    fetch_gazetteer: testdata/gazetteer.zip
+  break:
+    fetch_states: ALTER TABLE fixture RENAME COLUMN STATE_NAME TO NAME
+  expect:
+    fails_with: "ANSI state header has changed"
+
+- name: a changed Gazetteer header is refused
+  risk: Census changes the Gazetteer's columns and its GNIS codes or names are read from the wrong field
+  fixtures:
+    fetch_states: testdata/national_state.csv
+    fetch_counties: testdata/national_county.csv
+    fetch_gazetteer: testdata/gazetteer.zip
+    extract_gazetteer: testdata/gazetteer_counties.csv
+  break:
+    extract_gazetteer: ALTER TABLE fixture RENAME COLUMN ANSICODE TO GNIS
+  expect:
+    fails_with: "Gazetteer header has changed"
+
+- name: a malformed county code is refused
+  risk: a county code that lost its leading zeros publishes as a key nothing joins to
+  fixtures:
+    fetch_states: testdata/national_state.csv
+    fetch_counties: testdata/national_county.csv
+    fetch_gazetteer: testdata/gazetteer.zip
+  break:
+    fetch_counties: UPDATE fixture SET COUNTYFP = '1' WHERE STATEFP = '01' AND COUNTYFP = '001'
+  expect:
+    fails_with: "ANSI county code is not three digits"
+
+- name: a county whose state is missing is refused
+  risk: counties publish under a parent code the table does not hold
+  fixtures:
+    fetch_states: testdata/national_state.csv
+    fetch_counties: testdata/national_county.csv
+    fetch_gazetteer: testdata/gazetteer.zip
+  break:
+    fetch_states: DELETE FROM fixture WHERE STATEFP = '35'
+  expect:
+    fails_with: "county whose state is not in the ANSI state file: 35001"
+
+- name: a county renamed in the Gazetteer is refused
+  risk: a county renamed in a later vintage publishes under its old ANSI name without anyone deciding which is right
+  fixtures:
+    fetch_states: testdata/national_state.csv
+    fetch_counties: testdata/national_county.csv
+    fetch_gazetteer: testdata/gazetteer.zip
+    extract_gazetteer: testdata/gazetteer_counties.csv
+  break:
+    extract_gazetteer: UPDATE fixture SET NAME = 'Autauga Parish' WHERE GEOID = '01001'
+  expect:
+    fails_with: "county name differs between the ANSI and Gazetteer files: 01001"
+
+- name: a GNIS code that differs between the files is refused
+  risk: a county publishes with a GNIS code one of Census's own files contradicts
+  fixtures:
+    fetch_states: testdata/national_state.csv
+    fetch_counties: testdata/national_county.csv
+    fetch_gazetteer: testdata/gazetteer.zip
+    extract_gazetteer: testdata/gazetteer_counties.csv
+  break:
+    extract_gazetteer: UPDATE fixture SET ANSICODE = '00000000' WHERE GEOID = '01003'
+  expect:
+    fails_with: "county GNIS code differs between the ANSI and Gazetteer files: 01003"

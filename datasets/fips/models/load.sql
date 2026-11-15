@@ -47,6 +47,23 @@ gazetteer_lines AS (
                 header = false, filename = true)
   WHERE trim(line) <> ''
 ),
+-- Each file's header, found by its text: exactly one line must be it. The data CTEs
+-- test this first, so a changed header is reported as one, not as a malformed line.
+state_header AS (
+  SELECT CASE WHEN count(*) <> 1 THEN error('ANSI state header has changed: expected STATE|STATEFP|STATENS|STATE_NAME')
+              ELSE true END AS ok
+  FROM state_lines WHERE line = 'STATE|STATEFP|STATENS|STATE_NAME'
+),
+county_header AS (
+  SELECT CASE WHEN count(*) <> 1 THEN error('ANSI county header has changed: expected STATE|STATEFP|COUNTYFP|COUNTYNS|COUNTYNAME|CLASSFP|FUNCSTAT')
+              ELSE true END AS ok
+  FROM county_lines WHERE line = 'STATE|STATEFP|COUNTYFP|COUNTYNS|COUNTYNAME|CLASSFP|FUNCSTAT'
+),
+gazetteer_header AS (
+  SELECT CASE WHEN count(*) <> 1 THEN error('Gazetteer header has changed: expected USPS|GEOID|GEOIDFQ|ANSICODE|NAME|ALAND|AWATER|ALAND_SQMI|AWATER_SQMI|INTPTLAT|INTPTLONG')
+              ELSE true END AS ok
+  FROM gazetteer_lines WHERE line = 'USPS|GEOID|GEOIDFQ|ANSICODE|NAME|ALAND|AWATER|ALAND_SQMI|AWATER_SQMI|INTPTLAT|INTPTLONG'
+),
 -- One file of each, its vintage from its name, and its header where Census prints it.
 vintages AS (
   SELECT
@@ -75,15 +92,6 @@ fips_release AS (
            WHEN state_vintage <> county_vintage
              THEN error('ANSI state and county files are of different vintages: '
                         || state_vintage || ' and ' || county_vintage)
-           WHEN (SELECT count(*) FROM state_lines
-                 WHERE line = 'STATE|STATEFP|STATENS|STATE_NAME') <> 1
-             THEN error('ANSI state header has changed: expected STATE|STATEFP|STATENS|STATE_NAME')
-           WHEN (SELECT count(*) FROM county_lines
-                 WHERE line = 'STATE|STATEFP|COUNTYFP|COUNTYNS|COUNTYNAME|CLASSFP|FUNCSTAT') <> 1
-             THEN error('ANSI county header has changed: expected STATE|STATEFP|COUNTYFP|COUNTYNS|COUNTYNAME|CLASSFP|FUNCSTAT')
-           WHEN (SELECT count(*) FROM gazetteer_lines
-                 WHERE line = 'USPS|GEOID|GEOIDFQ|ANSICODE|NAME|ALAND|AWATER|ALAND_SQMI|AWATER_SQMI|INTPTLAT|INTPTLONG') <> 1
-             THEN error('Gazetteer header has changed: expected USPS|GEOID|GEOIDFQ|ANSICODE|NAME|ALAND|AWATER|ALAND_SQMI|AWATER_SQMI|INTPTLAT|INTPTLONG')
            ELSE 'ANSI ' || state_vintage || ', Gazetteer ' || gazetteer_vintage
          END AS release
   FROM vintages
@@ -91,7 +99,8 @@ fips_release AS (
 -- Data lines: every line but the header, split into its fields, each checked for shape.
 ansi_states AS (
   SELECT
-    CASE WHEN len(f) <> 4 THEN error('ANSI state line does not have 4 fields: ' || line)
+    CASE WHEN NOT (SELECT ok FROM state_header) THEN NULL
+         WHEN len(f) <> 4 THEN error('ANSI state line does not have 4 fields: ' || line)
          WHEN NOT regexp_full_match(f[1], '[A-Z]{2}') THEN error('ANSI state abbreviation is not two letters: ' || line)
          WHEN NOT regexp_full_match(f[2], '[0-9]{2}') THEN error('ANSI state code is not two digits: ' || line)
          WHEN NOT regexp_full_match(f[3], '[0-9]{8}') THEN error('ANSI state GNIS code is not eight digits: ' || line)
@@ -103,7 +112,8 @@ ansi_states AS (
 ),
 ansi_counties AS (
   SELECT
-    CASE WHEN len(f) <> 7 THEN error('ANSI county line does not have 7 fields: ' || line)
+    CASE WHEN NOT (SELECT ok FROM county_header) THEN NULL
+         WHEN len(f) <> 7 THEN error('ANSI county line does not have 7 fields: ' || line)
          WHEN NOT regexp_full_match(f[2], '[0-9]{2}') THEN error('ANSI county state code is not two digits: ' || line)
          WHEN NOT regexp_full_match(f[3], '[0-9]{3}') THEN error('ANSI county code is not three digits: ' || line)
          WHEN NOT regexp_full_match(f[4], '[0-9]{8}') THEN error('ANSI county GNIS code is not eight digits: ' || line)
@@ -118,7 +128,8 @@ ansi_counties AS (
 ),
 gazetteer AS (
   SELECT
-    CASE WHEN len(f) <> 11 THEN error('Gazetteer line does not have 11 fields: ' || line)
+    CASE WHEN NOT (SELECT ok FROM gazetteer_header) THEN NULL
+         WHEN len(f) <> 11 THEN error('Gazetteer line does not have 11 fields: ' || line)
          WHEN NOT regexp_full_match(f[1], '[A-Z]{2}') THEN error('Gazetteer state abbreviation is not two letters: ' || line)
          WHEN NOT regexp_full_match(f[2], '[0-9]{5}') THEN error('Gazetteer county code is not five digits: ' || line)
          WHEN NOT regexp_full_match(f[4], '[0-9]{8}') THEN error('Gazetteer GNIS code is not eight digits: ' || line)
