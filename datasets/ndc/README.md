@@ -60,7 +60,7 @@ Needs the `arc` binary, `duckdb`, `uv` (for `check_code_list` and the stamp), an
 
 <!-- protocol-steps: generated from arcform.yaml by scripts/check_protocol_readme.py — do not edit this block by hand -->
 
-All 9 steps are `sql:` models or typed `op:` operators from the arcform catalog. This Protocol runs no opaque `command:`/shell step.
+All 10 steps are `sql:` models or typed `op:` operators from the arcform catalog. This Protocol runs no opaque `command:`/shell step.
 
 | # | Step | How it runs |
 |---|---|---|
@@ -73,5 +73,6 @@ All 9 steps are `sql:` models or typed `op:` operators from the arcform catalog.
 | 7 | `check_code_list` | `op: uv@1` |
 | 8 | `validate` | `op: finetype_validate@1` |
 | 9 | `stamp_descriptor` | `op: uv@1` |
+| 10 | `publish` | `op: ducklake_write@1` |
 
 <!-- /protocol-steps -->
