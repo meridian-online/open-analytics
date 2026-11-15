@@ -41,6 +41,14 @@
       "product_id": {
         "label": "representation.identifier.alphanumeric_id",
         "why": "The FDA's listing identifier, the product NDC and a labeling document's UUID joined with an underscore. Inferred it is `unknown`."
+      },
+      "depth": {
+        "label": "representation.numeric.integer_number",
+        "why": "The level's position in the ladder: 0 for a labeler, 1 for a product, 2 for a package. Inferred from a sample of three small values, finetype's describe can read it as a word; nominated so the column keeps the integer it is."
+      },
+      "marketing_category": {
+        "label": "representation.text.word",
+        "why": "The FDA's marketing category, such as NDA, ANDA or BLA. Inferred from a sample, finetype can read these short capitalised words as month names; nominated so the column keeps the text label it has."
       }
     }
   }
