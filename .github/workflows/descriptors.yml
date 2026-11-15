@@ -673,11 +673,11 @@ jobs:
           set -euo pipefail
           curl -fsSL -o "$RUNNER_TEMP/libduckdb.tar.gz" \
             "https://github.com/duckdb/duckdb/releases/download/${ARC_LIBDUCKDB_VERSION}/duckdb-shared-libs-linux-amd64.tar.gz"
-          curl -fsSL -o "$RUNNER_TEMP/duckdb-cli.zip" \
-            "https://github.com/duckdb/duckdb/releases/download/${ARC_LIBDUCKDB_VERSION}/duckdb_cli-linux-amd64.zip"
+          curl -fsSL -o "$RUNNER_TEMP/duckdb-cli.tar.gz" \
+            "https://github.com/duckdb/duckdb/releases/download/${ARC_LIBDUCKDB_VERSION}/duckdb-cli-linux-amd64.tar.gz"
           mkdir -p "$HOME/libduckdb" "$HOME/duckdb-cli"
           tar -xzf "$RUNNER_TEMP/libduckdb.tar.gz" -C "$HOME/libduckdb"
-          unzip -q "$RUNNER_TEMP/duckdb-cli.zip" -d "$HOME/duckdb-cli"
+          tar -xzf "$RUNNER_TEMP/duckdb-cli.tar.gz" -C "$HOME/duckdb-cli"
           {
             echo "DUCKDB_LIB_DIR=$HOME/libduckdb"
             echo "DUCKDB_INCLUDE_DIR=$HOME/libduckdb"
