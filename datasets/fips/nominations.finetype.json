@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "resources": {
+    "fips": {
+      "code": {
+        "label": "representation.identifier.numeric_code",
+        "why": "Two-digit state and five-digit county FIPS codes. finetype has no FIPS type: a five-digit county code has a ZIP code's shape, so FIPS codes file under the general numeric code. Nominated so the label does not move with the share of two- and five-digit values in the sample."
+      },
+      "code_display": {
+        "label": "representation.identifier.numeric_code",
+        "why": "The same values as code, nominated with it."
+      },
+      "release": {
+        "label": "representation.identifier.alphanumeric_id",
+        "why": "The two Census vintages read, such as 'ANSI 2020, Gazetteer 2026': an identifier for the snapshot. Inferred it is `unknown`."
+      }
+    }
+  }
+}
