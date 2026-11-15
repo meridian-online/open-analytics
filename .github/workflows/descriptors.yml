@@ -686,7 +686,8 @@ jobs:
 
   # The HCPCS Protocol's SQL models, run over a reduced CMS file: one row per code, the
   # joined descriptions, the dental and CPT removals, the licence check and its three
-  # refusals, the load's refusals, and the code-list check on the result.
+  # refusals, the load's refusals, the code-list check on the result, and the quarter
+  # written the same in the manifest's URL and member and the overrides' source.
   hcpcs-models:
     name: the HCPCS models keep dental and CPT content out
     runs-on: ubuntu-latest
@@ -695,8 +696,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      - name: install duckdb
-        run: python -m pip install --disable-pip-version-check "duckdb==${DUCKDB_VERSION}"
+      - name: install duckdb and pyyaml
+        run: python -m pip install --disable-pip-version-check "duckdb==${DUCKDB_VERSION}" "pyyaml==${PYYAML_VERSION}"
       - name: the shipped models, against a scratch build directory
         run: python scripts/test_hcpcs_models.py
 
@@ -778,7 +779,7 @@ jobs:
       - name: install pyyaml
         run: python -m pip install --disable-pip-version-check "pyyaml==${PYYAML_VERSION}"
       - name: scratch archives, exit status and the date written
-        run: python datasets/schedule_b/scripts/test_member_date.py
+        run: python scripts/test_member_date.py
       - name: the year in the param, both Census URLs and the descriptor's source
         run: python datasets/schedule_b/scripts/test_protocol_year.py
 

@@ -7,10 +7,13 @@
 # (`op: uv@1`) declares no `deps:`.
 """Write the date a zip archive records for one of its members, as `{"date": "YYYY-MM-DD"}`.
 
-Census's `sbsdf.zip` holds `econcord.txt`, and the date the zip's central directory
-records for that member is the date of the Schedule B export file, which the
-`census/schedule_b` release carries. arc's `archive_extract@1` does not set a member's
-date on the file it writes out, so the date is read from the archive itself.
+Two Protocols date their release this way. Census's `sbsdf.zip` holds `econcord.txt`,
+and the date the zip's central directory records for it is the date of the Schedule B
+export file, which the `census/schedule_b` release carries. CMS's quarterly HCPCS zip
+holds a codes file whose name carries the quarter and, since January 2027, no date
+(`HCPC2027_JAN_ANWEB.txt`), so the `cms/hcpcs` release takes the date the zip records
+for it. arc's `archive_extract@1` does not set a member's date on the file it writes
+out, so the date is read from the archive itself.
 
 A zip stores each member's date as a local date and time with no time zone, so the
 date is written as recorded, not converted.

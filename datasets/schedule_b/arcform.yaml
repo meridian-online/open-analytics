@@ -76,13 +76,13 @@ steps:
   # ── Date: econcord.txt's date, as the zip records it ────────────────────────────
   # archive_extract does not set a member's date on the file it writes, so the date
   # `release` carries is read from the zip's own directory. The script is addressed by
-  # its bytes: `shasum -a 256 datasets/schedule_b/scripts/member_date.py` prints this.
-  # It needs only the standard library, so the step declares no `deps:`.
+  # its bytes: `shasum -a 256 scripts/member_date.py` prints this. The script
+  # is shared with ../hcpcs, which dates CMS's file the same way. It needs only the standard library, so the step declares no `deps:`.
   - name: date_schedule_b
     op: uv@1
     with:
-      script: scripts/member_date.py
-      sha256: 27a2058ec738c3e2fda5cedb5e8b67c6b824fb9001c97cfdbc7148aa32c75441
+      script: ../../scripts/member_date.py
+      sha256: 98a42fee4c99e3eee02881ed21368034e725f1609333faa73c0e46a721bd456c
       args:
         - --archive
         - build/sbsdf.zip

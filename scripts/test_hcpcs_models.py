@@ -3,13 +3,15 @@
 
 The models are `datasets/hcpcs/models/load.sql`, `package.sql` and `check_licence.sql`.
 Each case copies the fixture in `scripts/testdata/hcpcs/` into a scratch
-`build/hcpcs/`, runs `load` and `package` on one DuckDB connection with the scratch
+`build/hcpcs/`, writes the file's date to `build/hcpcs_date.json` as the `date_hcpcs`
+step does, runs `load` and `package` on one DuckDB connection with the scratch
 directory as its file search path, as the Protocol's `sql:` steps run them, exports the
 terminal table to `build/stage/hcpcs.parquet` as `export_hcpcs` does, and runs
 `check_licence` over that file.
 
-The fixture is cut from CMS's October 2026 alpha-numeric file
-(HCPC2026_OCT_ANWEB_09232026.txt), in file order: the first modifier record (A1), A0021
+The fixture was cut from CMS's October 2026 alpha-numeric file
+(HCPC2026_OCT_ANWEB_09232026.txt), and each of its records is the same in January 2027's
+(HCPC2027_JAN_ANWEB.txt, dated 2026-11-12), whose name it now carries. In file order: the first modifier record (A1), A0021
 (a cross-reference to A0030), A0080 (a long description on two lines), A4397
 (terminated 2021-12-31), C8904, G0279 (a description that cites
 CPT codes), and J0120. Three things are made up so that no CPT code is committed here:
@@ -17,13 +19,19 @@ C8904's cross-reference, a CPT code in CMS's file, is `00000`; G0279's two CPT c
 `00000` and `0000T`; and a dental record `D9999`, which CMS's file does not carry today,
 is inserted before J0120 to prove the D series is dropped.
 
-Needs duckdb==2.0.0 in the running Python:
+`QuarterTest` reads `arcform.yaml` and `descriptor.overrides.json` and fails when the
+quarter's URL, its zip member and the overrides' source disagree, since a new quarter
+changes each of them by hand.
 
-    uv run --quiet --with duckdb==2.0.0 python3 scripts/test_hcpcs_models.py
+Needs duckdb==2.0.0 and pyyaml in the running Python:
+
+    uv run --quiet --with duckdb==2.0.0 --with pyyaml python3 scripts/test_hcpcs_models.py
 """
 
 from __future__ import annotations
 
+import json
+import re
 import shutil
 import subprocess
 import sys
@@ -32,20 +40,23 @@ import unittest
 from pathlib import Path
 
 import duckdb
+import yaml
 
 REPO = Path(__file__).resolve().parent.parent
 HCPCS = REPO / "datasets" / "hcpcs"
 MODELS = [HCPCS / "models" / name for name in ("load.sql", "package.sql")]
 LICENCE = HCPCS / "models" / "check_licence.sql"
 FIXTURE = Path(__file__).resolve().parent / "testdata" / "hcpcs"
-NAME = "HCPC2026_OCT_ANWEB_09232026.txt"
+NAME = "HCPC2027_JAN_ANWEB.txt"
+DATE = "2026-11-12"
 CHECK = Path(__file__).resolve().parent / "check_code_list.py"
 
 
 class Run:
     """A scratch Protocol directory whose `build/hcpcs/` holds the fixture."""
 
-    def __init__(self, name: str = NAME, body: str | None = None, extra: str | None = None):
+    def __init__(self, name: str = NAME, body: str | None = None, extra: str | None = None,
+                 date: str | None = DATE):
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
         self.build = self.root / "build"
@@ -55,6 +66,7 @@ class Run:
         (self.build / "hcpcs" / name).write_bytes(text)
         if extra is not None:
             shutil.copy(FIXTURE / NAME, self.build / "hcpcs" / extra)
+        (self.build / "hcpcs_date.json").write_text(json.dumps({"date": date}) + "\n")
         self.con = duckdb.connect()
         self.con.execute("SET file_search_path = ?", [str(self.root)])
 
@@ -111,7 +123,7 @@ class BuildTest(unittest.TestCase):
         self.assertIsNone(r["parent_code"])
         self.assertEqual(r["description"], "Ambulance service, outside state per mile, transport (medicaid only)")
         self.assertEqual(r["description_full"], r["description"])
-        self.assertEqual(r["release"], "2026-10/2026-09-23")
+        self.assertEqual(r["release"], "2027-01/2026-11-12")
         self.assertEqual(r["text_source"], "cms")
         self.assertEqual(r["corpus"], r["description"].lower())
         self.assertEqual(r["short_description"], "Outside state ambulance serv")
@@ -164,7 +176,13 @@ class RefusalTest(unittest.TestCase):
             run.close()
 
     def test_two_files(self):
-        self.refuse(Run(extra="HCPC2026_JUL_ANWEB_06242026.txt"), Run.load, "expected one CMS ANWEB file")
+        self.refuse(Run(extra="HCPC2026_OCT_ANWEB_09232026.txt"), Run.load, "expected one CMS ANWEB file")
+
+    def test_no_date(self):
+        self.refuse(Run(date=None), Run.load, "holds no ISO date: null")
+
+    def test_a_date_that_is_not_a_date(self):
+        self.refuse(Run(date="2026-13-12"), Run.load, 'holds no ISO date: "2026-13-12"')
 
     def test_unparsed_name(self):
         self.refuse(Run(name="HCPC2026_XYZ_ANWEB_09232026.txt"), Run.load, "does not parse")
@@ -219,6 +237,63 @@ class RefusalTest(unittest.TestCase):
             run.close()
             raise
         self.refuse(run, Run.licence, "1 rows with a CPT or D cross-reference")
+
+
+class NameTest(unittest.TestCase):
+    def test_a_dated_name_still_parses_and_the_zip_dates_it(self):
+        # CMS's names up to October 2026 carried the file's date; the date is the zip's.
+        run = Run(name="HCPC2026_OCT_ANWEB_09232026.txt", date="2026-09-23")
+        try:
+            run.load()
+            self.assertEqual(
+                run.con.execute("SELECT DISTINCT release FROM hcpcs_out").fetchall(), [("2026-10/2026-09-23",)]
+            )
+        finally:
+            run.close()
+
+
+MONTHS = {"JAN": "january", "APR": "april", "JUL": "july", "OCT": "october"}
+
+
+class QuarterTest(unittest.TestCase):
+    """The quarter is written by hand in the manifest and the overrides; they must agree."""
+
+    @classmethod
+    def setUpClass(cls):
+        manifest = yaml.safe_load((HCPCS / "arcform.yaml").read_text(encoding="utf-8"))
+        cls.steps = {s["name"]: s for s in manifest["steps"]}
+        cls.overrides = json.loads((HCPCS / "descriptor.overrides.json").read_text(encoding="utf-8"))
+
+    def member(self) -> str:
+        members = self.steps["extract_hcpcs"]["with"]["members"]
+        self.assertEqual(len(members), 1, members)
+        return members[0]
+
+    def test_the_url_names_the_members_quarter(self):
+        m = re.fullmatch(r"HCPC(\d{4})_([A-Z]{3})_ANWEB\.txt", self.member())
+        self.assertIsNotNone(m, self.member())
+        year, mon = m.groups()
+        self.assertIn(mon, MONTHS)
+        self.assertEqual(
+            self.steps["fetch_hcpcs"]["with"]["url"],
+            f"https://www.cms.gov/files/zip/{MONTHS[mon]}-{year}-alpha-numeric-hcpcs-file.zip",
+        )
+
+    def test_the_date_step_and_load_read_the_extracted_member(self):
+        args = self.steps["date_hcpcs"]["with"]["args"]
+        self.assertEqual(args[args.index("--member") + 1], self.member())
+        self.assertEqual(args[args.index("--out") + 1], "build/hcpcs_date.json")
+        self.assertEqual(
+            sorted(self.steps["load"]["depends_on"]), sorted([f"build/hcpcs/{self.member()}", "build/hcpcs_date.json"])
+        )
+
+    def test_the_overrides_cite_the_fetched_quarter(self):
+        url = self.steps["fetch_hcpcs"]["with"]["url"]
+        month, year = re.search(r"/([a-z]+)-(\d{4})-alpha-numeric", url).groups()
+        quarterly = [s for s in self.overrides["sources"] if "alpha-numeric-hcpcs-file" in s["path"]]
+        self.assertEqual(
+            quarterly, [{"title": f"{month.capitalize()} {year} alpha-numeric HCPCS file — CMS", "path": url}]
+        )
 
 
 if __name__ == "__main__":
