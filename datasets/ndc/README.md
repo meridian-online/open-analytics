@@ -21,6 +21,7 @@ The FDA's National Drug Code directory, the codes that identify each finished dr
 7. **check_code_list** — hold the Parquet to the shared code-list contract (`scripts/check_code_list.py`, see `docs/code-lists.md`).
 8. **validate** — gate the Parquet against `schema.finetype.json`.
 9. **stamp_descriptor** — write the published `build/ndc.parquet` with the finished descriptor in its footer, and `datapackage.json` beside it.
+10. **publish** — upsert `fda.ndc` into the open lake on `code`, with its descriptor in the lake's `meta` schema and the readable copy at `fda/ndc.parquet` (see *Publish*).
 
 Produces `build/ndc.parquet`.
 
@@ -48,9 +49,11 @@ Three levels: `labeler` (depth 0), `product` (1) and `package` (2). An NDC is te
 
 `code` and `code_display` are nominated `identity.medical.ndc`. finetype's NDC pattern admits the ten-digit hyphenated layouts and eleven digits, which fit the package rows only, so `describe` widens it, and `descriptor.overrides.json` declares the shapes the columns hold, which `schema.finetype.json` enforces.
 
-## Boundary (deliberate)
+## Publish
 
-**Publish** — the content-addressed R2 upload + `manifest.json` / catalog pointer flip — stays in the out-of-repo publish pipeline. It *reads* this Protocol's terminal output `build/ndc.parquet` and the emitted `datapackage.json`; it is not an arcform step.
+The last step publishes `fda.ndc` into the open lake (<https://openlake.meridian.online/>), a DuckLake catalog on R2 that readers attach over https without a credential, and writes its readable copy, one Parquet file at <https://openlake.meridian.online/fda/ndc.parquet>. Each refresh upserts the table on `code`: packages openFDA adds are inserted, changed listings updated, and listings it no longer carries deleted, all in one snapshot a reader can time-travel back through. With all three of `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` and `R2_ACCOUNT_ID` set, from a `.env` here (`cp .env.example .env`, fill it in; `.env` and its variants are gitignored) or from the environment, every `arc run` publishes into the live lake. `arc run --publish` only makes a missing credential fail the run instead of falling back. With any of the three unset, a plain `arc run` still succeeds: the step says it published locally, names the missing variables, and writes a lake into `build/lake/open.ducklake` that attaches and reads back offline. For local work, keep `.env` absent and the variables unset. Better still, keep the credential in a file outside the Protocol folder and export it only for the publishing command, in a subshell: `(set -a; . /path/outside/repo/openlake.env; set +a; arc run --publish)`. Readers need DuckDB 2.0 or later. An unchanged rebuild commits nothing. [`docs/publishing.md`](../../docs/publishing.md) says what a publisher needs first.
+
+The fortnightly refresh is that command after `arc run --force`: openFDA's URL does not change, so nothing in the Protocol changes for it.
 
 ## Run
 
