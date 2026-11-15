@@ -17,7 +17,7 @@
       "title": "Meridian"
     }
   ],
-  "created": "2026-11-02T01:57:34Z",
+  "created": "2026-11-15T01:05:40Z",
   "description": "HCPCS Level II, the alpha-numeric codes the Centers for Medicare & Medicaid Services (CMS) maintain for billing supplies, drugs, equipment and services that CPT does not cover: one row per code in CMS's quarterly file, current and terminated, with its long and short description, the dates CMS added, last changed and terminated it, and CMS's pricing, coverage, BETOS and type-of-service fields. Two parts of CMS's file are not CMS's own work and are left out: the American Dental Association's dental codes (the D series, CDT) and every CPT code of the American Medical Association, including CPT codes CMS cites in a cross-reference or a description; where a description cited one, the number is replaced by '[CPT code]' and text_source says so. Modifiers are not included.",
   "homepage": "https://meridian.online/datasets/cms/hcpcs",
   "licenses": [
@@ -30,9 +30,9 @@
   "name": "hcpcs",
   "resources": [
     {
-      "bytes": 717953,
+      "bytes": 718136,
       "format": "parquet",
-      "hash": "sha256:935628b337fc15cb5011a48ef2d4775c3c9fb5382f89c3d97e4bff9eed1c41a6",
+      "hash": "sha256:63b5ec269de10b217d68b77be1b23d05641ce256228510e30956c11c4eb8fcc1",
       "mediatype": "application/vnd.apache.parquet",
       "name": "hcpcs",
       "path": "https://openlake.meridian.online/cms/hcpcs.parquet",

@@ -17,9 +17,9 @@ C8904's cross-reference, a CPT code in CMS's file, is `00000`; G0279's two CPT c
 `00000` and `0000T`; and a dental record `D9999`, which CMS's file does not carry today,
 is inserted before J0120 to prove the D series is dropped.
 
-Needs duckdb==1.5.5 in the running Python:
+Needs duckdb==2.0.0 in the running Python:
 
-    uv run --quiet --with duckdb==1.5.5 python3 scripts/test_hcpcs_models.py
+    uv run --quiet --with duckdb==2.0.0 python3 scripts/test_hcpcs_models.py
 """
 
 from __future__ import annotations
