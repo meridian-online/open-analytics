@@ -5,7 +5,8 @@
 #
 # CONFIG ONLY. Every step is a first-class `sql:` model or a typed `op:` operator (the
 # arcform catalog). The fetch is http_fetch and the unzip archive_extract; date_hcpcs
-# (uv) reads the codes file's date from the zip's directory; the SQL reads CMS's fixed-width file into one row per code and adds the search corpus; the
+# (uv) reads the codes file's date from the zip's directory; the SQL reads CMS's
+# fixed-width file into one row per code and adds the search corpus; the
 # COPY is parquet_export; check_licence proves the file carries no dental (CDT) code
 # and no CPT content; datapackage_describe emits the descriptor; check_code_list holds
 # the Parquet to the shared code-list contract; finetype_validate gates it; and
