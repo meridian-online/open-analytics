@@ -79,9 +79,15 @@ Three things came up that the next move will meet:
 - **finetype's inference moved under DuckDB 2.0.** `describe` types each column from a sample, and on DuckDB 2.0 the sample read NDC's `depth` (0, 1, 2) as a word and `marketing_category` (ANDA, NDA, BLA) as month names, though the committed descriptor had them as an integer and text. It did so on finetype 0.6.64, 0.6.66 and 0.6.67 alike, so the version was not the cause. Both columns are now nominated in `nominations.finetype.json`, which keeps the labels they had. The descriptor records the version of the `finetype` binary on PATH as `x-finetype-version`, so `FINETYPE_DUCKDB_EXT` should point at an extension of the same version: DuckDB 2.0's community repository serves 0.6.66, and 0.6.67's extension is built from finetype's `v0.6.67` tag with `make build-extension`, which needs its `extension-ci-tools` submodule.
 - **The CDN served the old readable copy after the publish.** arc uploads a readable copy with no `cache-control`, the zone caches everything for as long as the origin allows, and an edge copy of `fda/ndc.parquet` cached before the publish went on serving the old bytes, for up to Cloudflare's default edge TTL. The catalogue was not affected, since its data files are new keys. Until arc sets a revalidating `cache-control` on readable copies, check a readable copy's hash from the origin (a request with a query string bypasses the edge copy) and expect the plain URL to lag.
 
+## HCPCS
+
+`datasets/hcpcs` (`cms/hcpcs`) moved on 2026-11-15, after NDC. CMS's file was still October's quarter (`2026-10/2026-09-23`), so snapshot 5 changed no rows: it added the table's descriptor to `meta`, and the readable copy moved to the fixed `cms/hcpcs.parquet`, rebuilt by DuckDB 2.0. The rebuilt descriptor kept every label, so nothing was nominated. A re-run reported nothing changed.
+
+**Publishing from a branch reddens the branches below it.** CI holds every descriptor on a branch to the object the lake serves now. Once HCPCS published from its branch, the HCPCS descriptor on NDC's branch, still the one from 2 November, no longer matched the live object, so NDC's pull request cannot pass that check again on its own. Only a branch that carries every published restamp is green.
+
 ## What is left
 
-- **The other seven open Protocols move one at a time**: hcpcs, hts and schedule_b next, then naics, edgar, gleif and edgar_gleif. Each keeps serving what it has, through the rebased catalogue and its readable copy, but none can be republished until it moves, since infra's publish is stopped. Each moves its own DuckDB pin to 2.0 when it moves, and the engine check holds its footers to that pin.
+- **The other six open Protocols move one at a time**: hts and schedule_b next, then naics, edgar, gleif and edgar_gleif. Each keeps serving what it has, through the rebased catalogue and its readable copy, but none can be republished until it moves, since infra's publish is stopped. Each moves its own DuckDB pin to 2.0 when it moves, and the engine check holds its footers to that pin.
 - **infra's publish scripts and workflow are deleted** once all of them have moved. Until then they refuse to run.
 - **The website reads the catalogue** instead of `manifest.json`, at which point the manifest and its stale fields retire. The SOC dataset pages come with that work.
 
