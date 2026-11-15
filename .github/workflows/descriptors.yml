@@ -232,12 +232,18 @@ env:
   # move all three literals together; `arc-manifest-load` refuses a Cargo.lock whose
   # arcform sources are not all at this rev, and `--locked` refuses a Cargo.toml the lock
   # does not match.
-  ARC_REV: "40473103aba2c901d49e6fe175abe4bc99ddacbf"
+  ARC_REV: "f57ff3c4b37326704aa94667bfd04fe8ece01e1d"
   # The toolchain and the DuckDB C library arcform's own CI builds `arc` with at
   # `ARC_REV`, and they move with it. The loader calls no DuckDB function; it links the
   # library because `arc` does. This is a separate literal from `DUCKDB_VERSION`, which
   # is the Python reader's pin, so bumping one does not move the other.
   ARC_RUST_TOOLCHAIN: "1.94"
+  # What `protocol-tests` runs a Protocol's tests.yaml with, beside `arc` at ARC_REV: the
+  # finetype release whose binary and DuckDB extension the describe and validate steps
+  # load (0.6.67, the version every committed descriptor records), the `uv` that runs the
+  # uv@1 steps, and DuckDB's command line, which `arc test` runs a break's SQL on.
+  FINETYPE_VERSION: "0.6.67"
+  UV_VERSION: "0.13.8"
   ARC_LIBDUCKDB_VERSION: "v2.0.0"
 
 jobs:
@@ -638,6 +644,94 @@ jobs:
         with:
           name: label-agreement-check
           path: label-agreement-check.json
+          if-no-files-found: ignore
+
+  # Each Protocol with a tests.yaml, run by `arc test` at ARC_REV: its real steps against
+  # the fixture files committed beside it, with no network for data and no publish. A
+  # test asserts the run succeeds with its inline checks returning no rows, or fails with
+  # the loader's own message, and arc reruns every break without its change to show the
+  # failure comes from it. This replaces a Python self-test of the models for the
+  # Protocols that have one. The JUnit file is uploaded, and the summary lists each test.
+  protocol-tests:
+    name: each Protocol's tests.yaml passes under arc test
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        protocol: [fips]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.ARC_RUST_TOOLCHAIN }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: arc-binary
+          cache-directories: ~/.cargo/git/checkouts
+      - name: install libduckdb and the DuckDB command line
+        run: |
+          set -euo pipefail
+          curl -fsSL -o "$RUNNER_TEMP/libduckdb.tar.gz" \
+            "https://github.com/duckdb/duckdb/releases/download/${ARC_LIBDUCKDB_VERSION}/duckdb-shared-libs-linux-amd64.tar.gz"
+          curl -fsSL -o "$RUNNER_TEMP/duckdb-cli.zip" \
+            "https://github.com/duckdb/duckdb/releases/download/${ARC_LIBDUCKDB_VERSION}/duckdb_cli-linux-amd64.zip"
+          mkdir -p "$HOME/libduckdb" "$HOME/duckdb-cli"
+          tar -xzf "$RUNNER_TEMP/libduckdb.tar.gz" -C "$HOME/libduckdb"
+          unzip -q "$RUNNER_TEMP/duckdb-cli.zip" -d "$HOME/duckdb-cli"
+          {
+            echo "DUCKDB_LIB_DIR=$HOME/libduckdb"
+            echo "DUCKDB_INCLUDE_DIR=$HOME/libduckdb"
+            echo "LD_LIBRARY_PATH=$HOME/libduckdb${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+          } >> "$GITHUB_ENV"
+          echo "$HOME/duckdb-cli" >> "$GITHUB_PATH"
+      - name: install finetype, its DuckDB extension and uv
+        run: |
+          set -euo pipefail
+          base="https://github.com/meridian-online/finetype/releases/download/v${FINETYPE_VERSION}"
+          name="finetype-v${FINETYPE_VERSION}-x86_64-unknown-linux-gnu"
+          mkdir -p "$HOME/finetype"
+          cd "$HOME/finetype"
+          for f in "$name.tar.gz" "$name.duckdb_extension"; do
+            curl -fsSL -o "$f" "$base/$f"
+            curl -fsSL -o "$f.sha256" "$base/$f.sha256"
+            echo "$(awk '{print $1}' "$f.sha256")  $f" | sha256sum -c -
+          done
+          tar -xzf "$name.tar.gz"
+          echo "$HOME/finetype" >> "$GITHUB_PATH"
+          echo "FINETYPE_DUCKDB_EXT=$HOME/finetype/$name.duckdb_extension" >> "$GITHUB_ENV"
+          curl -LsSf "https://astral.sh/uv/${UV_VERSION}/install.sh" | env UV_INSTALL_DIR="$HOME/uv" sh
+          echo "$HOME/uv" >> "$GITHUB_PATH"
+      - name: build arc at ARC_REV
+        run: |
+          cargo install --locked --git https://github.com/meridian-online/arcform \
+            --rev "${ARC_REV}" --bin arc --root "$HOME/arc"
+          echo "$HOME/arc/bin" >> "$GITHUB_PATH"
+      - name: arc test
+        working-directory: datasets/${{ matrix.protocol }}
+        shell: bash
+        run: |
+          set +e
+          arc --version
+          finetype --version
+          duckdb --version
+          arc test --junit "$RUNNER_TEMP/${{ matrix.protocol }}-junit.xml" > "$RUNNER_TEMP/arc-test.log" 2>&1
+          status=$?
+          set -e
+          cat "$RUNNER_TEMP/arc-test.log"
+          {
+            echo "### \`arc test\` in datasets/${{ matrix.protocol }} at \`${ARC_REV}\`"
+            echo
+            echo '```'
+            cat "$RUNNER_TEMP/arc-test.log"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $status
+      - name: upload the JUnit file
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arc-test-${{ matrix.protocol }}
+          path: ${{ runner.temp }}/${{ matrix.protocol }}-junit.xml
           if-no-files-found: ignore
 
   code-list-self-test:

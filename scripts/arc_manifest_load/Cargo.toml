@@ -34,4 +34,4 @@ publish = false
 # Cargo takes from the same arcform git revision as a dependency of `arc`, so no
 # `[patch]` table is needed; the workflow's `ARC_REV` lock check covers that source too.
 # `arc` links DuckDB as well, which is why the workflow installs libduckdb.
-arc = { package = "arcform", git = "https://github.com/meridian-online/arcform", rev = "40473103aba2c901d49e6fe175abe4bc99ddacbf", default-features = false, features = ["http-fetch"] }
+arc = { package = "arcform", git = "https://github.com/meridian-online/arcform", rev = "f57ff3c4b37326704aa94667bfd04fe8ece01e1d", default-features = false, features = ["http-fetch"] }
