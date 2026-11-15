@@ -14,7 +14,7 @@ import duckdb
 CHECKER = Path(__file__).with_name("check_lake_shape.py")
 sys.path.insert(0, str(CHECKER.parent))
 
-from check_lake_shape import shape_difference  # noqa: E402
+from check_lake_shape import shape_difference
 
 
 class ShapeRule(unittest.TestCase):
