@@ -340,6 +340,8 @@ jobs:
         run: python -m pip install --disable-pip-version-check "duckdb==${DUCKDB_VERSION}"
       - name: scratch footers, exit status and message
         run: python scripts/test_check_engine_version.py
+      - name: lake shape rule and CLI against a scratch DuckLake
+        run: python scripts/test_check_lake_shape.py
 
   engine-version-matches-the-pin:
     name: every published footer names the engine this check is pinned to
