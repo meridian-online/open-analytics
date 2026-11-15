@@ -4,7 +4,7 @@
     "soc_2020_titles": {
       "release": {
         "label": "representation.identifier.alphanumeric_id",
-        "why": "The index's version and the date ONS issued it, v14/2026-08-27: an identifier for the snapshot, stored as text as every release is. Inferred it is `unknown`."
+        "why": "The index's version, the date ONS issued it and the revision of its reissue, v14/2026-08-27/v3: an identifier for the snapshot, stored as text as every release is. Inferred it is `unknown`."
       },
       "additional_qualifier": {
         "label": "representation.text.plain_text",

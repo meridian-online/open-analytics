@@ -22,8 +22,8 @@
       "path": "https://www.ons.gov.uk/methodology/classificationsandstandards/standardoccupationalclassificationsoc/soc2020/soc2020volume2codingrulesandconventions"
     },
     {
-      "title": "SOC 2020 coding index workbook, version 14, issued 27 August 2026 (soc2020volume2thecodingindexexcel20260827v2.xlsx) — Office for National Statistics",
-      "path": "https://www.ons.gov.uk/file?uri=/methodology/classificationsandstandards/standardoccupationalclassificationsoc/soc2020/soc2020volume2codingrulesandconventions/soc2020volume2thecodingindexexcel20260827v2.xlsx"
+      "title": "SOC 2020 coding index workbook, version 14, issued 27 August 2026, reissued as v3 (soc2020volume2thecodingindexexcel20260827v3.xlsx) — Office for National Statistics",
+      "path": "https://www.ons.gov.uk/file?uri=/methodology/classificationsandstandards/standardoccupationalclassificationsoc/soc2020/soc2020volume2codingrulesandconventions/soc2020volume2thecodingindexexcel20260827v3.xlsx"
     },
     {
       "title": "SOC 2020 Volume 1: structure and descriptions of unit groups — Office for National Statistics",
@@ -80,11 +80,11 @@
       "description": "The code's title in ons/soc_2020 (Chief executives and senior officials), so a lookup needs no second join."
     },
     "release": {
-      "description": "The index's own release, its version and the date ONS issued the workbook, as v<version>/<date>: v14/2026-08-27. The version is read from the workbook's INFO sheet (\"Version 14 Of The Standard Occupational Classification 2020 Index\") and the date from the URL of the workbook fetched (…excel20260827v2.xlsx).",
+      "description": "The index's own release, its version, the date ONS issued the workbook and, when ONS has reissued it under the same date, the reissue's revision, as v<version>/<date>/<revision>: v14/2026-08-27/v3. The version is read from the workbook's INFO sheet (\"Version 14 Of The Standard Occupational Classification 2020 Index\"), and the date and revision from the URL of the workbook fetched (…excel20260827v3.xlsx); a file name with no revision gives v<version>/<date>.",
       "constraints": {
         "minLength": 13,
-        "maxLength": 16,
-        "pattern": "^v[0-9]+/[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        "maxLength": 20,
+        "pattern": "^v[0-9]+/[0-9]{4}-[0-9]{2}-[0-9]{2}(/v[0-9]+)?$"
       }
     },
     "text_source": {

@@ -5,7 +5,7 @@ Cut copies of three workbooks the UK Office for National Statistics publishes fo
 Source: Office for National Statistics licensed under the Open Government Licence v3.0 (https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/). The rows are committed as ONS gives them.
 
 - `soc2020volume1structureanddescriptionofunitgroupsexcel20260827.xlsx`: the sheet `SOC2020 descriptions` of Volume 1, structure and description of unit groups, issued 27 August 2026.
-- `soc2020volume2thecodingindexexcel20260827v2.xlsx`: the sheets `INFO`, `FILE SPEC` and `SOC2020 coding index` of Volume 2, the coding index (version 14), issued 27 August 2026.
+- `soc2020volume2thecodingindexexcel20260827v3.xlsx`: the sheets `INFO`, `FILE SPEC` and `SOC2020 coding index` of Volume 2, the coding index (version 14), issued 27 August 2026 and reissued as v3. The rows were cut from v2 (`…20260827v2.xlsx`); on 2026-11-15 every one of them, and the `INFO` and `FILE SPEC` sheets, read the same in v3, whose ten corrected entries are none of these rows.
 - `soc2010soc2020relationshiptablesjuly2021.xlsx`: the sheet `soc2010-soc2020-map_Unit` of the relationship between SOC 2010 and SOC 2020, July 2021.
 
 Each copy keeps the header row exactly as ONS prints it (and in the coding index, the `INFO` and `FILE SPEC` sheets whole), then only these rows:
