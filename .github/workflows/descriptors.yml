@@ -664,10 +664,13 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ env.ARC_RUST_TOOLCHAIN }}
-      - uses: Swatinem/rust-cache@v2
+      # The built arc, by revision and toolchain, so a run at the same ARC_REV skips the
+      # compile. libduckdb is installed on every run, since arc links it at run time.
+      - id: arc-cache
+        uses: actions/cache@v4
         with:
-          shared-key: arc-binary
-          cache-directories: ~/.cargo/git/checkouts
+          path: ~/arc
+          key: arc-${{ env.ARC_REV }}-rust-${{ env.ARC_RUST_TOOLCHAIN }}-libduckdb-${{ env.ARC_LIBDUCKDB_VERSION }}
       - name: install libduckdb and the DuckDB command line
         run: |
           set -euo pipefail
@@ -697,15 +700,20 @@ jobs:
             echo "$(awk '{print $1}' "$f.sha256")  $f" | sha256sum -c -
           done
           tar -xzf "$name.tar.gz"
+          # DuckDB takes an extension's entry point from its file name, up to the first
+          # dot, so the release asset is loaded under the name finetype.duckdb_extension.
+          cp "$name.duckdb_extension" finetype.duckdb_extension
           echo "$HOME/finetype" >> "$GITHUB_PATH"
-          echo "FINETYPE_DUCKDB_EXT=$HOME/finetype/$name.duckdb_extension" >> "$GITHUB_ENV"
+          echo "FINETYPE_DUCKDB_EXT=$HOME/finetype/finetype.duckdb_extension" >> "$GITHUB_ENV"
           curl -LsSf "https://astral.sh/uv/${UV_VERSION}/install.sh" | env UV_INSTALL_DIR="$HOME/uv" sh
           echo "$HOME/uv" >> "$GITHUB_PATH"
       - name: build arc at ARC_REV
+        if: steps.arc-cache.outputs.cache-hit != 'true'
         run: |
           cargo install --locked --git https://github.com/meridian-online/arcform \
             --rev "${ARC_REV}" --bin arc --root "$HOME/arc"
-          echo "$HOME/arc/bin" >> "$GITHUB_PATH"
+      - name: put arc on PATH
+        run: echo "$HOME/arc/bin" >> "$GITHUB_PATH"
       - name: arc test
         working-directory: datasets/${{ matrix.protocol }}
         shell: bash
