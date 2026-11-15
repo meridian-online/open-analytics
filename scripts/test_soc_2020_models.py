@@ -47,13 +47,13 @@ LEVELS = "major,sub_major,minor,unit"
 
 ONS = "https://www.ons.gov.uk/file?uri=/methodology/classificationsandstandards/standardoccupationalclassificationsoc/soc2020/"
 VOLUME1_URL = ONS + "soc2020volume1structureanddescriptionsofunitgroups/soc2020volume1structureanddescriptionofunitgroupsexcel20260827.xlsx"
-INDEX_URL = ONS + "soc2020volume2codingrulesandconventions/soc2020volume2thecodingindexexcel20260827v2.xlsx"
+INDEX_URL = ONS + "soc2020volume2codingrulesandconventions/soc2020volume2thecodingindexexcel20260827v3.xlsx"
 RELATIONSHIP_URL = ONS + "therelationshipbetweenstandardoccupationalclassification2010andstandardoccupationalclassification2020/soc2010soc2020relationshiptablesjuly2021.xlsx"
 
 # fixture file -> (fixed path the Protocol fetches to, the URL it came from)
 FILES = {
     "soc2020volume1structureanddescriptionofunitgroupsexcel20260827.xlsx": ("volume1.xlsx", VOLUME1_URL),
-    "soc2020volume2thecodingindexexcel20260827v2.xlsx": ("coding_index.xlsx", INDEX_URL),
+    "soc2020volume2thecodingindexexcel20260827v3.xlsx": ("coding_index.xlsx", INDEX_URL),
     "soc2010soc2020relationshiptablesjuly2021.xlsx": ("relationship_2010_2020.xlsx", RELATIONSHIP_URL),
 }
 VOLUME1, INDEX, RELATIONSHIP = "volume1.xlsx", "coding_index.xlsx", "relationship_2010_2020.xlsx"
@@ -238,7 +238,7 @@ class BuildTest(unittest.TestCase):
     def test_staging_releases(self):
         self.assertEqual(self.con.execute(
             "SELECT code_list_release, index_release, crosswalk_release FROM ons_release").fetchall(),
-            [("2020/2026-08-27", "v14/2026-08-27", "2021-07")])
+            [("2020/2026-08-27", "v14/2026-08-27/v3", "2021-07")])
 
     def test_staging_tables(self):
         counts = dict(self.con.execute(
@@ -308,7 +308,7 @@ class BuildTest(unittest.TestCase):
 
     def test_titles_release_text_and_description(self):
         self.assertEqual(self.con.execute("SELECT DISTINCT release, text_source FROM soc_2020_titles_out").fetchall(),
-                         [("v14/2026-08-27", "ons")])
+                         [("v14/2026-08-27/v3", "ons")])
         self.assertEqual(self.con.execute(
             "SELECT count(*) FROM soc_2020_titles_out t JOIN soc_2020_out c USING (code) "
             "WHERE t.code_description IS DISTINCT FROM c.description").fetchone()[0], 0)
@@ -404,10 +404,21 @@ class ReleaseTest(unittest.TestCase):
                          "2020/2027-01-15")
 
     def test_index_release_from_sidecar_url(self):
-        scratch = self.build(urls={INDEX: INDEX_URL.replace("20260827v2", "20270115v3")})
+        scratch = self.build(urls={INDEX: INDEX_URL.replace("20260827v3", "20270115v3")})
         scratch.load()
         self.assertEqual(scratch.con.execute("SELECT index_release FROM ons_release").fetchone()[0],
-                         "v14/2027-01-15")
+                         "v14/2027-01-15/v3")
+
+    def test_index_revision_tells_reissues_apart(self):
+        # ONS reissues a corrected index under the same date; each revision suffix gives its
+        # own release, and a file name with no suffix keeps the two-part form.
+        releases = {}
+        for suffix in ("", "v2", "v3"):
+            scratch = self.build(urls={INDEX: INDEX_URL.replace("20260827v3", "20260827" + suffix)})
+            scratch.load()
+            releases[suffix] = scratch.con.execute("SELECT DISTINCT release FROM soc_2020_titles_out").fetchall()
+        self.assertEqual(releases, {"": [("v14/2026-08-27",)], "v2": [("v14/2026-08-27/v2",)],
+                                    "v3": [("v14/2026-08-27/v3",)]})
 
     def test_relationship_release_from_url(self):
         scratch = self.build(urls={RELATIONSHIP: RELATIONSHIP_URL.replace("july2021", "december2022")})
