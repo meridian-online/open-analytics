@@ -1,0 +1,95 @@
+{
+  "name": "naics_2022_titles",
+  "title": "NAICS 2022 index — business descriptions coded to industries",
+  "description": "The U.S. Census Bureau's 2022 NAICS index file, for coding free-text business descriptions (company profiles, permit and licence records, survey answers) to the 2022 North American Industry Classification System: one row per index entry, a short description of a kind of business such as Soybean farming, field and seed production, with the six-digit national industry Census codes it to and that industry's title in census/naics_2022. Every code is a national industry in census/naics_2022, which the run checks against the code list it builds from Census's descriptions workbook; two national industries (112130 and 541120) have no entries in Census's file. Census's 25 cross-references, whose code cell is ****** and whose text points to other entries (Dealers -- see type), name no code and are left out. Census's files are U.S. Government works in the public domain.",
+  "homepage": "https://meridian.online/datasets/census/naics_2022_titles",
+  "licenses": [
+    {
+      "name": "other-pd",
+      "title": "Public domain (U.S. Census Bureau)",
+      "path": "https://www.census.gov/about/policies/open-gov/open-data.html"
+    }
+  ],
+  "sources": [
+    {
+      "title": "North American Industry Classification System — U.S. Census Bureau",
+      "path": "https://www.census.gov/naics/"
+    },
+    {
+      "title": "2022 NAICS index file (2022_NAICS_Index_File.xlsx) — U.S. Census Bureau",
+      "path": "https://www.census.gov/naics/2022NAICS/2022_NAICS_Index_File.xlsx"
+    },
+    {
+      "title": "2022 NAICS descriptions (2022_NAICS_Descriptions.xlsx) — U.S. Census Bureau",
+      "path": "https://www.census.gov/naics/2022NAICS/2022_NAICS_Descriptions.xlsx"
+    }
+  ],
+  "contributors": [
+    {
+      "path": "https://www.census.gov/naics/",
+      "roles": [
+        "author"
+      ],
+      "title": "U.S. Census Bureau"
+    },
+    {
+      "path": "https://meridian.online",
+      "roles": [
+        "publisher",
+        "wrangler"
+      ],
+      "title": "Meridian"
+    }
+  ],
+  "resource": {
+    "name": "naics_2022_titles",
+    "path": "https://openlake.meridian.online/census/naics_2022_titles.parquet"
+  },
+  "x-meridian-title-index": {
+    "codeList": "census/naics_2022"
+  },
+  "fields": {
+    "entry_id": {
+      "description": "The entry's key, its code and description joined with '|' (111110|Soybean farming, field and seed production). Census gives its index entries no id of its own.",
+      "constraints": {
+        "pattern": "^[0-9]{6}\\|.+$"
+      }
+    },
+    "title": {
+      "description": "The business description as Census's index file prints it (Soybean farming, field and seed production), with spaces trimmed from its ends. Runs of spaces inside it are kept as Census prints them."
+    },
+    "code": {
+      "description": "The six-digit national industry Census codes the entry to, in census/naics_2022's form (111110).",
+      "constraints": {
+        "minLength": 6,
+        "maxLength": 6,
+        "pattern": "^[0-9]{6}$"
+      }
+    },
+    "code_description": {
+      "description": "The code's title in census/naics_2022 (Soybean Farming), so a lookup needs no second join."
+    },
+    "release": {
+      "description": "The NAICS edition, 2022. Census's index file states no release or revision date of its own.",
+      "constraints": {
+        "enum": [
+          "2022"
+        ]
+      }
+    },
+    "text_source": {
+      "description": "Whose text title is: always census, the Census Bureau's own description.",
+      "constraints": {
+        "enum": [
+          "census"
+        ]
+      }
+    },
+    "corpus": {
+      "description": "Lowercased, accent-stripped title, with runs of whitespace collapsed to one space: a derived free-text search field, not a source attribute."
+    }
+  },
+  "primaryKey": [
+    "entry_id"
+  ]
+}
