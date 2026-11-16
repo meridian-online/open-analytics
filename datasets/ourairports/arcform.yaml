@@ -18,11 +18,13 @@
 # alone writes the published build/ourairports.parquet and datapackage.json.
 #
 # THE RELEASE. OurAirports' files carry no date. Two fetches of the data repository's
-# latest commit on main, from GitHub's API, bracket the three data fetches and a listing
-# of the repository's top folder, which gives each file's git blob sha. The data files
+# latest commit on main, from GitHub's API, bracket the three data fetches and a fetch of
+# the git tree of main's top folder, which gives each file's git blob sha. The data files
 # come from raw.githubusercontent.com, which caches each file for minutes, so a run just
 # after a commit can be served the files of the commit before. verify.sql fails the run
-# if the two commits differ or if a fetched file's blob sha is not the listing's, and
+# if the two commits differ, if a fetched file's blob sha is not the tree's, or if the
+# tree, hashed as git does, is not the tree the commit names (GitHub's API answers are
+# cached for a minute, so the commit and the tree can come from different moments), and
 # writes the commit and its UTC date, the `release`, to build/ourairports/release.csv.
 #
 # IATA. iata_code and keywords are read only to check the header; load.sql drops them,
@@ -52,7 +54,7 @@ defaults:
     backoff_sec: 2.0
 
 steps:
-  # ── Fetch: the release bracket around OurAirports' three files and the listing ──
+  # ── Fetch: the release bracket around OurAirports' three files and the tree ─────
   # The latest commit on the data repository's main branch, before and after the data.
   - name: fetch_release_before
     op: http_fetch@1
@@ -63,12 +65,12 @@ steps:
         User-Agent: "Meridian Protocol (open-analytics; research@meridian.online)"
         Accept: "application/vnd.github+json"
 
-  - name: fetch_listing
+  - name: fetch_tree
     op: http_fetch@1
     depends_on: [build/ourairports/release_before.json]
     with:
-      url: https://api.github.com/repos/davidmegginson/ourairports-data/contents/?ref=main
-      out: build/ourairports/listing.json
+      url: https://api.github.com/repos/davidmegginson/ourairports-data/git/trees/main
+      out: build/ourairports/tree.json
       headers:
         User-Agent: "Meridian Protocol (open-analytics; research@meridian.online)"
         Accept: "application/vnd.github+json"
@@ -102,7 +104,7 @@ steps:
 
   - name: fetch_release_after
     op: http_fetch@1
-    depends_on: [build/ourairports/listing.json, build/ourairports/airports.csv, build/ourairports/countries.csv, build/ourairports/regions.csv]
+    depends_on: [build/ourairports/tree.json, build/ourairports/airports.csv, build/ourairports/countries.csv, build/ourairports/regions.csv]
     with:
       url: https://api.github.com/repos/davidmegginson/ourairports-data/commits?sha=main&per_page=1
       out: build/ourairports/release_after.json
@@ -112,13 +114,13 @@ steps:
 
   # ── Verify: the files are the ones at the commit; the release ───────────────────
   # Fails the run if the commit changed during the fetch, a commit date does not parse,
-  # or a fetched file is not the listing's. Writes one file and no table, so a test can
-  # stand a fixture in for it.
+  # or a fetched file or the tree is not the commit's. Writes one file and no table, so
+  # a test can stand a fixture in for it.
   - name: verify
     sql: models/verify.sql
     depends_on:
       - build/ourairports/release_before.json
-      - build/ourairports/listing.json
+      - build/ourairports/tree.json
       - build/ourairports/airports.csv
       - build/ourairports/countries.csv
       - build/ourairports/regions.csv

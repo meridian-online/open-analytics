@@ -23,9 +23,10 @@
 -- a country not in countries.csv; a region not in regions.csv, or one of another country;
 -- an airport type outside the five load knows; a scheduled_service other than yes or no;
 -- a latitude or longitude that is not a number in range; an elevation that is not an
--- integer; an empty name; and a country or region code that countries.csv or regions.csv
--- repeats, checked before the join so a repeated lookup row is not reported as a
--- repeated ICAO code.
+-- integer; an id that is not an integer; an empty name; fewer than 5% of the airports
+-- file's rows carrying an ICAO code; and a country or region code that countries.csv or
+-- regions.csv repeats, checked before the join so a repeated lookup row is not reported
+-- as a repeated ICAO code.
 
 CREATE OR REPLACE TABLE ourairports AS
 WITH airport_rows AS (
@@ -125,12 +126,27 @@ lookups_unique AS (
               THEN error('OurAirports regions file repeats a region code')
               ELSE true END AS ok
 ),
+-- A guard against OurAirports dropping most of its ICAO codes, which every per-row
+-- check would pass: at least 5% of the airports file's rows must carry one (12.4% on
+-- 2026-11-16, 10,734 of 86,368).
+icao_share AS (
+  SELECT CASE WHEN NOT (SELECT ok FROM airports_header) THEN NULL
+              WHEN count(icao_code) * 20 < count(*)
+              THEN error('only ' || count(icao_code) || ' of ' || count(*)
+                         || ' airports have an ICAO code, below the 5% floor')
+              ELSE true END AS ok
+  FROM airport_rows
+  WHERE NOT (id = 'id' AND ident = 'ident' AND icao_code = 'icao_code')
+),
 -- Data rows: the airports with an ICAO code, each checked for shape and against the
 -- countries and regions files, in that order.
 airports AS (
   SELECT
     CASE WHEN NOT (SELECT ok FROM airports_header) THEN NULL
          WHEN NOT (SELECT ok FROM lookups_unique) THEN NULL
+         WHEN NOT (SELECT ok FROM icao_share) THEN NULL
+         WHEN a.id IS NULL OR NOT regexp_full_match(a.id, '[0-9]{1,18}')
+           THEN error('OurAirports id is not an integer: ' || coalesce(a.id, 'NULL') || ' (' || a.icao_code || ')')
          WHEN NOT regexp_full_match(a.icao_code, '[A-Z]{4}')
            THEN error('ICAO code is not four capital letters: ' || a.icao_code || ' (id ' || a.id || ')')
          WHEN a.name IS NULL OR trim(a.name) = ''
@@ -168,8 +184,10 @@ icao_unique AS (
               ELSE true END AS ok
   FROM (SELECT code FROM airports GROUP BY code HAVING count(*) > 1)
 ),
+-- icao_share is here too, so an airports file with no ICAO code at all, which leaves
+-- the airports CTE empty, is refused rather than published as an empty table.
 checks AS (
-  SELECT u.ok FROM icao_unique u
+  SELECT u.ok AND s.ok AS ok FROM icao_unique u, icao_share s
 )
 SELECT
   a.code, a.code AS code_display, 'airport' AS level, 0::INTEGER AS depth,

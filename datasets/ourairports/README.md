@@ -14,8 +14,8 @@ OurAirports' airports that carry an ICAO code, the four-letter code air traffic 
 
 `arc run` (arcform) executes `arcform.yaml`. One **Run** → one Dataset version. The step DAG:
 
-1. **fetch** — the latest commit on the `main` branch of OurAirports' data repository, from GitHub's commits API; the repository's top-folder listing, from its contents API; OurAirports' `airports.csv`, `countries.csv` and `regions.csv` from `raw.githubusercontent.com`; and the latest commit again (see *The release*).
-2. **verify** (`models/verify.sql`) — check that both commit fetches name the same commit and that each CSV is the file at that commit, and write the commit and its UTC date to `build/ourairports/release.csv`.
+1. **fetch** — the latest commit on the `main` branch of OurAirports' data repository, from GitHub's commits API; the git tree of the repository's top folder at `main`, from its git trees API; OurAirports' `airports.csv`, `countries.csv` and `regions.csv` from `raw.githubusercontent.com`; and the latest commit again (see *The release*).
+2. **verify** (`models/verify.sql`) — check that both commit fetches name the same commit, that the tree is that commit's and that each CSV is the file at that commit, and write the commit and its UTC date to `build/ourairports/release.csv`.
 3. **load** (`models/load.sql`) — read each CSV with every field as text, check its header and every row, and build one row per airport that carries an ICAO code, with its country and region names from OurAirports' own lookup files. Stamps `release` from `release.csv`.
 4. **package** (`models/package.sql`) — add the search `corpus`, hand off the terminal table.
 5. **export** — write the zstd Parquet to `build/stage/`, ordered by `code`.
@@ -34,7 +34,7 @@ All 15 steps are `sql:` models or typed `op:` operators from the arcform catalog
 | # | Step | How it runs |
 |---|---|---|
 | 1 | `fetch_release_before` | `op: http_fetch@1` |
-| 2 | `fetch_listing` | `op: http_fetch@1` |
+| 2 | `fetch_tree` | `op: http_fetch@1` |
 | 3 | `fetch_airports` | `op: http_fetch@1` |
 | 4 | `fetch_countries` | `op: http_fetch@1` |
 | 5 | `fetch_regions` | `op: http_fetch@1` |
@@ -71,6 +71,8 @@ The run fails on any of these, each with an `error()` naming what it found:
 
 - a header that is not OurAirports', in any of the three files;
 - an ICAO code that is not four capital letters, or one that repeats;
+- fewer than 5% of the airports file's rows carrying an ICAO code (12.4% on 2026-11-16, 10,734 of 86,368), a guard against OurAirports dropping most of its ICAO codes, which every per-row check would pass;
+- an OurAirports `id` that is not an integer;
 - a country code `countries.csv` repeats, or a region code `regions.csv` repeats, checked before the join, so a repeated lookup row is not reported as a repeated ICAO code;
 - an airport whose country is not in `countries.csv`, whose region is not in `regions.csv`, or whose region is of another country;
 - a type outside the five `load` knows, or a `scheduled_service` other than `yes` or `no`;
@@ -79,9 +81,9 @@ The run fails on any of these, each with an `error()` naming what it found:
 
 ## The release
 
-OurAirports' files carry no date. OurAirports commits them nightly to the `main` branch of its data repository on GitHub (`davidmegginson/ourairports-data`), and `release` is the UTC date of the commit the files were read at (`2026-11-16`).
+OurAirports' files carry no date. OurAirports commits them to the `main` branch of its data repository on GitHub (`davidmegginson/ourairports-data`), and `release` is the UTC date of the commit OurAirports last made there before the run, the commit the files were read at (`2026-11-16`). GitHub records a commit only when the files change; in practice `airports.csv` changes nightly.
 
-Two fetches of the branch's latest commit from GitHub's commits API bracket a fetch of the repository's top-folder listing from its contents API, which gives each file's git blob sha, and the three CSV fetches from `raw.githubusercontent.com`. `verify` refuses the run unless both commit fetches name the same commit, each commit date parses, the listing names each file, and each CSV's git blob sha, computed over the bytes fetched, equals the listing's. A bracket on the commit alone is not enough: `raw.githubusercontent.com` caches each file for up to five minutes, so a run just after OurAirports' nightly commit could be served the previous night's bytes under the new commit, and publish yesterday's data with today's date. A run refused for that says GitHub's cache may still hold the previous version, publishes nothing, and is rerun later.
+Two fetches of the branch's latest commit from GitHub's commits API bracket a fetch of the git tree of the repository's top folder at `main` from its git trees API, which gives each file's git blob sha, and the three CSV fetches from `raw.githubusercontent.com`. `verify` refuses the run unless both commit fetches name the same commit, each commit date parses, the tree names each file, each CSV's git blob sha, computed over the bytes fetched, equals the tree's, and the tree, hashed as git does from its entries, is the tree the commit names (`commit.tree.sha`). GitHub's API answers are themselves cached for a minute, so the commit and the tree can come from different moments; the tree check ties the one to the other. A bracket on the commit alone is not enough: `raw.githubusercontent.com` caches each file for up to five minutes, so a run just after OurAirports' nightly commit could be served the previous night's bytes under the new commit, and publish yesterday's data with today's date. A run refused for that says GitHub's cache may still hold the previous version, publishes nothing, and is rerun later.
 
 The files are fetched from `raw.githubusercontent.com` rather than from the GitHub Pages site OurAirports' data page links, because the raw files are the branch's own and the blob check can hold them to it; the Pages site redeploys after each commit, on its own schedule. The URLs do not change, so a refresh changes nothing in the Protocol. OurAirports updates nightly and Meridian refreshes fortnightly, so the descriptor states that the data is as of `release`.
 
@@ -91,7 +93,7 @@ The files are fetched from `raw.githubusercontent.com` rather than from the GitH
 
 ## Tests
 
-`tests.yaml` holds the Protocol's tests, which `arc test` runs from this folder against the cut-down OurAirports files in `testdata/` (see `testdata/README.md`): each test runs the real steps in a copy of the Protocol, with the fixtures in place of the fetches and the publish left out. One case builds the fixture and holds the table to inline checks; one shows a commit late in the UTC day takes its UTC date, whatever the machine's time zone; four breaks show `verify` refuses a changed commit, a file that is not the listing's, a listing without one of the files and a commit date that does not parse; and sixteen breaks rewrite a fixture with SQL and show `load` refuses it with its own message. They run locally for now: OurAirports is not yet in CI's `protocol-tests` matrix, and joining it is a one-line change to `.github/workflows/descriptors.yml` (`protocol: [fips, ourairports]`). `check_code_list`'s own refusals are not tested here, since arc matches only `step 'check_code_list' failed (exit code n)` for a `uv` step; `scripts/test_check_code_list.py` tests the contract.
+`tests.yaml` holds the Protocol's tests, which `arc test` runs from this folder against the cut-down OurAirports files in `testdata/` (see `testdata/README.md`): each test runs the real steps in a copy of the Protocol, with the fixtures in place of the fetches and the publish left out. One case builds the fixture and holds the table to inline checks; one shows a commit late in the UTC day takes its UTC date, whatever the machine's time zone; seven breaks show `verify` refuses a changed commit, an empty commits answer, a file that is not the tree's, a tree without one of the files, a tree that is not the commit's (two ways) and a commit date that does not parse; and eighteen breaks rewrite a fixture with SQL and show `load` refuses it with its own message. They run locally for now: OurAirports is not yet in CI's `protocol-tests` matrix, and joining it is a one-line change to `.github/workflows/descriptors.yml` (`protocol: [fips, ourairports]`). `check_code_list`'s own refusals are not tested here, since arc matches only `step 'check_code_list' failed (exit code n)` for a `uv` step; `scripts/test_check_code_list.py` tests the contract.
 
 ## Publish
 

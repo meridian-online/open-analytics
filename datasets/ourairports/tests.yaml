@@ -2,14 +2,15 @@
 #
 # Fixtures, in testdata/ (see testdata/README.md): cut-down copies of OurAirports'
 # airports, countries and regions files as fetched on 2026-11-16, GitHub's answer for
-# that day's commit, which stands in for both release fetches, and a listing of the
-# repository's top folder holding the fixtures' own git blob shas. The airports fixture
-# keeps 25 rows, 22 with an ICAO code and three without.
+# that day's commit, which stands in for both release fetches, and a git tree of the
+# repository's top folder holding the fixtures' own git blob shas. The commit fixture
+# names that tree's sha, as git computes it from the entries, so verify's tree check runs
+# on it. The airports fixture keeps 25 rows, 22 with an ICAO code and three without.
 #
-# verify holds each fetched file's bytes to the listing. A break that rewrites a data
+# verify holds each fetched file's bytes to the tree, and the tree to the commit. A break that rewrites a data
 # CSV changes its bytes (and arc's control run round-trips the CSV through DuckDB, which
 # changes them too), so those tests give verify its fixture, testdata/release.csv, and
-# verify does not run. The pass cases and the breaks on the commit files and the listing
+# verify does not run. The pass cases and the breaks on the commit files and the tree
 # run verify for real.
 #
 # check_code_list is a uv step, so a refusal of its own could be matched only by
@@ -20,7 +21,7 @@
   risk: an ICAO list published with airports missing, IATA codes republished, or names, countries or regions wrong
   fixtures:
     fetch_release_before: testdata/commit.json
-    fetch_listing: testdata/listing.json
+    fetch_tree: testdata/tree.json
     fetch_airports: testdata/airports.csv
     fetch_countries: testdata/countries.csv
     fetch_regions: testdata/regions.csv
@@ -106,14 +107,14 @@
   risk: the release is read in the machine's time zone and a late commit publishes under the next day's date
   fixtures:
     fetch_release_before: testdata/commit.json
-    fetch_listing: testdata/listing.json
+    fetch_tree: testdata/tree.json
     fetch_airports: testdata/airports.csv
     fetch_countries: testdata/countries.csv
     fetch_regions: testdata/regions.csv
     fetch_release_after: testdata/commit.json
   break:
-    fetch_release_before: "UPDATE fixture SET \"commit\" = {'committer': {'date': '2026-11-15T23:30:00Z'}}"
-    fetch_release_after: "UPDATE fixture SET \"commit\" = {'committer': {'date': '2026-11-15T23:30:00Z'}}"
+    fetch_release_before: "UPDATE fixture SET \"commit\" = {'committer': {'date': '2026-11-15T23:30:00Z'}, 'tree': {'sha': 'ee87e71bbdb10202770287846e8604c267380c80'}}"
+    fetch_release_after: "UPDATE fixture SET \"commit\" = {'committer': {'date': '2026-11-15T23:30:00Z'}, 'tree': {'sha': 'ee87e71bbdb10202770287846e8604c267380c80'}}"
   checks:
     - SELECT DISTINCT release FROM ourairports_out WHERE release IS DISTINCT FROM '2026-11-15'
     - SELECT * FROM (SELECT count(*) AS n FROM ourairports_out) WHERE n <> 22
@@ -122,7 +123,7 @@
   risk: OurAirports commits between the two release fetches and the table is published under a date some of its rows are not from
   fixtures:
     fetch_release_before: testdata/commit.json
-    fetch_listing: testdata/listing.json
+    fetch_tree: testdata/tree.json
     fetch_airports: testdata/airports.csv
     fetch_countries: testdata/countries.csv
     fetch_regions: testdata/regions.csv
@@ -132,54 +133,97 @@
   expect:
     fails_with: "OurAirports changed during the fetch"
 
-- name: a fetched file that is not the listing's is refused
+- name: a fetched file that is not the tree's is refused
   risk: GitHub's file cache serves the previous night's airports after a commit and they publish under the new date
   fixtures:
     fetch_release_before: testdata/commit.json
-    fetch_listing: testdata/listing.json
+    fetch_tree: testdata/tree.json
     fetch_airports: testdata/airports.csv
     fetch_countries: testdata/countries.csv
     fetch_regions: testdata/regions.csv
     fetch_release_after: testdata/commit.json
   break:
-    fetch_listing: "UPDATE fixture SET sha = '0000000000000000000000000000000000000000' WHERE name = 'airports.csv'"
+    fetch_tree: "UPDATE fixture SET tree = list_transform(tree, lambda e: CASE WHEN e.path = 'airports.csv' THEN {'path': e.path, 'mode': e.mode, 'type': e.type, 'sha': '0000000000000000000000000000000000000000', 'size': e.size} ELSE e END)"
   expect:
     fails_with: "airports.csv is not the file at commit 1cdbf9cbed1e47bed8f115ec173b91aeb999e44f"
 
-- name: a listing without one of the files is refused
-  risk: a file the listing does not name is published unchecked
+- name: a tree without one of the files is refused
+  risk: a file the tree does not name is published unchecked
   fixtures:
     fetch_release_before: testdata/commit.json
-    fetch_listing: testdata/listing.json
+    fetch_tree: testdata/tree.json
     fetch_airports: testdata/airports.csv
     fetch_countries: testdata/countries.csv
     fetch_regions: testdata/regions.csv
     fetch_release_after: testdata/commit.json
   break:
-    fetch_listing: "DELETE FROM fixture WHERE name = 'regions.csv'"
+    fetch_tree: "UPDATE fixture SET tree = list_filter(tree, lambda e: e.path <> 'regions.csv')"
   expect:
-    fails_with: "OurAirports listing at main lacks regions.csv"
+    fails_with: "OurAirports tree at main lacks regions.csv"
 
 - name: a commit date that does not parse is refused
   risk: GitHub changes its date format and the table publishes with no release, or a wrong one
   fixtures:
     fetch_release_before: testdata/commit.json
-    fetch_listing: testdata/listing.json
+    fetch_tree: testdata/tree.json
     fetch_airports: testdata/airports.csv
     fetch_countries: testdata/countries.csv
     fetch_regions: testdata/regions.csv
     fetch_release_after: testdata/commit.json
   break:
-    fetch_release_before: "UPDATE fixture SET \"commit\" = {'committer': {'date': '16 Nov 2026'}}"
-    fetch_release_after: "UPDATE fixture SET \"commit\" = {'committer': {'date': '16 Nov 2026'}}"
+    fetch_release_before: "UPDATE fixture SET \"commit\" = {'committer': {'date': '16 Nov 2026'}, 'tree': {'sha': 'ee87e71bbdb10202770287846e8604c267380c80'}}"
+    fetch_release_after: "UPDATE fixture SET \"commit\" = {'committer': {'date': '16 Nov 2026'}, 'tree': {'sha': 'ee87e71bbdb10202770287846e8604c267380c80'}}"
   expect:
     fails_with: "commit date does not parse"
+
+- name: a tree that is not the commit's is refused
+  risk: GitHub's API cache answers the tree from one moment and the commit from another, and files are checked against the wrong commit
+  fixtures:
+    fetch_release_before: testdata/commit.json
+    fetch_tree: testdata/tree.json
+    fetch_airports: testdata/airports.csv
+    fetch_countries: testdata/countries.csv
+    fetch_regions: testdata/regions.csv
+    fetch_release_after: testdata/commit.json
+  break:
+    fetch_release_before: "UPDATE fixture SET \"commit\" = {'committer': {'date': '2026-11-16T02:53:14Z'}, 'tree': {'sha': '437dbde2bc7423864f5e0e7f521db0fb23fef704'}}"
+    fetch_release_after: "UPDATE fixture SET \"commit\" = {'committer': {'date': '2026-11-16T02:53:14Z'}, 'tree': {'sha': '437dbde2bc7423864f5e0e7f521db0fb23fef704'}}"
+  expect:
+    fails_with: "the fetched tree is not the tree of commit 1cdbf9cbed1e47bed8f115ec173b91aeb999e44f"
+
+- name: a tree whose other entries differ from the commit's is refused
+  risk: the tree's three files match but it is not the commit's tree, so the check rests on a tree from another moment
+  fixtures:
+    fetch_release_before: testdata/commit.json
+    fetch_tree: testdata/tree.json
+    fetch_airports: testdata/airports.csv
+    fetch_countries: testdata/countries.csv
+    fetch_regions: testdata/regions.csv
+    fetch_release_after: testdata/commit.json
+  break:
+    fetch_tree: "UPDATE fixture SET tree = list_transform(tree, lambda e: CASE WHEN e.path = 'README.md' THEN {'path': e.path, 'mode': e.mode, 'type': e.type, 'sha': '0000000000000000000000000000000000000000', 'size': e.size} ELSE e END)"
+  expect:
+    fails_with: "the fetched tree is not the tree of commit 1cdbf9cbed1e47bed8f115ec173b91aeb999e44f"
+
+- name: an empty commits answer is refused
+  risk: GitHub answers with no commit and the table publishes with no release
+  fixtures:
+    fetch_release_before: testdata/commit.json
+    fetch_tree: testdata/tree.json
+    fetch_airports: testdata/airports.csv
+    fetch_countries: testdata/countries.csv
+    fetch_regions: testdata/regions.csv
+    fetch_release_after: testdata/commit.json
+  break:
+    fetch_release_before: DELETE FROM fixture
+  expect:
+    fails_with: "expected one commit in each OurAirports release file"
 
 - name: a changed airports header is refused
   risk: OurAirports renames or reorders its airports columns and codes or names load into the wrong fields
   fixtures:
     fetch_release_before: testdata/commit.json
-    fetch_listing: testdata/listing.json
+    fetch_tree: testdata/tree.json
     fetch_airports: testdata/airports.csv
     fetch_countries: testdata/countries.csv
     fetch_regions: testdata/regions.csv
@@ -194,7 +238,7 @@
   risk: OurAirports changes its countries file and country names are read from the wrong field
   fixtures:
     fetch_release_before: testdata/commit.json
-    fetch_listing: testdata/listing.json
+    fetch_tree: testdata/tree.json
     fetch_airports: testdata/airports.csv
     fetch_countries: testdata/countries.csv
     fetch_regions: testdata/regions.csv
@@ -209,7 +253,7 @@
   risk: OurAirports changes its regions file and region names are read from the wrong field
   fixtures:
     fetch_release_before: testdata/commit.json
-    fetch_listing: testdata/listing.json
+    fetch_tree: testdata/tree.json
     fetch_airports: testdata/airports.csv
     fetch_countries: testdata/countries.csv
     fetch_regions: testdata/regions.csv
@@ -224,7 +268,7 @@
   risk: two airports publish under one ICAO code and a join on it doubles rows
   fixtures:
     fetch_release_before: testdata/commit.json
-    fetch_listing: testdata/listing.json
+    fetch_tree: testdata/tree.json
     fetch_airports: testdata/airports.csv
     fetch_countries: testdata/countries.csv
     fetch_regions: testdata/regions.csv
@@ -239,7 +283,7 @@
   risk: a code that is not an ICAO code publishes as a key nothing joins to
   fixtures:
     fetch_release_before: testdata/commit.json
-    fetch_listing: testdata/listing.json
+    fetch_tree: testdata/tree.json
     fetch_airports: testdata/airports.csv
     fetch_countries: testdata/countries.csv
     fetch_regions: testdata/regions.csv
@@ -254,7 +298,7 @@
   risk: an airport publishes with no name to show or search
   fixtures:
     fetch_release_before: testdata/commit.json
-    fetch_listing: testdata/listing.json
+    fetch_tree: testdata/tree.json
     fetch_airports: testdata/airports.csv
     fetch_countries: testdata/countries.csv
     fetch_regions: testdata/regions.csv
@@ -269,7 +313,7 @@
   risk: an airport publishes with no country name
   fixtures:
     fetch_release_before: testdata/commit.json
-    fetch_listing: testdata/listing.json
+    fetch_tree: testdata/tree.json
     fetch_airports: testdata/airports.csv
     fetch_countries: testdata/countries.csv
     fetch_regions: testdata/regions.csv
@@ -284,7 +328,7 @@
   risk: an airport publishes with no region name
   fixtures:
     fetch_release_before: testdata/commit.json
-    fetch_listing: testdata/listing.json
+    fetch_tree: testdata/tree.json
     fetch_airports: testdata/airports.csv
     fetch_countries: testdata/countries.csv
     fetch_regions: testdata/regions.csv
@@ -299,7 +343,7 @@
   risk: an airport publishes with a region its country does not have
   fixtures:
     fetch_release_before: testdata/commit.json
-    fetch_listing: testdata/listing.json
+    fetch_tree: testdata/tree.json
     fetch_airports: testdata/airports.csv
     fetch_countries: testdata/countries.csv
     fetch_regions: testdata/regions.csv
@@ -314,7 +358,7 @@
   risk: a country listed twice doubles its airports' rows in the join
   fixtures:
     fetch_release_before: testdata/commit.json
-    fetch_listing: testdata/listing.json
+    fetch_tree: testdata/tree.json
     fetch_airports: testdata/airports.csv
     fetch_countries: testdata/countries.csv
     fetch_regions: testdata/regions.csv
@@ -329,7 +373,7 @@
   risk: a region listed twice doubles its airports' rows in the join
   fixtures:
     fetch_release_before: testdata/commit.json
-    fetch_listing: testdata/listing.json
+    fetch_tree: testdata/tree.json
     fetch_airports: testdata/airports.csv
     fetch_countries: testdata/countries.csv
     fetch_regions: testdata/regions.csv
@@ -344,7 +388,7 @@
   risk: OurAirports adds a type and it publishes before anyone describes it
   fixtures:
     fetch_release_before: testdata/commit.json
-    fetch_listing: testdata/listing.json
+    fetch_tree: testdata/tree.json
     fetch_airports: testdata/airports.csv
     fetch_countries: testdata/countries.csv
     fetch_regions: testdata/regions.csv
@@ -359,7 +403,7 @@
   risk: a value load does not know publishes as false
   fixtures:
     fetch_release_before: testdata/commit.json
-    fetch_listing: testdata/listing.json
+    fetch_tree: testdata/tree.json
     fetch_airports: testdata/airports.csv
     fetch_countries: testdata/countries.csv
     fetch_regions: testdata/regions.csv
@@ -374,7 +418,7 @@
   risk: an airport publishes at a position that does not exist
   fixtures:
     fetch_release_before: testdata/commit.json
-    fetch_listing: testdata/listing.json
+    fetch_tree: testdata/tree.json
     fetch_airports: testdata/airports.csv
     fetch_countries: testdata/countries.csv
     fetch_regions: testdata/regions.csv
@@ -389,7 +433,7 @@
   risk: an airport publishes at a position that does not exist
   fixtures:
     fetch_release_before: testdata/commit.json
-    fetch_listing: testdata/listing.json
+    fetch_tree: testdata/tree.json
     fetch_airports: testdata/airports.csv
     fetch_countries: testdata/countries.csv
     fetch_regions: testdata/regions.csv
@@ -404,7 +448,7 @@
   risk: an elevation is rounded into a whole number OurAirports did not give
   fixtures:
     fetch_release_before: testdata/commit.json
-    fetch_listing: testdata/listing.json
+    fetch_tree: testdata/tree.json
     fetch_airports: testdata/airports.csv
     fetch_countries: testdata/countries.csv
     fetch_regions: testdata/regions.csv
@@ -414,3 +458,33 @@
     fetch_airports: "UPDATE fixture SET elevation_ft = '83.5' WHERE ident = 'EGLL'"
   expect:
     fails_with: "elevation is not an integer: 83.5"
+
+- name: an id that is not an integer is refused
+  risk: OurAirports' record id changes form and ourairports_id fails to cast or joins to nothing
+  fixtures:
+    fetch_release_before: testdata/commit.json
+    fetch_tree: testdata/tree.json
+    fetch_airports: testdata/airports.csv
+    fetch_countries: testdata/countries.csv
+    fetch_regions: testdata/regions.csv
+    fetch_release_after: testdata/commit.json
+    verify: testdata/release.csv
+  break:
+    fetch_airports: "UPDATE fixture SET id = 'x2434' WHERE ident = 'EGLL'"
+  expect:
+    fails_with: "OurAirports id is not an integer: x2434"
+
+- name: an airports file with almost no ICAO codes is refused
+  risk: OurAirports drops most of its ICAO codes and a table of a few airports publishes over the full one
+  fixtures:
+    fetch_release_before: testdata/commit.json
+    fetch_tree: testdata/tree.json
+    fetch_airports: testdata/airports.csv
+    fetch_countries: testdata/countries.csv
+    fetch_regions: testdata/regions.csv
+    fetch_release_after: testdata/commit.json
+    verify: testdata/release.csv
+  break:
+    fetch_airports: "UPDATE fixture SET icao_code = NULL WHERE ident <> 'EGLL'"
+  expect:
+    fails_with: "only 1 of 25 airports have an ICAO code, below the 5% floor"
