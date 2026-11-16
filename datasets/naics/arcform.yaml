@@ -9,16 +9,24 @@
 # an .xlsx — load.sql reads it directly via DuckDB's `excel` extension, so no external
 # xlsx→csv tool is needed.) Operator code lives in the arcform repo, not here.
 #
-# BOUNDARY — do NOT fold this into this manifest:
-#   • PUBLISH (content-addressed R2 upload + manifest/catalog pointer flip) stays in
-#     the out-of-repo publish pipeline and READS this Protocol's terminal output,
-#     build/naics.parquet + the emitted datapackage.json. It is not an arcform step.
+# PUBLISH. The last step, `publish` (ducklake_write), writes the table into the shared
+# open lake as one snapshot: the catalog, the data file and the table's readable Parquet
+# copy on R2 (public at https://openlake.meridian.online/). With all three R2 variables
+# set, from .env or the environment, EVERY `arc run` publishes into the live lake;
+# `arc run --publish` only makes a missing credential fail the run instead of publishing
+# into build/lake/. For local work keep .env absent and the variables unset. Keep the
+# credential outside this folder and export it for the publishing command only. Readers
+# need DuckDB 2.0 or later. It reads only what stamp_descriptor wrote, so it runs after it.
 #
 # Produces: build/naics.parquet  →  published as census.naics_2022
 name: naics
 engine: duckdb
+# engine_version and the duckdb pin on stamp_descriptor below move to 2.0 with the descriptor
+# in the next change; until then NAICS is not published from `main`.
 engine_version: ">=1.2"
 db: build/naics.db
+# The R2 write credential, if a .env is present (see .env.example); the process environment also counts.
+dotenv: [.env]
 
 # Transient API/network blips shouldn't sink a run — retry fetches with backoff.
 defaults:
@@ -140,5 +148,28 @@ steps:
         - datapackage.json
         - build/naics.parquet
 
-  # publish: the out-of-repo publish pipeline reads build/naics.parquet + the emitted
-  # datapackage.json (boundary — not an arc step). See README.
+  # ── Publish: the table into the open lake, one snapshot ─────────────────────────
+  # Runs on every `arc run`. With R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY and R2_ACCOUNT_ID
+  # all set, every run publishes live; otherwise into build/lake/, and `arc run --publish`
+  # fails instead.
+  - name: publish
+    op: ducklake_write@1
+    with:
+      public_base: https://openlake.meridian.online/
+      catalog: catalog/open.ducklake
+      data_path: lake/
+      runs: runs/
+      manifest: manifest.json
+      local_catalog: build/lake/open.ducklake
+      tables:
+        - table: census.naics_2022
+          from: build/naics.parquet
+          descriptor: datapackage.json
+          readable_copy: census/naics_2022.parquet
+      credential:
+        type: r2
+        bucket: meridian-open
+        env:
+          key_id: R2_ACCESS_KEY_ID
+          secret: R2_SECRET_ACCESS_KEY
+          account_id: R2_ACCOUNT_ID
