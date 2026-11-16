@@ -1,0 +1,502 @@
+# The ourairports Protocol's tests, run by `arc test` from this folder (see README.md).
+#
+# Fixtures, in testdata/ (see testdata/README.md): cut-down copies of OurAirports'
+# airports, countries and regions files as fetched on 2026-11-16, GitHub's answer for
+# that day's commit, which stands in for both release fetches, and a git tree of the
+# repository's top folder holding the fixtures' own git blob shas. The commit fixture
+# names that tree's sha, as git computes it from the entries, so verify's tree check runs
+# on it. The airports fixture keeps 25 rows, 22 with an ICAO code and three without.
+#
+# verify holds each fetched file's bytes to the tree, and the tree to the commit. A break that rewrites a data
+# CSV changes its bytes (and arc's control run round-trips the CSV through DuckDB, which
+# changes them too), so those tests give verify its fixture, testdata/release.csv, and
+# verify does not run. The pass cases and the breaks on the commit files and the tree
+# run verify for real.
+#
+# check_code_list is a uv step, so a refusal of its own could be matched only by
+# "step 'check_code_list' failed (exit code n)"; the contract it holds is tested by
+# scripts/test_check_code_list.py, and the pass case shows this table meets it.
+
+- name: the fixture builds the code list
+  risk: an ICAO list published with airports missing, IATA codes republished, or names, countries or regions wrong
+  fixtures:
+    fetch_release_before: testdata/commit.json
+    fetch_tree: testdata/tree.json
+    fetch_airports: testdata/airports.csv
+    fetch_countries: testdata/countries.csv
+    fetch_regions: testdata/regions.csv
+    fetch_release_after: testdata/commit.json
+  checks:
+    # One row per ICAO code in the fixture: the three rows without one are left out.
+    - SELECT * FROM (SELECT count(*) AS n FROM ourairports_out) WHERE n <> 22
+    - SELECT * FROM ourairports_out WHERE code IS NULL OR code_display IS DISTINCT FROM code
+    - SELECT code FROM ourairports_out WHERE ident IN ('00A', 'EGLS', 'EGBE')
+    # The columns, in order, and their types.
+    - >-
+      SELECT * FROM (
+        SELECT list(column_name ORDER BY ordinal_position) AS cols
+        FROM information_schema.columns WHERE table_name = 'ourairports_out')
+      WHERE cols IS DISTINCT FROM ['code', 'code_display', 'level', 'depth', 'parent_code',
+        'description', 'description_full', 'release', 'text_source', 'corpus',
+        'ourairports_id', 'ident', 'type', 'latitude_deg', 'longitude_deg', 'elevation_ft',
+        'continent', 'iso_country', 'country_name', 'iso_region', 'region_name',
+        'municipality', 'scheduled_service', 'gps_code', 'local_code', 'home_link',
+        'wikipedia_link']
+    - >-
+      SELECT column_name, data_type FROM information_schema.columns
+      WHERE table_name = 'ourairports_out'
+        AND data_type <> CASE column_name WHEN 'depth' THEN 'INTEGER'
+                                          WHEN 'ourairports_id' THEN 'BIGINT'
+                                          WHEN 'latitude_deg' THEN 'DOUBLE'
+                                          WHEN 'longitude_deg' THEN 'DOUBLE'
+                                          WHEN 'elevation_ft' THEN 'INTEGER'
+                                          WHEN 'scheduled_service' THEN 'BOOLEAN'
+                                          ELSE 'VARCHAR' END
+    # The core columns of a flat list of one level.
+    - >-
+      SELECT code FROM ourairports_out
+      WHERE level IS DISTINCT FROM 'airport' OR depth IS DISTINCT FROM 0 OR parent_code IS NOT NULL
+         OR description_full IS DISTINCT FROM description OR text_source IS DISTINCT FROM 'ourairports'
+         OR corpus IS DISTINCT FROM lower(strip_accents(description))
+    # The release is the commit's UTC date, on every row.
+    - SELECT DISTINCT release FROM ourairports_out WHERE release IS DISTINCT FROM '2026-11-16'
+    # The rows the checks below name must exist.
+    - >-
+      SELECT * FROM (VALUES ('EGLL'), ('KLAX'), ('CYBB'), ('SBGR'), ('LGKF'), ('ENAN'),
+        ('SLCR'), ('PPIT'), ('YWSN'), ('ZSLA')) v(code)
+      WHERE code NOT IN (SELECT code FROM ourairports_out)
+    # OurAirports' fields and the joined country and region names.
+    - >-
+      SELECT * FROM ourairports_out WHERE code = 'EGLL'
+        AND (description IS DISTINCT FROM 'London Heathrow Airport'
+             OR country_name IS DISTINCT FROM 'United Kingdom'
+             OR region_name IS DISTINCT FROM 'England'
+             OR scheduled_service IS DISTINCT FROM true
+             OR ourairports_id IS DISTINCT FROM 2434 OR type IS DISTINCT FROM 'large_airport'
+             OR elevation_ft IS DISTINCT FROM 83 OR gps_code IS DISTINCT FROM 'EGLL'
+             OR local_code IS NOT NULL)
+    # KLAX keeps the FAA's identifier in local_code, though IATA's code has the same letters.
+    - SELECT * FROM ourairports_out WHERE code = 'KLAX' AND local_code IS DISTINCT FROM 'LAX'
+    # CYBB's IATA code, YBB, is in OurAirports' iata_code and keywords only: no column of
+    # any row holds it, and no value holds the rest of its keywords ("Pelly Bay Townsite
+    # Airport"). Every column is cast to text, so a VARCHAR column is among them.
+    - >-
+      SELECT row_code, col, v FROM (
+        UNPIVOT (SELECT code AS row_code, COLUMNS(*)::VARCHAR FROM ourairports_out)
+        ON COLUMNS(* EXCLUDE row_code) INTO NAME col VALUE v)
+      WHERE v = 'YBB' OR contains(v, 'Pelly Bay')
+    # Names read intact: accents, a comma, double quotes, an apostrophe.
+    - >-
+      SELECT * FROM ourairports_out WHERE code = 'SBGR'
+        AND (description IS DISTINCT FROM 'São Paulo/Guarulhos–Governor André Franco Montoro International Airport'
+             OR region_name IS DISTINCT FROM 'São Paulo'
+             OR corpus IS DISTINCT FROM 'sao paulo/guarulhos–governor andre franco montoro international airport')
+    - SELECT * FROM ourairports_out WHERE code = 'LGKF' AND description IS DISTINCT FROM 'Kefalonia International Airport "Anna Pollatou"'
+    - SELECT * FROM ourairports_out WHERE code = 'ENAN' AND description IS DISTINCT FROM 'Andøya Airport, Andenes'
+    - SELECT * FROM ourairports_out WHERE code = 'ZSLA' AND description IS DISTINCT FROM 'Lu''an Airbase'
+    # A region OurAirports has not assigned keeps its name.
+    - >-
+      SELECT * FROM ourairports_out WHERE code = 'SLCR'
+        AND (iso_region IS DISTINCT FROM 'BO-U-A' OR region_name IS DISTINCT FROM '(unassigned)')
+    # An airport whose ident is not its ICAO code is keyed by the ICAO code.
+    - SELECT * FROM ourairports_out WHERE code = 'PPIT' AND (ident IS DISTINCT FROM '16A' OR local_code IS DISTINCT FROM '16A')
+    # Missing fields stay NULL.
+    - SELECT * FROM ourairports_out WHERE code = 'YWSN' AND (elevation_ft IS NOT NULL OR municipality IS NOT NULL)
+
+- name: a commit late in the UTC day takes its UTC date
+  risk: the release is read in the machine's time zone and a late commit publishes under the next day's date
+  fixtures:
+    fetch_release_before: testdata/commit.json
+    fetch_tree: testdata/tree.json
+    fetch_airports: testdata/airports.csv
+    fetch_countries: testdata/countries.csv
+    fetch_regions: testdata/regions.csv
+    fetch_release_after: testdata/commit.json
+  break:
+    fetch_release_before: "UPDATE fixture SET \"commit\" = {'committer': {'date': '2026-11-15T23:30:00Z'}, 'tree': {'sha': 'ee87e71bbdb10202770287846e8604c267380c80'}}"
+    fetch_release_after: "UPDATE fixture SET \"commit\" = {'committer': {'date': '2026-11-15T23:30:00Z'}, 'tree': {'sha': 'ee87e71bbdb10202770287846e8604c267380c80'}}"
+  checks:
+    - SELECT DISTINCT release FROM ourairports_out WHERE release IS DISTINCT FROM '2026-11-15'
+    - SELECT * FROM (SELECT count(*) AS n FROM ourairports_out) WHERE n <> 22
+
+- name: a tree with a folder hashes as git hashes it
+  risk: OurAirports adds a folder to its repository, GitHub writes its mode as 040000 where git hashes 40000, and every run is refused
+  fixtures:
+    fetch_release_before: testdata/commit_with_folder.json
+    fetch_tree: testdata/tree_with_folder.json
+    fetch_airports: testdata/airports.csv
+    fetch_countries: testdata/countries.csv
+    fetch_regions: testdata/regions.csv
+    fetch_release_after: testdata/commit_with_folder.json
+  checks:
+    - SELECT * FROM (SELECT count(*) AS n FROM ourairports_out) WHERE n <> 22
+
+- name: two different commits in the release bracket are refused
+  risk: OurAirports commits between the two release fetches and the table is published under a date some of its rows are not from
+  fixtures:
+    fetch_release_before: testdata/commit.json
+    fetch_tree: testdata/tree.json
+    fetch_airports: testdata/airports.csv
+    fetch_countries: testdata/countries.csv
+    fetch_regions: testdata/regions.csv
+    fetch_release_after: testdata/commit.json
+  break:
+    fetch_release_after: "UPDATE fixture SET sha = 'x'"
+  expect:
+    fails_with: "OurAirports changed during the fetch"
+
+- name: a fetched file that is not the tree's is refused
+  risk: GitHub's file cache serves the previous night's airports after a commit and they publish under the new date
+  fixtures:
+    fetch_release_before: testdata/commit.json
+    fetch_tree: testdata/tree.json
+    fetch_airports: testdata/airports.csv
+    fetch_countries: testdata/countries.csv
+    fetch_regions: testdata/regions.csv
+    fetch_release_after: testdata/commit.json
+  break:
+    fetch_tree: "UPDATE fixture SET tree = list_transform(tree, lambda e: CASE WHEN e.path = 'airports.csv' THEN {'path': e.path, 'mode': e.mode, 'type': e.type, 'sha': '0000000000000000000000000000000000000000', 'size': e.size} ELSE e END)"
+  expect:
+    fails_with: "airports.csv is not the file at commit 1cdbf9cbed1e47bed8f115ec173b91aeb999e44f"
+
+- name: a tree without one of the files is refused
+  risk: a file the tree does not name is published unchecked
+  fixtures:
+    fetch_release_before: testdata/commit.json
+    fetch_tree: testdata/tree.json
+    fetch_airports: testdata/airports.csv
+    fetch_countries: testdata/countries.csv
+    fetch_regions: testdata/regions.csv
+    fetch_release_after: testdata/commit.json
+  break:
+    fetch_tree: "UPDATE fixture SET tree = list_filter(tree, lambda e: e.path <> 'regions.csv')"
+  expect:
+    fails_with: "OurAirports tree at main lacks regions.csv"
+
+- name: a commit date that does not parse is refused
+  risk: GitHub changes its date format and the table publishes with no release, or a wrong one
+  fixtures:
+    fetch_release_before: testdata/commit.json
+    fetch_tree: testdata/tree.json
+    fetch_airports: testdata/airports.csv
+    fetch_countries: testdata/countries.csv
+    fetch_regions: testdata/regions.csv
+    fetch_release_after: testdata/commit.json
+  break:
+    fetch_release_before: "UPDATE fixture SET \"commit\" = {'committer': {'date': '16 Nov 2026'}, 'tree': {'sha': 'ee87e71bbdb10202770287846e8604c267380c80'}}"
+    fetch_release_after: "UPDATE fixture SET \"commit\" = {'committer': {'date': '16 Nov 2026'}, 'tree': {'sha': 'ee87e71bbdb10202770287846e8604c267380c80'}}"
+  expect:
+    fails_with: "commit date does not parse"
+
+- name: a tree that is not the commit's is refused
+  risk: GitHub's API cache answers the tree from one moment and the commit from another, and files are checked against the wrong commit
+  fixtures:
+    fetch_release_before: testdata/commit.json
+    fetch_tree: testdata/tree.json
+    fetch_airports: testdata/airports.csv
+    fetch_countries: testdata/countries.csv
+    fetch_regions: testdata/regions.csv
+    fetch_release_after: testdata/commit.json
+  break:
+    fetch_release_before: "UPDATE fixture SET \"commit\" = {'committer': {'date': '2026-11-16T02:53:14Z'}, 'tree': {'sha': '437dbde2bc7423864f5e0e7f521db0fb23fef704'}}"
+    fetch_release_after: "UPDATE fixture SET \"commit\" = {'committer': {'date': '2026-11-16T02:53:14Z'}, 'tree': {'sha': '437dbde2bc7423864f5e0e7f521db0fb23fef704'}}"
+  expect:
+    fails_with: "the fetched tree is not the tree of commit 1cdbf9cbed1e47bed8f115ec173b91aeb999e44f"
+
+- name: a tree whose other entries differ from the commit's is refused
+  risk: the tree's three files match but it is not the commit's tree, so the check rests on a tree from another moment
+  fixtures:
+    fetch_release_before: testdata/commit.json
+    fetch_tree: testdata/tree.json
+    fetch_airports: testdata/airports.csv
+    fetch_countries: testdata/countries.csv
+    fetch_regions: testdata/regions.csv
+    fetch_release_after: testdata/commit.json
+  break:
+    fetch_tree: "UPDATE fixture SET tree = list_transform(tree, lambda e: CASE WHEN e.path = 'README.md' THEN {'path': e.path, 'mode': e.mode, 'type': e.type, 'sha': '0000000000000000000000000000000000000000', 'size': e.size} ELSE e END)"
+  expect:
+    fails_with: "the fetched tree is not the tree of commit 1cdbf9cbed1e47bed8f115ec173b91aeb999e44f"
+
+- name: an empty commits answer is refused
+  risk: GitHub answers with no commit and the table publishes with no release
+  fixtures:
+    fetch_release_before: testdata/commit.json
+    fetch_tree: testdata/tree.json
+    fetch_airports: testdata/airports.csv
+    fetch_countries: testdata/countries.csv
+    fetch_regions: testdata/regions.csv
+    fetch_release_after: testdata/commit.json
+  break:
+    fetch_release_before: DELETE FROM fixture
+  expect:
+    fails_with: "expected one commit in each OurAirports release file"
+
+- name: a changed airports header is refused
+  risk: OurAirports renames or reorders its airports columns and codes or names load into the wrong fields
+  fixtures:
+    fetch_release_before: testdata/commit.json
+    fetch_tree: testdata/tree.json
+    fetch_airports: testdata/airports.csv
+    fetch_countries: testdata/countries.csv
+    fetch_regions: testdata/regions.csv
+    fetch_release_after: testdata/commit.json
+    verify: testdata/release.csv
+  break:
+    fetch_airports: "ALTER TABLE fixture RENAME COLUMN icao_code TO icao"
+  expect:
+    fails_with: "OurAirports airports header has changed"
+
+- name: a changed countries header is refused
+  risk: OurAirports changes its countries file and country names are read from the wrong field
+  fixtures:
+    fetch_release_before: testdata/commit.json
+    fetch_tree: testdata/tree.json
+    fetch_airports: testdata/airports.csv
+    fetch_countries: testdata/countries.csv
+    fetch_regions: testdata/regions.csv
+    fetch_release_after: testdata/commit.json
+    verify: testdata/release.csv
+  break:
+    fetch_countries: "ALTER TABLE fixture RENAME COLUMN name TO country_name"
+  expect:
+    fails_with: "countries header has changed"
+
+- name: a changed regions header is refused
+  risk: OurAirports changes its regions file and region names are read from the wrong field
+  fixtures:
+    fetch_release_before: testdata/commit.json
+    fetch_tree: testdata/tree.json
+    fetch_airports: testdata/airports.csv
+    fetch_countries: testdata/countries.csv
+    fetch_regions: testdata/regions.csv
+    fetch_release_after: testdata/commit.json
+    verify: testdata/release.csv
+  break:
+    fetch_regions: "ALTER TABLE fixture RENAME COLUMN name TO region_name"
+  expect:
+    fails_with: "regions header has changed"
+
+- name: a repeated ICAO code is refused
+  risk: two airports publish under one ICAO code and a join on it doubles rows
+  fixtures:
+    fetch_release_before: testdata/commit.json
+    fetch_tree: testdata/tree.json
+    fetch_airports: testdata/airports.csv
+    fetch_countries: testdata/countries.csv
+    fetch_regions: testdata/regions.csv
+    fetch_release_after: testdata/commit.json
+    verify: testdata/release.csv
+  break:
+    fetch_airports: "UPDATE fixture SET icao_code = 'EGLL' WHERE ident = 'EDDF'"
+  expect:
+    fails_with: "repeats an ICAO code: EGLL"
+
+- name: a malformed ICAO code is refused
+  risk: a code that is not an ICAO code publishes as a key nothing joins to
+  fixtures:
+    fetch_release_before: testdata/commit.json
+    fetch_tree: testdata/tree.json
+    fetch_airports: testdata/airports.csv
+    fetch_countries: testdata/countries.csv
+    fetch_regions: testdata/regions.csv
+    fetch_release_after: testdata/commit.json
+    verify: testdata/release.csv
+  break:
+    fetch_airports: "UPDATE fixture SET icao_code = 'EGL1' WHERE ident = 'EGLL'"
+  expect:
+    fails_with: "ICAO code is not four capital letters"
+
+- name: an empty name is refused
+  risk: an airport publishes with no name to show or search
+  fixtures:
+    fetch_release_before: testdata/commit.json
+    fetch_tree: testdata/tree.json
+    fetch_airports: testdata/airports.csv
+    fetch_countries: testdata/countries.csv
+    fetch_regions: testdata/regions.csv
+    fetch_release_after: testdata/commit.json
+    verify: testdata/release.csv
+  break:
+    fetch_airports: "UPDATE fixture SET name = '' WHERE ident = 'EGLL'"
+  expect:
+    fails_with: "airport has no name: EGLL"
+
+- name: a country missing from the countries file is refused
+  risk: an airport publishes with no country name
+  fixtures:
+    fetch_release_before: testdata/commit.json
+    fetch_tree: testdata/tree.json
+    fetch_airports: testdata/airports.csv
+    fetch_countries: testdata/countries.csv
+    fetch_regions: testdata/regions.csv
+    fetch_release_after: testdata/commit.json
+    verify: testdata/release.csv
+  break:
+    fetch_airports: "UPDATE fixture SET iso_country = 'ZZ' WHERE ident = 'EGLL'"
+  expect:
+    fails_with: "country not in OurAirports' countries file"
+
+- name: a region missing from the regions file is refused
+  risk: an airport publishes with no region name
+  fixtures:
+    fetch_release_before: testdata/commit.json
+    fetch_tree: testdata/tree.json
+    fetch_airports: testdata/airports.csv
+    fetch_countries: testdata/countries.csv
+    fetch_regions: testdata/regions.csv
+    fetch_release_after: testdata/commit.json
+    verify: testdata/release.csv
+  break:
+    fetch_airports: "UPDATE fixture SET iso_region = 'GB-ZZZ' WHERE ident = 'EGLL'"
+  expect:
+    fails_with: "region not in OurAirports' regions file: GB-ZZZ"
+
+- name: a region of another country is refused
+  risk: an airport publishes with a region its country does not have
+  fixtures:
+    fetch_release_before: testdata/commit.json
+    fetch_tree: testdata/tree.json
+    fetch_airports: testdata/airports.csv
+    fetch_countries: testdata/countries.csv
+    fetch_regions: testdata/regions.csv
+    fetch_release_after: testdata/commit.json
+    verify: testdata/release.csv
+  break:
+    fetch_airports: "UPDATE fixture SET iso_region = 'US-NY' WHERE ident = 'EGLL'"
+  expect:
+    fails_with: "region is not in the airport's country"
+
+- name: a repeated country code is refused
+  risk: a country listed twice doubles its airports' rows in the join
+  fixtures:
+    fetch_release_before: testdata/commit.json
+    fetch_tree: testdata/tree.json
+    fetch_airports: testdata/airports.csv
+    fetch_countries: testdata/countries.csv
+    fetch_regions: testdata/regions.csv
+    fetch_release_after: testdata/commit.json
+    verify: testdata/release.csv
+  break:
+    fetch_countries: "INSERT INTO fixture SELECT * FROM fixture WHERE code = 'GB'"
+  expect:
+    fails_with: "countries file repeats a country code"
+
+- name: a repeated region code is refused
+  risk: a region listed twice doubles its airports' rows in the join
+  fixtures:
+    fetch_release_before: testdata/commit.json
+    fetch_tree: testdata/tree.json
+    fetch_airports: testdata/airports.csv
+    fetch_countries: testdata/countries.csv
+    fetch_regions: testdata/regions.csv
+    fetch_release_after: testdata/commit.json
+    verify: testdata/release.csv
+  break:
+    fetch_regions: "INSERT INTO fixture SELECT * FROM fixture WHERE code = 'GB-ENG'"
+  expect:
+    fails_with: "regions file repeats a region code"
+
+- name: an unknown airport type is refused
+  risk: OurAirports adds a type and it publishes before anyone describes it
+  fixtures:
+    fetch_release_before: testdata/commit.json
+    fetch_tree: testdata/tree.json
+    fetch_airports: testdata/airports.csv
+    fetch_countries: testdata/countries.csv
+    fetch_regions: testdata/regions.csv
+    fetch_release_after: testdata/commit.json
+    verify: testdata/release.csv
+  break:
+    fetch_airports: "UPDATE fixture SET type = 'spaceport' WHERE ident = 'EGLL'"
+  expect:
+    fails_with: "airport type is not one load knows"
+
+- name: a scheduled_service other than yes or no is refused
+  risk: a value load does not know publishes as false
+  fixtures:
+    fetch_release_before: testdata/commit.json
+    fetch_tree: testdata/tree.json
+    fetch_airports: testdata/airports.csv
+    fetch_countries: testdata/countries.csv
+    fetch_regions: testdata/regions.csv
+    fetch_release_after: testdata/commit.json
+    verify: testdata/release.csv
+  break:
+    fetch_airports: "UPDATE fixture SET scheduled_service = 'maybe' WHERE ident = 'EGLL'"
+  expect:
+    fails_with: "scheduled_service is not yes or no"
+
+- name: a latitude out of range is refused
+  risk: an airport publishes at a position that does not exist
+  fixtures:
+    fetch_release_before: testdata/commit.json
+    fetch_tree: testdata/tree.json
+    fetch_airports: testdata/airports.csv
+    fetch_countries: testdata/countries.csv
+    fetch_regions: testdata/regions.csv
+    fetch_release_after: testdata/commit.json
+    verify: testdata/release.csv
+  break:
+    fetch_airports: "UPDATE fixture SET latitude_deg = '91' WHERE ident = 'EGLL'"
+  expect:
+    fails_with: "latitude is not a number between -90 and 90"
+
+- name: a longitude out of range is refused
+  risk: an airport publishes at a position that does not exist
+  fixtures:
+    fetch_release_before: testdata/commit.json
+    fetch_tree: testdata/tree.json
+    fetch_airports: testdata/airports.csv
+    fetch_countries: testdata/countries.csv
+    fetch_regions: testdata/regions.csv
+    fetch_release_after: testdata/commit.json
+    verify: testdata/release.csv
+  break:
+    fetch_airports: "UPDATE fixture SET longitude_deg = '181' WHERE ident = 'EGLL'"
+  expect:
+    fails_with: "longitude is not a number between -180 and 180"
+
+- name: an elevation that is not an integer is refused
+  risk: an elevation is rounded into a whole number OurAirports did not give
+  fixtures:
+    fetch_release_before: testdata/commit.json
+    fetch_tree: testdata/tree.json
+    fetch_airports: testdata/airports.csv
+    fetch_countries: testdata/countries.csv
+    fetch_regions: testdata/regions.csv
+    fetch_release_after: testdata/commit.json
+    verify: testdata/release.csv
+  break:
+    fetch_airports: "UPDATE fixture SET elevation_ft = '83.5' WHERE ident = 'EGLL'"
+  expect:
+    fails_with: "elevation is not an integer: 83.5"
+
+- name: an id that is not an integer is refused
+  risk: OurAirports' record id changes form and ourairports_id fails to cast or joins to nothing
+  fixtures:
+    fetch_release_before: testdata/commit.json
+    fetch_tree: testdata/tree.json
+    fetch_airports: testdata/airports.csv
+    fetch_countries: testdata/countries.csv
+    fetch_regions: testdata/regions.csv
+    fetch_release_after: testdata/commit.json
+    verify: testdata/release.csv
+  break:
+    fetch_airports: "UPDATE fixture SET id = 'x2434' WHERE ident = 'EGLL'"
+  expect:
+    fails_with: "OurAirports id is not an integer: x2434"
+
+- name: an airports file with almost no ICAO codes is refused
+  risk: OurAirports drops most of its ICAO codes and a table of a few airports publishes over the full one
+  fixtures:
+    fetch_release_before: testdata/commit.json
+    fetch_tree: testdata/tree.json
+    fetch_airports: testdata/airports.csv
+    fetch_countries: testdata/countries.csv
+    fetch_regions: testdata/regions.csv
+    fetch_release_after: testdata/commit.json
+    verify: testdata/release.csv
+  break:
+    fetch_airports: "UPDATE fixture SET icao_code = NULL WHERE ident <> 'EGLL'"
+  expect:
+    fails_with: "only 1 of 25 airports have an ICAO code, below the 5% floor"
