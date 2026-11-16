@@ -8,7 +8,7 @@ OurAirports' airports that carry an ICAO code, the four-letter code air traffic 
 | `datapackage.json` | **Descriptor** — what it is | schema, finetype labels, the code-list declaration |
 | `../registry.json` (this dataset's entry) | **Address** — how it's found | stable `uid`, `library/ourairports`, manifest pointer |
 
-`library/ourairports` is not yet published. As FIPS was, it is published after the Protocol merges, and its descriptor, registry entry and the repository README's Datasets row are committed with that publish, since CI holds every committed descriptor to the object the lake serves. Until then `datapackage.json` is in this folder's `.gitignore`; the change that commits it from the publishing run removes that line.
+`library/ourairports` is not yet published. As FIPS was, it is published after the Protocol merges, and its descriptor, registry entry and the repository README's Datasets row are committed with that publish, since CI holds every committed descriptor to the object the lake serves. Until then `datapackage.json` is in this folder's `.gitignore`; the change that commits it from the publishing run removes that line. That change also carries the reasons `datasets/label-agreement.json` needs for this descriptor's fields, which `scripts/check_label_agreement.py --strict` reports when run with the built descriptor in place: committed before the descriptor, a reason naming this package fails the strict check, since CI reads only committed descriptors.
 
 ## The Protocol
 
