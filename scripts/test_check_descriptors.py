@@ -719,6 +719,20 @@ class DescriptorCheckSelfTest(unittest.TestCase):
             "refusing to report the field as conformant",
         )
 
+    def test_range_on_a_column_stored_as_text_reports_the_type_not_a_sql_error(self) -> None:
+        write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT * FROM (VALUES ('north'), ('5')) t(latitude)",
+            fields=[{"name": "latitude", "type": "number", "constraints": {"minimum": -90}}],
+        )
+        self.assertOutcome(
+            run_check(self.datasets),
+            EXIT_VIOLATIONS,
+            "widgets.latitude",
+            "not coercible from Parquet physical type VARCHAR",
+        )
+
     def test_range_constraint_on_a_string_field_is_an_error(self) -> None:
         write_package(
             self.datasets,
