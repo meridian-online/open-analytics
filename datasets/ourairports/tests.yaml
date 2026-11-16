@@ -119,6 +119,18 @@
     - SELECT DISTINCT release FROM ourairports_out WHERE release IS DISTINCT FROM '2026-11-15'
     - SELECT * FROM (SELECT count(*) AS n FROM ourairports_out) WHERE n <> 22
 
+- name: a tree with a folder hashes as git hashes it
+  risk: OurAirports adds a folder to its repository, GitHub writes its mode as 040000 where git hashes 40000, and every run is refused
+  fixtures:
+    fetch_release_before: testdata/commit_with_folder.json
+    fetch_tree: testdata/tree_with_folder.json
+    fetch_airports: testdata/airports.csv
+    fetch_countries: testdata/countries.csv
+    fetch_regions: testdata/regions.csv
+    fetch_release_after: testdata/commit_with_folder.json
+  checks:
+    - SELECT * FROM (SELECT count(*) AS n FROM ourairports_out) WHERE n <> 22
+
 - name: two different commits in the release bracket are refused
   risk: OurAirports commits between the two release fetches and the table is published under a date some of its rows are not from
   fixtures:

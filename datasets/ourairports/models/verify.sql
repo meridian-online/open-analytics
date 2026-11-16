@@ -41,9 +41,11 @@ COPY (
   ),
   -- The tree object as git writes it, '<mode> <name>' NUL and the 20-byte sha for each
   -- entry in git's order (a folder sorts as if its name ended in '/'), and its sha.
+  -- GitHub writes a folder's mode as '040000', git hashes it as '40000': ltrim drops the
+  -- leading zero and leaves 100644, 100755, 120000 and 160000 as they are.
   tree_hash AS (
     SELECT sha1(('tree ' || octet_length(body) || chr(0))::BLOB || body) AS sha
-    FROM (SELECT unhex(string_agg(hex(mode || ' ' || name) || '00' || sha, ''
+    FROM (SELECT unhex(string_agg(hex(ltrim(mode, '0') || ' ' || name) || '00' || sha, ''
                                   ORDER BY (name || CASE WHEN type = 'tree' THEN '/' ELSE '' END)::BLOB)) AS body
           FROM tree_entries)
   ),

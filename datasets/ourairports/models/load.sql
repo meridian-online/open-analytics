@@ -184,8 +184,10 @@ icao_unique AS (
               ELSE true END AS ok
   FROM (SELECT code FROM airports GROUP BY code HAVING count(*) > 1)
 ),
--- icao_share is here too, so an airports file with no ICAO code at all, which leaves
--- the airports CTE empty, is refused rather than published as an empty table.
+-- icao_share is here too, so an airports file whose rows all lack an ICAO code, which
+-- leaves the airports CTE empty, is refused here. A file with a header and no rows at
+-- all passes the floor (0 of 0) and builds an empty table, which check_code_list then
+-- refuses.
 checks AS (
   SELECT u.ok AND s.ok AS ok FROM icao_unique u, icao_share s
 )
