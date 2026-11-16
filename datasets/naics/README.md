@@ -34,8 +34,6 @@ The last step publishes `census.naics_2022` into the open lake (<https://openlak
 
 `census.naics_2022` is already in the lake, so before a live publish check that the rebuilt table still has the live table's shape: `python scripts/check_lake_shape.py --catalog https://openlake.meridian.online/catalog/open.ducklake --table census.naics_2022 --parquet datasets/naics/build/naics.parquet` from the repository root must print `shape ok`. [`docs/publishing.md`](../../docs/publishing.md) says what else a publisher needs first.
 
-Do not publish from `main` yet: the DuckDB pins in `arcform.yaml` (`engine_version` and the stamp step's `duckdb==`) still name 1.x, and they move to 2.0 with the descriptor in the next change.
-
 ## Run
 
 Needs the `arc` binary, `duckdb` (with the `excel` extension), `uv` (for the stamp), and `finetype` with its DuckDB extension (`FINETYPE_DUCKDB_EXT`), plus `curl` for the fetch: `arc run`.
