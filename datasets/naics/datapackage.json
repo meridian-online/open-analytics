@@ -17,7 +17,7 @@
       "title": "Meridian"
     }
   ],
-  "created": "2026-10-30T23:53:04Z",
+  "created": "2026-11-16T11:21:14Z",
   "description": "The 2022 North American Industry Classification System — the standard taxonomy for classifying business establishments by industry, from broad sectors down to specific national industries.",
   "homepage": "https://meridian.online/datasets/naics",
   "licenses": [
@@ -30,9 +30,9 @@
   "name": "naics",
   "resources": [
     {
-      "bytes": 349871,
+      "bytes": 349873,
       "format": "parquet",
-      "hash": "sha256:8c091c158138215269dd607e72872fa221431636ab82c101c39eff7eb537d4d5",
+      "hash": "sha256:c819c5c2f2089888358ed0380b28821db5f137a518f975b3a7510bccab07d772",
       "mediatype": "application/vnd.apache.parquet",
       "name": "naics",
       "path": "https://openlake.meridian.online/census/naics_2022.parquet",
