@@ -4,7 +4,7 @@
 
 Host OurAirports' airport list, keyed by the ICAO code, at `library/ourairports` (SQL name `meridian.library.ourairports`, file `https://openlake.meridian.online/library/ourairports.parquet`). People search for ICAO codes: "icao codes" gets 2,400 searches a month in the US and 720 in the UK. An analyst holding flight, airspace or operations data keyed by ICAO code needs one table that turns the code into the airport's name, place, coordinates and type, and joins it to country and subdivision codes.
 
-OurAirports releases its data to the public domain (<https://ourairports.com/data/>). It is one person's project, not an issuing institution, so the list goes in `library` under the dataset's own name (bearing's ruling on namespaces).
+OurAirports releases its data to the public domain (<https://ourairports.com/data/>). It is one person's project, not an issuing institution, so the list goes in `library` under the dataset's own name: a dataset from a project rather than an issuing institution goes in `library` under the dataset's own name.
 
 ## Goals
 
@@ -18,7 +18,7 @@ OurAirports releases its data to the public domain (<https://ourairports.com/dat
 - The dataset page on meridian.online and the ICAO code type page's code column (web work, after the publish).
 - Airports with no ICAO code. They have no code other data carries in ICAO form; `ident` falls back to local and generated codes. A full airport list is a separate dataset if it is wanted.
 - OurAirports' runways, frequencies and navaids files.
-- Scheduling the fortnightly refresh: the recurring refresh task (bearing#99dx) picks the list up once it is published.
+- Scheduling the fortnightly refresh: the recurring fortnightly refresh task picks the list up once it is published.
 
 ## Anti-goals
 

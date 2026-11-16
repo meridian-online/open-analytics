@@ -6,7 +6,7 @@
 
 **Architecture:** A copy of the FIPS Protocol's shape (`datasets/fips/`): typed `op:` fetches, a `load.sql` that reads and checks the files and builds the rows, `package.sql` adding `corpus`, export, describe, `check_code_list`, validate, stamp and `publish`. The release comes from a before/after bracket of GitHub's latest-commit API, as HTS brackets USITC's export.
 
-**Tech Stack:** arc at arcform `f57ff3c` (`~/.arc-fips/bin/arc` locally), DuckDB 2.0 CLI, finetype 0.6.67 with its DuckDB extension (`FINETYPE_DUCKDB_EXT`), uv.
+**Tech Stack:** arc built at arcform `f57ff3c`, DuckDB 2.0 CLI, finetype 0.6.67 with its DuckDB extension (`FINETYPE_DUCKDB_EXT`), uv.
 
 **Spec:** `docs/superpowers/specs/2026-11-16-ourairports-design.md`
 
@@ -55,7 +55,7 @@
   - `scheduled_service = 'maybe'` → `"scheduled_service is not yes or no"`
   - `latitude_deg = '91'` → `"latitude is not a number between -90 and 90"`
 
-- [ ] **Step 3: Run `arc test` and see it fail** (no Protocol yet): `cd datasets/ourairports && FINETYPE_DUCKDB_EXT=… ~/.arc-fips/bin/arc test` → failures.
+- [ ] **Step 3: Run `arc test` and see it fail** (no Protocol yet): `cd datasets/ourairports && FINETYPE_DUCKDB_EXT=… arc test` → failures.
 
 - [ ] **Step 4: Write `arcform.yaml`, `load.sql`, `package.sql`** after FIPS's. `load` reads each CSV with explicit `columns`, `header = false`, `all_varchar` semantics and finds its header row by text (exactly one row equal to the expected names, else the header error). Release: both JSON files read with `read_json`; error if the shas differ; `release = strftime(committer date::TIMESTAMPTZ AT TIME ZONE 'UTC', '%Y-%m-%d')`, error if it does not parse. Filter to `icao_code IS NOT NULL`; drop `iata_code` and `keywords` there. Checks per spec "What `load` refuses", each a CTE with `error()`; types set `small_airport, medium_airport, large_airport, heliport, seaplane_base`. Must parse under arc (no `DESCRIBE` subquery, no `E''` strings).
 
