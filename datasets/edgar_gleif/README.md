@@ -25,7 +25,7 @@ happened to the sentence it replaces, and for months.
 
 <!-- protocol-steps: generated from arcform.yaml by scripts/check_protocol_readme.py — do not edit this block by hand -->
 
-All 23 steps are `sql:` models or typed `op:` operators from the arcform catalog. This Protocol runs no opaque `command:`/shell step.
+All 24 steps are `sql:` models or typed `op:` operators from the arcform catalog. This Protocol runs no opaque `command:`/shell step.
 
 | # | Step | How it runs |
 |---|---|---|
@@ -52,6 +52,7 @@ All 23 steps are `sql:` models or typed `op:` operators from the arcform catalog
 | 21 | `derive_join_coverage` | `op: uv@1` |
 | 22 | `validate` | `op: finetype_validate@1` |
 | 23 | `stamp_descriptor` | `op: uv@1` |
+| 24 | `publish` | `op: ducklake_write@1` |
 
 <!-- /protocol-steps -->
 
@@ -111,6 +112,7 @@ What those steps do, in phases:
     wall clock. The footer no longer carries `created`, and in `datapackage.json` it
     means *when this data first appeared*: a republish over the same data pages keeps
     it. `scripts/test_manifest_one_writer.py` holds the manifest to one writer per file.
+11. **publish** — upsert `library.edgar_lei` into the open lake on (`key_type`, `key`, `lei`), with its descriptor in the lake's `meta` schema and the readable copy at `library/edgar_lei.parquet` (see *Publish*).
 
 ## The identifier
 
@@ -201,6 +203,14 @@ takes effect at the Run that applies it rather than retroactively, so a snapshot
 published earlier can still carry rows it now removes — run this against one of those
 and expect few rows or none, because the values it removes are still in there.
 
+## Publish
+
+The last step publishes `library.edgar_lei` into the open lake (<https://openlake.meridian.online/>), a DuckLake catalog on R2 that readers attach over https without a credential, and writes its readable copy, one Parquet file at <https://openlake.meridian.online/library/edgar_lei.parquet>. Each publish upserts the table on (`key_type`, `key`, `lei`): edges the resolution adds are inserted, changed edges updated, and edges it no longer finds deleted, all in one snapshot a reader can time-travel back through. The catalogue's two views over the table, `crosswalk.edgar_gleif` and `main.edgar_gleif`, read through to it. With all three of `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` and `R2_ACCOUNT_ID` set, from a `.env` here (`cp .env.example .env`, fill it in; `.env` and its variants are gitignored) or from the environment, every `arc run` publishes into the live lake. `arc run --publish` only makes a missing credential fail the run instead of falling back. With any of the three unset, a plain `arc run` still succeeds: the step says it published locally, names the missing variables, and writes a lake into `build/lake/open.ducklake` that attaches and reads back offline. For local work, keep `.env` absent and the variables unset. Better still, keep the credential in a file outside the Protocol folder and export it only for the publishing command, in a subshell: `(set -a; . /path/outside/repo/openlake.env; set +a; arc run --publish --param as_of=<date>)`. Readers need DuckDB 2.0 or later. An unchanged rebuild commits nothing.
+
+`library.edgar_lei` is already in the lake, so before a live publish check that the rebuilt table still has the live table's shape: `python scripts/check_lake_shape.py --catalog https://openlake.meridian.online/catalog/open.ducklake --table library.edgar_lei --parquet datasets/edgar_gleif/build/edgar_gleif.parquet` from the repository root must print `shape ok`. Publish the crosswalk after `edgar` and `gleif`, since it reads their published copies. [`docs/publishing.md`](../../docs/publishing.md) says what else a publisher needs first.
+
+Do not publish from `main` yet: the DuckDB pins in `arcform.yaml` (`engine_version` and the `uv@1` steps' `duckdb==`) still name 1.x, and they move to 2.0 with the descriptor in the next change.
+
 ## Boundaries (deliberate)
 
 - The arcform **engine** and the **operator catalog** live in the `arcform` repo; this
@@ -208,9 +218,6 @@ and expect few rows or none, because the values it removes are still in there.
   operators embed their frozen script bytes (`resolve.py`, `describe.py`, the dlt
   paginator), so `@1` addresses an exact, reproducible implementation — the path-call
   the `resolve`/`describe`/fetch steps used before is retired.
-- **Publish** — the content-addressed R2 upload + `manifest.json` / catalog pointer
-  flip — stays in the out-of-repo publish pipeline. It *reads* this Protocol's terminal output
-  `build/edgar_gleif.parquet`; it is not an arcform step.
 - **Describe** — `datapackage.json` is **emitted**, not hand-authored. The `describe`
   step reads the staged Parquet, `build/stage/edgar_gleif.parquet`, and writes
   `build/stage/described.json`; the coverage step writes a copy of it carrying the

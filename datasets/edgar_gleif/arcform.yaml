@@ -17,15 +17,22 @@
 # parquet_export operators. This manifest REFERENCES them by name@version; their code
 # lives in the arcform repo (the engine + operator catalog), not here.
 #
-# BOUNDARY — PUBLISH (content-addressed R2 upload + catalog pointer flip) stays in the
-# out-of-repo publish pipeline and READS this Protocol's terminal output,
-# build/edgar_gleif.parquet + the emitted datapackage.json. It is not an arc step.
+# PUBLISH. The last step, `publish` (ducklake_write), writes the table into the shared
+# open lake as one snapshot: the catalog, the data file and the table's readable Parquet
+# copy on R2 (public at https://openlake.meridian.online/). With all three R2 variables
+# set, from .env or the environment, EVERY `arc run` publishes into the live lake;
+# `arc run --publish` only makes a missing credential fail the run instead of publishing
+# into build/lake/. For local work keep .env absent and the variables unset. Keep the
+# credential outside this folder and export it for the publishing command only. Readers
+# need DuckDB 2.0 or later. It reads only what stamp_descriptor wrote, so it runs after it.
 #
 # Produces: build/edgar_gleif.parquet  →  published as library.edgar_lei
 name: edgar_gleif
 engine: duckdb
 engine_version: ">=1.2"
 db: build/edgar_gleif.db
+# The R2 write credential, if a .env is present (see .env.example); the process environment also counts.
+dotenv: [.env]
 
 params:
   # Stamped on every row. REQUIRED — no default, so a run without it stops with
@@ -453,5 +460,31 @@ steps:
         - build/edgar_gleif.parquet
         - datapackage.json
 
-  # publish: the out-of-repo publish pipeline reads build/edgar_gleif.parquet + the
-  # emitted datapackage.json (boundary — not an arc step). See README.
+  # ── Publish: upsert the table into the open lake on (key_type, key, lei) ────────
+  # One snapshot: edges the resolution adds are inserted, changed edges updated, and
+  # edges it no longer finds deleted. The descriptor goes into the lake's meta schema
+  # and the readable copy to the fixed key library/edgar_lei.parquet. The two views the
+  # rebased catalogue carries over the table, crosswalk.edgar_gleif and main.edgar_gleif,
+  # read through to it unchanged. Without the credential it publishes into
+  # build/lake/open.ducklake and the run stays green.
+  - name: publish
+    op: ducklake_write@1
+    with:
+      public_base: https://openlake.meridian.online/
+      catalog: catalog/open.ducklake
+      data_path: lake/
+      runs: runs/
+      manifest: manifest.json
+      local_catalog: build/lake/open.ducklake
+      tables:
+        - table: library.edgar_lei
+          from: build/edgar_gleif.parquet
+          descriptor: datapackage.json
+          readable_copy: library/edgar_lei.parquet
+      credential:
+        type: r2
+        bucket: meridian-open
+        env:
+          key_id: R2_ACCESS_KEY_ID
+          secret: R2_SECRET_ACCESS_KEY
+          account_id: R2_ACCOUNT_ID
