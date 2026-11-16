@@ -132,9 +132,17 @@ The SEC refreshes its file daily, so unlike NAICS a republish changes rows. A fo
 
 A local run on 2026-11-17 from the 30 October golden copy, the one the live table was built from, published `gleif.lei +3479871 ~0 -0` into the local lake with the index beside it. The shape check printed `shape ok: gleif.lei 11 columns, rows 3479871 -> 3479871`. The index held 16,678,101 rows, the live parts' count, unique on (`token`, `lei`), and a prefix scan for `micro` read 1 of its 815 row groups. Every label held; only `bytes`, `hash` and `created` moved in the descriptor. The download of the 16 November golden copy stalled at 21 MB, as the manifest warns it can, so that run reused the October copy already on disk.
 
+## edgar_gleif
+
+`datasets/edgar_gleif` (`library/edgar_lei`) stays a published dataset. Hugh ruled on 2026-10-10 that the crosswalk keeps its stable URL and its row in the catalogue, and that its Protocol is also the reference Protocol; the earlier proposal that it become a reference Protocol instead was not taken. It moves onto the step like the others, in two pull requests. The first adds the publish step, upserting `library.edgar_lei` on (`key_type`, `key`, `lei`), with the readable copy at the fixed key `library/edgar_lei.parquet`. The rebased catalogue's two views over the table, `crosswalk.edgar_gleif` and `main.edgar_gleif`, read through to it unchanged.
+
+Unlike EDGAR and GLEIF, the crosswalk already has one writer per file, so a warm run re-runs only what changed. A run on 2026-11-17 over the 31 October build (the one the live table holds), with `--param as_of=2026-10-31`, skipped the fetches, the resolution and the export as fresh. It published `library.edgar_lei +212319 ~0 -0` into the local lake, and the shape check printed `shape ok: library.edgar_lei 14 columns, rows 212319 -> 212319`.
+
+**Its second pull request is a rebuild, not a restamp.** Moving its pins to DuckDB 2.0 needs a forced run, which fetches every source again and re-runs the Splink resolution over about 100 million candidate pairs, on a new `as_of`. Publish the crosswalk after EDGAR and GLEIF, since it fetches their published copies, so that rebuild and its descriptor belong to the session that publishes it. The resolution then measures its joins against the EDGAR and GLEIF objects just published, which clears the due-a-rebuild reports their republishes raise.
+
 ## What is left
 
-- **The other open Protocols move one at a time**: edgar and gleif (see *EDGAR* and *GLEIF* above), then edgar_gleif. Each keeps serving what it has, through the rebased catalogue and its readable copy, but none can be republished until it moves, since infra's publish is stopped. Each moves its own DuckDB pin to 2.0 when it moves, and the engine check holds its footers to that pin.
+- **The other open Protocols move one at a time**: edgar, gleif and edgar_gleif, each with a publish step on its first pull request (see their sections above), and each publishing from its second. Each keeps serving what it has, through the rebased catalogue and its readable copy, but none can be republished until it moves, since infra's publish is stopped. Each moves its own DuckDB pin to 2.0 when it moves, and the engine check holds its footers to that pin.
 - **infra's publish scripts and workflow are deleted** once all of them have moved. Until then they refuse to run.
 - **The website reads the catalogue** instead of `manifest.json`, at which point the manifest and its stale fields retire. The SOC dataset pages come with that work.
 
