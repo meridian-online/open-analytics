@@ -1,0 +1,198 @@
+# The `census/fips` Protocol — the reproducible *definition* of how the Census Bureau's
+# FIPS (ANSI/INCITS) codes for US states and counties are ingested: one row per state or
+# state-equivalent and per county or county-equivalent. `arc run` executes this
+# manifest; one Run → one Dataset version. See ./README.md.
+#
+# CONFIG ONLY. Every step is a first-class `sql:` model or a typed `op:` operator (the
+# arcform catalog). The fetches are http_fetch and the unzip archive_extract; the SQL
+# reads Census's pipe-delimited files into one row per code and adds the search corpus;
+# the COPY is parquet_export; datapackage_describe emits the descriptor; check_code_list
+# holds the Parquet to the shared code-list contract; finetype_validate gates it; and
+# stamp_descriptor writes the published Parquet with its descriptor in the footer.
+# Operator code lives in the arcform repo, not here.
+#
+# TESTS. tests.yaml beside this file holds the Protocol's tests, which `arc test` runs
+# against the cut-down Census files in testdata/, with no network and no publish.
+#
+# ONE WRITER PER FILE. The export and describe work on build/stage/; stamp_descriptor
+# alone writes the published build/fips.parquet and datapackage.json.
+#
+# THE VINTAGES. Census names each file for its vintage (national_county2020.txt,
+# 2026_Gaz_counties_national.txt), and load.sql reads `release` from those names, so it
+# cannot disagree with the files the rows came from. arc does not substitute a param
+# into an operator's `with:`, so a new vintage changes literals here: a fetch's URL and
+# `out`, and for the Gazetteer the member in extract_gazetteer. Update the sources in
+# descriptor.overrides.json at the same time.
+#
+# PUBLISH. The last step, `publish` (ducklake_write), writes the table into the shared
+# open lake as one snapshot: the catalog, the data file and the table's readable Parquet
+# copy on R2 (public at https://openlake.meridian.online/). With all three R2 variables
+# set, from .env or the environment, EVERY `arc run` publishes into the live lake;
+# `arc run --publish` only makes a missing credential fail the run instead of publishing
+# into build/lake/. For local work keep .env absent and the variables unset. Keep the
+# credential outside this folder and export it for the publishing command only. Readers
+# need DuckDB 2.0 or later. It reads only what stamp_descriptor wrote, so it runs after it.
+#
+# Produces: build/fips.parquet  →  published as census/fips
+name: fips
+engine: duckdb
+# Kept in step with ../soc_2018, which pins the DuckDB that arc links (2.0), the writer of its published Parquet.
+engine_version: ">=2.0"
+db: build/fips.db
+# The R2 write credential, if a .env is present (see .env.example); the process environment also counts.
+dotenv: [.env]
+
+defaults:
+  retry:
+    max_attempts: 3
+    backoff_sec: 2.0
+
+steps:
+  # ── Fetch: Census's ANSI state and county codes, and the Gazetteer's counties ───
+  - name: fetch_states
+    op: http_fetch@1
+    with:
+      url: https://www2.census.gov/geo/docs/reference/codes2020/national_state2020.txt
+      out: build/census/national_state2020.txt
+      headers:
+        User-Agent: "Meridian Protocol (open-analytics; research@meridian.online)"
+
+  - name: fetch_counties
+    op: http_fetch@1
+    with:
+      url: https://www2.census.gov/geo/docs/reference/codes2020/national_county2020.txt
+      out: build/census/national_county2020.txt
+      headers:
+        User-Agent: "Meridian Protocol (open-analytics; research@meridian.online)"
+
+  - name: fetch_gazetteer
+    op: http_fetch@1
+    with:
+      url: https://www2.census.gov/geo/docs/maps-data/data/gazetteer/2026_Gazetteer/2026_Gaz_counties_national.zip
+      out: build/census/gazetteer.zip
+      headers:
+        User-Agent: "Meridian Protocol (open-analytics; research@meridian.online)"
+
+  - name: extract_gazetteer
+    op: archive_extract@1
+    with:
+      archive: build/census/gazetteer.zip
+      members: [2026_Gaz_counties_national.txt]
+      dest: build/census/gazetteer
+
+  # ── Load: one row per state and county, its codes, its text and its release ─────
+  # Fails the run on a changed header, a malformed line or a disagreement between the
+  # files. See the model's header.
+  - name: load
+    sql: models/load.sql
+    depends_on:
+      - build/census/national_state2020.txt
+      - build/census/national_county2020.txt
+      - build/census/gazetteer/2026_Gaz_counties_national.txt
+    produces: [fips]
+
+  # ── Package: materialise the terminal table (adds the search corpus) ────────────
+  - name: package
+    sql: models/package.sql
+    produces: [fips_out]
+
+  # ── Export: write the Parquet the later steps read ──────────────────────────────
+  # order_by code (the primary key) is a total order → reproducible bytes.
+  - name: export_fips
+    op: parquet_export@1
+    with:
+      input: fips_out
+      dest: build/stage/fips.parquet
+      compression: zstd
+      order_by: "code"
+
+  # ── Describe: EMIT the descriptor from the built Parquet ────────────────────────
+  - name: describe
+    op: datapackage_describe@1
+    with:
+      parquet: build/stage/fips.parquet
+      overrides: descriptor.overrides.json
+      nominations: nominations.finetype.json
+      out: build/stage/described.json
+
+  # ── Contract: hold the Parquet to the shared code-list columns ──────────────────
+  # The script is addressed by its bytes, so editing it is a manifest edit as well:
+  # `shasum -a 256 scripts/check_code_list.py` prints the digest. duckdb is pinned to
+  # the same version as the stamp step below, which engine_version above names.
+  - name: check_code_list
+    op: uv@1
+    with:
+      script: ../../scripts/check_code_list.py
+      sha256: a6d4fd3c42aca53591f7f94bfef625f9c4f503b2d4331b64bea8103db88f7102
+      deps:
+        - duckdb==2.0.0
+      args:
+        - --parquet
+        - build/stage/fips.parquet
+        - --levels
+        - state,county
+        - --json
+        - build/code_list_check.json
+      reads:
+        - build/stage/fips.parquet
+      produces:
+        - build/code_list_check.json
+
+  # ── Validate: GATE the built Parquet against the self-derived finetype contract ─
+  - name: validate
+    op: finetype_validate@1
+    with:
+      parquet: build/stage/fips.parquet
+      schema: schema.finetype.json
+
+  # ── Self-describe: write the published Parquet with its descriptor inside ───────
+  - name: stamp_descriptor
+    op: uv@1
+    with:
+      script: ../../scripts/stamp_descriptor.py
+      sha256: a9356ac8d5412d94a940ebeef1e2508eaed6b77f1d923ada88edbacccf9d9b81
+      deps:
+        - duckdb==2.0.0
+      args:
+        - stamp
+        - --descriptor
+        - build/stage/described.json
+        - --parquet
+        - build/stage/fips.parquet
+        - --out
+        - build/fips.parquet
+        - --out-descriptor
+        - datapackage.json
+        - --carry-created
+      reads:
+        - build/stage/described.json
+        - build/stage/fips.parquet
+      produces:
+        - build/fips.parquet
+        - datapackage.json
+
+  # ── Publish: the table into the open lake, one snapshot ─────────────────────────
+  # Runs on every `arc run`. With R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY and R2_ACCOUNT_ID
+  # all set, every run publishes live; otherwise into build/lake/, and `arc run --publish`
+  # fails instead.
+  - name: publish
+    op: ducklake_write@1
+    with:
+      public_base: https://openlake.meridian.online/
+      catalog: catalog/open.ducklake
+      data_path: lake/
+      runs: runs/
+      manifest: manifest.json
+      local_catalog: build/lake/open.ducklake
+      tables:
+        - table: census.fips
+          from: build/fips.parquet
+          descriptor: datapackage.json
+          readable_copy: census/fips.parquet
+      credential:
+        type: r2
+        bucket: meridian-open
+        env:
+          key_id: R2_ACCESS_KEY_ID
+          secret: R2_SECRET_ACCESS_KEY
+          account_id: R2_ACCOUNT_ID

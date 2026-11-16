@@ -1,0 +1,161 @@
+{
+  "name": "fips",
+  "title": "FIPS state and county codes — U.S. Census Bureau",
+  "description": "The Census Bureau's FIPS codes (ANSI/INCITS 38 and 31) for US states and counties: one row per state or state-equivalent and per county or county-equivalent, with Census's name, the USPS abbreviation, the GNIS code, Census's class and functional-status codes, and whether the code is in Census's current vintage. The two-digit state code and the five-digit county code are the keys most US government data is joined on. Built from Census's ANSI code lists (2020 vintage, the latest Census publishes), which cover the 50 states, DC, Puerto Rico, the Island Areas and the U.S. Minor Outlying Islands, and from its 2026 Gazetteer county file, which adds the nine Connecticut planning regions that replaced Connecticut's eight counties as county-equivalents in 2022. The eight counties are kept, marked as no longer current, since data from before 2022 uses them. U.S. Census Bureau data, a US Government work in the public domain; Meridian prepared this table from Census's files, and Census does not endorse it.",
+  "homepage": "https://meridian.online/datasets/census/fips",
+  "licenses": [
+    {
+      "name": "other-pd",
+      "title": "Public domain (U.S. Census Bureau)",
+      "path": "https://www.census.gov/about/policies/open-gov/open-data.html"
+    }
+  ],
+  "sources": [
+    {
+      "title": "ANSI, FIPS and other standardized geographic codes — U.S. Census Bureau",
+      "path": "https://www.census.gov/library/reference/code-lists/ansi.html"
+    },
+    {
+      "title": "ANSI state codes, 2020 vintage — U.S. Census Bureau",
+      "path": "https://www2.census.gov/geo/docs/reference/codes2020/national_state2020.txt"
+    },
+    {
+      "title": "ANSI county codes, 2020 vintage — U.S. Census Bureau",
+      "path": "https://www2.census.gov/geo/docs/reference/codes2020/national_county2020.txt"
+    },
+    {
+      "title": "Gazetteer files — U.S. Census Bureau",
+      "path": "https://www.census.gov/geographies/reference-files/time-series/geo/gazetteer-files.html"
+    },
+    {
+      "title": "2026 Gazetteer county file — U.S. Census Bureau",
+      "path": "https://www2.census.gov/geo/docs/maps-data/data/gazetteer/2026_Gazetteer/2026_Gaz_counties_national.zip"
+    }
+  ],
+  "contributors": [
+    {
+      "path": "https://www.census.gov/",
+      "roles": [
+        "author"
+      ],
+      "title": "U.S. Census Bureau"
+    },
+    {
+      "path": "https://meridian.online",
+      "roles": [
+        "publisher",
+        "wrangler"
+      ],
+      "title": "Meridian"
+    }
+  ],
+  "resource": {
+    "name": "fips",
+    "path": "https://openlake.meridian.online/census/fips.parquet"
+  },
+  "x-meridian-code-list": {
+    "levels": [
+      "state",
+      "county"
+    ]
+  },
+  "primaryKey": [
+    "code"
+  ],
+  "fields": {
+    "code": {
+      "description": "The FIPS code, as other data carries it: two digits for a state or state-equivalent (01 for Alabama), five for a county or county-equivalent, the state's two digits and the county's three (01001 for Autauga County). Join other data on this column; it is text, so a leading zero is kept.",
+      "constraints": {
+        "minLength": 2,
+        "maxLength": 5,
+        "pattern": "^([0-9]{2}|[0-9]{5})$"
+      }
+    },
+    "code_display": {
+      "description": "The code as Census prints it, which is the same as code.",
+      "constraints": {
+        "minLength": 2,
+        "maxLength": 5,
+        "pattern": "^([0-9]{2}|[0-9]{5})$"
+      }
+    },
+    "level": {
+      "description": "Hierarchy level: 'state' for a state or state-equivalent (the 50 states, DC, Puerto Rico, the Island Areas and the U.S. Minor Outlying Islands), 'county' for a county or county-equivalent (parishes, boroughs, census areas, independent cities, municipios, districts, Connecticut's planning regions).",
+      "constraints": {
+        "enum": [
+          "state",
+          "county"
+        ]
+      }
+    },
+    "depth": {
+      "description": "0 for a state, 1 for a county."
+    },
+    "parent_code": {
+      "description": "A county's state code; NULL on a state.",
+      "constraints": {
+        "pattern": "^[0-9]{2}$"
+      }
+    },
+    "description": {
+      "description": "Census's name for the state or county (Alabama, Autauga County, Doña Ana County), with its accents."
+    },
+    "description_full": {
+      "description": "The name with its state's in front, joined with ' › ' (Alabama › Autauga County), so a county name repeated across states reads in context. A state's is its own name."
+    },
+    "release": {
+      "description": "The two Census vintages the table was built from, such as 'ANSI 2020, Gazetteer 2026': the vintage of the ANSI state and county code lists, and of the Gazetteer county file. Read from the files' names. One value for every row."
+    },
+    "text_source": {
+      "description": "Which Census file the row came from: 'census_ansi' for the ANSI code lists, 'census_gazetteer' for a county only the Gazetteer lists (Connecticut's nine planning regions).",
+      "constraints": {
+        "enum": [
+          "census_ansi",
+          "census_gazetteer"
+        ]
+      }
+    },
+    "corpus": {
+      "description": "description_full lowercased and accent-stripped, the field the in-browser search reads."
+    },
+    "state_code": {
+      "description": "The two-digit state code, on every row: the code of a state row, and the state of a county row.",
+      "constraints": {
+        "pattern": "^[0-9]{2}$"
+      }
+    },
+    "county_code": {
+      "description": "The three-digit county code within its state (001 for Autauga County); NULL on a state. Unique only with state_code.",
+      "constraints": {
+        "pattern": "^[0-9]{3}$"
+      }
+    },
+    "state_abbr": {
+      "description": "The state's two-letter USPS abbreviation (AL, DC, PR, AS, UM), on every row.",
+      "constraints": {
+        "pattern": "^[A-Z]{2}$"
+      }
+    },
+    "gnis_code": {
+      "description": "The eight-digit GNIS feature code Census lists for the state or county, the U.S. Geological Survey's Geographic Names Information System identifier (Census's STATENS, COUNTYNS or ANSICODE).",
+      "constraints": {
+        "pattern": "^[0-9]{8}$"
+      }
+    },
+    "class_code": {
+      "description": "Census's class code for the county (CLASSFP): H1 an active county or equivalent, H4 a legally defined inactive or nonfunctioning one, H5 a statistical equivalent (Alaska's census areas), H6 a county or equivalent that is coextensive with an incorporated place or another legal entity, C7 an independent city. NULL on states, and on counties only the Gazetteer lists, since it carries no class.",
+      "constraints": {
+        "pattern": "^[A-Z][0-9]$"
+      }
+    },
+    "functional_status": {
+      "description": "Census's functional-status code for the county (FUNCSTAT), from the ANSI county list: A an active government providing primary general-purpose functions, B partially consolidated with another government, C fully consolidated, F a fictitious entity, G an active government subordinate to another unit, N a nonfunctioning legal entity, S statistical. NULL on states, and on counties only the Gazetteer lists.",
+      "constraints": {
+        "pattern": "^[A-Z]$"
+      }
+    },
+    "current": {
+      "description": "Whether the code is in Census's current vintage, as the Gazetteer county file decides: true for a county it lists, and for a state with a county in it; false for a county in a state it covers that it no longer lists, which is Connecticut's eight counties, replaced in 2022 by its planning regions; NULL where it does not cover the state, the Island Areas and the U.S. Minor Outlying Islands, whose codes the ANSI lists still carry."
+    }
+  }
+}
