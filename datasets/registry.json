@@ -183,6 +183,16 @@
       "protocol": "datasets/fips/arcform.yaml"
     },
     {
+      "uid": "09002603-616c-4776-ba30-f7ece4b9d551",
+      "schema": "library",
+      "name": "ourairports",
+      "title": "Airports with ICAO codes — OurAirports",
+      "aliases": [],
+      "manifest": "https://openlake.meridian.online/manifest.json",
+      "doi": null,
+      "protocol": "datasets/ourairports/arcform.yaml"
+    },
+    {
       "uid": "1ac6fe9c-2017-4b6a-9a3d-516401eb1fce",
       "schema": "cms",
       "name": "hcpcs",

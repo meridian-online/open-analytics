@@ -1,0 +1,57 @@
+{
+  "$comment": "Self-derived finetype drift contract for census/naics_2022_titles, checked by the in-engine finetype_validate@1 gate (the model-free `ft_validate` DuckDB table macro). ft_validate MELTS every column to VARCHAR, so this contract uses ONLY the string-surviving JSON-Schema keywords. ENFORCED: the `pattern` on entry_id (a six-digit code, '|', a description) and on code (six digits), the shapes descriptor.overrides.json publishes; the closed `enum` on release and text_source; and `minLength`/`maxLength` envelopes on the text. NOT ENFORCED, by design: NULLs (invisible to ft_validate) and object-level `required` (documentation only); the title-index contract in ../../contracts/check_titles.sql refuses a NULL key, title, code or release. Free-text fields carry LOOSE length envelopes with headroom. Derived from build/stage/naics_2022_titles.parquet on Census's files of 2026-11-17 (the longest title 213 characters, the longest code title 118): a pass-through on today's rows, a fail-closed tripwire for future drift (a code that is not six digits, an entry_id of another shape, a release other than the edition).",
+  "$id": "finetype://naics_2022_titles.parquet",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "census/naics_2022_titles",
+  "type": "object",
+  "properties": {
+    "entry_id": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 1024,
+      "pattern": "^[0-9]{6}\\|.+$"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "code": {
+      "type": "string",
+      "minLength": 6,
+      "maxLength": 6,
+      "pattern": "^[0-9]{6}$"
+    },
+    "code_description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "release": {
+      "type": "string",
+      "enum": [
+        "2022"
+      ]
+    },
+    "text_source": {
+      "type": "string",
+      "enum": [
+        "census"
+      ]
+    },
+    "corpus": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    }
+  },
+  "required": [
+    "entry_id",
+    "title",
+    "code",
+    "code_description",
+    "release",
+    "text_source",
+    "corpus"
+  ]
+}

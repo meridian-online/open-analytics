@@ -1,0 +1,127 @@
+# The census/naics_2022_titles Protocol's tests, run by `arc test` from this folder (see
+# README.md).
+#
+# Fixtures, in testdata/ (see testdata/README.md): cut-down copies of Census's two
+# workbooks. The index keeps 19 entries under five national industries and three of
+# Census's 25 cross-references; the descriptions keep those five industries, their
+# ancestors, one national industry with no index entries (541120) and the 31-33 sector
+# range, so census/naics_2022's own load.sql builds a code list from it.
+#
+# A break on an xlsx fixture sees the sheet as a table `fixture` with a `row` column (the
+# sheet row, 1 for the header) and one text column per sheet letter.
+
+- name: the fixture builds the index
+  risk: an index published with cross-references as entries, codes that miss census/naics_2022, or Census's text changed
+  fixtures:
+    fetch_index: testdata/naics_index.xlsx
+    fetch_naics: testdata/naics_descriptions.xlsx
+  checks:
+    # Every entry, and no cross-reference.
+    - SELECT * FROM (SELECT count(*) AS n FROM naics_2022_titles_out) WHERE n <> 19
+    - >-
+      SELECT code, count(*) AS n FROM naics_2022_titles_out GROUP BY ALL
+      EXCEPT
+      SELECT * FROM (VALUES ('111110', 1), ('111120', 8), ('221114', 3), ('621399', 4), ('813410', 3))
+    - SELECT entry_id FROM naics_2022_titles_out WHERE code = '******' OR title LIKE '% -- see %'
+    # The key, the edition and whose text it is, on every row.
+    - >-
+      SELECT entry_id FROM naics_2022_titles_out
+      WHERE entry_id IS DISTINCT FROM code || '|' || title
+         OR release IS DISTINCT FROM '2022' OR text_source IS DISTINCT FROM 'census'
+    # Every code is a national industry of the code list built in the run, with its title.
+    - >-
+      SELECT t.entry_id FROM naics_2022_titles_out t LEFT JOIN naics c USING (code)
+      WHERE c.level IS DISTINCT FROM 'national_industry' OR t.code_description IS DISTINCT FROM c.title
+    # The code's title as census/naics_2022 gives it, with Census's trilateral 'T' stripped.
+    - >-
+      SELECT * FROM (VALUES ('111110', 'Soybean Farming'), ('111120', 'Oilseed (except Soybean) Farming'),
+        ('621399', 'Offices of All Other Miscellaneous Health Practitioners'))
+        v(code, code_description)
+      WHERE NOT EXISTS (SELECT 1 FROM naics_2022_titles_out t
+                        WHERE t.code = v.code AND t.code_description IS NOT DISTINCT FROM v.code_description)
+    # Text: the ends trimmed, inner runs of spaces kept in title and collapsed in corpus,
+    # a curly apostrophe kept.
+    - >-
+      SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM naics_2022_titles_out
+        WHERE entry_id = '221114|Electric power generation, solar'
+          AND corpus IS NOT DISTINCT FROM 'electric power generation, solar')
+    - >-
+      SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM naics_2022_titles_out
+        WHERE title = 'Veterans''  membership organizations'
+          AND corpus IS NOT DISTINCT FROM 'veterans'' membership organizations')
+    - >-
+      SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM naics_2022_titles_out
+        WHERE title = 'Advanced practicing registered nurses’ (APRNs) offices (e.g., centers, clinics)'
+          AND corpus IS NOT DISTINCT FROM 'advanced practicing registered nurses’ (aprns) offices (e.g., centers, clinics)')
+    # The contract check ran over every row.
+    - SELECT * FROM contract_titles_result WHERE rows_checked <> 19
+
+- name: a changed header is refused
+  risk: Census reworks the index file's columns and descriptions load as codes or codes as descriptions
+  fixtures:
+    fetch_index: testdata/naics_index.xlsx
+    fetch_naics: testdata/naics_descriptions.xlsx
+  break:
+    fetch_index: UPDATE fixture SET B = 'DESCRIPTION' WHERE row = 1
+  expect:
+    fails_with: "NAICS index header row has moved"
+
+- name: a code that is not six digits is refused
+  risk: a code that lost a digit, or a five-digit industry, publishes as an entry nothing in census/naics_2022 joins to
+  fixtures:
+    fetch_index: testdata/naics_index.xlsx
+    fetch_naics: testdata/naics_descriptions.xlsx
+  break:
+    fetch_index: UPDATE fixture SET A = '22111' WHERE B = 'Solar farms'
+  expect:
+    fails_with: "has a code that is not six digits and not a cross-reference: 22111"
+
+- name: an entry without a code is refused
+  risk: an entry whose code cell is empty is published with a NULL code, or dropped unseen
+  fixtures:
+    fetch_index: testdata/naics_index.xlsx
+    fetch_naics: testdata/naics_descriptions.xlsx
+  break:
+    fetch_index: UPDATE fixture SET A = NULL WHERE B = 'Solar farms'
+  expect:
+    fails_with: "NAICS index entry has no code: Solar farms"
+
+- name: an entry without a description is refused
+  risk: a code with an empty description publishes an entry an analyst can never match
+  fixtures:
+    fetch_index: testdata/naics_index.xlsx
+    fetch_naics: testdata/naics_descriptions.xlsx
+  break:
+    fetch_index: UPDATE fixture SET B = NULL WHERE B = 'Solar farms'
+  expect:
+    fails_with: "NAICS index entry has no description: 221114"
+
+- name: a ****** row that is not a cross-reference is refused
+  risk: an ordinary entry whose code Census blanked to ****** is dropped as a cross-reference and the index silently loses it
+  fixtures:
+    fetch_index: testdata/naics_index.xlsx
+    fetch_naics: testdata/naics_descriptions.xlsx
+  break:
+    fetch_index: UPDATE fixture SET A = '******' WHERE B = 'Solar farms'
+  expect:
+    fails_with: "NAICS index has a ****** row that is not a cross-reference: Solar farms"
+
+- name: a code the code list lacks is refused
+  risk: Census drops or renumbers an industry in the descriptions and the index publishes entries that join to nothing
+  fixtures:
+    fetch_index: testdata/naics_index.xlsx
+    fetch_naics: testdata/naics_descriptions.xlsx
+  break:
+    fetch_naics: DELETE FROM fixture WHERE A = '221114'
+  expect:
+    fails_with: "titles: code not in code list: 221114"
+
+- name: a repeated entry is refused
+  risk: Census repeats an entry and the published key is not unique
+  fixtures:
+    fetch_index: testdata/naics_index.xlsx
+    fetch_naics: testdata/naics_descriptions.xlsx
+  break:
+    fetch_index: INSERT INTO fixture (row, A, B) VALUES (24, '111110', 'Soybean farming, field and seed production')
+  expect:
+    fails_with: "titles: repeated entry_id: 111110|Soybean farming, field and seed production"

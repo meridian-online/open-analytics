@@ -15,16 +15,24 @@
 # would misrepresent a JSON-API lookup as link discovery and buy nothing, so the fetch
 # stays a script. Everything downstream of the raw CSV is first-class config.
 #
-# BOUNDARY — do NOT fold this into this manifest:
-#   • PUBLISH (content-addressed R2 upload + manifest/catalog pointer flip) stays in
-#     the out-of-repo publish pipeline and READS this Protocol's terminal output,
-#     build/gleif.parquet + the emitted datapackage.json. It is not an arcform step.
+# PUBLISH. The last step, `publish` (ducklake_write), writes the table into the shared
+# open lake as one snapshot: the catalog, the data file, the table's readable Parquet
+# copy and the search index on R2 (public at https://openlake.meridian.online/). With
+# all three R2 variables set, from .env or the environment, EVERY `arc run` publishes
+# into the live lake; `arc run --publish` only makes a missing credential fail the run
+# instead of publishing into build/lake/. For local work keep .env absent and the
+# variables unset. Keep the credential outside this folder and export it for the
+# publishing command only. Readers need DuckDB 2.0 or later. It reads only what
+# stamp_descriptor and export_search wrote, so it runs after them.
 #
 # Produces: build/gleif.parquet  →  published as gleif.lei
+#           build/gleif_search.parquet  →  its search index, gleif/lei/search.parquet
 name: gleif
 engine: duckdb
 engine_version: ">=1.2"
 db: build/gleif.db
+# The R2 write credential, if a .env is present (see .env.example); the process environment also counts.
+dotenv: [.env]
 
 # Transient API/network blips shouldn't sink a run — retry fetches with backoff.
 defaults:
@@ -163,5 +171,56 @@ steps:
   #       parquet: build/gleif.parquet
   #       schema: schema.finetype.json
 
-  # publish: the out-of-repo publish pipeline reads build/gleif.parquet + the emitted
-  # datapackage.json (boundary — not an arc step). See README.
+  # ── Search index: word token → entity, for the website's typeahead ─────────────
+  # Built from the terminal table, so it describes the same golden-copy snapshot. It is
+  # not a table in the lake: it is an extra file the publish step uploads, and the
+  # compatible manifest names it as the entry's searchUrls, which the website reads.
+  - name: search
+    sql: models/search.sql
+    produces: [gleif_search]
+
+  # Sorted by token with 20,000-row groups, so a prefix range scan prunes to about one
+  # group. (token, lei) is unique, so the order is total and the bytes reproducible.
+  - name: export_search
+    op: parquet_export@1
+    with:
+      input: gleif_search
+      dest: build/gleif_search.parquet
+      compression: zstd
+      row_group_size: 20000
+      order_by: "token, lei"
+
+  # ── Publish: upsert the table into the open lake on lei, with its search index ───
+  # One snapshot: entities the golden copy adds are inserted, changed rows updated, and
+  # entities it no longer carries deleted. The descriptor goes into the lake's meta
+  # schema, the readable copy to the fixed key gleif/lei.parquet, and the search index
+  # to gleif/lei/search.parquet, uploaded only after the catalogue holds the snapshot.
+  # Without the credential it publishes into build/lake/open.ducklake and the run stays
+  # green.
+  - name: publish
+    op: ducklake_write@1
+    with:
+      public_base: https://openlake.meridian.online/
+      catalog: catalog/open.ducklake
+      data_path: lake/
+      runs: runs/
+      manifest: manifest.json
+      local_catalog: build/lake/open.ducklake
+      tables:
+        - table: gleif.lei
+          from: build/gleif.parquet
+          descriptor: datapackage.json
+          readable_copy: gleif/lei.parquet
+          manifest_extra:
+            searchUrls:
+              - https://openlake.meridian.online/gleif/lei/search.parquet
+      files:
+        - from: build/gleif_search.parquet
+          to: gleif/lei/search.parquet
+      credential:
+        type: r2
+        bucket: meridian-open
+        env:
+          key_id: R2_ACCESS_KEY_ID
+          secret: R2_SECRET_ACCESS_KEY
+          account_id: R2_ACCOUNT_ID
