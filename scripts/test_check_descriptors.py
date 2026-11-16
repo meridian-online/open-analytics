@@ -328,6 +328,47 @@ class DescriptorCheckSelfTest(unittest.TestCase):
             "'galaxy'",
         )
 
+    def test_minimum_violation_names_the_field(self) -> None:
+        write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT * FROM (VALUES (-90.0), (-90.5)) t(latitude)",
+            fields=[{"name": "latitude", "type": "number", "constraints": {"minimum": -90.0}}],
+        )
+        self.assertOutcome(
+            run_check(self.datasets),
+            EXIT_VIOLATIONS,
+            "widgets.latitude",
+            "constraints.minimum",
+            "below minimum -90.0",
+        )
+
+    def test_maximum_violation_names_the_field(self) -> None:
+        write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT * FROM (VALUES (180), (181)) t(longitude)",
+            fields=[{"name": "longitude", "type": "integer", "constraints": {"maximum": 180}}],
+        )
+        self.assertOutcome(
+            run_check(self.datasets),
+            EXIT_VIOLATIONS,
+            "widgets.longitude",
+            "constraints.maximum",
+            "above maximum 180",
+        )
+
+    def test_values_on_the_bounds_and_nulls_pass_minimum_and_maximum(self) -> None:
+        write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT * FROM (VALUES (-90.0), (0.0), (90.0), (NULL)) t(latitude)",
+            fields=[
+                {"name": "latitude", "type": "number", "constraints": {"minimum": -90.0, "maximum": 90.0}}
+            ],
+        )
+        self.assertEqual(run_check(self.datasets).returncode, 0)
+
     def test_required_violation_names_the_field(self) -> None:
         write_package(
             self.datasets,
@@ -669,7 +710,7 @@ class DescriptorCheckSelfTest(unittest.TestCase):
             self.datasets,
             "widgets",
             select_sql="SELECT * FROM (VALUES (5)) t(n)",
-            fields=[{"name": "n", "type": "integer", "constraints": {"minimum": 10}}],
+            fields=[{"name": "n", "type": "integer", "constraints": {"exclusiveMinimum": 10}}],
         )
         self.assertOutcome(
             run_check(self.datasets),
@@ -677,6 +718,15 @@ class DescriptorCheckSelfTest(unittest.TestCase):
             "does not evaluate",
             "refusing to report the field as conformant",
         )
+
+    def test_range_constraint_on_a_string_field_is_an_error(self) -> None:
+        write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT * FROM (VALUES ('5')) t(n)",
+            fields=[{"name": "n", "type": "string", "constraints": {"maximum": 10}}],
+        )
+        self.assertOutcome(run_check(self.datasets), EXIT_ERROR, "only on integer and number fields")
 
     def test_unknown_declared_type_is_an_error(self) -> None:
         write_package(

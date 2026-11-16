@@ -186,7 +186,10 @@ COERCIBLE: dict[str, set[str]] = {
 
 # Constraint keywords this script evaluates. Anything else is an EXIT_ERROR rather
 # than a silent pass — an unimplemented constraint must not read as a conformant one.
-SUPPORTED_CONSTRAINTS = {"pattern", "minLength", "maxLength", "enum", "required"}
+# `minimum` and `maximum` are evaluated, inclusive as Frictionless defines them, on
+# `integer` and `number` fields only; on any other type they are an error too.
+SUPPORTED_CONSTRAINTS = {"pattern", "minLength", "maxLength", "enum", "required", "minimum", "maximum"}
+RANGE_CONSTRAINT_TYPES = {"integer", "number"}
 
 # Declared types that may sit on either end of a foreign key together.
 FK_COMPATIBLE_GROUPS = [{"integer", "number", "year"}]
@@ -318,6 +321,14 @@ def constraint_probes(
             "does not evaluate; refusing to report the field as conformant"
         )
 
+    ranged = sorted({"minimum", "maximum"} & set(constraints))
+    if ranged and field.get("type") not in RANGE_CONSTRAINT_TYPES:
+        raise CheckError(
+            f"field {name!r} carries constraint(s) {ranged} on type {field.get('type')!r}; this "
+            "check evaluates them only on integer and number fields, so it refuses to report "
+            "the field as conformant"
+        )
+
     probes: list[tuple[str, str, str, list[Any]]] = []
     if constraints.get("required") is True:
         probes.append(("constraints.required", "missing though declared required", f"{col} IS NULL", []))
@@ -348,6 +359,26 @@ def constraint_probes(
                 "constraints.maxLength",
                 f"longer than maxLength {value}",
                 f"{col} IS NOT NULL AND length({text}) > ?",
+                [value],
+            )
+        )
+    if "minimum" in constraints:
+        value = constraints["minimum"]
+        probes.append(
+            (
+                "constraints.minimum",
+                f"below minimum {value}",
+                f"{col} IS NOT NULL AND {col} < CAST(? AS DOUBLE)",
+                [value],
+            )
+        )
+    if "maximum" in constraints:
+        value = constraints["maximum"]
+        probes.append(
+            (
+                "constraints.maximum",
+                f"above maximum {value}",
+                f"{col} IS NOT NULL AND {col} > CAST(? AS DOUBLE)",
                 [value],
             )
         )

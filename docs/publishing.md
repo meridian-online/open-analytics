@@ -113,6 +113,10 @@ NAICS published on 2026-11-16, from the second pull request's branch after the f
 
 **Schedule B's NAICS join goes due a rebuild when NAICS republishes.** Its descriptor records the hash of the NAICS object it measured (`measuredAgainst`). Once NAICS's hash moves, CI's join check reports the join as due a rebuild and does not fail; Schedule B's next run re-measures it against the new object.
 
+## OurAirports
+
+`datasets/ourairports` (`library/ourairports`) took the same path as FIPS, and ran the label-agreement check with its built descriptor before its merge, so its reasons were ready and its first publish needed no second snapshot. After the merge, `arc run --force` with no credential rebuilt all fifteen steps from OurAirports' commit of 2026-11-16 and published into `build/lake/`, and the strict label-agreement check passed with the descriptor in place. Then `arc run --publish`, with the credential exported in a subshell, committed snapshot 13 (`library.ourairports +10734 ~0 -0`), with every step but `publish` skipped as fresh and `datapackage.json` unchanged by it. The readable copy served at `library/ourairports.parquet` is 917,037 bytes with the descriptor's sha256, and the catalogue serves the same 10,734 rows. The descriptor check, which also first sees a list merged this way in the change that commits its descriptor, then refused `latitude_deg` and `longitude_deg`: finetype gives coordinates `minimum` and `maximum` constraints, which no earlier descriptor carried and the check did not evaluate. It evaluates them now, on integer and number fields, so the published descriptor stands unchanged. **Run `scripts/check_descriptors.py` with the built descriptor in place before the merge as well**, beside the label-agreement check.
+
 ## What is left
 
 - **The other three open Protocols move one at a time**: edgar, gleif and edgar_gleif. Each keeps serving what it has, through the rebased catalogue and its readable copy, but none can be republished until it moves, since infra's publish is stopped. Each moves its own DuckDB pin to 2.0 when it moves, and the engine check holds its footers to that pin.
