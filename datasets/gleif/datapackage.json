@@ -17,7 +17,7 @@
       "title": "Meridian"
     }
   ],
-  "created": "2026-10-30T23:43:44Z",
+  "created": "2026-11-16T21:29:16Z",
   "description": "The Global Legal Entity Identifier Foundation's public register of legal entities — every entity with its 20-character LEI, legal name, country, jurisdiction and registration status.",
   "homepage": "https://meridian.online/datasets/gleif",
   "licenses": [
@@ -30,9 +30,9 @@
   "name": "gleif",
   "resources": [
     {
-      "bytes": 131697642,
+      "bytes": 131693727,
       "format": "parquet",
-      "hash": "sha256:765b13fecf2309d741f70ed4cdba093019b9f212ddc884e66e0ab8e3624519f5",
+      "hash": "sha256:6c40ac348fbc15f346477f534f4747f086d96769c56ccf02a443e7639875a6ad",
       "mediatype": "application/vnd.apache.parquet",
       "name": "gleif",
       "path": "https://openlake.meridian.online/gleif/lei.parquet",
