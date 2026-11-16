@@ -1,5 +1,1 @@
 build/
-# Until census/fips is first published. CI holds every committed descriptor to the object
-# the lake serves, so the descriptor is committed with the first publish, and this line
-# removed in the same change.
-datapackage.json
