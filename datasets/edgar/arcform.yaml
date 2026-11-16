@@ -9,10 +9,14 @@
 # finetype contract. Operator code lives in the arcform repo (engine + catalog), not
 # here; this manifest REFERENCES operators by name@version.
 #
-# BOUNDARY — do NOT fold this into this manifest:
-#   • PUBLISH (content-addressed R2 upload + manifest/catalog pointer flip) stays in
-#     the out-of-repo publish pipeline and READS this Protocol's terminal output,
-#     build/edgar.parquet + the emitted datapackage.json. It is not an arcform step.
+# PUBLISH. The last step, `publish` (ducklake_write), writes the table into the shared
+# open lake as one snapshot: the catalog, the data file and the table's readable Parquet
+# copy on R2 (public at https://openlake.meridian.online/). With all three R2 variables
+# set, from .env or the environment, EVERY `arc run` publishes into the live lake;
+# `arc run --publish` only makes a missing credential fail the run instead of publishing
+# into build/lake/. For local work keep .env absent and the variables unset. Keep the
+# credential outside this folder and export it for the publishing command only. Readers
+# need DuckDB 2.0 or later. It reads only what stamp_descriptor wrote, so it runs after it.
 #
 # INFORMATION RETRIEVAL ONLY — this is a clean IR dataset. The EDGAR ↔ GLEIF
 # entity-resolution "join" is NOT done here; it lives in the library.edgar_lei
@@ -23,6 +27,8 @@ name: edgar
 engine: duckdb
 engine_version: ">=1.2"
 db: build/edgar.db
+# The R2 write credential, if a .env is present (see .env.example); the process environment also counts.
+dotenv: [.env]
 
 # Transient API/network blips shouldn't sink a run — retry fetches with backoff.
 defaults:
@@ -149,5 +155,29 @@ steps:
         - datapackage.json
         - build/edgar.parquet
 
-  # publish: the out-of-repo publish pipeline reads build/edgar.parquet + the emitted
-  # datapackage.json (boundary — not an arc step). See README.
+  # ── Publish: upsert the table into the open lake on (cik, ticker) ────────────────
+  # One snapshot: tickers the SEC adds are inserted, changed rows updated, and tickers
+  # it no longer lists deleted. The descriptor goes into the lake's meta schema and the
+  # readable copy to the fixed key sec/company_tickers_exchange.parquet. Without the
+  # credential it publishes into build/lake/open.ducklake and the run stays green.
+  - name: publish
+    op: ducklake_write@1
+    with:
+      public_base: https://openlake.meridian.online/
+      catalog: catalog/open.ducklake
+      data_path: lake/
+      runs: runs/
+      manifest: manifest.json
+      local_catalog: build/lake/open.ducklake
+      tables:
+        - table: sec.company_tickers_exchange
+          from: build/edgar.parquet
+          descriptor: datapackage.json
+          readable_copy: sec/company_tickers_exchange.parquet
+      credential:
+        type: r2
+        bucket: meridian-open
+        env:
+          key_id: R2_ACCESS_KEY_ID
+          secret: R2_SECRET_ACCESS_KEY
+          account_id: R2_ACCOUNT_ID

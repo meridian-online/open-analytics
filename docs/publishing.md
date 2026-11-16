@@ -113,9 +113,17 @@ NAICS published on 2026-11-16, from the second pull request's branch after the f
 
 **Schedule B's NAICS join goes due a rebuild when NAICS republishes.** Its descriptor records the hash of the NAICS object it measured (`measuredAgainst`). Once NAICS's hash moves, CI's join check reports the join as due a rebuild and does not fail; Schedule B's next run re-measures it against the new object.
 
+## EDGAR
+
+`datasets/edgar` (`sec/company_tickers_exchange`) moves as NAICS did, in two pull requests and for the same reason: the served copy was written by DuckDB 1.5.5, so a pull request that moves the pins or commits a rebuilt descriptor is red until EDGAR has republished. The first adds the publish step, upserting `sec.company_tickers_exchange` on (`cik`, `ticker`), with `.env.example` and the README's Publish section; the second moves the pins to 2.0.0 and commits the descriptor, and is published from its own branch after the first merges. EDGAR has the same two writers per file as NAICS (`export_edgar` and `stamp_descriptor` both write `build/edgar.parquet`, `describe` and `stamp_descriptor` both write `datapackage.json`), so every run re-runs the steps from `export_edgar` on.
+
+The SEC refreshes its file daily, so unlike NAICS a republish changes rows. A forced rebuild on 2026-11-17, on DuckDB 2.0 and finetype 0.6.67, built 10,404 rows against the live table's 10,430, and the shape check printed `shape ok: sec.company_tickers_exchange 5 columns, rows 10430 -> 10404`. Every label held. The `ticker` pattern narrowed back to finetype's canonical one, since no ticker of the form `ABCD.` is left that once widened it, and `exchange`'s confidence moved. Expect the row count and those details to move again by the day of the publish; commit `datapackage.json` from the run that published.
+
+**edgar_gleif's join goes due a rebuild when EDGAR republishes**, as Schedule B's does on NAICS: its descriptor records the hash of the EDGAR object it measured, and CI's join check reports the join as due a rebuild without failing.
+
 ## What is left
 
-- **The other three open Protocols move one at a time**: edgar, gleif and edgar_gleif. Each keeps serving what it has, through the rebased catalogue and its readable copy, but none can be republished until it moves, since infra's publish is stopped. Each moves its own DuckDB pin to 2.0 when it moves, and the engine check holds its footers to that pin.
+- **The other open Protocols move one at a time**: edgar (see *EDGAR* above), then gleif and edgar_gleif. Each keeps serving what it has, through the rebased catalogue and its readable copy, but none can be republished until it moves, since infra's publish is stopped. Each moves its own DuckDB pin to 2.0 when it moves, and the engine check holds its footers to that pin.
 - **infra's publish scripts and workflow are deleted** once all of them have moved. Until then they refuse to run.
 - **The website reads the catalogue** instead of `manifest.json`, at which point the manifest and its stale fields retire. The SOC dataset pages come with that work.
 
