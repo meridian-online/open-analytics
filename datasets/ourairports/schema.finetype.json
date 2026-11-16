@@ -1,0 +1,57 @@
+{
+  "$comment": "Self-derived finetype drift contract for library/ourairports, checked by the in-engine finetype_validate@1 gate. Holds the ICAO code shape on code and code_display and the closed domains on level, text_source and type; completed in a later change.",
+  "$id": "finetype://ourairports.parquet",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "library/ourairports",
+  "type": "object",
+  "required": [
+    "code",
+    "code_display",
+    "level",
+    "description",
+    "release",
+    "text_source"
+  ],
+  "properties": {
+    "code": {
+      "type": "string",
+      "pattern": "^[A-Z]{4}$",
+      "minLength": 4,
+      "maxLength": 4
+    },
+    "code_display": {
+      "type": "string",
+      "pattern": "^[A-Z]{4}$",
+      "minLength": 4,
+      "maxLength": 4
+    },
+    "level": {
+      "type": "string",
+      "enum": [
+        "airport"
+      ]
+    },
+    "text_source": {
+      "type": "string",
+      "enum": [
+        "ourairports"
+      ]
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "heliport",
+        "large_airport",
+        "medium_airport",
+        "seaplane_base",
+        "small_airport"
+      ]
+    },
+    "release": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+      "minLength": 10,
+      "maxLength": 10
+    }
+  }
+}

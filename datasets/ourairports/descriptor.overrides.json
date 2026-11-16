@@ -1,0 +1,66 @@
+{
+  "name": "ourairports",
+  "title": "Airports with ICAO codes — OurAirports",
+  "description": "OurAirports' airports that carry an ICAO code: one row per ICAO code. Completed in a later change.",
+  "homepage": "https://meridian.online/datasets/library/ourairports",
+  "licenses": [
+    {
+      "name": "other-pd",
+      "title": "Public domain (OurAirports)",
+      "path": "https://ourairports.com/data/"
+    }
+  ],
+  "sources": [
+    {
+      "title": "Open data downloads — OurAirports",
+      "path": "https://ourairports.com/data/"
+    }
+  ],
+  "contributors": [
+    {
+      "path": "https://ourairports.com/",
+      "roles": [
+        "author"
+      ],
+      "title": "OurAirports"
+    },
+    {
+      "path": "https://meridian.online",
+      "roles": [
+        "publisher",
+        "wrangler"
+      ],
+      "title": "Meridian"
+    }
+  ],
+  "resource": {
+    "name": "ourairports",
+    "path": "https://openlake.meridian.online/library/ourairports.parquet"
+  },
+  "x-meridian-code-list": {
+    "levels": [
+      "airport"
+    ]
+  },
+  "primaryKey": [
+    "code"
+  ],
+  "fields": {
+    "code": {
+      "description": "The airport's ICAO code, four capital letters.",
+      "constraints": {
+        "minLength": 4,
+        "maxLength": 4,
+        "pattern": "^[A-Z]{4}$"
+      }
+    },
+    "code_display": {
+      "description": "The same as code.",
+      "constraints": {
+        "minLength": 4,
+        "maxLength": 4,
+        "pattern": "^[A-Z]{4}$"
+      }
+    }
+  }
+}

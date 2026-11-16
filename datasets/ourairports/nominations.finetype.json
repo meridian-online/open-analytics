@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "resources": {
+    "ourairports": {
+      "code": {
+        "label": "geography.transportation.icao_code",
+        "why": "OurAirports' ICAO airport codes."
+      },
+      "code_display": {
+        "label": "geography.transportation.icao_code",
+        "why": "The same values as code, nominated with it."
+      }
+    }
+  }
+}
