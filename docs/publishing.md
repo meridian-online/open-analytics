@@ -121,9 +121,20 @@ The SEC refreshes its file daily, so unlike NAICS a republish changes rows. A fo
 
 **edgar_gleif's join goes due a rebuild when EDGAR republishes**, as Schedule B's does on NAICS: its descriptor records the hash of the EDGAR object it measured, and CI's join check reports the join as due a rebuild without failing.
 
+## GLEIF
+
+`datasets/gleif` (`gleif/lei`) moves in two pull requests, as NAICS and EDGAR do: the first adds the publish step, upserting `gleif.lei` on `lei`, and the second moves the DuckDB pins to 2.0.0 and commits the rebuilt descriptor, publishing from its own branch after the first merges. GLEIF's stamp also rewrites `build/gleif.parquet` and `datapackage.json` in place, so every run re-runs the steps from `export_gleif` on.
+
+**GLEIF's search index moves into the Protocol.** The website's typeahead reads a token index, one row per word of each entity's legal name and city, sorted by token in 20,000-row groups so a prefix scan reads about one group. infra's `publish-gleif-search.sh` used to build it from the Protocol's Parquet and upload it in content-addressed parts, listed as `searchUrls` in the manifest entry. Now the `search` model and `export_search` step build it, from the same terminal table and with the same SQL, and the publish step uploads it as an extra file (`files:`) to the fixed key `gleif/lei/search.parquet`, after the catalogue holds the snapshot. The entry's `searchUrls` names that one URL through `manifest_extra`, which is the only search key the website reads. The old entry's `searchBytes`, `searchRows` and `searchPublished` stay as they were, since arc keeps keys it does not set, and stop moving; the old parts stay where they are, since infra's version collector stopped at the cutover.
+
+- **One part, not two.** The old script capped parts at 260 MB for wrangler's single-upload limit. arc uploads through the S3 API, so the index is one 427 MB file, and the website already takes a list of any length.
+- **A fixed key, not a content-addressed one.** Like the readable copies, the index is overwritten in place and served with `cache-control: public, max-age=60`, which arc sets on extra files from arcform PR 173 on. Publish GLEIF with an arc that includes it, or the edge keeps the old index for its default TTL. A reader whose search spans the overwrite can read two versions of the file; DuckDB fails and a retry heals it, which is the same trade the readable copies make.
+
+A local run on 2026-11-17 from the 30 October golden copy, the one the live table was built from, published `gleif.lei +3479871 ~0 -0` into the local lake with the index beside it. The shape check printed `shape ok: gleif.lei 11 columns, rows 3479871 -> 3479871`. The index held 16,678,101 rows, the live parts' count, unique on (`token`, `lei`), and a prefix scan for `micro` read 1 of its 815 row groups. Every label held; only `bytes`, `hash` and `created` moved in the descriptor. The download of the 16 November golden copy stalled at 21 MB, as the manifest warns it can, so that run reused the October copy already on disk.
+
 ## What is left
 
-- **The other open Protocols move one at a time**: edgar (see *EDGAR* above), then gleif and edgar_gleif. Each keeps serving what it has, through the rebased catalogue and its readable copy, but none can be republished until it moves, since infra's publish is stopped. Each moves its own DuckDB pin to 2.0 when it moves, and the engine check holds its footers to that pin.
+- **The other open Protocols move one at a time**: edgar and gleif (see *EDGAR* and *GLEIF* above), then edgar_gleif. Each keeps serving what it has, through the rebased catalogue and its readable copy, but none can be republished until it moves, since infra's publish is stopped. Each moves its own DuckDB pin to 2.0 when it moves, and the engine check holds its footers to that pin.
 - **infra's publish scripts and workflow are deleted** once all of them have moved. Until then they refuse to run.
 - **The website reads the catalogue** instead of `manifest.json`, at which point the manifest and its stale fields retire. The SOC dataset pages come with that work.
 
