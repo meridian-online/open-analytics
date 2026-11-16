@@ -20,8 +20,8 @@
       "path": "https://www.cms.gov/medicare/coding-billing/healthcare-common-procedure-system/quarterly-update"
     },
     {
-      "title": "October 2026 alpha-numeric HCPCS file — CMS",
-      "path": "https://www.cms.gov/files/zip/october-2026-alpha-numeric-hcpcs-file.zip"
+      "title": "January 2027 alpha-numeric HCPCS file — CMS",
+      "path": "https://www.cms.gov/files/zip/january-2027-alpha-numeric-hcpcs-file.zip"
     }
   ],
   "contributors": [
@@ -85,13 +85,13 @@
       }
     },
     "description": {
-      "description": "CMS's long description of the code, its lines joined with a space. Where CMS's text cites a CPT code by number (fifteen G, M, S and V codes in October 2026, such as 'list separately in addition to cpt codes 99306, 99310'), each number is replaced by '[CPT code]', and text_source is cms_cpt_redacted."
+      "description": "CMS's long description of the code, its lines joined with a space. Where CMS's text cites a CPT code by number (sixteen G, M, S and V codes in January 2027, such as 'list separately in addition to cpt codes 99306, 99310'), each number is replaced by '[CPT code]', and text_source is cms_cpt_redacted."
     },
     "description_full": {
       "description": "The same as description, since a code has no ancestors to put in front of it."
     },
     "release": {
-      "description": "CMS's quarter and the date in the file's name, as <year>-<month>/<file date>: the October 2026 file, HCPC2026_OCT_ANWEB_09232026, is 2026-10/2026-09-23.",
+      "description": "CMS's quarter and the date of its file, as <year>-<month>/<file date>: the January 2027 file, HCPC2027_JAN_ANWEB.txt, which CMS's zip dates 2026-11-12, is 2027-01/2026-11-12. The quarter is read from the file's name and the date from the zip, since CMS's names no longer carry it.",
       "constraints": {
         "pattern": "^[0-9]{4}-(01|04|07|10)/[0-9]{4}-[0-9]{2}-[0-9]{2}$",
         "minLength": 18,
@@ -192,7 +192,7 @@
       }
     },
     "cross_reference_codes": {
-      "description": "Up to five HCPCS Level II codes CMS crosswalks a deleted or non-Medicare code to, as a list. CMS's cross-references to CPT codes (42 codes in October 2026) and to dental codes are left out, so a code whose only cross-references were CPT codes has NULL here."
+      "description": "Up to five HCPCS Level II codes CMS crosswalks a deleted or non-Medicare code to, as a list. CMS's cross-references to CPT codes (42 codes in January 2027) and to dental codes are left out, so a code whose only cross-references were CPT codes has NULL here."
     }
   },
   "primaryKey": [

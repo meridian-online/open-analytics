@@ -1,6 +1,6 @@
 -- HCPCS Level II: one row per code, from CMS's quarterly alpha-numeric file.
 --
--- CMS's file (HCPC<year>_<MON>_ANWEB_<MMDDYYYY>.txt) is fixed-width, 320 characters a
+-- CMS's file (HCPC<year>_<MON>_ANWEB.txt) is fixed-width, 320 characters a
 -- record by CMS's record layout, one record per line of description. Record type 3 is
 -- the first line of a code and carries its data fields; type 4 continues its long
 -- description. Types 7 and 8 are modifiers, which are not codes on this ladder and are
@@ -25,16 +25,20 @@
 --         "[CPT code]", and text_source says so (`cms_cpt_redacted`).
 -- The check_licence step proves both on the exported file.
 --
--- release is CMS's quarter and the date in the file's name: HCPC2026_OCT_ANWEB_09232026
--- is `2026-10/2026-09-23`. The run fails if the extracted directory holds other than
--- one ANWEB file, if its name does not parse, if a record's code is not a letter and
--- four digits, if a code has no first record or more than one, or if a code has no
+-- release is CMS's quarter, from the file's name, and the file's date, as the zip
+-- records it (build/hcpcs_date.json, written by the date_hcpcs step):
+-- HCPC2027_JAN_ANWEB.txt, dated 2026-11-12, is `2027-01/2026-11-12`. CMS's names up to
+-- October 2026 also carried that date (HCPC2026_OCT_ANWEB_09232026.txt); such a name
+-- still parses, and its date is not read, since the zip records the same one. The run
+-- fails if the extracted directory holds other than one ANWEB file, if its name does
+-- not parse, if hcpcs_date.json holds no ISO date, if a record's code is not a letter
+-- and four digits, if a code has no first record or more than one, or if a code has no
 -- long description.
 
 CREATE OR REPLACE TABLE hcpcs AS
 WITH raw AS (
   SELECT line, filename
-  FROM read_csv('build/hcpcs/HCPC*_ANWEB_*.txt',
+  FROM read_csv('build/hcpcs/HCPC*_ANWEB*.txt',
                 columns = {'line': 'VARCHAR'}, delim = chr(1), quote = '', escape = '',
                 header = false, filename = true)
 ),
@@ -45,22 +49,30 @@ files AS (
               ELSE any_value(filename) END AS filename
   FROM raw
 ),
+file_date AS (
+  SELECT CASE WHEN regexp_full_match(coalesce(date, ''), '[0-9]{4}-[0-9]{2}-[0-9]{2}')
+                   AND TRY_CAST(date AS DATE) IS NOT NULL
+              THEN date
+              ELSE error('build/hcpcs_date.json holds no ISO date: '
+                         || coalesce('"' || date || '"', 'null')) END AS date
+  FROM read_json('build/hcpcs_date.json', columns = {date: 'VARCHAR'}, records = true)
+),
 release AS (
-  -- regexp_extract's struct form gives empty strings, not NULL, when the name does not
-  -- match, so emptiness is what is tested.
-  SELECT CASE WHEN m['year'] = '' OR m['fy'] = '' OR month_number IS NULL
-              THEN error('CMS file name does not parse as HCPC<year>_<MON>_ANWEB_<MMDDYYYY>: '
+  -- regexp_extract gives an empty string, not NULL, when the name does not match, so
+  -- emptiness is what is tested.
+  SELECT CASE WHEN year = '' OR month_number IS NULL
+              THEN error('CMS file name does not parse as HCPC<year>_<MON>_ANWEB.txt: '
                          || filename)
-              ELSE m['year'] || '-' || lpad(month_number::VARCHAR, 2, '0') || '/'
-                   || m['fy'] || '-' || m['fm'] || '-' || m['fd'] END AS release
+              ELSE year || '-' || lpad(month_number::VARCHAR, 2, '0') || '/'
+                   || (SELECT date FROM file_date) END AS release
   FROM (
     SELECT filename,
-           regexp_extract(filename,
-             'HCPC([0-9]{4})_([A-Z]{3})_ANWEB_(?:[^/]*_)?([0-9]{2})([0-9]{2})([0-9]{4})\.txt$',
-             ['year', 'mon', 'fm', 'fd', 'fy']) AS m,
+           regexp_extract(filename, 'HCPC([0-9]{4})_[A-Z]{3}_ANWEB(?:_[0-9]{8})?\.txt$', 1)
+             AS year,
            list_position(['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
                           'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'],
-             regexp_extract(filename, 'HCPC[0-9]{4}_([A-Z]{3})_ANWEB_', 1)) AS month_number
+             regexp_extract(filename, 'HCPC[0-9]{4}_([A-Z]{3})_ANWEB(?:_[0-9]{8})?\.txt$', 1))
+             AS month_number
     FROM files
   )
 ),

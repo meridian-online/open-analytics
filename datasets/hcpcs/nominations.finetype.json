@@ -21,6 +21,14 @@
       "asc_payment_group": {
         "label": "representation.text.word",
         "why": "YY or NULL, CMS's ambulatory surgical center indicator. Inferred it is `unknown`; the value is one short token."
+      },
+      "short_description": {
+        "label": "representation.text.plain_text",
+        "why": "CMS's short description, 28 characters or fewer, abbreviations included. On January 2027's file finetype's sample reads it as an entity name, which it read as plain text on October 2026's; nominated so the label does not move with the sample."
+      },
+      "betos": {
+        "label": "representation.identifier.alphanumeric_id",
+        "why": "A BETOS category such as D1F or O1E: a short code. On January 2027's file finetype's sample leaves it `unknown`, which it read as an alphanumeric identifier on October 2026's; nominated so the label does not move with the sample."
       }
     }
   }

@@ -4,8 +4,9 @@
 # executes this manifest; one Run → one Dataset version. See ./README.md.
 #
 # CONFIG ONLY. Every step is a first-class `sql:` model or a typed `op:` operator (the
-# arcform catalog). The fetch is http_fetch and the unzip archive_extract; the SQL
-# reads CMS's fixed-width file into one row per code and adds the search corpus; the
+# arcform catalog). The fetch is http_fetch and the unzip archive_extract; date_hcpcs
+# (uv) reads the codes file's date from the zip's directory; the SQL reads CMS's
+# fixed-width file into one row per code and adds the search corpus; the
 # COPY is parquet_export; check_licence proves the file carries no dental (CDT) code
 # and no CPT content; datapackage_describe emits the descriptor; check_code_list holds
 # the Parquet to the shared code-list contract; finetype_validate gates it; and
@@ -18,10 +19,14 @@
 #
 # THE QUARTER. CMS publishes each quarter's file at its own URL
 # (/files/zip/<month>-<year>-alpha-numeric-hcpcs-file.zip), and the text file inside
-# is named for the quarter and the date CMS built it. arc does not substitute a param
-# into an operator's `with:`, so a new quarter changes two literals here: the URL in
-# fetch_hcpcs and the member in extract_hcpcs. `release` is read from the member's
-# name in load.sql, so it cannot disagree with the file it was built from.
+# is named for the quarter (HCPC2027_JAN_ANWEB.txt). Up to October 2026 the name also
+# carried the date CMS built the file; from January 2027 it does not, so the date comes
+# from the zip's own directory, as Schedule B's does. arc does not substitute a param
+# into an operator's `with:`, so a new quarter changes the URL in fetch_hcpcs and the
+# member in extract_hcpcs, date_hcpcs and load's depends_on, and the quarter's source
+# in descriptor.overrides.json; scripts/test_hcpcs_models.py fails when they disagree.
+# `release` is read in load.sql from the member's name and its recorded date, so it
+# cannot disagree with the file it was built from.
 #
 # PUBLISH. The last step, `publish` (ducklake_write), writes the table into the shared
 # open lake as one snapshot: the catalog, the data file and the table's readable Parquet
@@ -51,7 +56,7 @@ steps:
   - name: fetch_hcpcs
     op: http_fetch@1
     with:
-      url: https://www.cms.gov/files/zip/october-2026-alpha-numeric-hcpcs-file.zip
+      url: https://www.cms.gov/files/zip/january-2027-alpha-numeric-hcpcs-file.zip
       out: build/hcpcs.zip
       headers:
         User-Agent: "Meridian Protocol (open-analytics; research@meridian.online)"
@@ -63,15 +68,37 @@ steps:
     op: archive_extract@1
     with:
       archive: build/hcpcs.zip
-      members: [HCPC2026_OCT_ANWEB_09232026.txt]
+      members: [HCPC2027_JAN_ANWEB.txt]
       dest: build/hcpcs
+
+  # ── Date: the codes file's date, as the zip records it ──────────────────────────
+  # archive_extract does not set a member's date on the file it writes, so the date
+  # `release` carries is read from the zip's own directory. The script is shared with
+  # ../schedule_b and addressed by its bytes: `shasum -a 256 scripts/member_date.py`
+  # prints this. It needs only the standard library, so the step declares no `deps:`.
+  - name: date_hcpcs
+    op: uv@1
+    with:
+      script: ../../scripts/member_date.py
+      sha256: 98a42fee4c99e3eee02881ed21368034e725f1609333faa73c0e46a721bd456c
+      args:
+        - --archive
+        - build/hcpcs.zip
+        - --member
+        - HCPC2027_JAN_ANWEB.txt
+        - --out
+        - build/hcpcs_date.json
+      reads:
+        - build/hcpcs.zip
+      produces:
+        - build/hcpcs_date.json
 
   # ── Load: one row per code, its text, its CMS fields and its release ────────────
   # Drops the D series and every CPT code, and fails the run on a record it cannot
   # read. See the model's header.
   - name: load
     sql: models/load.sql
-    depends_on: [build/hcpcs/HCPC2026_OCT_ANWEB_09232026.txt]
+    depends_on: [build/hcpcs/HCPC2027_JAN_ANWEB.txt, build/hcpcs_date.json]
 
   # ── Package: materialise the terminal table (adds the search corpus) ────────────
   - name: package

@@ -13,7 +13,7 @@ Schedule B, the U.S. Census Bureau's classification of exported goods: every ten
 `arc run` (arcform) executes `arcform.yaml`. One **Run** → one Dataset version. The step DAG:
 
 1. **fetch and extract** — Census's bulk file `sbsdf.zip` for the year, and `econcord.txt`, the export codes, out of it.
-2. **date** (`scripts/member_date.py`) — the date the zip records for `econcord.txt`, written to `build/econcord_date.json`. `archive_extract` does not set a member's date on the file it writes, so the date is read from the zip's own directory.
+2. **date** (`../../scripts/member_date.py`, shared with `../hcpcs`) — the date the zip records for `econcord.txt`, written to `build/econcord_date.json`. `archive_extract` does not set a member's date on the file it writes, so the date is read from the zip's own directory.
 3. **fetch the index** — the year's `index.html`, which holds the chapter titles and sections.
 4. **fetch USITC** — `currentRelease`, the whole HTS as one JSON export, and `currentRelease` again, as the HTS Protocol does, so `load` can fail a run whose revision changed mid-download.
 5. **outline** (`../hts/models/outline.sql`) — the HTS Protocol's own file: USITC's rows as an outline, with the text for every 2, 4, 6, 8 and 10-digit prefix.

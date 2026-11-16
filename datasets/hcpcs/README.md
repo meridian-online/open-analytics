@@ -13,16 +13,17 @@ HCPCS Level II, the alpha-numeric codes the Centers for Medicare & Medicaid Serv
 `arc run` (arcform) executes `arcform.yaml`. One **Run** → one Dataset version. The step DAG:
 
 1. **fetch** — CMS's alpha-numeric HCPCS zip for the quarter, from the HCPCS quarterly update page.
-2. **extract** — the fixed-width codes file from the zip (`HCPC2026_OCT_ANWEB_09232026.txt` for October 2026). The zip's Excel copy, record layout, transaction report, corrections, not-otherwise-classified list and processing notes are not read.
-3. **load** (`models/load.sql`) — read CMS's 320-character records by its record layout: one row per code from its first record, with the long description's continuation records joined with a space. Modifier records are not read. Drops the D series and every CPT code (see below), and stamps `release` from the file's name.
-4. **package** (`models/package.sql`) — add the search `corpus`, hand off the terminal table.
-5. **export** — write the zstd Parquet to `build/stage/`, ordered by `code`.
-6. **check_licence** (`models/check_licence.sql`) — fail the run if the exported file holds a D code, a code that is not a letter and four digits, a cross-reference that is a CPT or D code, or text holding a CPT-shaped code or naming a D code.
-7. **describe** — emit the descriptor from the Parquet, typed by finetype with `nominations.finetype.json` and `descriptor.overrides.json` applied.
-8. **check_code_list** — hold the Parquet to the shared code-list contract (`scripts/check_code_list.py`, see `docs/code-lists.md`).
-9. **validate** — gate the Parquet against `schema.finetype.json`.
-10. **stamp_descriptor** — write the published `build/hcpcs.parquet` with the finished descriptor in its footer, and `datapackage.json` beside it.
-11. **publish** — upsert `cms.hcpcs` into the open lake on `code`, with its descriptor in the lake's `meta` schema and the readable copy at `cms/hcpcs.parquet` (see *Publish*).
+2. **extract** — the fixed-width codes file from the zip (`HCPC2027_JAN_ANWEB.txt` for January 2027). The zip's Excel copy, record layout, transaction report, not-otherwise-classified list and processing notes are not read.
+3. **date** (`../../scripts/member_date.py`, shared with `../schedule_b`) — the date the zip records for the codes file, written to `build/hcpcs_date.json`. `archive_extract` does not set a member's date on the file it writes, so the date is read from the zip's own directory.
+4. **load** (`models/load.sql`) — read CMS's 320-character records by its record layout: one row per code from its first record, with the long description's continuation records joined with a space. Modifier records are not read. Drops the D series and every CPT code (see below), and stamps `release` from the file's name and date.
+5. **package** (`models/package.sql`) — add the search `corpus`, hand off the terminal table.
+6. **export** — write the zstd Parquet to `build/stage/`, ordered by `code`.
+7. **check_licence** (`models/check_licence.sql`) — fail the run if the exported file holds a D code, a code that is not a letter and four digits, a cross-reference that is a CPT or D code, or text holding a CPT-shaped code or naming a D code.
+8. **describe** — emit the descriptor from the Parquet, typed by finetype with `nominations.finetype.json` and `descriptor.overrides.json` applied.
+9. **check_code_list** — hold the Parquet to the shared code-list contract (`scripts/check_code_list.py`, see `docs/code-lists.md`).
+10. **validate** — gate the Parquet against `schema.finetype.json`.
+11. **stamp_descriptor** — write the published `build/hcpcs.parquet` with the finished descriptor in its footer, and `datapackage.json` beside it.
+12. **publish** — upsert `cms.hcpcs` into the open lake on `code`, with its descriptor in the lake's `meta` schema and the readable copy at `cms/hcpcs.parquet` (see *Publish*).
 
 Produces `build/hcpcs.parquet`.
 
@@ -31,7 +32,7 @@ Produces `build/hcpcs.parquet`.
 HCPCS Level II's codes and descriptors are a US Government work, with two exceptions that bind this dataset.
 
 - **Dental codes.** The D series is the American Dental Association's Current Dental Terminology (CDT), which the ADA holds copyright in. CMS's alpha-numeric file does not carry the D series today; `load` drops any D code it finds, and `check_licence` fails the run if one reaches the file.
-- **CPT.** HCPCS Level I is the American Medical Association's CPT. CMS's file carries no CPT code as a row, but it cites CPT codes in two places, and neither is published here. Its cross-reference field points at a CPT code for 42 codes in October 2026; those cross-references are dropped and only Level II codes are kept. Fifteen of its long descriptions (G, M, S and V codes) cite CPT codes by number, such as "list separately in addition to cpt codes 99306, 99310"; each five-digit number, and each four digits followed by F or T (CPT's category II and III forms), is replaced by `[CPT code]`, and `text_source` is `cms_cpt_redacted` on those rows. The words "cpt code" in CMS's own text, without a number, are kept.
+- **CPT.** HCPCS Level I is the American Medical Association's CPT. CMS's file carries no CPT code as a row, but it cites CPT codes in two places, and neither is published here. Its cross-reference field points at a CPT code for 42 codes in January 2027; those cross-references are dropped and only Level II codes are kept. Sixteen of its long descriptions in January 2027 (G, M, S and V codes) cite CPT codes by number, such as "list separately in addition to cpt codes 99306, 99310"; each five-digit number, and each four digits followed by F or T (CPT's category II and III forms), is replaced by `[CPT code]`, and `text_source` is `cms_cpt_redacted` on those rows. The words "cpt code" in CMS's own text, without a number, are kept.
 
 Modifiers (CMS's record types 7 and 8) are not included: they are not codes on this list and would need a table of their own.
 
@@ -41,9 +42,11 @@ The list is flat: every row is level `code` at depth 0 with no parent, so `descr
 
 ## The release
 
-`release` is CMS's quarter and the date in the file's name, `<year>-<month>/<file date>`: `HCPC2026_OCT_ANWEB_09232026.txt` is `2026-10/2026-09-23`. `load` reads it from the extracted file's name, so it cannot disagree with the file the rows came from, and fails the run if the directory holds other than one such file or the name does not parse.
+`release` is CMS's quarter and the file's date, `<year>-<month>/<file date>`: `HCPC2027_JAN_ANWEB.txt`, which the zip dates 2026-11-12, is `2027-01/2026-11-12`. The quarter comes from the extracted file's name and the date from the zip's directory, so neither can disagree with the file the rows came from. `load` fails the run if the directory holds other than one such file, if the name does not parse, or if the date step wrote no ISO date. Up to October 2026 CMS also put the date in the name (`HCPC2026_OCT_ANWEB_09232026.txt`, `2026-10/2026-09-23`); from January 2027 it does not. The zip dated October's file the same day its name did, so the two ways of reading the date agree. A dated name still parses, and its date is not read.
 
-CMS publishes each quarter at its own URL, and arc does not substitute a param into an operator's `with:`, so a new quarter changes two literals in `arcform.yaml`: `fetch_hcpcs`'s URL and `extract_hcpcs`'s member. Update the October 2026 source in `descriptor.overrides.json` at the same time.
+CMS publishes each quarter at its own URL, and arc does not substitute a param into an operator's `with:`, so a new quarter changes `arcform.yaml` in four places, `fetch_hcpcs`'s URL, `extract_hcpcs`'s member, `date_hcpcs`'s `--member` and `load`'s `depends_on`, and the quarter's source in `descriptor.overrides.json`. `scripts/test_hcpcs_models.py` fails in CI when they disagree.
+
+**When to publish a quarter.** CMS posts each quarter's file about six weeks before the quarter starts (January 2027's on 13 November 2026), and its codes take effect on the quarter's first day. Publish a quarter on or after that day, so `cms/hcpcs` holds the codes in force. Nothing in the Protocol checks the date: once the manifest names a quarter, any `arc run` with the R2 credential set publishes it.
 
 ## The code column
 
@@ -63,20 +66,21 @@ Needs the `arc` binary, `duckdb`, `uv` (for `check_code_list` and the stamp), an
 
 <!-- protocol-steps: generated from arcform.yaml by scripts/check_protocol_readme.py — do not edit this block by hand -->
 
-All 11 steps are `sql:` models or typed `op:` operators from the arcform catalog. This Protocol runs no opaque `command:`/shell step.
+All 12 steps are `sql:` models or typed `op:` operators from the arcform catalog. This Protocol runs no opaque `command:`/shell step.
 
 | # | Step | How it runs |
 |---|---|---|
 | 1 | `fetch_hcpcs` | `op: http_fetch@1` |
 | 2 | `extract_hcpcs` | `op: archive_extract@1` |
-| 3 | `load` | `sql: models/load.sql` |
-| 4 | `package` | `sql: models/package.sql` |
-| 5 | `export_hcpcs` | `op: parquet_export@1` |
-| 6 | `check_licence` | `sql: models/check_licence.sql` |
-| 7 | `describe` | `op: datapackage_describe@1` |
-| 8 | `check_code_list` | `op: uv@1` |
-| 9 | `validate` | `op: finetype_validate@1` |
-| 10 | `stamp_descriptor` | `op: uv@1` |
-| 11 | `publish` | `op: ducklake_write@1` |
+| 3 | `date_hcpcs` | `op: uv@1` |
+| 4 | `load` | `sql: models/load.sql` |
+| 5 | `package` | `sql: models/package.sql` |
+| 6 | `export_hcpcs` | `op: parquet_export@1` |
+| 7 | `check_licence` | `sql: models/check_licence.sql` |
+| 8 | `describe` | `op: datapackage_describe@1` |
+| 9 | `check_code_list` | `op: uv@1` |
+| 10 | `validate` | `op: finetype_validate@1` |
+| 11 | `stamp_descriptor` | `op: uv@1` |
+| 12 | `publish` | `op: ducklake_write@1` |
 
 <!-- /protocol-steps -->
