@@ -7,6 +7,8 @@ Cut-down copies of the files the Protocol fetches, downloaded on 2026-11-16, for
 | `airports.csv` | `fetch_airports`, OurAirports' `airports.csv` | 25 airports, listed below |
 | `countries.csv` | `fetch_countries`, `countries.csv` | The 16 countries the kept airports are in |
 | `regions.csv` | `fetch_regions`, `regions.csv` | The 21 regions the kept airports are in |
+| `listing.json` | `fetch_listing`, GitHub's listing of the repository's top folder at `main` | The entries for the three CSVs, with the fixtures' own git blob shas (`git hash-object`) and sizes, and README.md's, so verify finds them as it finds the real files |
+| `release.csv` | `verify`, for the tests that rewrite a data CSV | The commit's sha and the release, 2026-11-16, as verify writes them |
 | `commit.json` | `fetch_release_before` and `fetch_release_after`, GitHub's answer for the latest commit on the data repository's `main` | That day's commit, `1cdbf9c…`, committed 2026-11-16T02:53:14Z, trimmed to its `sha` and `commit.committer.date` |
 
 The airports, by ICAO code (OurAirports' `ident` in brackets where it differs):
@@ -35,4 +37,4 @@ The airports, by ICAO code (OurAirports' `ident` in brackets where it differs):
 
 So the table built from the fixture has 22 rows.
 
-To cut new fixtures, keep the header line and copy whole lines from the downloaded files; do not write them back through a CSV tool, which changes OurAirports' quoting.
+To cut new fixtures, keep the header line and copy whole lines from the downloaded files; do not write them back through a CSV tool, which changes OurAirports' quoting. When a CSV fixture changes, put its new `git hash-object` sha and size in `listing.json`, or verify refuses it.

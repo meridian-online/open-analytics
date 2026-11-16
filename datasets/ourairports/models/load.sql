@@ -7,15 +7,14 @@
 --   * countries.csv: id, code, name, continent, wikipedia_link, keywords.
 --   * regions.csv: id, code, local_code, name, continent, iso_country, wikipedia_link,
 --     keywords.
---   * release_before.json and release_after.json: GitHub's answer for the latest commit
---     on the data repository's main branch, fetched before and after the three files.
+--   * release.csv, written by verify: the commit the three files were checked against
+--     and its UTC date, the table's release.
 --
 -- Each CSV is read with every field as text and header = false, so the header is found
 -- by its text, not by its position in the scan: exactly one row must be OurAirports'
 -- header, and a header that has changed fails the run.
 --
--- The release is the commit's UTC date. The two commit files must name the same commit,
--- so a repository that changed during the fetch is never published under one date.
+-- A quoted empty field reads as NULL, as an unquoted one does.
 --
 -- IATA's codes are not republished: iata_code and keywords (free text in which IATA
 -- codes appear) are read only so the header can be checked, and dropped here.
@@ -25,7 +24,8 @@
 -- an airport type outside the five load knows; a scheduled_service other than yes or no;
 -- a latitude or longitude that is not a number in range; an elevation that is not an
 -- integer; an empty name; and a country or region code that countries.csv or regions.csv
--- repeats.
+-- repeats, checked before the join so a repeated lookup row is not reported as a
+-- repeated ICAO code.
 
 CREATE OR REPLACE TABLE ourairports AS
 WITH airport_rows AS (
@@ -40,7 +40,8 @@ WITH airport_rows AS (
                            'iata_code': 'VARCHAR', 'gps_code': 'VARCHAR',
                            'local_code': 'VARCHAR', 'home_link': 'VARCHAR',
                            'wikipedia_link': 'VARCHAR', 'keywords': 'VARCHAR'},
-                header = false, delim = ',', quote = '"', escape = '"')
+                header = false, delim = ',', quote = '"', escape = '"',
+                nullstr = '', allow_quoted_nulls = true)
 ),
 country_rows AS (
   SELECT *
@@ -48,7 +49,8 @@ country_rows AS (
                 columns = {'id': 'VARCHAR', 'code': 'VARCHAR', 'name': 'VARCHAR',
                            'continent': 'VARCHAR', 'wikipedia_link': 'VARCHAR',
                            'keywords': 'VARCHAR'},
-                header = false, delim = ',', quote = '"', escape = '"')
+                header = false, delim = ',', quote = '"', escape = '"',
+                nullstr = '', allow_quoted_nulls = true)
 ),
 region_rows AS (
   SELECT *
@@ -57,7 +59,8 @@ region_rows AS (
                            'name': 'VARCHAR', 'continent': 'VARCHAR',
                            'iso_country': 'VARCHAR', 'wikipedia_link': 'VARCHAR',
                            'keywords': 'VARCHAR'},
-                header = false, delim = ',', quote = '"', escape = '"')
+                header = false, delim = ',', quote = '"', escape = '"',
+                nullstr = '', allow_quoted_nulls = true)
 ),
 -- Each file's header, found by its text: exactly one row must be it. The data CTEs test
 -- this first, so a changed header is reported as one, not as a malformed row.
@@ -92,32 +95,14 @@ regions_header AS (
     AND continent = 'continent' AND iso_country = 'iso_country'
     AND wikipedia_link = 'wikipedia_link' AND keywords = 'keywords'
 ),
--- The release: the commit both files name, and its UTC date.
-release_before AS (
-  SELECT sha, "commit".committer.date AS committed
-  FROM read_json('build/ourairports/release_before.json',
-                 columns = {'sha': 'VARCHAR', 'commit': 'STRUCT(committer STRUCT(date VARCHAR))'})
-),
-release_after AS (
-  SELECT sha, "commit".committer.date AS committed
-  FROM read_json('build/ourairports/release_after.json',
-                 columns = {'sha': 'VARCHAR', 'commit': 'STRUCT(committer STRUCT(date VARCHAR))'})
-),
+-- The release, from verify: the commit the files were checked against, and its date.
 airports_release AS (
-  SELECT CASE
-           WHEN (SELECT count(*) FROM release_before) <> 1
-             OR (SELECT count(*) FROM release_after) <> 1
-             THEN error('expected one commit in each OurAirports release file')
-           WHEN (SELECT sha FROM release_before) IS DISTINCT FROM (SELECT sha FROM release_after)
-             THEN error('OurAirports changed during the fetch: commit '
-                        || coalesce((SELECT sha FROM release_before), 'NULL') || ' before, '
-                        || coalesce((SELECT sha FROM release_after), 'NULL') || ' after')
-           WHEN try_cast((SELECT committed FROM release_before) AS TIMESTAMPTZ) IS NULL
-             THEN error('OurAirports commit date does not parse: '
-                        || coalesce((SELECT committed FROM release_before), 'NULL'))
-           ELSE strftime(try_cast((SELECT committed FROM release_before) AS TIMESTAMPTZ)
-                         AT TIME ZONE 'UTC', '%Y-%m-%d')
-         END AS release
+  SELECT CASE WHEN count(*) <> 1 THEN error('expected one row in release.csv')
+              WHEN NOT regexp_full_match(any_value(release), '[0-9]{4}-[0-9]{2}-[0-9]{2}')
+                THEN error('release.csv release is not a date: ' || coalesce(any_value(release), 'NULL'))
+              ELSE any_value(release) END AS release
+  FROM read_csv('build/ourairports/release.csv',
+                columns = {'commit_sha': 'VARCHAR', 'release': 'VARCHAR'}, header = true)
 ),
 countries AS (
   SELECT
@@ -145,6 +130,7 @@ lookups_unique AS (
 airports AS (
   SELECT
     CASE WHEN NOT (SELECT ok FROM airports_header) THEN NULL
+         WHEN NOT (SELECT ok FROM lookups_unique) THEN NULL
          WHEN NOT regexp_full_match(a.icao_code, '[A-Z]{4}')
            THEN error('ICAO code is not four capital letters: ' || a.icao_code || ' (id ' || a.id || ')')
          WHEN a.name IS NULL OR trim(a.name) = ''
@@ -183,7 +169,7 @@ icao_unique AS (
   FROM (SELECT code FROM airports GROUP BY code HAVING count(*) > 1)
 ),
 checks AS (
-  SELECT l.ok AND u.ok AS ok FROM lookups_unique l, icao_unique u
+  SELECT u.ok FROM icao_unique u
 )
 SELECT
   a.code, a.code AS code_display, 'airport' AS level, 0::INTEGER AS depth,
