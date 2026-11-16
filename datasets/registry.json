@@ -173,6 +173,16 @@
       "protocol": "datasets/schedule_b/arcform.yaml"
     },
     {
+      "uid": "85a87231-c994-4efe-8a47-b96b461bd020",
+      "schema": "census",
+      "name": "fips",
+      "title": "FIPS state and county codes — U.S. Census Bureau",
+      "aliases": [],
+      "manifest": "https://openlake.meridian.online/manifest.json",
+      "doi": null,
+      "protocol": "datasets/fips/arcform.yaml"
+    },
+    {
       "uid": "1ac6fe9c-2017-4b6a-9a3d-516401eb1fce",
       "schema": "cms",
       "name": "hcpcs",

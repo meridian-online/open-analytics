@@ -8,7 +8,7 @@ The Census Bureau's FIPS codes (ANSI/INCITS 38 for states, 31 for counties) for 
 | `datapackage.json` | **Descriptor** — what it is | schema, finetype labels, the code-list declaration |
 | `../registry.json` (this dataset's entry) | **Address** — how it's found | stable `uid`, `census/fips`, manifest pointer |
 
-The descriptor and the registry entry are committed with the first publish. Until then `datapackage.json` is written by every run and ignored by git (see `.gitignore`), because CI holds every committed descriptor to the object the lake serves.
+`census/fips` was first published on 2026-11-16, after the Protocol merged; its descriptor and registry entry were committed with that publish, since CI holds every committed descriptor to the object the lake serves. Commit `datapackage.json` from the run that publishes.
 
 ## The Protocol
 
