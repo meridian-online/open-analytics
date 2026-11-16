@@ -658,7 +658,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        protocol: [fips, naics_2022_titles]
+        protocol: [fips, ourairports, naics_2022_titles]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -714,9 +714,15 @@ jobs:
             --rev "${ARC_REV}" --bin arc --root "$HOME/arc"
       - name: put arc on PATH
         run: echo "$HOME/arc/bin" >> "$GITHUB_PATH"
+      # Run east of UTC: GitHub's runners are on UTC, so a Protocol that reads a UTC
+      # timestamp as local time would pass there. OurAirports' "a commit late in the UTC
+      # day takes its UTC date" test fails under this zone if the release date is read
+      # in local time, and only then.
       - name: arc test
         working-directory: datasets/${{ matrix.protocol }}
         shell: bash
+        env:
+          TZ: Pacific/Auckland
         run: |
           set +e
           arc --version
