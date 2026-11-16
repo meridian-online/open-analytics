@@ -1,7 +1,7 @@
 {
   "name": "ourairports",
-  "title": "Airports with ICAO codes — OurAirports",
-  "description": "OurAirports' airports that carry an ICAO code: one row per ICAO code. Completed in a later change.",
+  "title": "OurAirports — Airports with ICAO Codes",
+  "description": "OurAirports' airports that carry an ICAO code, the four-letter code air traffic control, flight plans and airspace data use for an airport: one row per ICAO code, with OurAirports' name for the airport, its type, coordinates and elevation, its country and region codes and names, the place it serves, whether it has scheduled airline service, its GPS and local codes, and links to its website and Wikipedia article. Airports without an ICAO code are not included. IATA's three-letter airport codes are left out, since IATA's code list is not open data: OurAirports' iata_code column is not read into the table, and its keywords column is dropped because it carries IATA codes. Data from OurAirports (https://ourairports.com/), which its maintainers release to the public domain and which comes with no guarantee of accuracy; Meridian prepared this table from OurAirports' files, and OurAirports does not endorse it. OurAirports updates its files nightly; Meridian refreshes this dataset fortnightly, so the data is as of the date in release.",
   "homepage": "https://meridian.online/datasets/library/ourairports",
   "licenses": [
     {
@@ -14,6 +14,26 @@
     {
       "title": "Open data downloads — OurAirports",
       "path": "https://ourairports.com/data/"
+    },
+    {
+      "title": "Data dictionary — OurAirports",
+      "path": "https://ourairports.com/help/data-dictionary.html"
+    },
+    {
+      "title": "airports.csv — OurAirports data repository",
+      "path": "https://raw.githubusercontent.com/davidmegginson/ourairports-data/main/airports.csv"
+    },
+    {
+      "title": "countries.csv — OurAirports data repository",
+      "path": "https://raw.githubusercontent.com/davidmegginson/ourairports-data/main/countries.csv"
+    },
+    {
+      "title": "regions.csv — OurAirports data repository",
+      "path": "https://raw.githubusercontent.com/davidmegginson/ourairports-data/main/regions.csv"
+    },
+    {
+      "title": "Latest commit on main — OurAirports data repository (GitHub API)",
+      "path": "https://api.github.com/repos/davidmegginson/ourairports-data/commits?sha=main&per_page=1"
     }
   ],
   "contributors": [
@@ -47,7 +67,7 @@
   ],
   "fields": {
     "code": {
-      "description": "The airport's ICAO code, four capital letters.",
+      "description": "The airport's ICAO code, four capital letters (EGLL for London Heathrow), from OurAirports' icao_code. Join other data on this column.",
       "constraints": {
         "minLength": 4,
         "maxLength": 4,
@@ -55,12 +75,133 @@
       }
     },
     "code_display": {
-      "description": "The same as code.",
+      "description": "The ICAO code as it is printed, which is the same as code.",
       "constraints": {
         "minLength": 4,
         "maxLength": 4,
         "pattern": "^[A-Z]{4}$"
       }
+    },
+    "level": {
+      "description": "Hierarchy level: always 'airport', since the list is flat.",
+      "constraints": {
+        "enum": [
+          "airport"
+        ]
+      }
+    },
+    "depth": {
+      "description": "Always 0: the list has one level."
+    },
+    "parent_code": {
+      "description": "Always NULL: an airport in a one-level list has no parent."
+    },
+    "description": {
+      "description": "OurAirports' name for the airport (London Heathrow Airport), with its accents."
+    },
+    "description_full": {
+      "description": "The same as description, since an airport has no ancestors to put in front of it."
+    },
+    "release": {
+      "description": "The UTC date of the commit on OurAirports' data repository that the files were read at (2026-11-16). OurAirports' files carry no date of their own; the run reads the repository's latest commit before and after fetching them and checks each file against that commit. OurAirports updates nightly; Meridian refreshes this dataset fortnightly, so the data is as of this date. One value for every row.",
+      "constraints": {
+        "minLength": 10,
+        "maxLength": 10,
+        "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+      }
+    },
+    "text_source": {
+      "description": "Where the row's text came from: always 'ourairports'.",
+      "constraints": {
+        "enum": [
+          "ourairports"
+        ]
+      }
+    },
+    "corpus": {
+      "description": "Lowercased, accent-stripped description_full: a derived free-text search field, not a source attribute."
+    },
+    "ourairports_id": {
+      "description": "OurAirports' own record id for the airport (its id column), which stays the same when the airport's codes change. Joins this table back to OurAirports' other files, such as its runways and frequencies."
+    },
+    "ident": {
+      "description": "OurAirports' identifier for the airport (its ident column): the ICAO code where OurAirports has one on record for it, otherwise a local code or one OurAirports generated, such as KE-0042. It can differ from code, which is the ICAO code OurAirports records in its icao_code column; join on code."
+    },
+    "type": {
+      "description": "OurAirports' type for the airport: 'large_airport', 'medium_airport', 'small_airport', 'heliport' or 'seaplane_base'.",
+      "constraints": {
+        "enum": [
+          "heliport",
+          "large_airport",
+          "medium_airport",
+          "seaplane_base",
+          "small_airport"
+        ]
+      }
+    },
+    "latitude_deg": {
+      "description": "The airport's latitude in decimal degrees, positive north of the equator (WGS 84)."
+    },
+    "longitude_deg": {
+      "description": "The airport's longitude in decimal degrees, positive east of Greenwich (WGS 84)."
+    },
+    "elevation_ft": {
+      "description": "The airport's elevation above mean sea level, in feet; NULL where OurAirports has none."
+    },
+    "continent": {
+      "description": "OurAirports' two-letter continent code: AF Africa, AN Antarctica, AS Asia, EU Europe, NA North America, OC Oceania, SA South America.",
+      "constraints": {
+        "enum": [
+          "AF",
+          "AN",
+          "AS",
+          "EU",
+          "NA",
+          "OC",
+          "SA"
+        ]
+      }
+    },
+    "iso_country": {
+      "description": "The two-letter code of the airport's country or territory, as OurAirports gives it: the ISO 3166-1 alpha-2 code, and XK for Kosovo, which ISO has not assigned.",
+      "constraints": {
+        "pattern": "^[A-Z]{2}$"
+      }
+    },
+    "country_name": {
+      "description": "OurAirports' name for the country or territory, from its countries file, joined on iso_country."
+    },
+    "iso_region": {
+      "description": "The code of the airport's first-level subdivision, as OurAirports gives it: the ISO 3166-2 code where one is assigned (GB-ENG, US-NY), or OurAirports' own code where it is not, such as <country>-U-A for a region OurAirports has not assigned."
+    },
+    "region_name": {
+      "description": "OurAirports' name for the region, from its regions file, joined on iso_region."
+    },
+    "municipality": {
+      "description": "The place the airport serves, as OurAirports records it (London; Sydney (Mascot)); NULL where OurAirports has none."
+    },
+    "scheduled_service": {
+      "description": "Whether the airport has scheduled airline service, as OurAirports records it (its yes or no). Set on every row.",
+      "constraints": {
+        "required": true
+      }
+    },
+    "gps_code": {
+      "description": "The code an aviation GPS database would use for the airport, as OurAirports records it. OurAirports' data dictionary says it is the ICAO code where one exists; on 17 airports it differs from code (as of 2026-11-16), so join on code. NULL where OurAirports has none.",
+      "constraints": {
+        "minLength": 4,
+        "maxLength": 4,
+        "pattern": "^[A-Z0-9]{4}$"
+      }
+    },
+    "local_code": {
+      "description": "The airport's code from its country's own aviation authority, as OurAirports records it: in the US the FAA's location identifier (JFK for John F. Kennedy International), elsewhere the national authority's code. It is not an IATA code, though in the US and some other countries the IATA code is often the same letters. NULL where OurAirports has none."
+    },
+    "home_link": {
+      "description": "The airport's website, as OurAirports records it; NULL where it has none."
+    },
+    "wikipedia_link": {
+      "description": "The airport's Wikipedia article, as OurAirports records it; NULL where it has none."
     }
   }
 }

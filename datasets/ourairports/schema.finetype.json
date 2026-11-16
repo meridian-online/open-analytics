@@ -1,5 +1,5 @@
 {
-  "$comment": "Self-derived finetype drift contract for library/ourairports, checked by the in-engine finetype_validate@1 gate. Holds the ICAO code shape on code and code_display and the closed domains on level, text_source and type; completed in a later change.",
+  "$comment": "Self-derived finetype drift contract for library/ourairports, checked by the in-engine finetype_validate@1 gate (the model-free `ft_validate` DuckDB table macro). ft_validate MELTS every column to VARCHAR, so this contract uses ONLY the string-surviving JSON-Schema keywords. ENFORCED: the shapes descriptor.overrides.json publishes on code, code_display, gps_code, iso_country and release; the closed `enum` domains on level, text_source, type and continent, so a new airport type or continent code fails the run for a person to describe; and `minLength`/`maxLength` envelopes on the names. NOT ENFORCED, by design: depth, ourairports_id, latitude_deg, longitude_deg, elevation_ft and scheduled_service (a numeric or boolean `type` BACKFIRES to 100% reject once melted to VARCHAR; load.sql checks the coordinates' range and the elevation's integer shape); ident, iso_region, local_code and the links, whose shapes OurAirports does not fix; NULLs (invisible to ft_validate); object-level `required` (documentation only). Derived from build/stage/ourairports.parquet: a pass-through on 2026-11-16's 10,734 rows, a fail-closed tripwire for future drift.",
   "$id": "finetype://ourairports.parquet",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "library/ourairports",
@@ -8,9 +8,23 @@
     "code",
     "code_display",
     "level",
+    "depth",
     "description",
+    "description_full",
     "release",
-    "text_source"
+    "text_source",
+    "corpus",
+    "ourairports_id",
+    "ident",
+    "type",
+    "latitude_deg",
+    "longitude_deg",
+    "continent",
+    "iso_country",
+    "country_name",
+    "iso_region",
+    "region_name",
+    "scheduled_service"
   ],
   "properties": {
     "code": {
@@ -31,11 +45,32 @@
         "airport"
       ]
     },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "description_full": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "release": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+      "minLength": 10,
+      "maxLength": 10
+    },
     "text_source": {
       "type": "string",
       "enum": [
         "ourairports"
       ]
+    },
+    "corpus": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
     },
     "type": {
       "type": "string",
@@ -47,11 +82,44 @@
         "small_airport"
       ]
     },
-    "release": {
+    "continent": {
       "type": "string",
-      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
-      "minLength": 10,
-      "maxLength": 10
+      "enum": [
+        "AF",
+        "AN",
+        "AS",
+        "EU",
+        "NA",
+        "OC",
+        "SA"
+      ]
+    },
+    "iso_country": {
+      "type": "string",
+      "pattern": "^[A-Z]{2}$",
+      "minLength": 2,
+      "maxLength": 2
+    },
+    "country_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "region_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "municipality": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "gps_code": {
+      "type": "string",
+      "pattern": "^[A-Z0-9]{4}$",
+      "minLength": 4,
+      "maxLength": 4
     }
   }
 }

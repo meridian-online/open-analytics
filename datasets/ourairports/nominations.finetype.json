@@ -4,11 +4,55 @@
     "ourairports": {
       "code": {
         "label": "geography.transportation.icao_code",
-        "why": "OurAirports' ICAO airport codes."
+        "why": "OurAirports' ICAO airport codes, four capital letters. Nominated so the label does not move with the sample."
       },
       "code_display": {
         "label": "geography.transportation.icao_code",
         "why": "The same values as code, nominated with it."
+      },
+      "level": {
+        "label": "representation.text.word",
+        "why": "A closed set of one level name, airport; nominated so the label does not move with the inference's confidence on a single repeated value."
+      },
+      "depth": {
+        "label": "representation.numeric.integer_number",
+        "why": "Always 0 in a one-level list; nominated so the column keeps the integer it is, as the other code lists' depth does."
+      },
+      "description": {
+        "label": "representation.text.plain_text",
+        "why": "OurAirports' name for an airport, such as 'London Heathrow Airport': free text, labelled as the other code lists label their descriptions. Inferred, finetype reads airport names as city names."
+      },
+      "description_full": {
+        "label": "representation.text.plain_text",
+        "why": "The same as description in a flat list, labelled with it."
+      },
+      "release": {
+        "label": "representation.identifier.alphanumeric_id",
+        "why": "The UTC date of OurAirports' commit, such as 2026-11-16, used as the identifier of the snapshot, as the other code lists' release is. Stored as text, so every code list's release has one type; nominated so finetype does not type it a DATE."
+      },
+      "text_source": {
+        "label": "representation.text.word",
+        "why": "A closed set of one value, ourairports; nominated so the label does not move with the inference's confidence on a single repeated value."
+      },
+      "corpus": {
+        "label": "representation.text.plain_text",
+        "why": "The lowered, accent-stripped description_full the search reads, labelled with it. Inferred it is `unknown`."
+      },
+      "ourairports_id": {
+        "label": "representation.identifier.increment",
+        "why": "OurAirports' integer record id, the primary key of its database, stored as BIGINT. Inferred, finetype reads it as a numeric code, which it types as text."
+      },
+      "type": {
+        "label": "representation.text.word",
+        "why": "A closed set of five type names, such as small_airport; nominated so the label does not move with the inference's confidence."
+      },
+      "municipality": {
+        "label": "representation.text.plain_text",
+        "why": "The place an airport serves, as OurAirports records it: free text that is often more than one place's name, such as 'Winnipeg/Saint Andrews', 'Bialla, Matalilu, Ewase' or 'Sydney (Mascot)'. Inferred, finetype reads it as a city name."
+      },
+      "wikipedia_link": {
+        "label": "technology.internet.url",
+        "why": "A link to the airport's Wikipedia article, an http or https URL. Inferred, finetype reads it as an S3 URI."
       }
     }
   }
