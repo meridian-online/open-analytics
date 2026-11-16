@@ -186,7 +186,10 @@ COERCIBLE: dict[str, set[str]] = {
 
 # Constraint keywords this script evaluates. Anything else is an EXIT_ERROR rather
 # than a silent pass — an unimplemented constraint must not read as a conformant one.
-SUPPORTED_CONSTRAINTS = {"pattern", "minLength", "maxLength", "enum", "required"}
+# `minimum` and `maximum` are evaluated, inclusive as Frictionless defines them, on
+# `integer` and `number` fields only; on any other type they are an error too.
+SUPPORTED_CONSTRAINTS = {"pattern", "minLength", "maxLength", "enum", "required", "minimum", "maximum"}
+RANGE_CONSTRAINT_TYPES = {"integer", "number"}
 
 # Declared types that may sit on either end of a foreign key together.
 FK_COMPATIBLE_GROUPS = [{"integer", "number", "year"}]
@@ -297,14 +300,17 @@ def check_pattern_compiles(con, pattern: str) -> str | None:
 
 
 def constraint_probes(
-    field: dict[str, Any], *, skip_pattern: bool = False
+    field: dict[str, Any], *, skip_pattern: bool = False, skip_range: bool = False
 ) -> list[tuple[str, str, str, list[Any]]]:
     """(rule, description, SQL boolean naming a violating row, params) for one field.
 
     `skip_pattern` leaves the `pattern` probe out even when the field declares one —
     set when that pattern has already failed to compile and been reported as its own
     disagreement, so the rest of the field's constraints are still evaluated rather
-    than a bad regex taking the whole field down with it.
+    than a bad regex taking the whole field down with it. `skip_range` leaves the
+    `minimum` and `maximum` probes out — set when the column's physical type cannot be
+    read as the declared numeric type, already reported as its own `type` disagreement,
+    since comparing such a column with a number would fail the whole scan.
     """
     name = field["name"]
     col = quote_ident(name)
@@ -316,6 +322,14 @@ def constraint_probes(
         raise CheckError(
             f"field {name!r} carries constraint(s) {sorted(unsupported)} that this check "
             "does not evaluate; refusing to report the field as conformant"
+        )
+
+    ranged = sorted({"minimum", "maximum"} & set(constraints))
+    if ranged and field.get("type") not in RANGE_CONSTRAINT_TYPES:
+        raise CheckError(
+            f"field {name!r} carries constraint(s) {ranged} on type {field.get('type')!r}; this "
+            "check evaluates them only on integer and number fields, so it refuses to report "
+            "the field as conformant"
         )
 
     probes: list[tuple[str, str, str, list[Any]]] = []
@@ -348,6 +362,26 @@ def constraint_probes(
                 "constraints.maxLength",
                 f"longer than maxLength {value}",
                 f"{col} IS NOT NULL AND length({text}) > ?",
+                [value],
+            )
+        )
+    if "minimum" in constraints and not skip_range:
+        value = constraints["minimum"]
+        probes.append(
+            (
+                "constraints.minimum",
+                f"below minimum {value}",
+                f"{col} IS NOT NULL AND {col} < CAST(? AS DOUBLE)",
+                [value],
+            )
+        )
+    if "maximum" in constraints and not skip_range:
+        value = constraints["maximum"]
+        probes.append(
+            (
+                "constraints.maximum",
+                f"above maximum {value}",
+                f"{col} IS NOT NULL AND {col} > CAST(? AS DOUBLE)",
                 [value],
             )
         )
@@ -392,8 +426,9 @@ def check_constraints(
         if name not in physical:
             continue  # already reported as a missing field
         col = quote_ident(name)
+        readable = physical[name] in COERCIBLE.get(field.get("type", "any"), set())
         for rule, description, predicate, probe_params in constraint_probes(
-            field, skip_pattern=name in unusable_patterns
+            field, skip_pattern=name in unusable_patterns, skip_range=not readable
         ):
             index = len(meta)
             selects.append(f"count(*) FILTER (WHERE {predicate}) AS v{index}")

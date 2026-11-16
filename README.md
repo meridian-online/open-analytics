@@ -12,7 +12,7 @@ ATTACH 'ducklake:https://openlake.meridian.online/catalog/open.ducklake' AS meri
 SELECT * FROM meridian.gleif.lei LIMIT 10;
 ```
 
-A dataset's address is `<namespace>/<name>`: `gleif/lei`, `sec/company_tickers_exchange`, `census/naics_2022`, `census/schedule_b`, `census/fips`, `usitc/hts`, `cms/hcpcs`, `fda/ndc`, `library/edgar_lei`, `bls/soc_2018`, `bls/soc_2018_titles`, `bls/soc_2010_to_2018`, `ons/soc_2020`, `ons/soc_2020_titles` and `ons/soc_2010_to_2020`, which are the SQL names `meridian.gleif.lei` and so on and the file URLs `https://openlake.meridian.online/<namespace>/<name>.parquet`. The old flat files stay readable but are frozen at the move and no longer refreshed, so read current data from the new URLs. The old SQL names (`source.gleif`, `source.edgar`, `source.naics`, `crosswalk.edgar_gleif`) keep working as views for a window after the move, then retire along with the old flat files.
+A dataset's address is `<namespace>/<name>`: `gleif/lei`, `sec/company_tickers_exchange`, `census/naics_2022`, `census/schedule_b`, `census/fips`, `usitc/hts`, `cms/hcpcs`, `fda/ndc`, `library/edgar_lei`, `library/ourairports`, `bls/soc_2018`, `bls/soc_2018_titles`, `bls/soc_2010_to_2018`, `ons/soc_2020`, `ons/soc_2020_titles` and `ons/soc_2010_to_2020`, which are the SQL names `meridian.gleif.lei` and so on and the file URLs `https://openlake.meridian.online/<namespace>/<name>.parquet`. The old flat files stay readable but are frozen at the move and no longer refreshed, so read current data from the new URLs. The old SQL names (`source.gleif`, `source.edgar`, `source.naics`, `crosswalk.edgar_gleif`) keep working as views for a window after the move, then retire along with the old flat files.
 
 Attaching the catalogue needs DuckDB 2.0 or later. The SOC datasets are published into the lake by their own Protocol's last step, and the other eight move to that step one at a time; [`docs/publishing.md`](docs/publishing.md) says how a Protocol publishes, and how the lake was cut over to it on 2026-11-14.
 
@@ -69,6 +69,7 @@ copies to each other.
 | HTS — Harmonized Tariff Schedule of the United States | 42,036 | Public domain | [USITC](https://hts.usitc.gov/) | [datapackage.json](datasets/hts/datapackage.json) |
 | Schedule B — U.S. Export Classification Codes | 16,727 | Public domain | [U.S. Census Bureau](https://www.census.gov/foreign-trade/schedules/b/index.html) | [datapackage.json](datasets/schedule_b/datapackage.json) |
 | FIPS — U.S. State and County Codes | 3,301 | Public domain | [U.S. Census Bureau](https://www.census.gov/library/reference/code-lists/ansi.html) | [datapackage.json](datasets/fips/datapackage.json) |
+| OurAirports — Airports with ICAO codes | 10,734 | Public domain | [OurAirports](https://ourairports.com/data/) | [datapackage.json](datasets/ourairports/datapackage.json) |
 | HCPCS Level II — Healthcare Common Procedure Coding System | 8,770 | Public domain | [CMS](https://www.cms.gov/medicare/coding-billing/healthcare-common-procedure-system) | [datapackage.json](datasets/hcpcs/datapackage.json) |
 | NDC Directory — National Drug Code | 340K | CC0-1.0 | [FDA](https://www.fda.gov/drugs/drug-approvals-and-databases/national-drug-code-directory) | [datapackage.json](datasets/ndc/datapackage.json) |
 | SOC 2018 — Standard Occupational Classification (U.S.) | 1,447 | Public domain | [BLS](https://www.bls.gov/soc/2018/home.htm) | [soc_2018.datapackage.json](datasets/soc_2018/soc_2018.datapackage.json) |
@@ -116,7 +117,7 @@ against the file at its `resources[].path`, **and reads the description the file
 itself carries back against both**, and exits non-zero on any disagreement — a declared field the Parquet does not have, a Parquet column the
 descriptor does not declare, a Frictionless `type` the physical type cannot be
 read as, a value outside `constraints.pattern` / `minLength` / `maxLength` /
-`enum` / `required`, a `primaryKey` naming a column that is not there or holding a
+`enum` / `required`, or outside `minimum` / `maximum` on a number, a `primaryKey` naming a column that is not there or holding a
 NULL or a repeated value, a wrong `bytes`, a `foreignKey` whose two ends are
 declared with incompatible types, or a row count in the catalogue above that
 disagrees with the object that row links to. Foreign keys resolve across every package in
