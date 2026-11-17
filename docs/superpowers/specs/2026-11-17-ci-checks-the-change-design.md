@@ -86,7 +86,7 @@ Hugh ruled this in review: report the gap, fail on drift, so `main` is not red a
 - `build-dataset-profiles.mjs`, `build-dataset-joins.mjs`, `build-dataset-summaries.mjs`, `build-protocol-contracts.mjs` and `dataset-addresses.mjs` read a dataset's descriptor from the lake (DuckDB attaching the public catalogue, or `emit_descriptor.py`'s output) instead of `<open-analytics>/datasets/<slug>/datapackage.json`. Example Protocols still read from the checkout, since they keep their files.
 - web's pull-request CI stops comparing `src/data/` with the live lake. The parity checks run on `main` and on a schedule and report drift in the run's summary; regenerating is the existing build commands, run by hand. No bot opens a pull request, since one opened with the workflow's own token triggers no CI and could not go green, and the hand-transcribed claims in `lib/datasets.ts` cannot be regenerated anyway. *My call, made in review.*
 - web's research data (`src/data/protocol-research/*.json`, `dataset-research/*.json`) cites `blob/main/datasets/<slug>/datapackage.json` as evidence; those citations move to the readable copy's URL, so the research checks find no dead link.
-- Lands before open-analytics deletes its descriptors, because web's CI clones open-analytics' `main`.
+- Merges right after open-analytics' pull request (see Order).
 
 ### arcform
 
@@ -95,8 +95,8 @@ Hugh ruled this in review: report the gap, fail on drift, so `main` is not red a
 
 ## Order
 
-1. web reads descriptors from the lake (its pull request).
-2. open-analytics stops committing descriptors and moves its checks (this repo's pull request). Merges after web's.
+1. open-analytics stops committing descriptors, adds the emitter and moves its checks (this repo's pull request).
+2. web reads descriptors from the lake (its pull request), merged right after open-analytics'. Its pull-request CI no longer reads descriptors, so it is green on its own; its lake job needs the emitter on open-analytics' `main`. *Changed in planning from web-first, my call: web-first would need web to emit descriptors before the emitter exists.*
 3. arcform's `on_descriptor_change` (its pull request), then a small open-analytics change to move `ARC_REV` and set the option.
 
 ## Approaches considered
