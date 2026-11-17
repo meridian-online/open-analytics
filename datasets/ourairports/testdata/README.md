@@ -39,3 +39,11 @@ The airports, by ICAO code (OurAirports' `ident` in brackets where it differs):
 So the table built from the fixture has 22 rows.
 
 To cut new fixtures, keep the header line and copy whole lines from the downloaded files; do not write them back through a CSV tool, which changes OurAirports' quoting. When a CSV fixture changes, put its new `git hash-object` sha and size in `tree.json`, and the new tree's sha in `commit.json`'s `commit.tree.sha`, or verify refuses it. The tree's sha is git's hash of `tree <length>` NUL and, for each entry in name order, `<mode> <path>` NUL and the entry's 20-byte sha: in a git repository, `git mktree --missing` over the entries prints it.
+
+The lake fixtures were emitted from the open lake on 2026-11-17 with `python scripts/emit_descriptor.py --all --bundle <file>`, from the repository root, and need regenerating when a table they hold is republished with different declarations:
+
+| Fixture | Stands in for | Kept |
+|---|---|---|
+| `lake_descriptors.json` | `emit_descriptors`, the bundle of every published table's descriptor | The twelve tables published with a `<slug>/datapackage.json`, which is every table the label check before publish compares; the six SOC tables, published with per-table descriptors, are left out because the check does not compare them. None of the twelve can go: `datasets/label-agreement.json` pins values from every one of them, and a pinned value that goes missing is a stale reason, which fails the check |
+| `described.json` | `describe`, in the test that runs the check before publish for real | The lake's descriptor of `library.ourairports`, as it is in `lake_descriptors.json`. finetype infers a descriptor from the rows it reads, so on the fixture's rows it labels some columns differently from the full table, and the label check would refuse that descriptor for a reason that is not a defect |
+| `check_before_publish.json` | `check_before_publish`, in the tests that run `describe` on the fixture | A stand-in report, which no step left in a test reads |

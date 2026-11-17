@@ -1,0 +1,4037 @@
+{
+  "census.fips": {
+    "$schema": "https://datapackage.org/profiles/2.0/datapackage.json",
+    "contributors": [
+      {
+        "path": "https://www.census.gov/",
+        "roles": [
+          "author"
+        ],
+        "title": "U.S. Census Bureau"
+      },
+      {
+        "path": "https://meridian.online",
+        "roles": [
+          "publisher",
+          "wrangler"
+        ],
+        "title": "Meridian"
+      }
+    ],
+    "created": "2026-11-16T00:22:11Z",
+    "description": "The Census Bureau's FIPS codes (ANSI/INCITS 38 and 31) for US states and counties: one row per state or state-equivalent and per county or county-equivalent, with Census's name, the USPS abbreviation, the GNIS code, Census's class and functional-status codes, and whether the code is in Census's current vintage. The two-digit state code and the five-digit county code are the keys most US government data is joined on. Built from Census's ANSI code lists (2020 vintage, the latest Census publishes), which cover the 50 states, DC, Puerto Rico, the Island Areas and the U.S. Minor Outlying Islands, and from its 2026 Gazetteer county file, which adds the nine Connecticut planning regions that replaced Connecticut's eight counties as county-equivalents in 2022. The eight counties are kept, marked as no longer current, since data from before 2022 uses them. U.S. Census Bureau data, a US Government work in the public domain; Meridian prepared this table from Census's files, and Census does not endorse it.",
+    "homepage": "https://meridian.online/datasets/census/fips",
+    "licenses": [
+      {
+        "name": "other-pd",
+        "path": "https://www.census.gov/about/policies/open-gov/open-data.html",
+        "title": "Public domain (U.S. Census Bureau)"
+      }
+    ],
+    "name": "fips",
+    "resources": [
+      {
+        "bytes": 95916,
+        "format": "parquet",
+        "hash": "sha256:50d44e061bf99cd2e63264605205394d9a2d31a02e0abb874ca483c47a55007c",
+        "mediatype": "application/vnd.apache.parquet",
+        "name": "fips",
+        "path": "https://openlake.meridian.online/census/fips.parquet",
+        "schema": {
+          "fields": [
+            {
+              "constraints": {
+                "maxLength": 5,
+                "minLength": 2,
+                "pattern": "^([0-9]{2}|[0-9]{5})$"
+              },
+              "description": "The FIPS code, as other data carries it: two digits for a state or state-equivalent (01 for Alabama), five for a county or county-equivalent, the state's two digits and the county's three (01001 for Autauga County). Join other data on this column; it is text, so a leading zero is kept.",
+              "name": "code",
+              "type": "string",
+              "x-finetype-label": "representation.identifier.numeric_code",
+              "x-finetype-nominated": true
+            },
+            {
+              "constraints": {
+                "maxLength": 5,
+                "minLength": 2,
+                "pattern": "^([0-9]{2}|[0-9]{5})$"
+              },
+              "description": "The code as Census prints it, which is the same as code.",
+              "name": "code_display",
+              "type": "string",
+              "x-finetype-label": "representation.identifier.numeric_code",
+              "x-finetype-nominated": true
+            },
+            {
+              "constraints": {
+                "enum": [
+                  "state",
+                  "county"
+                ]
+              },
+              "description": "Hierarchy level: 'state' for a state or state-equivalent (the 50 states, DC, Puerto Rico, the Island Areas and the U.S. Minor Outlying Islands), 'county' for a county or county-equivalent (parishes, boroughs, census areas, independent cities, municipios, districts, Connecticut's planning regions).",
+              "name": "level",
+              "type": "string",
+              "x-finetype-confidence": 0.8387,
+              "x-finetype-enum-domain": {
+                "cohesion": 1.0,
+                "distinct": 2,
+                "domain": [
+                  "county",
+                  "state"
+                ],
+                "open": true,
+                "rows": 3301
+              },
+              "x-finetype-label": "representation.text.word"
+            },
+            {
+              "description": "0 for a state, 1 for a county.",
+              "name": "depth",
+              "type": "integer",
+              "x-finetype-confidence": 1.0,
+              "x-finetype-display": {
+                "number": ",d"
+              },
+              "x-finetype-label": "representation.numeric.integer_number",
+              "x-finetype-unsupported-constraints": {
+                "pattern": "^-?[0-9]+$"
+              }
+            },
+            {
+              "constraints": {
+                "pattern": "^[0-9]{2}$"
+              },
+              "description": "A county's state code; NULL on a state.",
+              "name": "parent_code",
+              "type": "string",
+              "x-finetype-confidence": 0.6229,
+              "x-finetype-label": "representation.identifier.numeric_code"
+            },
+            {
+              "constraints": {
+                "maxLength": 65536,
+                "minLength": 1
+              },
+              "description": "Census's name for the state or county (Alabama, Autauga County, Doña Ana County), with its accents.",
+              "name": "description",
+              "type": "string",
+              "x-finetype-label": "representation.text.plain_text",
+              "x-finetype-nominated": true
+            },
+            {
+              "constraints": {
+                "maxLength": 65536,
+                "minLength": 1
+              },
+              "description": "The name with its state's in front, joined with ' › ' (Alabama › Autauga County), so a county name repeated across states reads in context. A state's is its own name.",
+              "name": "description_full",
+              "type": "string",
+              "x-finetype-label": "representation.text.plain_text",
+              "x-finetype-nominated": true
+            },
+            {
+              "constraints": {
+                "pattern": "^[A-Za-z][A-Za-z0-9 /_.#-]*[0-9][A-Za-z0-9 /_.#-]*$|^[0-9][A-Za-z0-9 /_.#-]*[A-Za-z][A-Za-z0-9 /_.#-]*$|^[A-Z]{4} [0-9]{4}, [A-Za-z]{9} [0-9]{4}$"
+              },
+              "description": "The two Census vintages the table was built from, such as 'ANSI 2020, Gazetteer 2026': the vintage of the ANSI state and county code lists, and of the Gazetteer county file. Read from the files' names. One value for every row.",
+              "name": "release",
+              "type": "string",
+              "x-finetype-label": "representation.identifier.alphanumeric_id",
+              "x-finetype-nominated": true,
+              "x-finetype-pattern-fit": {
+                "canonical": "^[A-Za-z][A-Za-z0-9 /_.#-]*[0-9][A-Za-z0-9 /_.#-]*$|^[0-9][A-Za-z0-9 /_.#-]*[A-Za-z][A-Za-z0-9 /_.#-]*$",
+                "outcome": "widened"
+              }
+            },
+            {
+              "constraints": {
+                "enum": [
+                  "census_ansi",
+                  "census_gazetteer"
+                ]
+              },
+              "description": "Which Census file the row came from: 'census_ansi' for the ANSI code lists, 'census_gazetteer' for a county only the Gazetteer lists (Connecticut's nine planning regions).",
+              "name": "text_source",
+              "type": "string",
+              "x-finetype-confidence": 0.8976,
+              "x-finetype-enum-domain": {
+                "cohesion": 1.0,
+                "distinct": 2,
+                "domain": [
+                  "census_ansi",
+                  "census_gazetteer"
+                ],
+                "open": true,
+                "rows": 3301
+              },
+              "x-finetype-label": "representation.text.word"
+            },
+            {
+              "constraints": {
+                "maxLength": 65536,
+                "minLength": 1
+              },
+              "description": "description_full lowercased and accent-stripped, the field the in-browser search reads.",
+              "name": "corpus",
+              "type": "string",
+              "x-finetype-label": "representation.text.plain_text",
+              "x-finetype-nominated": true
+            },
+            {
+              "constraints": {
+                "pattern": "^[0-9]{2}$"
+              },
+              "description": "The two-digit state code, on every row: the code of a state row, and the state of a county row.",
+              "name": "state_code",
+              "type": "string",
+              "x-finetype-confidence": 0.6266,
+              "x-finetype-label": "representation.identifier.numeric_code"
+            },
+            {
+              "constraints": {
+                "pattern": "^[0-9]{3}$"
+              },
+              "description": "The three-digit county code within its state (001 for Autauga County); NULL on a state. Unique only with state_code.",
+              "name": "county_code",
+              "type": "string",
+              "x-finetype-confidence": 0.85,
+              "x-finetype-label": "representation.identifier.numeric_code"
+            },
+            {
+              "constraints": {
+                "pattern": "^[A-Z]{2}$"
+              },
+              "description": "The state's two-letter USPS abbreviation (AL, DC, PR, AS, UM), on every row.",
+              "name": "state_abbr",
+              "type": "string",
+              "x-finetype-confidence": 1.0,
+              "x-finetype-label": "geography.location.state_code",
+              "x-finetype-locale": "EN_US"
+            },
+            {
+              "constraints": {
+                "pattern": "^[0-9]{8}$"
+              },
+              "description": "The eight-digit GNIS feature code Census lists for the state or county, the U.S. Geological Survey's Geographic Names Information System identifier (Census's STATENS, COUNTYNS or ANSICODE).",
+              "name": "gnis_code",
+              "type": "string",
+              "x-finetype-confidence": 0.85,
+              "x-finetype-label": "representation.identifier.numeric_code"
+            },
+            {
+              "constraints": {
+                "pattern": "^[A-Z][0-9]$"
+              },
+              "description": "Census's class code for the county (CLASSFP): H1 an active county or equivalent, H4 a legally defined inactive or nonfunctioning one, H5 a statistical equivalent (Alaska's census areas), H6 a county or equivalent that is coextensive with an incorporated place or another legal entity, C7 an independent city. NULL on states, and on counties only the Gazetteer lists, since it carries no class.",
+              "name": "class_code",
+              "type": "string",
+              "x-finetype-confidence": 0.9944,
+              "x-finetype-label": "representation.identifier.alphanumeric_id"
+            },
+            {
+              "constraints": {
+                "pattern": "^[A-Z]$"
+              },
+              "description": "Census's functional-status code for the county (FUNCSTAT), from the ANSI county list: A an active government providing primary general-purpose functions, B partially consolidated with another government, C fully consolidated, F a fictitious entity, G an active government subordinate to another unit, N a nonfunctioning legal entity, S statistical. NULL on states, and on counties only the Gazetteer lists.",
+              "name": "functional_status",
+              "type": "string",
+              "x-finetype-confidence": 0.3504,
+              "x-finetype-enum-domain": {
+                "cohesion": 1.0,
+                "distinct": 7,
+                "domain": [
+                  "A",
+                  "B",
+                  "C",
+                  "F",
+                  "G",
+                  "N",
+                  "S"
+                ],
+                "open": true,
+                "rows": 3235
+              },
+              "x-finetype-label": "representation.text.word"
+            },
+            {
+              "description": "Whether the code is in Census's current vintage, as the Gazetteer county file decides: true for a county it lists, and for a state with a county in it; false for a county in a state it covers that it no longer lists, which is Connecticut's eight counties, replaced in 2022 by its planning regions; NULL where it does not cover the state, the Island Areas and the U.S. Minor Outlying Islands, whose codes the ANSI lists still carry.",
+              "falseValues": [
+                "false",
+                "no",
+                "off",
+                "False",
+                "No",
+                "Off",
+                "FALSE",
+                "NO",
+                "OFF",
+                "disabled",
+                "Disabled",
+                "DISABLED",
+                "inactive",
+                "Inactive",
+                "INACTIVE"
+              ],
+              "name": "current",
+              "trueValues": [
+                "true",
+                "yes",
+                "on",
+                "True",
+                "Yes",
+                "On",
+                "TRUE",
+                "YES",
+                "ON",
+                "enabled",
+                "Enabled",
+                "ENABLED",
+                "active",
+                "Active",
+                "ACTIVE"
+              ],
+              "type": "boolean",
+              "x-finetype-confidence": 0.9957,
+              "x-finetype-enum-domain": {
+                "cohesion": 1.0,
+                "distinct": 2,
+                "domain": [
+                  "false",
+                  "true"
+                ],
+                "open": true,
+                "rows": 3282
+              },
+              "x-finetype-label": "representation.boolean.terms"
+            }
+          ],
+          "primaryKey": [
+            "code"
+          ]
+        }
+      }
+    ],
+    "sources": [
+      {
+        "path": "https://www.census.gov/library/reference/code-lists/ansi.html",
+        "title": "ANSI, FIPS and other standardized geographic codes — U.S. Census Bureau"
+      },
+      {
+        "path": "https://www2.census.gov/geo/docs/reference/codes2020/national_state2020.txt",
+        "title": "ANSI state codes, 2020 vintage — U.S. Census Bureau"
+      },
+      {
+        "path": "https://www2.census.gov/geo/docs/reference/codes2020/national_county2020.txt",
+        "title": "ANSI county codes, 2020 vintage — U.S. Census Bureau"
+      },
+      {
+        "path": "https://www.census.gov/geographies/reference-files/time-series/geo/gazetteer-files.html",
+        "title": "Gazetteer files — U.S. Census Bureau"
+      },
+      {
+        "path": "https://www2.census.gov/geo/docs/maps-data/data/gazetteer/2026_Gazetteer/2026_Gaz_counties_national.zip",
+        "title": "2026 Gazetteer county file — U.S. Census Bureau"
+      }
+    ],
+    "title": "FIPS state and county codes — U.S. Census Bureau",
+    "x-finetype-version": "0.6.67",
+    "x-meridian-code-list": {
+      "levels": [
+        "state",
+        "county"
+      ]
+    }
+  },
+  "census.naics_2017_to_2022": {
+    "$schema": "https://datapackage.org/profiles/2.0/datapackage.json",
+    "contributors": [
+      {
+        "path": "https://www.census.gov/naics/",
+        "roles": [
+          "author"
+        ],
+        "title": "U.S. Census Bureau"
+      },
+      {
+        "path": "https://meridian.online",
+        "roles": [
+          "publisher",
+          "wrangler"
+        ],
+        "title": "Meridian"
+      }
+    ],
+    "created": "2026-11-17T04:36:27Z",
+    "description": "The U.S. Census Bureau's own concordance from the 2017 North American Industry Classification System to the 2022 edition, at the six-digit national industry level, for bridging data still coded to 2017, such as County Business Patterns through 2023: one row per pairing of a 2017 industry with a 2022 industry, as Census publishes it. A 2017 industry Census split appears once for each 2022 industry it went to, its title naming the piece that went there (Anthracite Mining - anthracite surface mining), and a 2022 industry formed from several 2017 industries once for each of them; Census gives no weights for apportioning counts between them. Every 2022 code is a national industry in census/naics_2022, which the run checks against the code list it builds from Census's descriptions workbook; the 2017 edition is not hosted, so the 2017 codes are checked by their shape only. Census's 2022 to 2017 file holds the same pairings, so this table serves both directions. Census's files are U.S. Government works in the public domain.",
+    "homepage": "https://meridian.online/datasets/census/naics_2017_to_2022",
+    "licenses": [
+      {
+        "name": "other-pd",
+        "path": "https://www.census.gov/about/policies/open-gov/open-data.html",
+        "title": "Public domain (U.S. Census Bureau)"
+      }
+    ],
+    "name": "naics_2017_to_2022",
+    "resources": [
+      {
+        "bytes": 41203,
+        "format": "parquet",
+        "hash": "sha256:8442381fd085c7471020edafc8314cadcb9e4e03a2b434617bbcb1354bd1a0ab",
+        "mediatype": "application/vnd.apache.parquet",
+        "name": "naics_2017_to_2022",
+        "path": "https://openlake.meridian.online/census/naics_2017_to_2022.parquet",
+        "schema": {
+          "fields": [
+            {
+              "constraints": {
+                "maxLength": 6,
+                "minLength": 6,
+                "pattern": "^[0-9]{6}$"
+              },
+              "description": "A six-digit national industry code of the 2017 NAICS (212113).",
+              "name": "from_code",
+              "type": "string",
+              "x-finetype-label": "representation.identifier.numeric_code",
+              "x-finetype-nominated": true
+            },
+            {
+              "constraints": {
+                "maxLength": 65536,
+                "minLength": 1
+              },
+              "description": "The 2017 industry's title as Census prints it in the concordance, with spaces trimmed from its ends. Where Census split a 2017 industry, the title is followed by ' - ' and the piece of it that went to this 2022 industry (Anthracite Mining - anthracite surface mining). Text is kept as printed, Census's misspelling 'excpet' in 531120's title included, which Census's 2022 to 2017 file corrects.",
+              "name": "from_description",
+              "type": "string",
+              "x-finetype-label": "representation.text.plain_text",
+              "x-finetype-nominated": true
+            },
+            {
+              "constraints": {
+                "maxLength": 6,
+                "minLength": 6,
+                "pattern": "^[0-9]{6}$"
+              },
+              "description": "A six-digit national industry code of the 2022 NAICS, a code in census/naics_2022 (212114).",
+              "name": "to_code",
+              "type": "string",
+              "x-finetype-label": "representation.identifier.numeric_code",
+              "x-finetype-nominated": true
+            },
+            {
+              "constraints": {
+                "maxLength": 65536,
+                "minLength": 1
+              },
+              "description": "The 2022 industry's title as Census prints it in the concordance, with spaces trimmed from its ends. It is kept as printed, so it can differ from the code's title in census/naics_2022 (531120's reads 'excpet' here and 'except' there).",
+              "name": "to_description",
+              "type": "string",
+              "x-finetype-label": "representation.text.plain_text",
+              "x-finetype-nominated": true
+            },
+            {
+              "constraints": {
+                "enum": [
+                  "2017"
+                ]
+              },
+              "description": "The edition from_code belongs to: always 2017.",
+              "name": "from_edition",
+              "type": "string",
+              "x-finetype-enum-domain": {
+                "cohesion": 1.0,
+                "distinct": 1,
+                "domain": [
+                  "2017"
+                ],
+                "open": true,
+                "rows": 1150
+              },
+              "x-finetype-label": "representation.text.word",
+              "x-finetype-nominated": true
+            },
+            {
+              "constraints": {
+                "enum": [
+                  "2022"
+                ]
+              },
+              "description": "The edition to_code belongs to: always 2022.",
+              "name": "to_edition",
+              "type": "string",
+              "x-finetype-enum-domain": {
+                "cohesion": 1.0,
+                "distinct": 1,
+                "domain": [
+                  "2022"
+                ],
+                "open": true,
+                "rows": 1150
+              },
+              "x-finetype-label": "representation.text.word",
+              "x-finetype-nominated": true
+            },
+            {
+              "constraints": {
+                "enum": [
+                  "2022"
+                ]
+              },
+              "description": "The NAICS edition the concordance bridges to, 2022. Census's concordance states no release or revision date of its own.",
+              "name": "release",
+              "type": "string",
+              "x-finetype-label": "representation.identifier.alphanumeric_id",
+              "x-finetype-nominated": true,
+              "x-finetype-pattern-fit": {
+                "canonical": "^[A-Za-z][A-Za-z0-9 /_.#-]*[0-9][A-Za-z0-9 /_.#-]*$|^[0-9][A-Za-z0-9 /_.#-]*[A-Za-z][A-Za-z0-9 /_.#-]*$",
+                "outcome": "widened"
+              }
+            }
+          ],
+          "primaryKey": [
+            "from_code",
+            "to_code"
+          ]
+        }
+      }
+    ],
+    "sources": [
+      {
+        "path": "https://www.census.gov/naics/",
+        "title": "North American Industry Classification System — U.S. Census Bureau"
+      },
+      {
+        "path": "https://www.census.gov/naics/concordances/2017_to_2022_NAICS.xlsx",
+        "title": "2017 NAICS to 2022 NAICS concordance (2017_to_2022_NAICS.xlsx) — U.S. Census Bureau"
+      },
+      {
+        "path": "https://www.census.gov/naics/2022NAICS/2022_NAICS_Descriptions.xlsx",
+        "title": "2022 NAICS descriptions (2022_NAICS_Descriptions.xlsx) — U.S. Census Bureau"
+      }
+    ],
+    "title": "NAICS 2017 to 2022 concordance",
+    "x-finetype-version": "0.6.67",
+    "x-meridian-crosswalk": {
+      "from": "2017",
+      "to": "2022",
+      "toCodeList": "census/naics_2022"
+    }
+  },
+  "census.naics_2022": {
+    "$schema": "https://datapackage.org/profiles/2.0/datapackage.json",
+    "contributors": [
+      {
+        "path": "https://www.census.gov/naics/",
+        "roles": [
+          "author"
+        ],
+        "title": "U.S. Census Bureau"
+      },
+      {
+        "path": "https://meridian.online",
+        "roles": [
+          "publisher",
+          "wrangler"
+        ],
+        "title": "Meridian"
+      }
+    ],
+    "created": "2026-11-16T11:21:17Z",
+    "description": "The 2022 North American Industry Classification System — the standard taxonomy for classifying business establishments by industry, from broad sectors down to specific national industries.",
+    "homepage": "https://meridian.online/datasets/naics",
+    "licenses": [
+      {
+        "name": "other-pd",
+        "path": "https://www.census.gov/naics/",
+        "title": "Public domain (U.S. Census Bureau)"
+      }
+    ],
+    "name": "naics",
+    "resources": [
+      {
+        "bytes": 349873,
+        "format": "parquet",
+        "hash": "sha256:c819c5c2f2089888358ed0380b28821db5f137a518f975b3a7510bccab07d772",
+        "mediatype": "application/vnd.apache.parquet",
+        "name": "naics",
+        "path": "https://openlake.meridian.online/census/naics_2022.parquet",
+        "schema": {
+          "fields": [
+            {
+              "constraints": {
+                "pattern": "^(11|2[1-3]|3[1-3]|4[1-2]|4[4-5]|4[8-9]|5[1-6]|6[1-2]|7[1-2]|8[1-2]|9[1-2])[0-9]{0,4}$|^(31-33|44-45|48-49)$"
+              },
+              "description": "NAICS 2022 code — 2 digits (or a hyphenated sector range) down to a 6-digit national industry; the hierarchy is read from the code length.",
+              "name": "code",
+              "type": "string",
+              "x-finetype-confidence": 1.0,
+              "x-finetype-label": "identity.industry.naics"
+            },
+            {
+              "constraints": {
+                "maxLength": 65536,
+                "minLength": 1
+              },
+              "description": "Official Census title for the code, with the trilateral-comparable superscript 'T' marker stripped.",
+              "name": "title",
+              "type": "string",
+              "x-finetype-confidence": 0.6779,
+              "x-finetype-label": "representation.text.plain_text"
+            },
+            {
+              "constraints": {
+                "maxLength": 100,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$"
+              },
+              "description": "Hierarchy level derived from the code shape: sector, subsector, industry_group, naics_industry or national_industry.",
+              "name": "level",
+              "type": "string",
+              "x-finetype-confidence": 0.6,
+              "x-finetype-enum-domain": {
+                "cohesion": 0.6000000238418579,
+                "distinct": 5,
+                "domain": [
+                  "industry_group",
+                  "naics_industry",
+                  "national_industry",
+                  "sector",
+                  "subsector"
+                ],
+                "open": true,
+                "rows": 2125
+              },
+              "x-finetype-label": "representation.text.plain_text"
+            },
+            {
+              "constraints": {
+                "maxLength": 65536,
+                "minLength": 1
+              },
+              "description": "Official Census description of the industry; NULL for codes that defer to a child code.",
+              "name": "description",
+              "type": "string",
+              "x-finetype-label": "representation.text.plain_text",
+              "x-finetype-nominated": true
+            },
+            {
+              "constraints": {
+                "maxLength": 65536,
+                "minLength": 1
+              },
+              "description": "Lowercased, accent-stripped concatenation of title + description — a derived free-text search field, not a source attribute.",
+              "name": "corpus",
+              "type": "string",
+              "x-finetype-label": "representation.text.plain_text",
+              "x-finetype-nominated": true
+            }
+          ],
+          "primaryKey": [
+            "code"
+          ]
+        }
+      }
+    ],
+    "sources": [
+      {
+        "path": "https://www.census.gov/naics/",
+        "title": "U.S. Census Bureau"
+      }
+    ],
+    "title": "NAICS — Industry Classification (2022)",
+    "x-finetype-version": "0.6.67"
+  },
+  "census.naics_2022_titles": {
+    "$schema": "https://datapackage.org/profiles/2.0/datapackage.json",
+    "contributors": [
+      {
+        "path": "https://www.census.gov/naics/",
+        "roles": [
+          "author"
+        ],
+        "title": "U.S. Census Bureau"
+      },
+      {
+        "path": "https://meridian.online",
+        "roles": [
+          "publisher",
+          "wrangler"
+        ],
+        "title": "Meridian"
+      }
+    ],
+    "created": "2026-11-17T05:35:17Z",
+    "description": "The U.S. Census Bureau's 2022 NAICS index file, for coding free-text business descriptions (company profiles, permit and licence records, survey answers) to the 2022 North American Industry Classification System: one row per index entry, a short description of a kind of business such as Soybean farming, field and seed production, with the six-digit national industry Census codes it to and that industry's title in census/naics_2022. Every code is a national industry in census/naics_2022, which the run checks against the code list it builds from Census's descriptions workbook; two national industries (112130 and 541120) have no entries in Census's file. Census's 25 cross-references, whose code cell is ****** and whose text points to other entries (Dealers -- see type), name no code and are left out. Census's files are U.S. Government works in the public domain.",
+    "homepage": "https://meridian.online/datasets/census/naics_2022_titles",
+    "licenses": [
+      {
+        "name": "other-pd",
+        "path": "https://www.census.gov/about/policies/open-gov/open-data.html",
+        "title": "Public domain (U.S. Census Bureau)"
+      }
+    ],
+    "name": "naics_2022_titles",
+    "resources": [
+      {
+        "bytes": 723019,
+        "format": "parquet",
+        "hash": "sha256:d5b132b5f99e008dd7ea8fc1b0c59e0330772a408e95d2291abb038d66964656",
+        "mediatype": "application/vnd.apache.parquet",
+        "name": "naics_2022_titles",
+        "path": "https://openlake.meridian.online/census/naics_2022_titles.parquet",
+        "schema": {
+          "fields": [
+            {
+              "constraints": {
+                "pattern": "^[0-9]{6}\\|.+$"
+              },
+              "description": "The entry's key, its code and description joined with '|' (111110|Soybean farming, field and seed production). Census gives its index entries no id of its own.",
+              "name": "entry_id",
+              "type": "string",
+              "x-finetype-label": "representation.identifier.alphanumeric_id",
+              "x-finetype-nominated": true,
+              "x-finetype-pattern-fit": {
+                "canonical": "^[A-Za-z][A-Za-z0-9 /_.#-]*[0-9][A-Za-z0-9 /_.#-]*$|^[0-9][A-Za-z0-9 /_.#-]*[A-Za-z][A-Za-z0-9 /_.#-]*$",
+                "outcome": "omitted"
+              }
+            },
+            {
+              "constraints": {
+                "maxLength": 65536,
+                "minLength": 1
+              },
+              "description": "The business description as Census's index file prints it (Soybean farming, field and seed production), with spaces trimmed from its ends. Runs of spaces inside it are kept as Census prints them.",
+              "name": "title",
+              "type": "string",
+              "x-finetype-confidence": 0.7828,
+              "x-finetype-label": "representation.text.plain_text"
+            },
+            {
+              "constraints": {
+                "maxLength": 6,
+                "minLength": 6,
+                "pattern": "^[0-9]{6}$"
+              },
+              "description": "The six-digit national industry Census codes the entry to, in census/naics_2022's form (111110).",
+              "name": "code",
+              "type": "string",
+              "x-finetype-confidence": 1.0,
+              "x-finetype-label": "identity.industry.naics"
+            },
+            {
+              "constraints": {
+                "maxLength": 65536,
+                "minLength": 1
+              },
+              "description": "The code's title in census/naics_2022 (Soybean Farming), so a lookup needs no second join.",
+              "name": "code_description",
+              "type": "string",
+              "x-finetype-label": "representation.text.plain_text",
+              "x-finetype-nominated": true
+            },
+            {
+              "constraints": {
+                "enum": [
+                  "2022"
+                ]
+              },
+              "description": "The NAICS edition, 2022. Census's index file states no release or revision date of its own.",
+              "name": "release",
+              "type": "string",
+              "x-finetype-label": "representation.identifier.alphanumeric_id",
+              "x-finetype-nominated": true,
+              "x-finetype-pattern-fit": {
+                "canonical": "^[A-Za-z][A-Za-z0-9 /_.#-]*[0-9][A-Za-z0-9 /_.#-]*$|^[0-9][A-Za-z0-9 /_.#-]*[A-Za-z][A-Za-z0-9 /_.#-]*$",
+                "outcome": "widened"
+              }
+            },
+            {
+              "constraints": {
+                "enum": [
+                  "census"
+                ]
+              },
+              "description": "Whose text title is: always census, the Census Bureau's own description.",
+              "name": "text_source",
+              "type": "string",
+              "x-finetype-confidence": 0.3939,
+              "x-finetype-enum-domain": {
+                "cohesion": 1.0,
+                "distinct": 1,
+                "domain": [
+                  "census"
+                ],
+                "open": true,
+                "rows": 20373
+              },
+              "x-finetype-label": "representation.text.word"
+            },
+            {
+              "constraints": {
+                "maxLength": 65536,
+                "minLength": 1
+              },
+              "description": "Lowercased, accent-stripped title, with runs of whitespace collapsed to one space: a derived free-text search field, not a source attribute.",
+              "name": "corpus",
+              "type": "string",
+              "x-finetype-confidence": 0.7894,
+              "x-finetype-label": "representation.text.plain_text"
+            }
+          ],
+          "primaryKey": [
+            "entry_id"
+          ]
+        }
+      }
+    ],
+    "sources": [
+      {
+        "path": "https://www.census.gov/naics/",
+        "title": "North American Industry Classification System — U.S. Census Bureau"
+      },
+      {
+        "path": "https://www.census.gov/naics/2022NAICS/2022_NAICS_Index_File.xlsx",
+        "title": "2022 NAICS index file (2022_NAICS_Index_File.xlsx) — U.S. Census Bureau"
+      },
+      {
+        "path": "https://www.census.gov/naics/2022NAICS/2022_NAICS_Descriptions.xlsx",
+        "title": "2022 NAICS descriptions (2022_NAICS_Descriptions.xlsx) — U.S. Census Bureau"
+      }
+    ],
+    "title": "NAICS 2022 index — business descriptions coded to industries",
+    "x-finetype-version": "0.6.67",
+    "x-meridian-title-index": {
+      "codeList": "census/naics_2022"
+    }
+  },
+  "census.schedule_b": {
+    "$schema": "https://datapackage.org/profiles/2.0/datapackage.json",
+    "contributors": [
+      {
+        "path": "https://www.census.gov/foreign-trade/",
+        "roles": [
+          "author"
+        ],
+        "title": "U.S. Census Bureau"
+      },
+      {
+        "path": "https://www.usitc.gov/",
+        "roles": [
+          "contributor"
+        ],
+        "title": "U.S. International Trade Commission"
+      },
+      {
+        "path": "https://meridian.online",
+        "roles": [
+          "publisher",
+          "wrangler"
+        ],
+        "title": "Meridian"
+      }
+    ],
+    "created": "2026-11-15T11:46:40Z",
+    "description": "Schedule B, the U.S. Census Bureau's classification of exported goods: every ten-digit commodity Census publishes, with a row for each chapter, heading and subheading its codes imply and a parent for every row. Each commodity carries Census's units of quantity, SITC, end-use, agricultural, NAICS and high-technology codes. Chapter titles and commodity text are Census's; heading and subheading text is the U.S. International Trade Commission's, from the HTS revision named in hts_release. The data is credited to the U.S. Census Bureau; Census's bulk file carries no endorsement notice.",
+    "homepage": "https://meridian.online/datasets/census/schedule_b",
+    "licenses": [
+      {
+        "name": "other-pd",
+        "path": "https://www.census.gov/about/policies/open-gov/open-data.html",
+        "title": "Public domain (U.S. Census Bureau)"
+      }
+    ],
+    "name": "schedule_b",
+    "resources": [
+      {
+        "bytes": 1317433,
+        "format": "parquet",
+        "hash": "sha256:706579d1186f9480c6be9689eb936fbc5eb890a4e8c4e0ab73083a4af43cae8d",
+        "mediatype": "application/vnd.apache.parquet",
+        "name": "schedule_b",
+        "path": "https://openlake.meridian.online/census/schedule_b.parquet",
+        "schema": {
+          "fields": [
+            {
+              "constraints": {
+                "maxLength": 10,
+                "minLength": 2,
+                "pattern": "^[0-9]{2}$|^[0-9]{4}$|^[0-9]{6}$|^[0-9]{10}$"
+              },
+              "description": "Schedule B code, digits only: 2 (chapter), 4 (heading), 6 (subheading) or 10 (commodity) digits. Join other data on this column.",
+              "name": "code",
+              "type": "string",
+              "x-finetype-label": "geography.transportation.hs_code",
+              "x-finetype-nominated": true,
+              "x-finetype-pattern-fit": {
+                "canonical": "^\\d{4}\\.?\\d{2}(\\.?\\d{2}){0,2}$",
+                "outcome": "widened"
+              }
+            },
+            {
+              "constraints": {
+                "pattern": "^\\d{4}\\.?\\d{2}(\\.?\\d{2}){0,2}$|^[0-9]{2}$|^[0-9]{4}$"
+              },
+              "description": "The code as Census prints it, with dots (0101.21.0000). For a chapter or heading, its digits; for a subheading, 0101.21.",
+              "name": "code_display",
+              "type": "string",
+              "x-finetype-label": "geography.transportation.hs_code",
+              "x-finetype-nominated": true,
+              "x-finetype-pattern-fit": {
+                "canonical": "^\\d{4}\\.?\\d{2}(\\.?\\d{2}){0,2}$",
+                "outcome": "widened"
+              }
+            },
+            {
+              "constraints": {
+                "maxLength": 100,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$"
+              },
+              "description": "Hierarchy level: chapter, heading, subheading or commodity (the ten-digit Schedule B number). Schedule B has no eight-digit level.",
+              "name": "level",
+              "type": "string",
+              "x-finetype-confidence": 0.6,
+              "x-finetype-enum-domain": {
+                "cohesion": 1.0,
+                "distinct": 4,
+                "domain": [
+                  "chapter",
+                  "commodity",
+                  "heading",
+                  "subheading"
+                ],
+                "open": true,
+                "rows": 16727
+              },
+              "x-finetype-label": "representation.text.word"
+            },
+            {
+              "description": "The level's position in the ladder, from 0 for a chapter to 3 for a commodity.",
+              "name": "depth",
+              "type": "integer",
+              "x-finetype-confidence": 0.6,
+              "x-finetype-display": {
+                "number": ",d"
+              },
+              "x-finetype-label": "representation.numeric.integer_number",
+              "x-finetype-unsupported-constraints": {
+                "pattern": "^-?[0-9]+$"
+              }
+            },
+            {
+              "constraints": {
+                "maxLength": 6,
+                "minLength": 2,
+                "pattern": "^[0-9]+$"
+              },
+              "description": "The code one level up, always the code's own prefix; NULL for a chapter.",
+              "name": "parent_code",
+              "type": "string",
+              "x-finetype-confidence": 0.9929,
+              "x-finetype-label": "representation.identifier.numeric_code"
+            },
+            {
+              "constraints": {
+                "maxLength": 65536,
+                "minLength": 1
+              },
+              "description": "The row's text. A commodity's is Census's long description and a chapter's is Census's title from the year's index page. A heading's or subheading's is USITC's text for that prefix in the HTS, except in chapter 98, where USITC's provisions are import ones, and where USITC gives the prefix no text: there it is the text of the one Census line under it, or, with several lines under it, a label such as 'Heading 9802'. text_source says which.",
+              "name": "description",
+              "type": "string",
+              "x-finetype-confidence": 0.8688,
+              "x-finetype-label": "representation.text.plain_text"
+            },
+            {
+              "constraints": {
+                "maxLength": 65536,
+                "minLength": 1
+              },
+              "description": "The chapter title and the text of each level above the row, then its own, joined with ' › '. Where levels take their text from the same source line, the text appears once, at the lowest of them.",
+              "name": "description_full",
+              "type": "string",
+              "x-finetype-confidence": 0.9988,
+              "x-finetype-label": "representation.text.plain_text"
+            },
+            {
+              "constraints": {
+                "pattern": "^[A-Za-z][A-Za-z0-9 /_.#-]*[0-9][A-Za-z0-9 /_.#-]*$|^[0-9][A-Za-z0-9 /_.#-]*[A-Za-z][A-Za-z0-9 /_.#-]*$|^[0-9]{4}/[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+              },
+              "description": "Census's year folder and the date the bulk file records for its export codes file, econcord.txt, joined by '/', for example 2026/2026-07-27.",
+              "name": "release",
+              "type": "string",
+              "x-finetype-label": "representation.identifier.alphanumeric_id",
+              "x-finetype-nominated": true,
+              "x-finetype-pattern-fit": {
+                "canonical": "^[A-Za-z][A-Za-z0-9 /_.#-]*[0-9][A-Za-z0-9 /_.#-]*$|^[0-9][A-Za-z0-9 /_.#-]*[A-Za-z][A-Za-z0-9 /_.#-]*$",
+                "outcome": "widened"
+              }
+            },
+            {
+              "constraints": {
+                "maxLength": 100,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$"
+              },
+              "description": "Whose text description is: census (a commodity's description, or a chapter title from Census's index page), usitc (USITC's HTS text for the heading or subheading, from the revision in hts_release), census_derived (a heading or subheading with exactly one Census line under it, taking that line's text, in chapter 98 or where USITC gives the prefix no text) or meridian_label (such a level with several Census lines under it, labelled by its level and code).",
+              "name": "text_source",
+              "type": "string",
+              "x-finetype-confidence": 0.6,
+              "x-finetype-enum-domain": {
+                "cohesion": 0.5,
+                "distinct": 4,
+                "domain": [
+                  "census",
+                  "census_derived",
+                  "meridian_label",
+                  "usitc"
+                ],
+                "open": true,
+                "rows": 16727
+              },
+              "x-finetype-label": "representation.text.word"
+            },
+            {
+              "constraints": {
+                "maxLength": 65536,
+                "minLength": 1
+              },
+              "description": "Lowercased, accent-stripped description_full: a derived free-text search field, not a source attribute.",
+              "name": "corpus",
+              "type": "string",
+              "x-finetype-confidence": 0.9999,
+              "x-finetype-label": "representation.text.plain_text"
+            },
+            {
+              "constraints": {
+                "maxLength": 65536,
+                "minLength": 1
+              },
+              "description": "Census's short description of the commodity, at most 50 characters. NULL on chapter, heading and subheading rows.",
+              "name": "description_short",
+              "type": "string",
+              "x-finetype-label": "representation.text.plain_text",
+              "x-finetype-nominated": true
+            },
+            {
+              "constraints": {
+                "maxLength": 3,
+                "minLength": 1,
+                "pattern": "^[A-Z0-9]{1,3}$"
+              },
+              "description": "Census's abbreviation for the commodity's first unit of quantity (for example KG or NO), as printed. NULL where Census prints none, and on chapter, heading and subheading rows.",
+              "name": "unit_1",
+              "type": "string",
+              "x-finetype-label": "representation.identifier.alphanumeric_id",
+              "x-finetype-nominated": true,
+              "x-finetype-pattern-fit": {
+                "canonical": "^[A-Za-z][A-Za-z0-9 /_.#-]*[0-9][A-Za-z0-9 /_.#-]*$|^[0-9][A-Za-z0-9 /_.#-]*[A-Za-z][A-Za-z0-9 /_.#-]*$",
+                "outcome": "widened"
+              }
+            },
+            {
+              "constraints": {
+                "maxLength": 3,
+                "minLength": 1,
+                "pattern": "^[A-Z0-9]{1,3}$"
+              },
+              "description": "Census's abbreviation for the commodity's second unit of quantity, as printed. NULL where Census prints none, and on chapter, heading and subheading rows.",
+              "name": "unit_2",
+              "type": "string",
+              "x-finetype-label": "representation.identifier.alphanumeric_id",
+              "x-finetype-nominated": true,
+              "x-finetype-pattern-fit": {
+                "canonical": "^[A-Za-z][A-Za-z0-9 /_.#-]*[0-9][A-Za-z0-9 /_.#-]*$|^[0-9][A-Za-z0-9 /_.#-]*[A-Za-z][A-Za-z0-9 /_.#-]*$",
+                "outcome": "widened"
+              }
+            },
+            {
+              "constraints": {
+                "maxLength": 5,
+                "minLength": 5,
+                "pattern": "^[0-9]{3}[0-9X]{2}$"
+              },
+              "description": "The commodity's Standard International Trade Classification, Revision 4, code, as Census prints it, five characters. A few codes end in X (792XX); Census's layout does not define X, and its reading as digits left unspecified is inferred from the codes' shape. NULL on chapter, heading and subheading rows.",
+              "name": "sitc",
+              "type": "string",
+              "x-finetype-label": "representation.identifier.alphanumeric_id",
+              "x-finetype-locale": "EN_US",
+              "x-finetype-nominated": true,
+              "x-finetype-pattern-fit": {
+                "canonical": "^[A-Za-z][A-Za-z0-9 /_.#-]*[0-9][A-Za-z0-9 /_.#-]*$|^[0-9][A-Za-z0-9 /_.#-]*[A-Za-z][A-Za-z0-9 /_.#-]*$",
+                "outcome": "widened"
+              }
+            },
+            {
+              "constraints": {
+                "maxLength": 5,
+                "minLength": 5,
+                "pattern": "^[0-9]{5}$"
+              },
+              "description": "Census's end-use classification code for the commodity, five digits, as printed. NULL on chapter, heading and subheading rows.",
+              "name": "end_use",
+              "type": "string",
+              "x-finetype-label": "representation.identifier.numeric_code",
+              "x-finetype-nominated": true
+            },
+            {
+              "description": "Whether the commodity is an agricultural product, read from Census's one-character flag, which its layout calls 'Agriculture or non-agriculture product code' and prints as '0' or '1'. true is '0'. Census's layout does not say which value is which; the reading is from the data: every line of chapters 1, 2 and 4 is '0', and every line of chapter 3, fish, which USDA's definition of agricultural products leaves out, is '1'. NULL on chapter, heading and subheading rows.",
+              "falseValues": [
+                "false",
+                "no",
+                "off",
+                "False",
+                "No",
+                "Off",
+                "FALSE",
+                "NO",
+                "OFF",
+                "disabled",
+                "Disabled",
+                "DISABLED",
+                "inactive",
+                "Inactive",
+                "INACTIVE"
+              ],
+              "name": "agricultural",
+              "trueValues": [
+                "true",
+                "yes",
+                "on",
+                "True",
+                "Yes",
+                "On",
+                "TRUE",
+                "YES",
+                "ON",
+                "enabled",
+                "Enabled",
+                "ENABLED",
+                "active",
+                "Active",
+                "ACTIVE"
+              ],
+              "type": "boolean",
+              "x-finetype-confidence": 0.8977,
+              "x-finetype-enum-domain": {
+                "cohesion": 1.0,
+                "distinct": 2,
+                "domain": [
+                  "false",
+                  "true"
+                ],
+                "open": true,
+                "rows": 9779
+              },
+              "x-finetype-label": "representation.boolean.terms"
+            },
+            {
+              "constraints": {
+                "maxLength": 6,
+                "minLength": 6,
+                "pattern": "^[0-9]{4}[0-9X]{2}$"
+              },
+              "description": "The NAICS industry Census assigns to the commodity, six characters, as printed. Joins to census/naics_2022's code; the descriptor's x-joins states how many commodity lines match. Some codes are not 2022 NAICS codes: some end in X (33641X, 1121XX), which Census's layout does not define and which reads, from the codes' shape, as digits left unspecified; and 910000, 930000 and 990000 are Census's own. NULL on chapter, heading and subheading rows.",
+              "name": "naics",
+              "type": "string",
+              "x-finetype-confidence": 1.0,
+              "x-finetype-label": "identity.industry.naics",
+              "x-finetype-pattern-fit": {
+                "canonical": "^(11|2[1-3]|3[1-3]|4[1-2]|4[4-5]|4[8-9]|5[1-6]|6[1-2]|7[1-2]|8[1-2]|9[1-2])[0-9]{0,4}$|^(31-33|44-45|48-49)$",
+                "outcome": "widened"
+              }
+            },
+            {
+              "constraints": {
+                "maxLength": 2,
+                "minLength": 2,
+                "pattern": "^[0-9]{2}$"
+              },
+              "description": "Census's high-technology classification for the commodity, two digits, '00' to '10', as printed. Census's layout calls the field 'HiTech classification' and does not define its values; '00', on most lines, is read from the data as a line outside the classification and the others as the group it falls in. NULL on chapter, heading and subheading rows.",
+              "name": "hitech",
+              "type": "string",
+              "x-finetype-label": "representation.identifier.numeric_code",
+              "x-finetype-nominated": true
+            },
+            {
+              "constraints": {
+                "maxLength": 100,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$"
+              },
+              "description": "The section of the schedule the row's chapter belongs to, as a Roman numeral, from Census's index page.",
+              "name": "section",
+              "type": "string",
+              "x-finetype-enum-domain": {
+                "cohesion": 1.0,
+                "distinct": 22,
+                "domain": [
+                  "I",
+                  "II",
+                  "III",
+                  "IV",
+                  "IX",
+                  "V",
+                  "VI",
+                  "VII",
+                  "VIII",
+                  "X",
+                  "XI",
+                  "XII",
+                  "XIII",
+                  "XIV",
+                  "XIX",
+                  "XV",
+                  "XVI",
+                  "XVII",
+                  "XVIII",
+                  "XX",
+                  "XXI",
+                  "XXII"
+                ],
+                "open": true,
+                "rows": 16727
+              },
+              "x-finetype-label": "representation.text.word",
+              "x-finetype-nominated": true
+            },
+            {
+              "constraints": {
+                "maxLength": 65536,
+                "minLength": 1
+              },
+              "description": "The title of that section.",
+              "name": "section_title",
+              "type": "string",
+              "x-finetype-confidence": 0.9705,
+              "x-finetype-enum-domain": {
+                "cohesion": 0.090999998152256,
+                "distinct": 22,
+                "domain": [
+                  "Animal of Vegetable Fats and Oils and their Cleavage Products; Prepared Edible Fats; Animal or Vegetable Waxes",
+                  "Arms and Ammunition; Parts and Accessories Thereof",
+                  "Articles of Stone, Plaster, Cement, Asbestos, Mica or Similar Materials; Ceramic Products; Glass and Glassware",
+                  "Base Metals and Articles of Base Metal",
+                  "Footware, Headgear, Umbrellas, Sun Umbrellas, Walking-sticks, Seat-sticks, Whips, Riding-crops and Parts Thereof; Prepared Feathers and Articles Made Therewith; Artificial Flowers; Articles of Human Hair",
+                  "Live Animals; Animal Products",
+                  "Machinery and Mechanical Appliances; Electrical Equipment; Parts Thereof; Sound Recorders and Reproducers, Television Image and Sound Recorders and Reproducers, and Parts and Accessories of Such Articles",
+                  "Mineral Products",
+                  "Miscellaneous Manufactured Articles",
+                  "Natural of Cultured Pearls, Precious or Semiprecious Stones, Precious Metals, Metals Clad with Precious Metal, and Articles Thereof; Imitation Jewlry; Coin",
+                  "Optical, Photographic, Cinematographic, Measuring, Checking, Precision, Medical or Surgical Instruments and Apparatus; Clocks and Watches; Musical Instruments; Parts and Accessories Thereof",
+                  "Plastics and Articles Thereof; Rubber and Articles Thereof",
+                  "Prepared Foodstuffs; Beverages, Spirits and Vinegar; Tobacco and Manufactured Tobacco Substitutes",
+                  "Products of the Chemical or Allied Industries",
+                  "Pulp of Wood or of Other Fibrous Cellulosic Material; Recovered (Waste and Scrap) Paper or Paperboard; Paper and Paperboard Articles Thereof",
+                  "Raw Hides and Skins, Leather, Furskins and Articles Thereof; Saddlery and Harness; Travel Goods, Handbags and Similar Containers; Articles of Animal Gut (Other Than Silkworm Gut)",
+                  "Special Classification Provisions",
+                  "Textiles and Textile Articles",
+                  "Vegetable Products",
+                  "Vehicles, Aircraft, Vessels and Associated Transport Equipment",
+                  "Wood and Articles of Wood; Wood Charcoal; Cork and Articles of Cork; Manufactures of Straw, of Esparto or of Other Plainting Materials; Basketware and Wickerwork",
+                  "Works of Art, Collectors' Pieces and Antiques"
+                ],
+                "open": true,
+                "rows": 16727
+              },
+              "x-finetype-label": "representation.text.plain_text"
+            },
+            {
+              "constraints": {
+                "pattern": "^[A-Za-z][A-Za-z0-9 /_.#-]*[0-9][A-Za-z0-9 /_.#-]*$|^[0-9][A-Za-z0-9 /_.#-]*[A-Za-z][A-Za-z0-9 /_.#-]*$"
+              },
+              "description": "The USITC HTS revision whose heading and subheading text this snapshot carries (the usitc rows), for example 2026HTSRev22. The run fails if the revision's year is not the Schedule B year.",
+              "name": "hts_release",
+              "type": "string",
+              "x-finetype-label": "representation.identifier.alphanumeric_id",
+              "x-finetype-nominated": true
+            }
+          ],
+          "primaryKey": [
+            "code"
+          ]
+        }
+      }
+    ],
+    "sources": [
+      {
+        "path": "https://www.census.gov/foreign-trade/schedules/b/index.html",
+        "title": "Schedule B — U.S. Census Bureau"
+      },
+      {
+        "path": "https://www.census.gov/foreign-trade/schedules/b/2026/index.html",
+        "title": "Schedule B 2026 — index and bulk file"
+      },
+      {
+        "path": "https://hts.usitc.gov/reststop/exportList?from=0100&to=9999&format=JSON&styles=false",
+        "title": "HTS export — U.S. International Trade Commission (heading and subheading text)"
+      }
+    ],
+    "title": "Schedule B — U.S. Export Classification Codes",
+    "x-finetype-version": "0.6.67",
+    "x-joins": {
+      "$comment": "How to join Schedule B's NAICS codes to census/naics_2022, and how far the join reaches. It is NOT a `schema.foreignKeys` entry: a foreign key asserts that every value on the left exists on the right, and some of Census's NAICS codes on Schedule B lines are not codes of the 2022 edition. `coverage` does not live in this file: `crosswalk_join.py --write` measures it from the build and writes it into the generated `datapackage.json`.",
+      "joins": [
+        {
+          "cardinality": "partial — 9,464 of 9,779 rows match. The unmatched lines carry a code that is not a 2022 NAICS code: an industry code ending in X (33641X, 1121XX), which Census's layout does not define and which reads, from the codes' shape, as digits left unspecified, or one of the codes 910000, 930000 and 990000, which Census gives to lines such as waste and scrap, used goods and chapter 98's special provisions.",
+          "compareAs": "exact",
+          "coverage": {
+            "matched": 9464,
+            "rows": 9779
+          },
+          "description": "The NAICS industry Census assigns to each ten-digit commodity. Join `naics` to `naics.code` on commodity rows; both sides are text. Chapter, heading and subheading rows carry no NAICS code.",
+          "evidence": "Census's Schedule B export file (econcord.txt) prints a six-character NAICS code on every ten-digit line, at characters 266 to 271 of the layout Census publishes with it (exp-stru.txt, `NAICS classification`). Where the code is a 2022 national industry, it names that industry in census/naics_2022.",
+          "fields": [
+            "naics"
+          ],
+          "measuredAgainst": "sha256:8c091c158138215269dd607e72872fa221431636ab82c101c39eff7eb537d4d5",
+          "name": "naics",
+          "package": "https://github.com/meridian-online/open-analytics/blob/main/datasets/naics/datapackage.json",
+          "reference": {
+            "fields": [
+              "code"
+            ],
+            "resource": "naics"
+          },
+          "where": {
+            "equals": "commodity",
+            "field": "level"
+          }
+        }
+      ],
+      "verifiedBy": "datasets/edgar_gleif/scripts/crosswalk_join.py — the same script both writes and checks `coverage`. Run with `--write`, right after `describe`, it measures the join above against this build's own Parquet and writes `coverage` into datapackage.json (arcform.yaml step `derive_join_coverage`). Run with no flags, it re-measures against the published objects instead and fails if the committed `coverage` disagrees."
+    },
+    "x-meridian-code-list": {
+      "levels": [
+        "chapter",
+        "heading",
+        "subheading",
+        "commodity"
+      ]
+    }
+  },
+  "cms.hcpcs": {
+    "$schema": "https://datapackage.org/profiles/2.0/datapackage.json",
+    "contributors": [
+      {
+        "path": "https://www.cms.gov/",
+        "roles": [
+          "author"
+        ],
+        "title": "Centers for Medicare & Medicaid Services"
+      },
+      {
+        "path": "https://meridian.online",
+        "roles": [
+          "publisher",
+          "wrangler"
+        ],
+        "title": "Meridian"
+      }
+    ],
+    "created": "2026-11-15T03:36:51Z",
+    "description": "HCPCS Level II, the alpha-numeric codes the Centers for Medicare & Medicaid Services (CMS) maintain for billing supplies, drugs, equipment and services that CPT does not cover: one row per code in CMS's quarterly file, current and terminated, with its long and short description, the dates CMS added, last changed and terminated it, and CMS's pricing, coverage, BETOS and type-of-service fields. Two parts of CMS's file are not CMS's own work and are left out: the American Dental Association's dental codes (the D series, CDT) and every CPT code of the American Medical Association, including CPT codes CMS cites in a cross-reference or a description; where a description cited one, the number is replaced by '[CPT code]' and text_source says so. Modifiers are not included.",
+    "homepage": "https://meridian.online/datasets/cms/hcpcs",
+    "licenses": [
+      {
+        "name": "other-pd",
+        "path": "https://www.cms.gov/medicare/coding-billing/healthcare-common-procedure-system",
+        "title": "Public domain (Centers for Medicare & Medicaid Services)"
+      }
+    ],
+    "name": "hcpcs",
+    "resources": [
+      {
+        "bytes": 718136,
+        "format": "parquet",
+        "hash": "sha256:63b5ec269de10b217d68b77be1b23d05641ce256228510e30956c11c4eb8fcc1",
+        "mediatype": "application/vnd.apache.parquet",
+        "name": "hcpcs",
+        "path": "https://openlake.meridian.online/cms/hcpcs.parquet",
+        "schema": {
+          "fields": [
+            {
+              "constraints": {
+                "maxLength": 5,
+                "minLength": 5,
+                "pattern": "^[A-CE-V][0-9]{4}$"
+              },
+              "description": "The HCPCS Level II code: a letter and four digits (A0021, J0120), as claims carry it. Join other data on this column. No code in the D series (the ADA's dental codes) and no CPT code appears; the letters in use run from A to V.",
+              "name": "code",
+              "type": "string",
+              "x-finetype-confidence": 1.0,
+              "x-finetype-label": "identity.medical.hcpcs"
+            },
+            {
+              "constraints": {
+                "maxLength": 5,
+                "minLength": 5,
+                "pattern": "^[A-CE-V][0-9]{4}$"
+              },
+              "description": "The code as CMS prints it, which is the same as code.",
+              "name": "code_display",
+              "type": "string",
+              "x-finetype-confidence": 1.0,
+              "x-finetype-label": "identity.medical.hcpcs"
+            },
+            {
+              "constraints": {
+                "enum": [
+                  "code"
+                ]
+              },
+              "description": "Hierarchy level: always 'code'. HCPCS Level II is a flat list, and CMS publishes no titles for the letter a code starts with, so the list has one level.",
+              "name": "level",
+              "type": "string",
+              "x-finetype-enum-domain": {
+                "cohesion": 1.0,
+                "distinct": 1,
+                "domain": [
+                  "code"
+                ],
+                "open": true,
+                "rows": 8770
+              },
+              "x-finetype-label": "representation.text.word",
+              "x-finetype-nominated": true
+            },
+            {
+              "description": "Always 0: every code is at the top of a one-level list.",
+              "name": "depth",
+              "type": "integer",
+              "x-finetype-confidence": 0.9997,
+              "x-finetype-display": {
+                "number": ",d"
+              },
+              "x-finetype-label": "representation.numeric.integer_number",
+              "x-finetype-unsupported-constraints": {
+                "pattern": "^-?[0-9]+$"
+              }
+            },
+            {
+              "constraints": {
+                "maxLength": 5
+              },
+              "description": "Always NULL: a code in a one-level list has no parent.",
+              "name": "parent_code",
+              "type": "string",
+              "x-finetype-confidence": 0.0,
+              "x-finetype-label": "unknown"
+            },
+            {
+              "constraints": {
+                "maxLength": 65536,
+                "minLength": 1
+              },
+              "description": "CMS's long description of the code, its lines joined with a space. Where CMS's text cites a CPT code by number (fifteen G, M, S and V codes in October 2026, such as 'list separately in addition to cpt codes 99306, 99310'), each number is replaced by '[CPT code]', and text_source is cms_cpt_redacted.",
+              "name": "description",
+              "type": "string",
+              "x-finetype-confidence": 0.5074,
+              "x-finetype-label": "representation.text.plain_text"
+            },
+            {
+              "constraints": {
+                "maxLength": 65536,
+                "minLength": 1
+              },
+              "description": "The same as description, since a code has no ancestors to put in front of it.",
+              "name": "description_full",
+              "type": "string",
+              "x-finetype-confidence": 0.618,
+              "x-finetype-label": "representation.text.plain_text"
+            },
+            {
+              "constraints": {
+                "maxLength": 18,
+                "minLength": 18,
+                "pattern": "^[0-9]{4}-(01|04|07|10)/[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+              },
+              "description": "CMS's quarter and the date in the file's name, as <year>-<month>/<file date>: the October 2026 file, HCPC2026_OCT_ANWEB_09232026, is 2026-10/2026-09-23.",
+              "name": "release",
+              "type": "string",
+              "x-finetype-label": "representation.identifier.alphanumeric_id",
+              "x-finetype-nominated": true,
+              "x-finetype-pattern-fit": {
+                "canonical": "^[A-Za-z][A-Za-z0-9 /_.#-]*[0-9][A-Za-z0-9 /_.#-]*$|^[0-9][A-Za-z0-9 /_.#-]*[A-Za-z][A-Za-z0-9 /_.#-]*$",
+                "outcome": "widened"
+              }
+            },
+            {
+              "constraints": {
+                "enum": [
+                  "cms",
+                  "cms_cpt_redacted"
+                ]
+              },
+              "description": "Whose text description is: cms (CMS's text as printed) or cms_cpt_redacted (CMS's text with the CPT code numbers it cites replaced by '[CPT code]').",
+              "name": "text_source",
+              "type": "string",
+              "x-finetype-enum-domain": {
+                "cohesion": 0.5,
+                "distinct": 2,
+                "domain": [
+                  "cms",
+                  "cms_cpt_redacted"
+                ],
+                "open": true,
+                "rows": 8770
+              },
+              "x-finetype-label": "representation.text.word",
+              "x-finetype-nominated": true
+            },
+            {
+              "constraints": {
+                "maxLength": 65536,
+                "minLength": 1
+              },
+              "description": "Lowercased, accent-stripped description_full: a derived free-text search field, not a source attribute.",
+              "name": "corpus",
+              "type": "string",
+              "x-finetype-confidence": 1.0,
+              "x-finetype-label": "representation.text.plain_text"
+            },
+            {
+              "constraints": {
+                "maxLength": 65536,
+                "minLength": 1
+              },
+              "description": "CMS's short description, 28 characters or fewer, as printed, abbreviations included.",
+              "name": "short_description",
+              "type": "string",
+              "x-finetype-confidence": 0.752,
+              "x-finetype-label": "representation.text.plain_text"
+            },
+            {
+              "description": "The date CMS added the code to HCPCS.",
+              "format": "%Y-%m-%d",
+              "name": "added_date",
+              "type": "date",
+              "x-finetype-confidence": 1.0,
+              "x-finetype-display": {
+                "time": "%Y-%m-%d"
+              },
+              "x-finetype-label": "datetime.date.iso",
+              "x-finetype-unsupported-constraints": {
+                "maxLength": 10,
+                "minLength": 10,
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+              }
+            },
+            {
+              "description": "The date CMS's latest action on the code (action_code) took effect.",
+              "format": "%Y-%m-%d",
+              "name": "action_effective_date",
+              "type": "date",
+              "x-finetype-confidence": 1.0,
+              "x-finetype-display": {
+                "time": "%Y-%m-%d"
+              },
+              "x-finetype-label": "datetime.date.iso",
+              "x-finetype-unsupported-constraints": {
+                "maxLength": 10,
+                "minLength": 10,
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+              }
+            },
+            {
+              "description": "The last date Medicare providers may use the code. NULL for a code still in use; CMS's file keeps terminated codes, so filter on this column for the codes valid on a date.",
+              "format": "%Y-%m-%d",
+              "name": "termination_date",
+              "type": "date",
+              "x-finetype-confidence": 1.0,
+              "x-finetype-display": {
+                "time": "%Y-%m-%d"
+              },
+              "x-finetype-label": "datetime.date.iso",
+              "x-finetype-unsupported-constraints": {
+                "maxLength": 10,
+                "minLength": 10,
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+              }
+            },
+            {
+              "constraints": {
+                "enum": [
+                  "A",
+                  "B",
+                  "C",
+                  "D",
+                  "F",
+                  "N",
+                  "P",
+                  "R",
+                  "S",
+                  "T"
+                ]
+              },
+              "description": "CMS's code for its latest change to the code: A added, B administrative data and long description changed, C long description changed, D discontinued, F administrative data changed, N no maintenance, P payment change, R reactivated, S short description changed, T miscellaneous change (BETOS, type of service).",
+              "name": "action_code",
+              "type": "string",
+              "x-finetype-enum-domain": {
+                "cohesion": 1.0,
+                "distinct": 6,
+                "domain": [
+                  "A",
+                  "C",
+                  "D",
+                  "F",
+                  "N",
+                  "P"
+                ],
+                "open": true,
+                "rows": 8770
+              },
+              "x-finetype-label": "representation.text.word",
+              "x-finetype-nominated": true
+            },
+            {
+              "constraints": {
+                "enum": [
+                  "C",
+                  "D",
+                  "I",
+                  "M",
+                  "S"
+                ]
+              },
+              "description": "CMS's Medicare coverage status: C carrier judgment, D special coverage instructions apply, I not payable by Medicare, M non-covered by Medicare, S non-covered by Medicare statute.",
+              "name": "coverage_code",
+              "type": "string",
+              "x-finetype-confidence": 0.4742,
+              "x-finetype-enum-domain": {
+                "cohesion": 1.0,
+                "distinct": 5,
+                "domain": [
+                  "C",
+                  "D",
+                  "I",
+                  "M",
+                  "S"
+                ],
+                "open": true,
+                "rows": 8770
+              },
+              "x-finetype-label": "representation.text.word"
+            },
+            {
+              "description": "CMS's Medicare Part B pricing indicators for the code, one to four two-digit codes, as a list: for example 00 not separately priced by Part B, 11 priced using national RVUs, 51 drugs, 99 value not established. CMS's record layout, in the zip the Protocol fetches, defines each. NULL where none is printed.",
+              "name": "pricing_indicators",
+              "type": "array",
+              "x-finetype-confidence": 0.9,
+              "x-finetype-enum-domain": {
+                "cohesion": 0.8930000066757202,
+                "distinct": 28,
+                "domain": [
+                  "[00]",
+                  "[11, 21]",
+                  "[11]",
+                  "[13, 21]",
+                  "[13]",
+                  "[21]",
+                  "[22]",
+                  "[31]",
+                  "[32]",
+                  "[33]",
+                  "[34]",
+                  "[35]",
+                  "[36]",
+                  "[37]",
+                  "[38]",
+                  "[39]",
+                  "[40]",
+                  "[45]",
+                  "[46]",
+                  "[51]",
+                  "[52]",
+                  "[53]",
+                  "[54]",
+                  "[55]",
+                  "[56]",
+                  "[57, 21]",
+                  "[57]",
+                  "[99]"
+                ],
+                "open": true,
+                "rows": 8770
+              },
+              "x-finetype-label": "container.object.json_array",
+              "x-finetype-unsupported-constraints": {
+                "pattern": "^\\[.*\\]$"
+              }
+            },
+            {
+              "constraints": {
+                "enum": [
+                  "9",
+                  "A",
+                  "B",
+                  "C",
+                  "D",
+                  "E",
+                  "F",
+                  "G"
+                ]
+              },
+              "description": "CMS's indicator for a code that can be priced under more than one methodology: 9 not applicable because the code is not separately priced by Part B or has no established value, A priced under one methodology, B to G the split methodologies CMS's record layout defines (D, E and F not applicable since 1 January 1998). NULL where CMS prints none.",
+              "name": "multiple_pricing_indicator",
+              "type": "string",
+              "x-finetype-confidence": 0.9736,
+              "x-finetype-enum-domain": {
+                "cohesion": 0.6669999957084656,
+                "distinct": 3,
+                "domain": [
+                  "9",
+                  "A",
+                  "C"
+                ],
+                "open": true,
+                "rows": 8768
+              },
+              "x-finetype-label": "representation.text.word"
+            },
+            {
+              "constraints": {
+                "maxLength": 3,
+                "minLength": 2,
+                "pattern": "^[A-Z][0-9][A-Z]?$"
+              },
+              "description": "The code's Berenson-Eggers Type of Service (BETOS) category, as CMS assigns it (for example D1F prosthetic/orthotic devices, O1E other drugs, Z2 undefined codes). CMS's record layout lists the categories.",
+              "name": "betos",
+              "type": "string",
+              "x-finetype-confidence": 0.9992,
+              "x-finetype-label": "representation.identifier.alphanumeric_id"
+            },
+            {
+              "description": "CMS's type-of-service codes for the code, one to five single characters, as a list. NULL where none is printed.",
+              "name": "type_of_service",
+              "type": "array",
+              "x-finetype-confidence": 0.6326,
+              "x-finetype-label": "container.object.json_array",
+              "x-finetype-unsupported-constraints": {
+                "pattern": "^\\[.*\\]$"
+              }
+            },
+            {
+              "description": "CMS's laboratory specialty certification codes for a laboratory code, up to eight three-digit codes, as a list (for example 310 routine chemistry, 400 hematology). NULL for a code that is not a laboratory test.",
+              "name": "lab_certification_codes",
+              "type": "array",
+              "x-finetype-confidence": 0.5181,
+              "x-finetype-enum-domain": {
+                "cohesion": 0.6470000147819519,
+                "distinct": 17,
+                "domain": [
+                  "[110, 120, 130, 400]",
+                  "[110]",
+                  "[120]",
+                  "[130]",
+                  "[140, 220]",
+                  "[140]",
+                  "[220, 310, 900]",
+                  "[220, 400]",
+                  "[220, 610]",
+                  "[220]",
+                  "[310, 400]",
+                  "[310]",
+                  "[330]",
+                  "[340]",
+                  "[400]",
+                  "[610]",
+                  "[630]"
+                ],
+                "open": true,
+                "rows": 72
+              },
+              "x-finetype-label": "container.object.json_array",
+              "x-finetype-unsupported-constraints": {
+                "pattern": "^\\[.*\\]$"
+              }
+            },
+            {
+              "constraints": {
+                "enum": [
+                  "YY"
+                ]
+              },
+              "description": "YY where the procedure is approved to be performed in an ambulatory surgical center; NULL otherwise.",
+              "name": "asc_payment_group",
+              "type": "string",
+              "x-finetype-enum-domain": {
+                "cohesion": 1.0,
+                "distinct": 1,
+                "domain": [
+                  "YY"
+                ],
+                "open": true,
+                "rows": 1201
+              },
+              "x-finetype-label": "representation.text.word",
+              "x-finetype-nominated": true
+            },
+            {
+              "description": "Up to five HCPCS Level II codes CMS crosswalks a deleted or non-Medicare code to, as a list. CMS's cross-references to CPT codes (42 codes in October 2026) and to dental codes are left out, so a code whose only cross-references were CPT codes has NULL here.",
+              "name": "cross_reference_codes",
+              "type": "array",
+              "x-finetype-confidence": 0.9,
+              "x-finetype-label": "container.object.json_array",
+              "x-finetype-unsupported-constraints": {
+                "pattern": "^\\[.*\\]$"
+              }
+            }
+          ],
+          "primaryKey": [
+            "code"
+          ]
+        }
+      }
+    ],
+    "sources": [
+      {
+        "path": "https://www.cms.gov/medicare/coding-billing/healthcare-common-procedure-system",
+        "title": "Healthcare Common Procedure Coding System (HCPCS) — CMS"
+      },
+      {
+        "path": "https://www.cms.gov/medicare/coding-billing/healthcare-common-procedure-system/quarterly-update",
+        "title": "HCPCS quarterly update — CMS"
+      },
+      {
+        "path": "https://www.cms.gov/files/zip/october-2026-alpha-numeric-hcpcs-file.zip",
+        "title": "October 2026 alpha-numeric HCPCS file — CMS"
+      }
+    ],
+    "title": "HCPCS Level II — Healthcare Common Procedure Coding System",
+    "x-finetype-version": "0.6.67",
+    "x-meridian-code-list": {
+      "levels": [
+        "code"
+      ]
+    }
+  },
+  "fda.ndc": {
+    "$schema": "https://datapackage.org/profiles/2.0/datapackage.json",
+    "contributors": [
+      {
+        "path": "https://www.fda.gov/",
+        "roles": [
+          "author"
+        ],
+        "title": "U.S. Food and Drug Administration"
+      },
+      {
+        "path": "https://meridian.online",
+        "roles": [
+          "publisher",
+          "wrangler"
+        ],
+        "title": "Meridian"
+      }
+    ],
+    "created": "2026-11-15T00:58:21Z",
+    "description": "The FDA's National Drug Code directory: the codes that identify each finished drug sold in the United States, as one row per labeler, product and package, with each package under its product and each product under its labeler. Each product row carries the FDA's fields for it: brand and generic name, dosage form, routes, active ingredients and strengths, pharmacologic classes, DEA schedule, marketing category and application number, and marketing dates; each package row carries its description and dates, and its product's fields. Read from openFDA's NDC download, which the FDA releases under CC0; unfinished drugs (bulk ingredients and drugs for further processing) are not included. The FDA updates the directory daily and Meridian refreshes this dataset fortnightly, so release gives the date the data is as of. The listings are submitted by the labelers, and the FDA does not verify them: a code's presence in the directory does not mean the FDA has approved the drug. Brand names can be trademarks, which CC0 does not waive.",
+    "homepage": "https://meridian.online/datasets/fda/ndc",
+    "licenses": [
+      {
+        "name": "CC0-1.0",
+        "path": "https://open.fda.gov/license/",
+        "title": "CC0 1.0 Universal"
+      }
+    ],
+    "name": "ndc",
+    "resources": [
+      {
+        "bytes": 23118453,
+        "format": "parquet",
+        "hash": "sha256:59e4de4076ab30cd97f1e56f49ee13df9826db06712f59c58d2d682ec934b0fa",
+        "mediatype": "application/vnd.apache.parquet",
+        "name": "ndc",
+        "path": "https://openlake.meridian.online/fda/ndc.parquet",
+        "schema": {
+          "fields": [
+            {
+              "constraints": {
+                "maxLength": 11,
+                "minLength": 5,
+                "pattern": "^([0-9]{5}|[0-9]{9}|[0-9]{11})$"
+              },
+              "description": "The NDC in the eleven-digit form claims and most other data carry, digits only, each of the FDA's three segments padded with zeros to 5-4-2: a package 00002015201, its product 000020152, its labeler 00002. Join other data on this column; for data that carries the FDA's hyphenated ten-digit form, join on code_display.",
+              "name": "code",
+              "type": "string",
+              "x-finetype-label": "identity.medical.ndc",
+              "x-finetype-nominated": true,
+              "x-finetype-pattern-fit": {
+                "canonical": "^\\d{4}-\\d{4}-\\d{2}$|^\\d{5}-\\d{3}-\\d{2}$|^\\d{5}-\\d{4}-\\d{1}$|^\\d{6}-\\d{4}-\\d{1,2}$|^\\d{6}-\\d{3}-\\d{2}$|^\\d{11}$",
+                "outcome": "widened"
+              }
+            },
+            {
+              "constraints": {
+                "maxLength": 12,
+                "minLength": 4,
+                "pattern": "^[0-9]{4,5}(-[0-9]{3,4}(-[0-9]{1,2})?)?$"
+              },
+              "description": "The NDC as the FDA prints it, with hyphens and without padding: a package 0002-0152-01 (in one of the layouts 4-4-2, 5-3-2 or 5-4-1), its product 0002-0152, its labeler 0002.",
+              "name": "code_display",
+              "type": "string",
+              "x-finetype-label": "identity.medical.ndc",
+              "x-finetype-nominated": true,
+              "x-finetype-pattern-fit": {
+                "canonical": "^\\d{4}-\\d{4}-\\d{2}$|^\\d{5}-\\d{3}-\\d{2}$|^\\d{5}-\\d{4}-\\d{1}$|^\\d{6}-\\d{4}-\\d{1,2}$|^\\d{6}-\\d{3}-\\d{2}$|^\\d{11}$",
+                "outcome": "omitted"
+              }
+            },
+            {
+              "constraints": {
+                "enum": [
+                  "labeler",
+                  "product",
+                  "package"
+                ]
+              },
+              "description": "Hierarchy level: labeler (the firm the FDA assigned the labeler code to), product (a drug as one labeler lists it: one strength and dosage form) or package (one package size and type of that product, the level claims carry).",
+              "name": "level",
+              "type": "string",
+              "x-finetype-enum-domain": {
+                "cohesion": 1.0,
+                "distinct": 3,
+                "domain": [
+                  "labeler",
+                  "package",
+                  "product"
+                ],
+                "open": true,
+                "rows": 340193
+              },
+              "x-finetype-label": "representation.text.word",
+              "x-finetype-nominated": true
+            },
+            {
+              "description": "0 for a labeler, 1 for a product, 2 for a package.",
+              "name": "depth",
+              "type": "integer",
+              "x-finetype-display": {
+                "number": ",d"
+              },
+              "x-finetype-label": "representation.numeric.integer_number",
+              "x-finetype-nominated": true,
+              "x-finetype-unsupported-constraints": {
+                "pattern": "^-?[0-9]+$"
+              }
+            },
+            {
+              "constraints": {
+                "maxLength": 9,
+                "minLength": 5,
+                "pattern": "^([0-9]{5}|[0-9]{9})$"
+              },
+              "description": "The code one level up: a package's product (its first nine digits) and a product's labeler (its first five). NULL for a labeler.",
+              "name": "parent_code",
+              "type": "string",
+              "x-finetype-confidence": 0.85,
+              "x-finetype-label": "representation.identifier.numeric_code"
+            },
+            {
+              "constraints": {
+                "maxLength": 65536,
+                "minLength": 1
+              },
+              "description": "The row's own text, as labelers submit it to the FDA. A labeler: its name, the one its listings give most often. A product: its brand name, suffix included, then its generic name in brackets where that differs, then its dosage form (Zepbound (tirzepatide), INJECTION, SOLUTION); the generic name alone where there is no brand name. A package: the FDA's package description (1 VIAL, SINGLE-DOSE in 1 CARTON (0002-0152-01) / .5 mL in 1 VIAL, SINGLE-DOSE).",
+              "name": "description",
+              "type": "string",
+              "x-finetype-label": "representation.text.plain_text",
+              "x-finetype-nominated": true
+            },
+            {
+              "constraints": {
+                "maxLength": 65536,
+                "minLength": 1
+              },
+              "description": "The labeler's name, the product's text and the package's description, joined with ' › ', down to the row's own level.",
+              "name": "description_full",
+              "type": "string",
+              "x-finetype-confidence": 0.967,
+              "x-finetype-label": "representation.text.plain_text"
+            },
+            {
+              "constraints": {
+                "maxLength": 10,
+                "minLength": 10,
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+              },
+              "description": "The date openFDA last updated the directory, as its file records it (2026-10-30). The FDA updates the directory daily; Meridian refreshes this dataset fortnightly, so the data is as of this date.",
+              "name": "release",
+              "type": "string",
+              "x-finetype-label": "representation.identifier.alphanumeric_id",
+              "x-finetype-nominated": true,
+              "x-finetype-pattern-fit": {
+                "canonical": "^[A-Za-z][A-Za-z0-9 /_.#-]*[0-9][A-Za-z0-9 /_.#-]*$|^[0-9][A-Za-z0-9 /_.#-]*[A-Za-z][A-Za-z0-9 /_.#-]*$",
+                "outcome": "widened"
+              }
+            },
+            {
+              "constraints": {
+                "enum": [
+                  "fda"
+                ]
+              },
+              "description": "Whose text description is: always fda, the text as the FDA's directory gives it, submitted by the labeler.",
+              "name": "text_source",
+              "type": "string",
+              "x-finetype-enum-domain": {
+                "cohesion": 1.0,
+                "distinct": 1,
+                "domain": [
+                  "fda"
+                ],
+                "open": true,
+                "rows": 340193
+              },
+              "x-finetype-label": "representation.text.word",
+              "x-finetype-nominated": true
+            },
+            {
+              "constraints": {
+                "maxLength": 65536,
+                "minLength": 1
+              },
+              "description": "Lowercased, accent-stripped description_full: a derived free-text search field, not a source attribute.",
+              "name": "corpus",
+              "type": "string",
+              "x-finetype-confidence": 0.9989,
+              "x-finetype-label": "representation.text.plain_text"
+            },
+            {
+              "constraints": {
+                "maxLength": 256,
+                "minLength": 1
+              },
+              "description": "The labeler's name. On a labeler row, the name its listings give most often; on a product or package row, the name that product's listing gives, which can differ in spelling or legal form from the labeler row's.",
+              "name": "labeler_name",
+              "type": "string",
+              "x-finetype-confidence": 0.9942,
+              "x-finetype-label": "representation.text.entity_name"
+            },
+            {
+              "constraints": {
+                "maxLength": 200,
+                "minLength": 2
+              },
+              "description": "The FDA's product type, such as HUMAN PRESCRIPTION DRUG, HUMAN OTC DRUG, VACCINE or PLASMA DERIVATIVE. NULL on a labeler row.",
+              "name": "product_type",
+              "type": "string",
+              "x-finetype-confidence": 0.8809,
+              "x-finetype-enum-domain": {
+                "cohesion": 0.42899999022483826,
+                "distinct": 7,
+                "domain": [
+                  "CELLULAR THERAPY",
+                  "HUMAN OTC DRUG",
+                  "HUMAN PRESCRIPTION DRUG",
+                  "NON-STANDARDIZED ALLERGENIC",
+                  "PLASMA DERIVATIVE",
+                  "STANDARDIZED ALLERGENIC",
+                  "VACCINE"
+                ],
+                "open": true,
+                "rows": 334788
+              },
+              "x-finetype-label": "representation.text.entity_name"
+            },
+            {
+              "constraints": {
+                "maxLength": 512,
+                "minLength": 1
+              },
+              "description": "The proprietary name the labeler gives the product, ending with brand_name_suffix where there is one. NULL on a labeler row and on the few products listed without one.",
+              "name": "brand_name",
+              "type": "string",
+              "x-finetype-confidence": 0.9989,
+              "x-finetype-label": "representation.text.entity_name"
+            },
+            {
+              "constraints": {
+                "maxLength": 256,
+                "minLength": 1
+              },
+              "description": "The suffix that ends the proprietary name, such as XR or R, which brand_name already includes. NULL where the listing gives none.",
+              "name": "brand_name_suffix",
+              "type": "string",
+              "x-finetype-confidence": 0.9635,
+              "x-finetype-label": "representation.text.entity_name"
+            },
+            {
+              "constraints": {
+                "maxLength": 65536,
+                "minLength": 1
+              },
+              "description": "The product's nonproprietary name, usually its active ingredients. NULL on a labeler row.",
+              "name": "generic_name",
+              "type": "string",
+              "x-finetype-label": "representation.text.plain_text",
+              "x-finetype-nominated": true
+            },
+            {
+              "constraints": {
+                "maxLength": 65536,
+                "minLength": 1
+              },
+              "description": "The FDA's dosage form, such as TABLET, FILM COATED or INJECTION, SOLUTION. NULL on a labeler row.",
+              "name": "dosage_form",
+              "type": "string",
+              "x-finetype-label": "representation.text.plain_text",
+              "x-finetype-nominated": true
+            },
+            {
+              "description": "The routes of administration, as a list (ORAL, SUBCUTANEOUS). NULL on a labeler row and where the listing gives none.",
+              "name": "routes",
+              "type": "array",
+              "x-finetype-confidence": 0.9,
+              "x-finetype-label": "container.object.json_array",
+              "x-finetype-unsupported-constraints": {
+                "pattern": "^\\[.*\\]$"
+              }
+            },
+            {
+              "description": "The active ingredients, as a list of name and strength (TIRZEPATIDE, 2.5 mg/.5mL), as the labeler lists them. NULL on a labeler row and where the listing gives none.",
+              "name": "active_ingredients",
+              "type": "array",
+              "x-finetype-confidence": 1.0,
+              "x-finetype-label": "container.object.json_array",
+              "x-finetype-unsupported-constraints": {
+                "pattern": "^\\[.*\\]$"
+              }
+            },
+            {
+              "description": "The FDA's established pharmacologic classes for the product's ingredients, as a list, each marked with its kind: [EPC] established pharmacologic class, [MoA] mechanism of action, [PE] physiologic effect, [CS] chemical structure. NULL where the FDA gives none.",
+              "name": "pharm_classes",
+              "type": "array",
+              "x-finetype-confidence": 0.9,
+              "x-finetype-label": "container.object.json_array",
+              "x-finetype-unsupported-constraints": {
+                "pattern": "^\\[.*\\]$"
+              }
+            },
+            {
+              "constraints": {
+                "enum": [
+                  "CI",
+                  "CII",
+                  "CIII",
+                  "CIV",
+                  "CV"
+                ]
+              },
+              "description": "The Drug Enforcement Administration schedule of a controlled substance, CI to CV. NULL for a product that is not scheduled.",
+              "name": "dea_schedule",
+              "type": "string",
+              "x-finetype-confidence": 0.6,
+              "x-finetype-enum-domain": {
+                "cohesion": 1.0,
+                "distinct": 4,
+                "domain": [
+                  "CII",
+                  "CIII",
+                  "CIV",
+                  "CV"
+                ],
+                "open": true,
+                "rows": 16752
+              },
+              "x-finetype-label": "representation.text.word"
+            },
+            {
+              "constraints": {
+                "maxLength": 100,
+                "minLength": 1
+              },
+              "description": "The FDA's marketing category, the basis on which the product is marketed, such as NDA, ANDA, BLA, OTC MONOGRAPH DRUG or UNAPPROVED HOMEOPATHIC. NULL on a labeler row.",
+              "name": "marketing_category",
+              "type": "string",
+              "x-finetype-enum-domain": {
+                "cohesion": 0.5,
+                "distinct": 12,
+                "domain": [
+                  "ANDA",
+                  "BLA",
+                  "EMERGENCY USE AUTHORIZATION",
+                  "NDA",
+                  "NDA AUTHORIZED GENERIC",
+                  "OTC MONOGRAPH DRUG",
+                  "OTC MONOGRAPH FINAL",
+                  "OTC MONOGRAPH NOT FINAL",
+                  "UNAPPROVED DRUG FOR USE IN DRUG SHORTAGE",
+                  "UNAPPROVED DRUG OTHER",
+                  "UNAPPROVED HOMEOPATHIC",
+                  "UNAPPROVED MEDICAL GAS"
+                ],
+                "open": true,
+                "rows": 334788
+              },
+              "x-finetype-label": "representation.text.word",
+              "x-finetype-nominated": true,
+              "x-finetype-pattern-fit": {
+                "canonical": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$",
+                "outcome": "omitted"
+              }
+            },
+            {
+              "description": "The application or monograph the product is marketed under, such as NDA217806, ANDA078245, BLA018780 or M017. NULL where the marketing category has none.",
+              "name": "application_number",
+              "type": "string",
+              "x-finetype-confidence": 0.8263,
+              "x-finetype-label": "representation.identifier.alphanumeric_id",
+              "x-finetype-pattern-fit": {
+                "canonical": "^[A-Za-z][A-Za-z0-9 /_.#-]*[0-9][A-Za-z0-9 /_.#-]*$|^[0-9][A-Za-z0-9 /_.#-]*[A-Za-z][A-Za-z0-9 /_.#-]*$",
+                "outcome": "omitted"
+              }
+            },
+            {
+              "description": "The date the labeler began marketing the product. NULL on a labeler row.",
+              "format": "%Y-%m-%d",
+              "name": "product_marketing_start_date",
+              "type": "date",
+              "x-finetype-confidence": 1.0,
+              "x-finetype-display": {
+                "time": "%Y-%m-%d"
+              },
+              "x-finetype-label": "datetime.date.iso",
+              "x-finetype-unsupported-constraints": {
+                "maxLength": 10,
+                "minLength": 10,
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+              }
+            },
+            {
+              "description": "The date the labeler stops or stopped marketing the product. NULL while it has no end date.",
+              "format": "%Y-%m-%d",
+              "name": "product_marketing_end_date",
+              "type": "date",
+              "x-finetype-confidence": 1.0,
+              "x-finetype-display": {
+                "time": "%Y-%m-%d"
+              },
+              "x-finetype-label": "datetime.date.iso",
+              "x-finetype-unsupported-constraints": {
+                "maxLength": 10,
+                "minLength": 10,
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+              }
+            },
+            {
+              "description": "The date the product's listing is certified through; a labeler must recertify each year. NULL on a labeler row and where the listing gives none.",
+              "format": "%Y-%m-%d",
+              "name": "listing_expiration_date",
+              "type": "date",
+              "x-finetype-confidence": 1.0,
+              "x-finetype-display": {
+                "time": "%Y-%m-%d"
+              },
+              "x-finetype-label": "datetime.date.iso",
+              "x-finetype-unsupported-constraints": {
+                "maxLength": 10,
+                "minLength": 10,
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+              }
+            },
+            {
+              "description": "On a product row, how many listings the FDA's directory holds for the product NDC, one per labeling document. Most products have one; where there are more, the row's fields come from the listing certified latest. NULL on labeler and package rows.",
+              "name": "listing_count",
+              "type": "integer",
+              "x-finetype-confidence": 0.9686,
+              "x-finetype-display": {
+                "number": ",d"
+              },
+              "x-finetype-label": "representation.numeric.integer_number",
+              "x-finetype-unsupported-constraints": {
+                "pattern": "^-?[0-9]+$"
+              }
+            },
+            {
+              "constraints": {
+                "maxLength": 65536,
+                "minLength": 1
+              },
+              "description": "The FDA's description of the package, the same as description on a package row. NULL on labeler and product rows.",
+              "name": "package_description",
+              "type": "string",
+              "x-finetype-label": "representation.text.plain_text",
+              "x-finetype-nominated": true
+            },
+            {
+              "description": "The date the labeler began marketing the package. NULL on labeler and product rows.",
+              "format": "%Y-%m-%d",
+              "name": "package_marketing_start_date",
+              "type": "date",
+              "x-finetype-confidence": 1.0,
+              "x-finetype-display": {
+                "time": "%Y-%m-%d"
+              },
+              "x-finetype-label": "datetime.date.iso",
+              "x-finetype-unsupported-constraints": {
+                "maxLength": 10,
+                "minLength": 10,
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+              }
+            },
+            {
+              "description": "The date the labeler stops or stopped marketing the package. NULL while it has no end date, and on labeler and product rows.",
+              "format": "%Y-%m-%d",
+              "name": "package_marketing_end_date",
+              "type": "date",
+              "x-finetype-confidence": 1.0,
+              "x-finetype-display": {
+                "time": "%Y-%m-%d"
+              },
+              "x-finetype-label": "datetime.date.iso",
+              "x-finetype-unsupported-constraints": {
+                "maxLength": 10,
+                "minLength": 10,
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+              }
+            },
+            {
+              "description": "True for a package distributed as a free sample. NULL on labeler and product rows.",
+              "falseValues": [
+                "false",
+                "no",
+                "off",
+                "False",
+                "No",
+                "Off",
+                "FALSE",
+                "NO",
+                "OFF",
+                "disabled",
+                "Disabled",
+                "DISABLED",
+                "inactive",
+                "Inactive",
+                "INACTIVE"
+              ],
+              "name": "sample",
+              "trueValues": [
+                "true",
+                "yes",
+                "on",
+                "True",
+                "Yes",
+                "On",
+                "TRUE",
+                "YES",
+                "ON",
+                "enabled",
+                "Enabled",
+                "ENABLED",
+                "active",
+                "Active",
+                "ACTIVE"
+              ],
+              "type": "boolean",
+              "x-finetype-confidence": 0.9992,
+              "x-finetype-enum-domain": {
+                "cohesion": 1.0,
+                "distinct": 2,
+                "domain": [
+                  "false",
+                  "true"
+                ],
+                "open": true,
+                "rows": 219257
+              },
+              "x-finetype-label": "representation.boolean.terms"
+            },
+            {
+              "constraints": {
+                "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+              },
+              "description": "The identifier of the Structured Product Labeling document the product's listing comes from, which DailyMed serves. NULL on a labeler row.",
+              "format": "uuid",
+              "name": "spl_id",
+              "type": "string",
+              "x-finetype-confidence": 1.0,
+              "x-finetype-label": "representation.identifier.uuid"
+            },
+            {
+              "constraints": {
+                "pattern": "^[A-Za-z][A-Za-z0-9 /_.#-]*[0-9][A-Za-z0-9 /_.#-]*$|^[0-9][A-Za-z0-9 /_.#-]*[A-Za-z][A-Za-z0-9 /_.#-]*$"
+              },
+              "description": "The FDA's identifier for the listing the row's product fields come from: the product NDC and the labeling document's identifier. NULL on a labeler row.",
+              "name": "product_id",
+              "type": "string",
+              "x-finetype-label": "representation.identifier.alphanumeric_id",
+              "x-finetype-nominated": true
+            }
+          ],
+          "primaryKey": [
+            "code"
+          ]
+        }
+      }
+    ],
+    "sources": [
+      {
+        "path": "https://www.fda.gov/drugs/drug-approvals-and-databases/national-drug-code-directory",
+        "title": "National Drug Code Directory — FDA"
+      },
+      {
+        "path": "https://open.fda.gov/data/ndc/",
+        "title": "NDC — openFDA"
+      },
+      {
+        "path": "https://download.open.fda.gov/drug/ndc/drug-ndc-0001-of-0001.json.zip",
+        "title": "openFDA NDC download"
+      }
+    ],
+    "title": "NDC Directory — National Drug Code",
+    "x-finetype-version": "0.6.67",
+    "x-meridian-code-list": {
+      "levels": [
+        "labeler",
+        "product",
+        "package"
+      ]
+    }
+  },
+  "gleif.lei": {
+    "$schema": "https://datapackage.org/profiles/2.0/datapackage.json",
+    "contributors": [
+      {
+        "path": "https://www.gleif.org/",
+        "roles": [
+          "author"
+        ],
+        "title": "Global Legal Entity Identifier Foundation"
+      },
+      {
+        "path": "https://meridian.online",
+        "roles": [
+          "publisher",
+          "wrangler"
+        ],
+        "title": "Meridian"
+      }
+    ],
+    "created": "2026-11-17T00:04:18Z",
+    "description": "The Global Legal Entity Identifier Foundation's public register of legal entities — every entity with its 20-character LEI, legal name, country, jurisdiction and registration status.",
+    "homepage": "https://meridian.online/datasets/gleif",
+    "licenses": [
+      {
+        "name": "CC0-1.0",
+        "path": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "title": "CC0 1.0 Universal"
+      }
+    ],
+    "name": "gleif",
+    "resources": [
+      {
+        "bytes": 132275898,
+        "format": "parquet",
+        "hash": "sha256:6ad646994c5874854bacec92fb07029280a5f430e223632605b78941225ba74a",
+        "mediatype": "application/vnd.apache.parquet",
+        "name": "gleif",
+        "path": "https://openlake.meridian.online/gleif/lei.parquet",
+        "schema": {
+          "fields": [
+            {
+              "constraints": {
+                "pattern": "^[A-Z0-9]{4}[A-Z0-9]{14}[0-9]{2}$"
+              },
+              "description": "The 20-character ISO 17442 Legal Entity Identifier — the entity's globally unique key in the GLEIF register.",
+              "name": "lei",
+              "type": "string",
+              "x-finetype-confidence": 1.0,
+              "x-finetype-label": "finance.securities.lei"
+            },
+            {
+              "constraints": {
+                "maxLength": 500,
+                "minLength": 1
+              },
+              "description": "The entity's official legal name, as recorded in the GLEIF golden copy. The bounds are the register's own: LEI-CDF v3.1 types this element NameType, a complexType whose simpleContent extends Tokenized500Type — the extension adds an optional xml:lang attribute and leaves the inherited value space, which restricts the text to between 1 and 500 characters. Names at both ends are genuine — single-character names are registered in several jurisdictions, and names past 200 characters are typically a registry's full form, such as the Italian convention of carrying the permitted trading abbreviations inside the registered name. The type on this field is declared, not inferred: `nominations.finetype.json` beside this descriptor nominates `representation.text.entity_name` and says why, so the field carries `x-finetype-nominated` and no confidence. Its bounds are the register's rather than that label's, whose two to two hundred characters would refuse the genuine names at both ends. Inferred, the label is a draw: finetype returned it on 424 of 600 independent 100-value samples of this column and one of several other types on the rest.",
+              "name": "legal_name",
+              "type": "string",
+              "x-finetype-label": "representation.text.entity_name",
+              "x-finetype-nominated": true
+            },
+            {
+              "constraints": {
+                "pattern": "^[A-Z]{2}$"
+              },
+              "description": "Country of the entity's legal address, as the GLEIF register records it. The register types this element as a two-letter country code (LEI-CDF v3.1's CountryCodeType), and the pattern here is that shape. It checks shape, not assignment: the schema itself notes that a well-formed pair of upper-case letters need not be a valid ISO 3166 entry, and values outside the ISO-assigned list do occur in this column, so treat membership of an ISO reference list as something to verify rather than assume.",
+              "name": "country",
+              "type": "string",
+              "x-finetype-confidence": 0.9711,
+              "x-finetype-label": "geography.location.country_code"
+            },
+            {
+              "constraints": {
+                "maxLength": 100,
+                "minLength": 1
+              },
+              "description": "City of the entity's legal address.",
+              "name": "city",
+              "type": "string",
+              "x-finetype-confidence": 1.0,
+              "x-finetype-label": "geography.location.city"
+            },
+            {
+              "constraints": {
+                "pattern": "^[A-Z]{2}(-[A-Z0-9]{1,3})?$"
+              },
+              "description": "Jurisdiction the entity is constituted under, as the GLEIF register records it. The register types this element as a country code or a country-plus-subdivision code — LEI-CDF v3.1's JurisdictionCodeType, a union of its CountryCodeType and RegionCodeType — and the pattern here is the union of those two shapes. It checks shape, not assignment: the schema itself notes that a well-formed value need not be a valid ISO 3166 entry, and values outside the ISO-assigned lists do occur in this column, so treat membership of an ISO reference list as something to verify rather than assume.",
+              "name": "jurisdiction",
+              "type": "string",
+              "x-finetype-confidence": 0.9987,
+              "x-finetype-label": "geography.location.country_code",
+              "x-finetype-pattern-fit": {
+                "canonical": "^[A-Z]{2}$",
+                "outcome": "widened"
+              }
+            },
+            {
+              "constraints": {
+                "maxLength": 4,
+                "minLength": 4,
+                "pattern": "^[A-Z0-9]{4}$"
+              },
+              "description": "ELF (Entity Legal Form) code classifying the entity's legal form.",
+              "name": "legal_form",
+              "type": "string",
+              "x-finetype-confidence": 0.6,
+              "x-finetype-label": "representation.identifier.alphanumeric_id",
+              "x-finetype-pattern-fit": {
+                "canonical": "^[A-Za-z][A-Za-z0-9 /_.#-]*[0-9][A-Za-z0-9 /_.#-]*$|^[0-9][A-Za-z0-9 /_.#-]*[A-Za-z][A-Za-z0-9 /_.#-]*$",
+                "outcome": "widened"
+              }
+            },
+            {
+              "constraints": {
+                "enum": [
+                  "ACTIVE",
+                  "INACTIVE",
+                  "NULL"
+                ],
+                "required": true
+              },
+              "description": "The register's entity status, as text: ACTIVE (legally registered and operating as of the last report), INACTIVE (no longer legally registered or operating), or the four-character string NULL, which the register uses to mean the status is not applicable. These three are LEI-CDF v3.1's EntityStatusEnum. It is not a boolean, and the string NULL is a reported value rather than a missing one — the field is declared required so that an actual SQL null reads as a violation instead of as a synonym for that value.",
+              "falseValues": [
+                "false",
+                "no",
+                "off",
+                "False",
+                "No",
+                "Off",
+                "FALSE",
+                "NO",
+                "OFF",
+                "disabled",
+                "Disabled",
+                "DISABLED",
+                "inactive",
+                "Inactive",
+                "INACTIVE"
+              ],
+              "name": "entity_status",
+              "trueValues": [
+                "true",
+                "yes",
+                "on",
+                "True",
+                "Yes",
+                "On",
+                "TRUE",
+                "YES",
+                "ON",
+                "enabled",
+                "Enabled",
+                "ENABLED",
+                "active",
+                "Active",
+                "ACTIVE"
+              ],
+              "type": "string",
+              "x-finetype-confidence": 1.0,
+              "x-finetype-enum-domain": {
+                "cohesion": 1.0,
+                "distinct": 2,
+                "domain": [
+                  "ACTIVE",
+                  "INACTIVE"
+                ],
+                "open": true,
+                "rows": 3486231
+              },
+              "x-finetype-label": "representation.boolean.terms"
+            },
+            {
+              "constraints": {
+                "maxLength": 100,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$"
+              },
+              "description": "LEI registration lifecycle status (e.g. ISSUED, LAPSED, RETIRED).",
+              "name": "registration_status",
+              "type": "string",
+              "x-finetype-confidence": 0.5435,
+              "x-finetype-enum-domain": {
+                "cohesion": 0.7139999866485596,
+                "distinct": 7,
+                "domain": [
+                  "ANNULLED",
+                  "DUPLICATE",
+                  "ISSUED",
+                  "LAPSED",
+                  "PENDING_ARCHIVAL",
+                  "PENDING_TRANSFER",
+                  "RETIRED"
+                ],
+                "open": true,
+                "rows": 3495364
+              },
+              "x-finetype-label": "representation.text.word"
+            },
+            {
+              "description": "Date the LEI was first registered (calendar date sliced from the golden-copy timestamp).",
+              "format": "%Y-%m-%d",
+              "name": "initial_registration",
+              "type": "date",
+              "x-finetype-confidence": 1.0,
+              "x-finetype-display": {
+                "time": "%Y-%m-%d"
+              },
+              "x-finetype-label": "datetime.date.iso",
+              "x-finetype-unsupported-constraints": {
+                "maxLength": 10,
+                "minLength": 10,
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+              }
+            },
+            {
+              "description": "Date the LEI registration is next due for renewal.",
+              "format": "%Y-%m-%d",
+              "name": "next_renewal",
+              "type": "date",
+              "x-finetype-confidence": 1.0,
+              "x-finetype-display": {
+                "time": "%Y-%m-%d"
+              },
+              "x-finetype-label": "datetime.date.iso",
+              "x-finetype-unsupported-constraints": {
+                "maxLength": 10,
+                "minLength": 10,
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+              }
+            },
+            {
+              "constraints": {
+                "maxLength": 65536,
+                "minLength": 1
+              },
+              "description": "Lowercased, accent-stripped concatenation of legal name + city + country — a derived free-text search field, not a source attribute. The type on this field is declared, not inferred: `nominations.finetype.json` beside this descriptor nominates `representation.text.plain_text` and says why, so the field carries `x-finetype-nominated` and no confidence. Inferred, the label is a draw: finetype returned it on 377 of 600 independent 100-value samples of this column and `unknown` on 207, and the previously published `unknown` was one such draw.",
+              "name": "corpus",
+              "type": "string",
+              "x-finetype-label": "representation.text.plain_text",
+              "x-finetype-nominated": true
+            }
+          ],
+          "primaryKey": [
+            "lei"
+          ]
+        }
+      }
+    ],
+    "sources": [
+      {
+        "path": "https://www.gleif.org/",
+        "title": "GLEIF golden copy"
+      }
+    ],
+    "title": "GLEIF — Legal Entity Identifiers",
+    "x-finetype-version": "0.6.67"
+  },
+  "library.edgar_lei": {
+    "$schema": "https://datapackage.org/profiles/2.0/datapackage.json",
+    "contributors": [
+      {
+        "path": "https://meridian.online",
+        "roles": [
+          "author",
+          "publisher",
+          "wrangler"
+        ],
+        "title": "Meridian"
+      }
+    ],
+    "created": "2026-11-17T01:36:55Z",
+    "description": "A resolved crosswalk linking SEC EDGAR registrants (CIK / ticker / fund series) to their GLEIF Legal Entity Identifier (LEI) — one row per link between an EDGAR identifier and an LEI, each carrying its provenance tier, method and confidence. Authoritative edges come from official SEC/GLEIF registration (no guessing); the operating-company tail is linked by probabilistic name resolution (Fellegi-Sunter / Splink): exact normalized-name matches are confirmed (~95% precision), while name-only fuzzy matches are surfaced as candidates rather than auto-confirmed. A point-in-time snapshot, with an as-of date on every row.",
+    "homepage": "https://meridian.online/datasets/edgar_gleif",
+    "licenses": [
+      {
+        "name": "CC0-1.0",
+        "path": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "title": "CC0 1.0 Universal"
+      }
+    ],
+    "name": "edgar_gleif",
+    "resources": [
+      {
+        "bytes": 10636721,
+        "format": "parquet",
+        "hash": "sha256:77e8ce57fbd500e5045cf2fb3bd429fbd2c8569861985a3d2bc140f70be562be",
+        "mediatype": "application/vnd.apache.parquet",
+        "name": "edgar_gleif",
+        "path": "https://openlake.meridian.online/library/edgar_lei.parquet",
+        "schema": {
+          "fields": [
+            {
+              "constraints": {
+                "maxLength": 100,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$"
+              },
+              "description": "Scheme of the SEC identifier held in `key`, and the discriminator that says how to read that column. This snapshot carries two: cik (an EDGAR Central Index Key, rendered as decimal digits) and series (an SEC fund identifier, a letter prefix followed by digits). A third scheme, class (fund share class), is producible by the pipeline but is absent from this snapshot.",
+              "name": "key_type",
+              "type": "string",
+              "x-finetype-confidence": 0.6,
+              "x-finetype-enum-domain": {
+                "cohesion": 1.0,
+                "distinct": 2,
+                "domain": [
+                  "cik",
+                  "series"
+                ],
+                "open": true,
+                "rows": 213033
+              },
+              "x-finetype-label": "representation.text.word"
+            },
+            {
+              "constraints": {
+                "maxLength": 10,
+                "minLength": 4,
+                "pattern": "^([1-9][0-9]{0,9}|[A-Z]{1,3}[0-9]{7,9})$"
+              },
+              "description": "The SEC-side identifier this edge is keyed on, read according to `key_type`: for cik rows an EDGAR Central Index Key in decimal digits with no leading zeros; for series rows an SEC fund identifier — an uppercase letter prefix followed by digits (S…, CEF…). Text, not a number: the two schemes share one column, so the pattern above is their union and no arithmetic type describes it. To join it to `edgar.cik`, render that integer column as text — see `x-joins`.",
+              "name": "key",
+              "type": "string",
+              "x-finetype-confidence": 0.5676,
+              "x-finetype-display": {
+                "number": ",d"
+              },
+              "x-finetype-label": "representation.numeric.integer_number",
+              "x-finetype-pattern-fit": {
+                "canonical": "^-?[0-9]+$",
+                "outcome": "widened"
+              },
+              "x-finetype-unsupported-constraints": {
+                "pattern": "^-?[0-9]+$|^[A-Z0-9]{10}$"
+              }
+            },
+            {
+              "constraints": {
+                "pattern": "^(?:[A-Z]{1,7}(?:[./-][A-Z]{1,4})?|[0-9]{1,6})$"
+              },
+              "name": "ticker",
+              "type": "string",
+              "x-finetype-confidence": 0.9,
+              "x-finetype-label": "finance.securities.ticker"
+            },
+            {
+              "constraints": {
+                "maxLength": 200,
+                "minLength": 2
+              },
+              "description": "The type on this field is declared, not inferred: `nominations.finetype.json` beside this descriptor nominates `representation.text.entity_name` and says why, so the field carries `x-finetype-nominated` and no confidence. Inferred, the label is a draw: finetype returned it on 246 of 300 independent 100-value samples of this column, and unknown on 36, plain_text on 14 and full_address on 2.",
+              "name": "company_name",
+              "type": "string",
+              "x-finetype-label": "representation.text.entity_name",
+              "x-finetype-nominated": true
+            },
+            {
+              "constraints": {
+                "pattern": "^[A-Z0-9]{4}[A-Z0-9]{14}[0-9]{2}$"
+              },
+              "description": "GLEIF Legal Entity Identifier (ISO 17442): a four-character alphanumeric LOU prefix, fourteen alphanumeric entity characters, then two check digits — ISO 7064 MOD 97-10 over the eighteen that precede them. The `pattern` below states the shape and nothing more: no regular expression evaluates a checksum, and `00000000000000000000` satisfies this one. The arithmetic is checked where the edge is built: `models/load.sql` declares it and `models/package.sql` gates the terminal table on it. A value GLEIF publishes is admitted whether or not its check digits satisfy the standard, because the register defines which identifiers exist.",
+              "name": "lei",
+              "type": "string",
+              "x-finetype-confidence": 1.0,
+              "x-finetype-label": "finance.securities.lei"
+            },
+            {
+              "constraints": {
+                "maxLength": 500,
+                "minLength": 1
+              },
+              "description": "The entity's official legal name — GLEIF's own `legal_name` column, carried through the join unchanged (`models/package.sql` selects `g.legal_name`), so it is the same register element `gleif.legal_name` describes and takes the same bounds. LEI-CDF v3.1 types this element NameType, a complexType whose simpleContent extends Tokenized500Type, restricting the text to between 1 and 500 characters — the value space `gleif.legal_name`'s own description names for the same element, not a bound measured off one build. A snapshot narrower than the register at either end would be true of today's rows and false of the element a consumer is validating against.",
+              "name": "legal_name",
+              "type": "string",
+              "x-finetype-confidence": 0.9399,
+              "x-finetype-label": "representation.text.entity_name"
+            },
+            {
+              "constraints": {
+                "maxLength": 100,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$"
+              },
+              "description": "GLEIF's authoritative entity category (e.g. GENERAL, FUND, BRANCH); GENERAL when unknown.",
+              "name": "category",
+              "type": "string",
+              "x-finetype-confidence": 0.9095,
+              "x-finetype-enum-domain": {
+                "cohesion": 0.5,
+                "distinct": 4,
+                "domain": [
+                  "FUND",
+                  "GENERAL",
+                  "RESIDENT_GOVERNMENT_ENTITY",
+                  "SOLE_PROPRIETOR"
+                ],
+                "open": true,
+                "rows": 213033
+              },
+              "x-finetype-label": "representation.text.word"
+            },
+            {
+              "constraints": {
+                "pattern": "^[A-Z]{2}(-[A-Z0-9]{1,3})?$"
+              },
+              "description": "Jurisdiction the entity is constituted under, as GLEIF records it: a country code or a country-plus-subdivision code (country, hyphen, subdivision) where GLEIF holds one — US-DE, AE-SH. It checks shape, not assignment: a well-formed value need not be a valid ISO 3166 entry, and values outside the ISO-assigned lists do occur in this column, so treat membership of an ISO reference list as something to verify rather than assume. The type on this field is declared, not inferred: `nominations.finetype.json` beside this descriptor nominates `geography.location.country_code` and says why, so the field carries `x-finetype-nominated` and no confidence. No label names the union of the two shapes, and every value begins with its country; the pattern here stays widened past that label's two letters to admit the subdivision suffix. Inferred, the label is a draw: finetype returned geography.location.state_code on 260 of 300 independent 100-value samples of this column, geography.location.country_code on 34 and unknown on 6.",
+              "name": "jurisdiction",
+              "type": "string",
+              "x-finetype-label": "geography.location.country_code",
+              "x-finetype-nominated": true,
+              "x-finetype-pattern-fit": {
+                "canonical": "^[A-Z]{2}$",
+                "outcome": "widened"
+              }
+            },
+            {
+              "constraints": {
+                "maxLength": 100,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$"
+              },
+              "description": "GLEIF's registration status for the matched LEI record — ISSUED, LAPSED, RETIRED or another of the register's states. The type on this field is declared, not inferred: `nominations.finetype.json` beside this descriptor nominates `representation.text.word` and says why, so the field carries `x-finetype-nominated` and no confidence. Inferred, the label is a draw: finetype returned it on 262 of 300 independent 100-value samples of this column and geography.location.state_code on 38.",
+              "name": "reg_status",
+              "type": "string",
+              "x-finetype-enum-domain": {
+                "cohesion": 0.8330000042915344,
+                "distinct": 6,
+                "domain": [
+                  "ANNULLED",
+                  "DUPLICATE",
+                  "ISSUED",
+                  "LAPSED",
+                  "PENDING_ARCHIVAL",
+                  "RETIRED"
+                ],
+                "open": true,
+                "rows": 213033
+              },
+              "x-finetype-label": "representation.text.word",
+              "x-finetype-nominated": true
+            },
+            {
+              "constraints": {
+                "maxLength": 100,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$"
+              },
+              "description": "How the edge was established. Authoritative: sec-registration (GLEIF RA000665) or sec-ncen (SEC Form N-CEN). Probabilistic: exact_name (identical normalized company name) or jaro_winkler (fuzzy name).",
+              "name": "method",
+              "type": "string",
+              "x-finetype-confidence": 0.4714,
+              "x-finetype-enum-domain": {
+                "cohesion": 0.5,
+                "distinct": 4,
+                "domain": [
+                  "exact_name",
+                  "jaro_winkler",
+                  "sec-ncen",
+                  "sec-registration"
+                ],
+                "open": true,
+                "rows": 213033
+              },
+              "x-finetype-label": "representation.text.word"
+            },
+            {
+              "constraints": {
+                "maxLength": 100,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$"
+              },
+              "description": "Provenance tier, in precedence order: authoritative (deterministic SEC/GLEIF registration — no guessing), confirmed (exact normalized-name Splink match, ~95% precision), candidate (name-only fuzzy match, surfaced NOT asserted), ambiguous (one exact name matched more than one entity). A deterministic edge always wins over a name match for the same key. The type on this field is declared, not inferred: `nominations.finetype.json` beside this descriptor nominates `representation.text.word` and says why, so the field carries `x-finetype-nominated` and no confidence. Inferred, the label is a draw: finetype returned it on 193 of 300 independent 100-value samples of this column and datetime.component.month_name on 107.",
+              "name": "tier",
+              "type": "string",
+              "x-finetype-enum-domain": {
+                "cohesion": 1.0,
+                "distinct": 4,
+                "domain": [
+                  "ambiguous",
+                  "authoritative",
+                  "candidate",
+                  "confirmed"
+                ],
+                "open": true,
+                "rows": 213033
+              },
+              "x-finetype-label": "representation.text.word",
+              "x-finetype-nominated": true
+            },
+            {
+              "description": "Edge confidence in [0, 1]: 1.0 for authoritative edges; the Fellegi-Sunter posterior match probability under the frozen resolution model for probabilistic edges.",
+              "name": "confidence",
+              "type": "number",
+              "x-finetype-confidence": 0.9998,
+              "x-finetype-display": {
+                "number": ","
+              },
+              "x-finetype-label": "representation.numeric.decimal_number",
+              "x-finetype-unsupported-constraints": {
+                "pattern": "^-?[0-9]+(\\.[0-9]+)?([eE][+-]?[0-9]+)?$"
+              }
+            },
+            {
+              "description": "The date this linkage was asserted — the vintage of the sources the edge was resolved from, stamped on every row at build time. Constant within any one published build, and that is the point: an edge carries its own vintage, so a row copied out of this table into a warehouse still says when it was true, and two builds unioned together stay tellable apart. The package's top-level `created` records when the descriptor was written, which is a different fact and does not travel with the rows. A link is a claim about two identifiers at a moment: EDGAR registrants change name and ticker (the CIK itself is permanent and never expires, per the SEC), LEIs lapse and transfer, and an edge resolved in July is not evidence about December. Read it as the as-at date for the claim, not as a modification timestamp.",
+              "format": "%Y-%m-%d",
+              "name": "as_of",
+              "type": "date",
+              "x-finetype-confidence": 1.0,
+              "x-finetype-display": {
+                "time": "%Y-%m-%d"
+              },
+              "x-finetype-label": "datetime.date.iso",
+              "x-finetype-unsupported-constraints": {
+                "maxLength": 10,
+                "minLength": 10,
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+              }
+            },
+            {
+              "constraints": {
+                "maxLength": 65536,
+                "minLength": 1
+              },
+              "description": "Lowercased, accent-stripped concatenation of the display name, legal name, ticker and LEI — a derived free-text search field, not a source attribute. The type on this field is declared, not inferred: `nominations.finetype.json` beside this descriptor nominates `representation.text.plain_text` and says why, so the field carries `x-finetype-nominated` and no confidence. Inferred, the label is a draw: finetype returned it on 186 of 300 independent 100-value samples of this column, and unknown on 75, alphanumeric_id on 37 and semicolon_separated on 2.",
+              "name": "corpus",
+              "type": "string",
+              "x-finetype-label": "representation.text.plain_text",
+              "x-finetype-nominated": true
+            }
+          ],
+          "primaryKey": [
+            "key_type",
+            "key",
+            "lei"
+          ]
+        }
+      }
+    ],
+    "sources": [
+      {
+        "path": "https://www.sec.gov/",
+        "title": "SEC EDGAR — company tickers (public domain)"
+      },
+      {
+        "path": "https://www.gleif.org/",
+        "title": "GLEIF golden copy (CC0)"
+      }
+    ],
+    "title": "EDGAR ↔ GLEIF — company-to-LEI crosswalk",
+    "x-finetype-version": "0.6.67",
+    "x-joins": {
+      "$comment": "How to join this crosswalk to the packages it references, and how far each join reaches. These are NOT `schema.foreignKeys`: a Data Package foreign key asserts that every value on the left exists on the right, and neither of these joins satisfies that against the published bytes — see each `cardinality` and (in the built descriptor) `coverage`. Declaring them as foreign keys would advertise a guarantee the data does not keep, so the guarantee is dropped and the reachable part is stated instead. `coverage` does NOT live in this file: a hand-typed row count decays as soon as an upstream source grows, which is exactly what happened here (four weeks stale on 2026-08-13). `crosswalk_join.py --write` measures it from the build and writes it into the generated `datapackage.json` instead.",
+      "joins": [
+        {
+          "cardinality": "partial — 6,357 of 189,204 rows match. Neither side contains the other.",
+          "compareAs": "text",
+          "coverage": {
+            "matched": 6357,
+            "rows": 189204
+          },
+          "description": "SEC-side identity: a cik-typed edge to the EDGAR company-ticker table. `edgar` is a ticker/exchange listing, not the CIK universe, so it covers a small part of the registrants this crosswalk keys on; the direction of containment runs neither way. Join by rendering `edgar.cik` (an integer) as text and comparing it to `key` (text) — the rendering is exact, because no published CIK carries a leading zero.",
+          "evidence": "For key_type='cik' rows, `key` is the EDGAR Central Index Key as reported to SEC EDGAR. Where both sides hold the same registrant the values agree exactly; the shortfall is coverage, not disagreement — `edgar` is built from the SEC's company-tickers file, so its reach follows that file rather than the registrant population.",
+          "fields": [
+            "key"
+          ],
+          "measuredAgainst": "sha256:c9ad5a7d87de9389e25c3f1bbc44fe08411aa3cc61433cb8f4a05bff4996c5a0",
+          "name": "edgar",
+          "package": "https://github.com/meridian-online/open-analytics/blob/main/datasets/edgar/datapackage.json",
+          "reference": {
+            "fields": [
+              "cik"
+            ],
+            "resource": "edgar"
+          },
+          "where": {
+            "equals": "cik",
+            "field": "key_type"
+          }
+        },
+        {
+          "cardinality": "complete — all 213,033 rows match. `coverage` is written into the built descriptor, not into this file — see `verifiedBy` below.",
+          "compareAs": "exact",
+          "coverage": {
+            "matched": 213033,
+            "rows": 213033
+          },
+          "description": "GLEIF-side identity: the LEI each edge resolved to. Join `lei` to `gleif.lei` directly — both sides are text and no rendering is involved.",
+          "evidence": {
+            "blocking": [
+              "shared 6-character name prefix",
+              "shared first name token"
+            ],
+            "comparison": "normalized company name (exact, then Jaro-Winkler tiers)",
+            "confidence": "per-row (see the confidence column)",
+            "gleif_status_matched": [
+              "ISSUED",
+              "LAPSED",
+              "RETIRED"
+            ],
+            "method": "Fellegi-Sunter probabilistic record linkage (Splink), frozen model, for the operating-company tail; official SEC/GLEIF registration for authoritative edges",
+            "precision": "exact normalized-name matches auto-confirmed (~95% precision, spot-checked); name-only fuzzy matches surfaced as candidate, not confirmed",
+            "status": "per-row (see the tier column)",
+            "tie_break": "ISSUED > LAPSED > RETIRED, then US jurisdiction"
+          },
+          "fields": [
+            "lei"
+          ],
+          "measuredAgainst": "sha256:6ad646994c5874854bacec92fb07029280a5f430e223632605b78941225ba74a",
+          "name": "gleif",
+          "package": "https://github.com/meridian-online/open-analytics/blob/main/datasets/gleif/datapackage.json",
+          "reference": {
+            "fields": [
+              "lei"
+            ],
+            "resource": "gleif"
+          }
+        }
+      ],
+      "verifiedBy": "datasets/edgar_gleif/scripts/crosswalk_join.py — the same script both writes and checks `coverage`. Run with `--write`, right after `describe`, it measures each join above against this build's own Parquet and writes `coverage` into datapackage.json (arcform.yaml step `derive_join_coverage`). Run with no flags, it re-measures against the published objects instead and fails if the committed `coverage` disagrees."
+    }
+  },
+  "library.ourairports": {
+    "$schema": "https://datapackage.org/profiles/2.0/datapackage.json",
+    "contributors": [
+      {
+        "path": "https://ourairports.com/",
+        "roles": [
+          "author"
+        ],
+        "title": "OurAirports"
+      },
+      {
+        "path": "https://meridian.online",
+        "roles": [
+          "publisher",
+          "wrangler"
+        ],
+        "title": "Meridian"
+      }
+    ],
+    "created": "2026-11-16T20:57:54Z",
+    "description": "OurAirports' airports that carry an ICAO code, the four-letter code air traffic control, flight plans and airspace data use for an airport: one row per ICAO code, with OurAirports' name for the airport, its type, coordinates and elevation, its country and region codes and names, the place it serves, whether it has scheduled airline service, its GPS and local codes, and links to its website and Wikipedia article. Airports without an ICAO code are not included. IATA's three-letter airport codes are left out, since IATA's code list is not open data: OurAirports' iata_code column is not read into the table, and its keywords column is dropped because it carries IATA codes. Data from OurAirports (https://ourairports.com/), which its maintainers release to the public domain and which comes with no guarantee of accuracy; Meridian prepared this table from OurAirports' files, and OurAirports does not endorse it. The date in release is the UTC date of the commit OurAirports last made to its data repository before the run, the commit the files were read at. GitHub records a commit only when the files change; in practice airports.csv changes nightly. Meridian refreshes this dataset fortnightly, so the data is as of the date in release.",
+    "homepage": "https://meridian.online/datasets/library/ourairports",
+    "licenses": [
+      {
+        "name": "other-pd",
+        "path": "https://ourairports.com/data/",
+        "title": "Public domain (OurAirports)"
+      }
+    ],
+    "name": "ourairports",
+    "resources": [
+      {
+        "bytes": 917037,
+        "format": "parquet",
+        "hash": "sha256:5bba5343676861af1716fac6147e4e5ce08303b73a51479ba4ddc9327f54d9a6",
+        "mediatype": "application/vnd.apache.parquet",
+        "name": "ourairports",
+        "path": "https://openlake.meridian.online/library/ourairports.parquet",
+        "schema": {
+          "fields": [
+            {
+              "constraints": {
+                "maxLength": 4,
+                "minLength": 4,
+                "pattern": "^[A-Z]{4}$"
+              },
+              "description": "The airport's ICAO code, four capital letters (EGLL for London Heathrow), from OurAirports' icao_code. Join other data on this column.",
+              "name": "code",
+              "type": "string",
+              "x-finetype-label": "geography.transportation.icao_code",
+              "x-finetype-nominated": true
+            },
+            {
+              "constraints": {
+                "maxLength": 4,
+                "minLength": 4,
+                "pattern": "^[A-Z]{4}$"
+              },
+              "description": "The ICAO code as it is printed, which is the same as code.",
+              "name": "code_display",
+              "type": "string",
+              "x-finetype-label": "geography.transportation.icao_code",
+              "x-finetype-nominated": true
+            },
+            {
+              "constraints": {
+                "enum": [
+                  "airport"
+                ]
+              },
+              "description": "Hierarchy level: always 'airport', since the list is flat.",
+              "name": "level",
+              "type": "string",
+              "x-finetype-enum-domain": {
+                "cohesion": 1.0,
+                "distinct": 1,
+                "domain": [
+                  "airport"
+                ],
+                "open": true,
+                "rows": 10734
+              },
+              "x-finetype-label": "representation.text.word",
+              "x-finetype-nominated": true
+            },
+            {
+              "description": "Always 0: the list has one level.",
+              "name": "depth",
+              "type": "integer",
+              "x-finetype-display": {
+                "number": ",d"
+              },
+              "x-finetype-label": "representation.numeric.integer_number",
+              "x-finetype-nominated": true,
+              "x-finetype-unsupported-constraints": {
+                "pattern": "^-?[0-9]+$"
+              }
+            },
+            {
+              "description": "Always NULL: an airport in a one-level list has no parent.",
+              "name": "parent_code",
+              "type": "string",
+              "x-finetype-confidence": 0.0,
+              "x-finetype-label": "unknown"
+            },
+            {
+              "constraints": {
+                "maxLength": 65536,
+                "minLength": 1
+              },
+              "description": "OurAirports' name for the airport (London Heathrow Airport), with its accents.",
+              "name": "description",
+              "type": "string",
+              "x-finetype-label": "representation.text.plain_text",
+              "x-finetype-nominated": true
+            },
+            {
+              "constraints": {
+                "maxLength": 65536,
+                "minLength": 1
+              },
+              "description": "The same as description, since an airport has no ancestors to put in front of it.",
+              "name": "description_full",
+              "type": "string",
+              "x-finetype-label": "representation.text.plain_text",
+              "x-finetype-nominated": true
+            },
+            {
+              "constraints": {
+                "maxLength": 10,
+                "minLength": 10,
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+              },
+              "description": "The UTC date of the commit OurAirports last made to its data repository before the run, the commit the files were read at (2026-11-16). GitHub records a commit only when the files change; in practice airports.csv changes nightly. OurAirports' files carry no date of their own; the run reads the repository's latest commit before and after fetching them, and checks each file and the repository's file tree against that commit. Meridian refreshes this dataset fortnightly, so the data is as of this date. One value for every row.",
+              "name": "release",
+              "type": "string",
+              "x-finetype-label": "representation.identifier.alphanumeric_id",
+              "x-finetype-nominated": true,
+              "x-finetype-pattern-fit": {
+                "canonical": "^[A-Za-z][A-Za-z0-9 /_.#-]*[0-9][A-Za-z0-9 /_.#-]*$|^[0-9][A-Za-z0-9 /_.#-]*[A-Za-z][A-Za-z0-9 /_.#-]*$",
+                "outcome": "widened"
+              }
+            },
+            {
+              "constraints": {
+                "enum": [
+                  "ourairports"
+                ]
+              },
+              "description": "Where the row's text came from: always 'ourairports'.",
+              "name": "text_source",
+              "type": "string",
+              "x-finetype-enum-domain": {
+                "cohesion": 1.0,
+                "distinct": 1,
+                "domain": [
+                  "ourairports"
+                ],
+                "open": true,
+                "rows": 10734
+              },
+              "x-finetype-label": "representation.text.word",
+              "x-finetype-nominated": true
+            },
+            {
+              "constraints": {
+                "maxLength": 65536,
+                "minLength": 1
+              },
+              "description": "Lowercased, accent-stripped description_full: a derived free-text search field, not a source attribute.",
+              "name": "corpus",
+              "type": "string",
+              "x-finetype-label": "representation.text.plain_text",
+              "x-finetype-nominated": true
+            },
+            {
+              "description": "OurAirports' own record id for the airport (its id column), which stays the same when the airport's codes change. Joins this table back to OurAirports' other files, such as its runways and frequencies.",
+              "name": "ourairports_id",
+              "type": "integer",
+              "x-finetype-display": {
+                "number": "d"
+              },
+              "x-finetype-label": "representation.identifier.increment",
+              "x-finetype-nominated": true,
+              "x-finetype-unsupported-constraints": {
+                "pattern": "^[0-9]+$"
+              }
+            },
+            {
+              "description": "OurAirports' identifier for the airport (its ident column): the ICAO code where OurAirports has one on record for it, otherwise a local code or one OurAirports generated, such as KE-0042. It can differ from code, which is the ICAO code OurAirports records in its icao_code column; join on code.",
+              "name": "ident",
+              "type": "string",
+              "x-finetype-confidence": 0.9925,
+              "x-finetype-label": "unknown"
+            },
+            {
+              "constraints": {
+                "enum": [
+                  "heliport",
+                  "large_airport",
+                  "medium_airport",
+                  "seaplane_base",
+                  "small_airport"
+                ]
+              },
+              "description": "OurAirports' type for the airport: 'large_airport', 'medium_airport', 'small_airport', 'heliport' or 'seaplane_base'.",
+              "name": "type",
+              "type": "string",
+              "x-finetype-enum-domain": {
+                "cohesion": 0.800000011920929,
+                "distinct": 5,
+                "domain": [
+                  "heliport",
+                  "large_airport",
+                  "medium_airport",
+                  "seaplane_base",
+                  "small_airport"
+                ],
+                "open": true,
+                "rows": 10734
+              },
+              "x-finetype-label": "representation.text.word",
+              "x-finetype-nominated": true
+            },
+            {
+              "constraints": {
+                "maximum": 90.0,
+                "minimum": -90.0
+              },
+              "description": "The airport's latitude in decimal degrees, positive north of the equator (WGS 84).",
+              "name": "latitude_deg",
+              "type": "number",
+              "x-finetype-confidence": 1.0,
+              "x-finetype-display": {
+                "number": "~f"
+              },
+              "x-finetype-label": "geography.coordinate.latitude",
+              "x-finetype-unsupported-constraints": {
+                "pattern": "^-?([0-8]?\\d(\\.\\d+)?|90(\\.0+)?)$"
+              }
+            },
+            {
+              "constraints": {
+                "maximum": 180.0,
+                "minimum": -180.0
+              },
+              "description": "The airport's longitude in decimal degrees, positive east of Greenwich (WGS 84).",
+              "name": "longitude_deg",
+              "type": "number",
+              "x-finetype-confidence": 1.0,
+              "x-finetype-display": {
+                "number": "~f"
+              },
+              "x-finetype-label": "geography.coordinate.longitude"
+            },
+            {
+              "description": "The airport's elevation above mean sea level, in feet; NULL where OurAirports has none.",
+              "name": "elevation_ft",
+              "type": "integer",
+              "x-finetype-confidence": 0.9951,
+              "x-finetype-display": {
+                "number": ",d"
+              },
+              "x-finetype-label": "representation.numeric.integer_number",
+              "x-finetype-unsupported-constraints": {
+                "pattern": "^-?[0-9]+$"
+              }
+            },
+            {
+              "constraints": {
+                "enum": [
+                  "AF",
+                  "AN",
+                  "AS",
+                  "EU",
+                  "NA",
+                  "OC",
+                  "SA"
+                ]
+              },
+              "description": "OurAirports' two-letter continent code: AF Africa, AN Antarctica, AS Asia, EU Europe, NA North America, OC Oceania, SA South America.",
+              "name": "continent",
+              "type": "string",
+              "x-finetype-confidence": 0.9999,
+              "x-finetype-enum-domain": {
+                "cohesion": 1.0,
+                "distinct": 6,
+                "domain": [
+                  "AF",
+                  "AN",
+                  "AS",
+                  "EU",
+                  "OC",
+                  "SA"
+                ],
+                "open": true,
+                "rows": 8211
+              },
+              "x-finetype-label": "geography.location.continent"
+            },
+            {
+              "constraints": {
+                "pattern": "^[A-Z]{2}$"
+              },
+              "description": "The two-letter code of the airport's country or territory, as OurAirports gives it: the ISO 3166-1 alpha-2 code, and XK for Kosovo, which ISO has not assigned.",
+              "name": "iso_country",
+              "type": "string",
+              "x-finetype-confidence": 1.0,
+              "x-finetype-label": "geography.location.country_code"
+            },
+            {
+              "constraints": {
+                "maxLength": 100,
+                "minLength": 2
+              },
+              "description": "OurAirports' name for the country or territory, from its countries file, joined on iso_country.",
+              "name": "country_name",
+              "type": "string",
+              "x-finetype-confidence": 1.0,
+              "x-finetype-label": "geography.location.country"
+            },
+            {
+              "constraints": {
+                "maxLength": 100,
+                "minLength": 2
+              },
+              "description": "The code of the airport's first-level subdivision, as OurAirports gives it: the ISO 3166-2 code where one is assigned (GB-ENG, US-NY), or OurAirports' own code where it is not, such as <country>-U-A for a region OurAirports has not assigned.",
+              "name": "iso_region",
+              "type": "string",
+              "x-finetype-confidence": 0.85,
+              "x-finetype-label": "geography.location.region"
+            },
+            {
+              "constraints": {
+                "maxLength": 100,
+                "minLength": 2
+              },
+              "description": "OurAirports' name for the region, from its regions file, joined on iso_region.",
+              "name": "region_name",
+              "type": "string",
+              "x-finetype-confidence": 1.0,
+              "x-finetype-label": "geography.location.region"
+            },
+            {
+              "constraints": {
+                "maxLength": 65536,
+                "minLength": 1
+              },
+              "description": "The place the airport serves, as OurAirports records it (London; Sydney (Mascot)); NULL where OurAirports has none.",
+              "name": "municipality",
+              "type": "string",
+              "x-finetype-label": "representation.text.plain_text",
+              "x-finetype-nominated": true
+            },
+            {
+              "constraints": {
+                "required": true
+              },
+              "description": "Whether the airport has scheduled airline service, as OurAirports records it (its yes or no). Set on every row.",
+              "falseValues": [
+                "false",
+                "no",
+                "off",
+                "False",
+                "No",
+                "Off",
+                "FALSE",
+                "NO",
+                "OFF",
+                "disabled",
+                "Disabled",
+                "DISABLED",
+                "inactive",
+                "Inactive",
+                "INACTIVE"
+              ],
+              "name": "scheduled_service",
+              "trueValues": [
+                "true",
+                "yes",
+                "on",
+                "True",
+                "Yes",
+                "On",
+                "TRUE",
+                "YES",
+                "ON",
+                "enabled",
+                "Enabled",
+                "ENABLED",
+                "active",
+                "Active",
+                "ACTIVE"
+              ],
+              "type": "boolean",
+              "x-finetype-confidence": 0.9883,
+              "x-finetype-enum-domain": {
+                "cohesion": 1.0,
+                "distinct": 2,
+                "domain": [
+                  "false",
+                  "true"
+                ],
+                "open": true,
+                "rows": 10734
+              },
+              "x-finetype-label": "representation.boolean.terms"
+            },
+            {
+              "constraints": {
+                "maxLength": 4,
+                "minLength": 4,
+                "pattern": "^[A-Z0-9]{4}$"
+              },
+              "description": "The code an aviation GPS database would use for the airport, as OurAirports records it. OurAirports' data dictionary says it is the ICAO code where one exists; on 17 airports it differs from code (as of 2026-11-16), so join on code. NULL where OurAirports has none.",
+              "name": "gps_code",
+              "type": "string",
+              "x-finetype-confidence": 1.0,
+              "x-finetype-label": "geography.transportation.icao_code",
+              "x-finetype-pattern-fit": {
+                "canonical": "^[A-Z]{4}$",
+                "outcome": "widened"
+              }
+            },
+            {
+              "description": "The airport's code from its country's own aviation authority, as OurAirports records it: in the US the FAA's location identifier (JFK for John F. Kennedy International), elsewhere the national authority's code. It is not an IATA code, though in the US and some other countries the IATA code is often the same letters. NULL where OurAirports has none.",
+              "name": "local_code",
+              "type": "string",
+              "x-finetype-confidence": 0.6,
+              "x-finetype-label": "unknown"
+            },
+            {
+              "description": "The airport's website, as OurAirports records it; NULL where it has none.",
+              "format": "uri",
+              "name": "home_link",
+              "type": "string",
+              "x-finetype-confidence": 0.8501,
+              "x-finetype-label": "technology.internet.url",
+              "x-finetype-pattern-fit": {
+                "canonical": "^(?:(?:https?|ftp|file):)?//(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\\.)+[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?(?::\\d+)?(?:/[^?#]*)?(?:\\?[^#]*)?(?:#.*)?$",
+                "outcome": "omitted"
+              }
+            },
+            {
+              "constraints": {
+                "pattern": "^(?:(?:https?|ftp|file):)?//(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\\.)+[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?(?::\\d+)?(?:/[^?#]*)?(?:\\?[^#]*)?(?:#.*)?$"
+              },
+              "description": "The airport's Wikipedia article, as OurAirports records it; NULL where it has none.",
+              "format": "uri",
+              "name": "wikipedia_link",
+              "type": "string",
+              "x-finetype-label": "technology.internet.url",
+              "x-finetype-nominated": true
+            }
+          ],
+          "primaryKey": [
+            "code"
+          ]
+        }
+      }
+    ],
+    "sources": [
+      {
+        "path": "https://ourairports.com/data/",
+        "title": "Open data downloads — OurAirports"
+      },
+      {
+        "path": "https://ourairports.com/help/data-dictionary.html",
+        "title": "Data dictionary — OurAirports"
+      },
+      {
+        "path": "https://raw.githubusercontent.com/davidmegginson/ourairports-data/main/airports.csv",
+        "title": "airports.csv — OurAirports data repository"
+      },
+      {
+        "path": "https://raw.githubusercontent.com/davidmegginson/ourairports-data/main/countries.csv",
+        "title": "countries.csv — OurAirports data repository"
+      },
+      {
+        "path": "https://raw.githubusercontent.com/davidmegginson/ourairports-data/main/regions.csv",
+        "title": "regions.csv — OurAirports data repository"
+      },
+      {
+        "path": "https://api.github.com/repos/davidmegginson/ourairports-data/commits?sha=main&per_page=1",
+        "title": "Latest commit on main — OurAirports data repository (GitHub API)"
+      },
+      {
+        "path": "https://api.github.com/repos/davidmegginson/ourairports-data/git/trees/main",
+        "title": "Git tree of main — OurAirports data repository (GitHub API)"
+      }
+    ],
+    "title": "OurAirports — Airports with ICAO Codes",
+    "x-finetype-version": "0.6.67",
+    "x-meridian-code-list": {
+      "levels": [
+        "airport"
+      ]
+    }
+  },
+  "sec.company_tickers_exchange": {
+    "$schema": "https://datapackage.org/profiles/2.0/datapackage.json",
+    "contributors": [
+      {
+        "path": "https://www.sec.gov/",
+        "roles": [
+          "author"
+        ],
+        "title": "U.S. Securities and Exchange Commission"
+      },
+      {
+        "path": "https://meridian.online",
+        "roles": [
+          "publisher",
+          "wrangler"
+        ],
+        "title": "Meridian"
+      }
+    ],
+    "created": "2026-11-16T23:55:48Z",
+    "description": "The U.S. Securities and Exchange Commission's company-tickers file from its EDGAR system: one row per ticker symbol, with the Central Index Key (CIK), EDGAR conformed company name and exchange it is associated with. A company with several listed securities has several rows — 1RT Acquisition Corp. (CIK 2054272) has ONCH, ONCHU and ONCHW — so CIK alone is not a key. The SEC updates the file to support EDGAR searches and does not guarantee its accuracy or scope: it is a ticker list, not a register of every company with securities registered with the SEC.",
+    "homepage": "https://meridian.online/datasets/edgar",
+    "licenses": [
+      {
+        "name": "other-pd",
+        "path": "https://www.sec.gov/privacy#dissemination",
+        "title": "Public domain (U.S. federal government work)"
+      }
+    ],
+    "name": "edgar",
+    "resources": [
+      {
+        "bytes": 278528,
+        "format": "parquet",
+        "hash": "sha256:c9ad5a7d87de9389e25c3f1bbc44fe08411aa3cc61433cb8f4a05bff4996c5a0",
+        "mediatype": "application/vnd.apache.parquet",
+        "name": "edgar",
+        "path": "https://openlake.meridian.online/sec/company_tickers_exchange.parquet",
+        "schema": {
+          "fields": [
+            {
+              "constraints": {},
+              "description": "SEC EDGAR Central Index Key — the registrant's identifier in EDGAR, stored as an integer. Unpadded: no leading zeros are stored and none are implied, so the decimal rendering of this column is the CIK. The SEC renders a CIK zero-padded in URLs and filenames (`CIK0000320193`); that is a rendering convention applied to the identifier, not the value the company-tickers file this column is built from carries, and the Parquet column is a signed 64-bit integer. Join it to `edgar_gleif.key` by rendering it as text — see that package's `x-joins`.",
+              "name": "cik",
+              "type": "integer",
+              "x-finetype-confidence": 0.85,
+              "x-finetype-label": "representation.identifier.numeric_code",
+              "x-finetype-unsupported-constraints": {
+                "pattern": "^[0-9]+$"
+              }
+            },
+            {
+              "constraints": {
+                "maxLength": 200,
+                "minLength": 2
+              },
+              "description": "Legal name of the registrant as carried in the SEC company-tickers file. The type on this field is declared, not inferred: `nominations.finetype.json` beside this descriptor nominates `representation.text.entity_name` and says why, so the field carries `x-finetype-nominated` and no confidence. Inferred, the label is a draw: finetype returned it on 572 of 600 independent 100-value samples of this column and one of four other types on the rest.",
+              "name": "company_name",
+              "type": "string",
+              "x-finetype-label": "representation.text.entity_name",
+              "x-finetype-nominated": true
+            },
+            {
+              "constraints": {
+                "pattern": "^(?:[A-Z]{1,7}(?:[./-][A-Z]{1,4})?|[0-9]{1,6})$"
+              },
+              "description": "Exchange ticker symbol for the registrant's security.",
+              "name": "ticker",
+              "type": "string",
+              "x-finetype-confidence": 0.9,
+              "x-finetype-label": "finance.securities.ticker"
+            },
+            {
+              "constraints": {
+                "maxLength": 100,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$"
+              },
+              "description": "Listing venue for the ticker (e.g. NYSE, Nasdaq, CBOE, OTC, TXSE — the Texas Stock Exchange).",
+              "name": "exchange",
+              "type": "string",
+              "x-finetype-confidence": 1.0,
+              "x-finetype-enum-domain": {
+                "cohesion": 0.800000011920929,
+                "distinct": 5,
+                "domain": [
+                  "CBOE",
+                  "NYSE",
+                  "Nasdaq",
+                  "OTC",
+                  "TXSE"
+                ],
+                "open": true,
+                "rows": 10241
+              },
+              "x-finetype-label": "representation.text.word"
+            },
+            {
+              "constraints": {
+                "maxLength": 65536,
+                "minLength": 1
+              },
+              "description": "Lowercased, accent-stripped concatenation of name + ticker + exchange — a derived free-text search field, not a source attribute. The type on this field is declared, not inferred: `nominations.finetype.json` beside this descriptor nominates `representation.text.plain_text` and says why, so the field carries `x-finetype-nominated` and no confidence. Inferred, the label is a draw: finetype returned it on 484 of 600 independent 100-value samples of this column, `unknown` on 97 and one of seven other types on the rest.",
+              "name": "corpus",
+              "type": "string",
+              "x-finetype-label": "representation.text.plain_text",
+              "x-finetype-nominated": true
+            }
+          ],
+          "primaryKey": [
+            "cik",
+            "ticker"
+          ]
+        }
+      }
+    ],
+    "sources": [
+      {
+        "path": "https://www.sec.gov/",
+        "title": "SEC EDGAR"
+      }
+    ],
+    "title": "SEC EDGAR — Company Tickers",
+    "x-finetype-version": "0.6.67"
+  },
+  "usitc.hts": {
+    "$schema": "https://datapackage.org/profiles/2.0/datapackage.json",
+    "contributors": [
+      {
+        "path": "https://www.usitc.gov/",
+        "roles": [
+          "author"
+        ],
+        "title": "U.S. International Trade Commission"
+      },
+      {
+        "path": "https://meridian.online",
+        "roles": [
+          "publisher",
+          "wrangler"
+        ],
+        "title": "Meridian"
+      }
+    ],
+    "created": "2026-11-15T09:09:37Z",
+    "description": "The Harmonized Tariff Schedule of the United States, issued by the U.S. International Trade Commission: every chapter, heading, subheading, tariff line and statistical line as a row with its parent, with each line's duty rates, units and footnotes as USITC prints them.",
+    "homepage": "https://meridian.online/datasets/usitc/hts",
+    "licenses": [
+      {
+        "name": "other-pd",
+        "path": "https://www.usitc.gov/tariff_affairs/about_hts.htm",
+        "title": "Public domain (U.S. International Trade Commission)"
+      }
+    ],
+    "name": "hts",
+    "resources": [
+      {
+        "bytes": 2096468,
+        "format": "parquet",
+        "hash": "sha256:6d5ca5c7536ea883fc736373d71c5102cbc04ab5d15ff9437ed4d97fc470cd7d",
+        "mediatype": "application/vnd.apache.parquet",
+        "name": "hts",
+        "path": "https://openlake.meridian.online/usitc/hts.parquet",
+        "schema": {
+          "fields": [
+            {
+              "constraints": {
+                "maxLength": 10,
+                "minLength": 2,
+                "pattern": "^[0-9]{2}$|^[0-9]{4}$|^[0-9]{6}$|^[0-9]{8}$|^[0-9]{10}$"
+              },
+              "description": "HTS code, digits only: 2 (chapter), 4 (heading), 6 (subheading), 8 (tariff line) or 10 (statistical line) digits. Join other data on this column.",
+              "name": "code",
+              "type": "string",
+              "x-finetype-label": "geography.transportation.hs_code",
+              "x-finetype-nominated": true,
+              "x-finetype-pattern-fit": {
+                "canonical": "^\\d{4}\\.?\\d{2}(\\.?\\d{2}){0,2}$",
+                "outcome": "widened"
+              }
+            },
+            {
+              "constraints": {
+                "pattern": "^\\d{4}\\.?\\d{2}(\\.?\\d{2}){0,2}$|^[0-9]{2}$|^[0-9]{4}$"
+              },
+              "description": "The code as USITC prints it, with dots (8471.30.01.00). For a chapter, the two digits.",
+              "name": "code_display",
+              "type": "string",
+              "x-finetype-confidence": 0.9998,
+              "x-finetype-label": "geography.transportation.hs_code",
+              "x-finetype-pattern-fit": {
+                "canonical": "^\\d{4}\\.?\\d{2}(\\.?\\d{2}){0,2}$",
+                "outcome": "widened"
+              }
+            },
+            {
+              "constraints": {
+                "maxLength": 100,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$"
+              },
+              "description": "Hierarchy level: chapter, heading, subheading, tariff_line or statistical_line.",
+              "name": "level",
+              "type": "string",
+              "x-finetype-enum-domain": {
+                "cohesion": 0.6000000238418579,
+                "distinct": 5,
+                "domain": [
+                  "chapter",
+                  "heading",
+                  "statistical_line",
+                  "subheading",
+                  "tariff_line"
+                ],
+                "open": true,
+                "rows": 42036
+              },
+              "x-finetype-label": "representation.text.word",
+              "x-finetype-nominated": true
+            },
+            {
+              "description": "The level's position in the ladder, from 0 for a chapter to 4 for a statistical line.",
+              "name": "depth",
+              "type": "integer",
+              "x-finetype-confidence": 0.6,
+              "x-finetype-display": {
+                "number": ",d"
+              },
+              "x-finetype-label": "representation.numeric.integer_number",
+              "x-finetype-unsupported-constraints": {
+                "pattern": "^-?[0-9]+$"
+              }
+            },
+            {
+              "constraints": {
+                "maxLength": 8,
+                "minLength": 2,
+                "pattern": "^[0-9]+$"
+              },
+              "description": "The code one level up, always the code's own prefix; NULL for a chapter.",
+              "name": "parent_code",
+              "type": "string",
+              "x-finetype-confidence": 0.85,
+              "x-finetype-label": "representation.identifier.numeric_code"
+            },
+            {
+              "constraints": {
+                "maxLength": 65536,
+                "minLength": 1
+              },
+              "description": "USITC's text for the row. For a level USITC prints only through longer codes it is the text of that level's node in USITC's outline; for a level USITC gives no text, a label such as 'Heading 9903'. text_source says which.",
+              "name": "description",
+              "type": "string",
+              "x-finetype-label": "representation.text.plain_text",
+              "x-finetype-nominated": true
+            },
+            {
+              "constraints": {
+                "maxLength": 65536,
+                "minLength": 1
+              },
+              "description": "The chapter title, the subchapter where the chapter has them, and the outline rows above the row, then its own text, joined with ' › '.",
+              "name": "description_full",
+              "type": "string",
+              "x-finetype-label": "representation.text.plain_text",
+              "x-finetype-nominated": true
+            },
+            {
+              "constraints": {
+                "pattern": "^[A-Za-z][A-Za-z0-9 /_.#-]*[0-9][A-Za-z0-9 /_.#-]*$|^[0-9][A-Za-z0-9 /_.#-]*[A-Za-z][A-Za-z0-9 /_.#-]*$"
+              },
+              "description": "USITC's revision name for the schedule this row comes from, for example 2026HTSRev22.",
+              "name": "release",
+              "type": "string",
+              "x-finetype-label": "representation.identifier.alphanumeric_id",
+              "x-finetype-nominated": true
+            },
+            {
+              "constraints": {
+                "maxLength": 100,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$"
+              },
+              "description": "Whose text description is: usitc (USITC prints the code), usitc_derived (taken from the level's node in USITC's outline), meridian_label (USITC gives the level no text; labelled by level and code) or usitc_toc (a chapter title from USITC's table of contents).",
+              "name": "text_source",
+              "type": "string",
+              "x-finetype-confidence": 0.6,
+              "x-finetype-enum-domain": {
+                "cohesion": 0.75,
+                "distinct": 4,
+                "domain": [
+                  "meridian_label",
+                  "usitc",
+                  "usitc_derived",
+                  "usitc_toc"
+                ],
+                "open": true,
+                "rows": 42036
+              },
+              "x-finetype-label": "representation.text.word"
+            },
+            {
+              "constraints": {
+                "maxLength": 65536,
+                "minLength": 1
+              },
+              "description": "Lowercased, accent-stripped description_full: a derived free-text search field, not a source attribute.",
+              "name": "corpus",
+              "type": "string",
+              "x-finetype-label": "representation.text.plain_text",
+              "x-finetype-nominated": true
+            },
+            {
+              "description": "USITC's indent for the row in its outline, as an integer. Set for rows USITC prints; NULL for chapters, for levels derived from an outline node and for labelled levels.",
+              "name": "indent",
+              "type": "integer",
+              "x-finetype-confidence": 0.6,
+              "x-finetype-display": {
+                "number": ",d"
+              },
+              "x-finetype-label": "representation.numeric.integer_number",
+              "x-finetype-unsupported-constraints": {
+                "pattern": "^-?[0-9]+$"
+              }
+            },
+            {
+              "constraints": {
+                "maxLength": 100,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9\\-_]*[a-zA-Z0-9])?$"
+              },
+              "description": "The section of the schedule the row's chapter belongs to, as a Roman numeral, from USITC's table of contents.",
+              "name": "section",
+              "type": "string",
+              "x-finetype-enum-domain": {
+                "cohesion": 1.0,
+                "distinct": 22,
+                "domain": [
+                  "I",
+                  "II",
+                  "III",
+                  "IV",
+                  "IX",
+                  "V",
+                  "VI",
+                  "VII",
+                  "VIII",
+                  "X",
+                  "XI",
+                  "XII",
+                  "XIII",
+                  "XIV",
+                  "XIX",
+                  "XV",
+                  "XVI",
+                  "XVII",
+                  "XVIII",
+                  "XX",
+                  "XXI",
+                  "XXII"
+                ],
+                "open": true,
+                "rows": 42036
+              },
+              "x-finetype-label": "representation.text.word",
+              "x-finetype-nominated": true
+            },
+            {
+              "constraints": {
+                "maxLength": 65536,
+                "minLength": 1
+              },
+              "description": "The title of that section.",
+              "name": "section_title",
+              "type": "string",
+              "x-finetype-confidence": 0.9873,
+              "x-finetype-enum-domain": {
+                "cohesion": 0.090999998152256,
+                "distinct": 22,
+                "domain": [
+                  "Animal, Vegetable or Microbial Fats and Oils and Their Cleavage Products; Prepared Edible Fats; Animal or Vegetable Waxes",
+                  "Arms and Ammunition; Parts and Accessories Thereof",
+                  "Articles of Stone, Plaster, Cement, Asbestos, Mica or Similar Materials; Ceramic Products; Glass and Glassware",
+                  "Base Metals and Articles of Base Metal",
+                  "Footwear, Headgear, Umbrellas, Sun Umbrellas, Walking Sticks, Seatsticks, Whips, Riding-Crops and Parts Thereof; Prepared Feathers and Articles Made Therewith; Artificial Flowers; Articles of Human Hair",
+                  "Live Animals; Animal Products",
+                  "Machinery and Mechanical Appliances; Electrical Equipment; Parts Thereof; Sound Recorders and Reproducers, Television Image and Sound Recorders and Reproducers, and Parts and Accessories of Such Articles",
+                  "Mineral Products",
+                  "Miscellaneous Manufactured Articles",
+                  "Natural or Cultured Pearls, Precious or Semiprecious Stones, Precious Metals, Metals Clad With Precious Metal, and Articles Thereof; Imitation Jewelry; Coin",
+                  "Optical, Photographic, Cinematographic, Measuring, Checking, Precision, Medical or Surgical Instruments and Apparatus; Clocks and Watches; Musical Instruments; Parts and Accessories Thereof",
+                  "Plastics and Articles Thereof Rubber and Articles Thereof",
+                  "Prepared Foodstuffs; Beverages, Spirits, and Vinegar; Tobacco and Manufactured Tobacco Substitutes",
+                  "Products of the Chemical or Allied Industries",
+                  "Pulp of Wood or of Other Fibrous Cellulosic Material; Waste and Scrap of Paper or Paperboard; Paper and Paperboard and Articles Thereof",
+                  "Raw Hides and Skins, Leather, Furskins and Articles Thereof; Saddlery and Harness; Travel Goods, Handbags and Similar Containers; Articles of Animal Gut (Other Than Silkworm Gut)",
+                  "Special Classification Provisions; Temporary Legislation; Temporary Modifications Proclaimed pursuant to Trade Agreements Legislation; Additional Import Restrictions Proclaimed Pursuant to Section 22 of the Agricultural Adjustment Act, As Amended",
+                  "Textile and Textile Articles",
+                  "Vegetable Products",
+                  "Vehicles, Aircraft, Vessels and Associated Transport Equipment",
+                  "Wood and Articles of Wood; Wood Charcoal; Cork and Articles of Cork; Manufacturers of Straw,of Esparto or of Other Plaiting Materials; Basketware and Wickerwork",
+                  "Works of Art, Collectors' Pieces and Antiques"
+                ],
+                "open": true,
+                "rows": 42036
+              },
+              "x-finetype-label": "representation.text.plain_text"
+            },
+            {
+              "description": "The unit or units of quantity USITC prints for the line (for example 'kg' or 'No.'), as a list; NULL where none is printed.",
+              "name": "units",
+              "type": "array",
+              "x-finetype-confidence": 0.9999,
+              "x-finetype-label": "container.object.json_array",
+              "x-finetype-pattern-fit": {
+                "canonical": "^\\[.*\\]$",
+                "outcome": "omitted"
+              }
+            },
+            {
+              "constraints": {
+                "maxLength": 65536,
+                "minLength": 1
+              },
+              "description": "The general (column 1) rate of duty. The rate is as USITC prints it, blank as NULL. A line that prints none of the general, special and column 2 rates takes all three from its nearest printed ancestor that prints a general rate, named in rate_from_code. Where no printed ancestor prints a general rate (a heading such as 0101), the three stay NULL, as they do on chapters and on rows made for prefixes USITC prints only through longer codes. Chapter 99 provisions can add duties to this line, whether or not its footnotes name them, and those duties are not included here.",
+              "name": "general_rate",
+              "type": "string",
+              "x-finetype-label": "representation.text.plain_text",
+              "x-finetype-nominated": true
+            },
+            {
+              "constraints": {
+                "maxLength": 65536,
+                "minLength": 1
+              },
+              "description": "The special (column 1) rate of duty, with the programme codes USITC prints. The rate is as USITC prints it, blank as NULL. A line that prints none of the general, special and column 2 rates takes all three from its nearest printed ancestor that prints a general rate, named in rate_from_code. Where no printed ancestor prints a general rate (a heading such as 0101), the three stay NULL, as they do on chapters and on rows made for prefixes USITC prints only through longer codes. Chapter 99 provisions can add duties to this line, whether or not its footnotes name them, and those duties are not included here.",
+              "name": "special_rate",
+              "type": "string",
+              "x-finetype-label": "representation.text.plain_text",
+              "x-finetype-nominated": true
+            },
+            {
+              "constraints": {
+                "maxLength": 65536,
+                "minLength": 1
+              },
+              "description": "The column 2 rate of duty. The rate is as USITC prints it, blank as NULL. A line that prints none of the general, special and column 2 rates takes all three from its nearest printed ancestor that prints a general rate, named in rate_from_code. Where no printed ancestor prints a general rate (a heading such as 0101), the three stay NULL, as they do on chapters and on rows made for prefixes USITC prints only through longer codes. Chapter 99 provisions can add duties to this line, whether or not its footnotes name them, and those duties are not included here.",
+              "name": "column2_rate",
+              "type": "string",
+              "x-finetype-label": "representation.text.plain_text",
+              "x-finetype-nominated": true
+            },
+            {
+              "constraints": {
+                "maxLength": 10,
+                "minLength": 6,
+                "pattern": "^[0-9]{6}$|^[0-9]{8}$|^[0-9]{10}$"
+              },
+              "description": "The code of the printed line whose rates this row carries: the row's own code where it prints a rate, otherwise its nearest printed ancestor that prints a general rate. Join on this to find the rate that applies to a ten-digit import code. NULL on chapters, on every row made for a prefix USITC prints only through longer codes, and on a printed line that prints no rate and has no printed ancestor that prints a general rate.",
+              "name": "rate_from_code",
+              "type": "string",
+              "x-finetype-label": "geography.transportation.hs_code",
+              "x-finetype-nominated": true
+            },
+            {
+              "description": "The footnote texts USITC prints for the line, as a list. Some name chapter 99 provisions that can add duties to the line.",
+              "name": "footnotes",
+              "type": "array",
+              "x-finetype-confidence": 0.9,
+              "x-finetype-label": "container.object.json_array",
+              "x-finetype-unsupported-constraints": {
+                "pattern": "^\\[.*\\]$"
+              }
+            },
+            {
+              "constraints": {
+                "maxLength": 65536,
+                "minLength": 1
+              },
+              "description": "USITC's quota quantity field, as printed. USITC leaves it empty on every row of the current revision, so the column is NULL throughout.",
+              "name": "quota_quantity",
+              "type": "string",
+              "x-finetype-label": "representation.text.plain_text",
+              "x-finetype-nominated": true
+            },
+            {
+              "constraints": {
+                "maxLength": 65536,
+                "minLength": 1
+              },
+              "description": "The additional-duty text USITC prints on chapter 99 provision lines (for example 'No additional duty'), as printed. NULL where USITC leaves it blank, including rows that hold only a space.",
+              "name": "additional_duties",
+              "type": "string",
+              "x-finetype-confidence": 0.4384,
+              "x-finetype-label": "representation.text.plain_text"
+            }
+          ],
+          "primaryKey": [
+            "code"
+          ]
+        }
+      }
+    ],
+    "sources": [
+      {
+        "path": "https://hts.usitc.gov/",
+        "title": "HTS — Harmonized Tariff Schedule of the United States"
+      },
+      {
+        "path": "https://hts.usitc.gov/download",
+        "title": "HTS downloads"
+      }
+    ],
+    "title": "HTS — Harmonized Tariff Schedule of the United States",
+    "x-finetype-version": "0.6.67",
+    "x-meridian-code-list": {
+      "levels": [
+        "chapter",
+        "heading",
+        "subheading",
+        "tariff_line",
+        "statistical_line"
+      ]
+    }
+  }
+}
