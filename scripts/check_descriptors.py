@@ -1909,7 +1909,7 @@ def main(argv: list[str] | None = None) -> int:
     violations: list[Violation] = []
     self_described: list[str] = []
     resource_count = 0
-    read_from_used: set[Any] = set()
+    read_from_used: set[str] = set()
 
     for descriptor_path in descriptor_paths:
         package = str(descriptor_path)
@@ -1923,7 +1923,8 @@ def main(argv: list[str] | None = None) -> int:
                 found, carried = check_resource(
                     con, descriptor_path, package, descriptor, resource, args.require_self_description, read_from
                 )
-                read_from_used.add(resource.get("path"))
+                if isinstance(resource.get("path"), str):
+                    read_from_used.add(resource["path"])
                 violations.extend(found)
                 if carried:
                     self_described.append(f"{descriptor_path.parent.name}::{resource.get('name')}")

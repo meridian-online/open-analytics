@@ -4,9 +4,13 @@
 Three checks can only be known at the point of publishing, because each needs both
 what this Run built and what the open lake already holds:
 
-  label agreement  — `check_label_agreement.py --strict` over every package: the
-                     built descriptors beside every other table's, so a field labelled
-                     one way here and another way in the lake is caught before it lands.
+  label agreement  — `check_label_agreement.py --strict` over every
+                     `<slug>/datapackage.json`, the coverage the lake check has: the
+                     built descriptor beside every other such table's, so a field
+                     labelled one way here and another way in the lake is caught before
+                     it lands. A per-table `<name>.datapackage.json` (a Protocol that
+                     publishes several tables) is NOT compared; widening the coverage
+                     is a separate change.
   frictionless     — `check_frictionless.py --only <each built package>`: the
                      reference implementation loads each built descriptor.
   descriptors      — `check_descriptors.py --only <each built package>
@@ -34,7 +38,7 @@ descriptor is compared against its siblings alone.
 `packages/` beside it holds one `<package>/datapackage.json` per table, because the
 per-package checks read only `*/datapackage.json`: a Protocol's per-table
 `<name>.datapackage.json` appears there as package `<name>`. Label agreement reads
-`datasets/` as the lake check does, so a per-table descriptor is not compared there.
+`datasets/`, not `packages/`, so the exclusion above holds.
 
 THE BYTES. A built descriptor keeps the `path` it will be published at. The reference
 implementation refuses an absolute local path, and the Parquet's footer carries the
@@ -46,7 +50,9 @@ The checks run in-process, through each script's `main(argv)`, so the `uv@1` ste
 that runs this pins one script digest.
 
 Exit codes: 0 every check passed; 1 a check failed, each failing check named with its
-findings; 2 the inputs could not be read or do not describe this Protocol.
+findings; 2 the inputs could not be read or do not describe this Protocol, or a check
+could not run (its own exit 2, or an exception, recorded with its traceback) and no
+check returned a finding. Every check runs, and the report is written, either way.
 """
 
 from __future__ import annotations
@@ -57,6 +63,7 @@ import io
 import json
 import shutil
 import sys
+import traceback
 from pathlib import Path
 from typing import Any, Callable
 
@@ -175,6 +182,9 @@ def run(name: str, main: Callable[[list[str]], int], argv: list[str], findings: 
             status = main([*argv, "--json", str(findings)])
         except SystemExit as exc:  # argparse refusing its arguments
             status = exc.code if isinstance(exc.code, int) else EXIT_ERROR
+        except Exception:  # noqa: BLE001 - a crash is this check not running, not a pass
+            traceback.print_exc()
+            status = EXIT_ERROR
     result: dict[str, Any] = {
         "check": name,
         "passed": status == EXIT_OK,
@@ -183,7 +193,10 @@ def run(name: str, main: Callable[[list[str]], int], argv: list[str], findings: 
         "findings": None,
     }
     if findings.exists():
-        result["findings"] = json.loads(findings.read_text(encoding="utf-8"))
+        try:
+            result["findings"] = json.loads(findings.read_text(encoding="utf-8"))
+        except ValueError:
+            result["findings"] = None
     return result
 
 
@@ -260,7 +273,13 @@ def main(argv: list[str] | None = None) -> int:
             args.json_out,
             {"slug": args.slug, "packages": names, "passed": len(passed) == len(checks), "checks": checks},
         )
-    return EXIT_OK if len(passed) == len(checks) else EXIT_FAILED
+    if len(passed) == len(checks):
+        return EXIT_OK
+    # A finding outranks a fault: 1 says what to fix. Only when every failure is a check
+    # that could not run is the run itself a fault.
+    if any(check["exit"] == EXIT_FAILED for check in checks):
+        return EXIT_FAILED
+    return EXIT_ERROR
 
 
 if __name__ == "__main__":

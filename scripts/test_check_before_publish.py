@@ -267,12 +267,15 @@ class CheckBeforePublish(Scratch):
             self.build("gamma", f"{n}.datapackage.json", code_list(n, f"t.{n}"))
         result, report = self.run_check("gamma")
         self.assertEqual(result.returncode, EXIT_OK, self.both(result))
-        self.assertChecks(report, label_agreement=True, frictionless=True, descriptors=True)
+        # Label agreement does not read per-table descriptors (see the exclusion test
+        # below), so this case claims only the two checks that do.
+        checks = {c["check"]: c for c in report["checks"]}
+        self.assertTrue(checks["frictionless"]["passed"])
+        self.assertTrue(checks["descriptors"]["passed"])
         tree = self.datasets / "gamma/build/check_tree/datasets/gamma"
         for n in names:
             laid = json.loads((tree / f"{n}.datapackage.json").read_text())
             self.assertEqual(laid["created"], "2026-11-17T00:00:00Z", n)
-        checks = {c["check"]: c for c in report["checks"]}
         self.assertEqual(checks["descriptors"]["findings"]["checked"], "g_one, g_three, g_two")
         self.assertEqual(sorted(checks["descriptors"]["findings"]["self_described"]),
                          sorted(f"{n}::{n}" for n in names))
@@ -292,8 +295,32 @@ class CheckBeforePublish(Scratch):
             self.build("gamma", f"{n}.datapackage.json", document, sql)
         result, report = self.run_check("gamma")
         self.assertEqual(result.returncode, EXIT_FAILED, self.both(result))
-        self.assertChecks(report, label_agreement=True, frictionless=True, descriptors=False)
+        checks = {c["check"]: c for c in report["checks"]}
+        self.assertTrue(checks["frictionless"]["passed"])
+        self.assertFalse(checks["descriptors"]["passed"])
         self.assertIn("g_three", result.stdout)
+
+    def test_label_agreement_does_not_read_per_table_descriptors(self) -> None:
+        """The stated exclusion, pinned: label agreement reads `<slug>/datapackage.json` only.
+
+        That is the coverage the lake check has today. A per-table `<name>.datapackage.json`
+        labelling `description` differently from its sibling still passes. Widening the
+        coverage is a separate change; when it lands, this case flips to expect the failure.
+        """
+        self.two_code_lists()
+        names = ["g_one", "g_two"]
+        self.protocol("gamma", [(f"t.{n}", f"{n}.datapackage.json") for n in names])
+        self.build("gamma", "g_one.datapackage.json", code_list("g_one", "t.g_one", description_label=WORD))
+        self.build("gamma", "g_two.datapackage.json", code_list("g_two", "t.g_two"))
+        result, report = self.run_check("gamma")
+        self.assertEqual(result.returncode, EXIT_OK, self.both(result))
+        self.assertChecks(report, label_agreement=True, frictionless=True, descriptors=True)
+        label = next(c for c in report["checks"] if c["check"] == "label agreement")
+        # alpha and beta only: neither gamma table was read.
+        self.assertEqual(label["findings"]["examined"], 2)
+        self.assertEqual(
+            sorted(Path(p).parent.name for p in label["findings"]["packages"]), ["alpha", "beta"]
+        )
 
     def test_the_tree_is_rebuilt_fresh(self) -> None:
         self.two_code_lists()
@@ -312,6 +339,58 @@ class CheckBeforePublish(Scratch):
         self.assertEqual(result.returncode, EXIT_ERROR, self.both(result))
         self.assertIn("other.datapackage.json", result.stderr)
         self.assertIn("datapackage.json", result.stderr)
+
+
+class ACheckThatCannotRun(Scratch):
+    """A crash inside one check is that check failing to run: the rest still run and the report is written."""
+
+    def run_in_process(self, broken: str) -> tuple[int, dict[str, Any], str]:
+        import contextlib
+        import io
+
+        import check_before_publish as cbp
+
+        self.two_code_lists()
+        self.build("alpha", "datapackage.json", code_list("alpha", "t.alpha"))
+        folder = self.datasets / "alpha"
+        (folder / "build" / "lake_descriptors.json").write_text(json.dumps(self.bundle))
+        module = getattr(cbp, broken)
+        original = module.main
+
+        def crash(argv: list[str]) -> int:
+            print("partial output before the crash")
+            raise RuntimeError("the check fell over")
+
+        module.main = crash
+        cwd = os.getcwd()
+        out = io.StringIO()
+        try:
+            os.chdir(folder)
+            with contextlib.redirect_stdout(out):
+                status = cbp.main(
+                    [
+                        "--datasets-dir", "../../datasets", "--slug", "alpha",
+                        "--lake-bundle", "build/lake_descriptors.json",
+                        "--built", "datapackage.json=build/alpha.parquet",
+                        "--json", "build/check_before_publish.json",
+                    ]
+                )
+        finally:
+            os.chdir(cwd)
+            module.main = original
+        report = json.loads((folder / "build" / "check_before_publish.json").read_text())
+        return status, report, out.getvalue()
+
+    def test_a_crash_is_exit_2_with_its_traceback_and_the_rest_still_run(self) -> None:
+        status, report, out = self.run_in_process("check_frictionless")
+        self.assertEqual(status, EXIT_ERROR, out)
+        checks = {c["check"]: c for c in report["checks"]}
+        self.assertEqual(checks["frictionless"]["exit"], EXIT_ERROR)
+        self.assertIn("partial output before the crash", checks["frictionless"]["output"])
+        self.assertIn("RuntimeError: the check fell over", checks["frictionless"]["output"])
+        self.assertTrue(checks["label agreement"]["passed"])
+        self.assertTrue(checks["descriptors"]["passed"])
+        self.assertIn("FAILED  frictionless (exit 2)", out)
 
 
 if __name__ == "__main__":

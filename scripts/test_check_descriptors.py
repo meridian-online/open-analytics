@@ -300,6 +300,19 @@ class DescriptorCheckSelfTest(unittest.TestCase):
             "'cd'",
         )
 
+    def test_no_catalogue_with_write_catalogue_is_refused(self) -> None:
+        write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT * FROM (VALUES ('AB')) t(code)",
+            fields=[{"name": "code", "type": "string"}],
+        )
+        self.assertOutcome(
+            run_check(self.datasets, "--no-catalogue", "--write-catalogue"),
+            EXIT_ERROR,
+            "--no-catalogue and --write-catalogue cannot both be given",
+        )
+
     def test_read_from_naming_no_resource_exits_2(self) -> None:
         """A mapping no scanned resource declares is a typo, not a pass that read the remote."""
         write_package(
