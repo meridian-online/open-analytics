@@ -29,7 +29,8 @@
 #           build/gleif_search.parquet  →  its search index, gleif/lei/search.parquet
 name: gleif
 engine: duckdb
-engine_version: ">=1.2"
+# Kept in step with ../soc_2018, which pins the DuckDB that arc links (2.0), the writer of its published Parquet.
+engine_version: ">=2.0"
 db: build/gleif.db
 # The R2 write credential, if a .env is present (see .env.example); the process environment also counts.
 dotenv: [.env]
@@ -136,10 +137,10 @@ steps:
       script: ../../scripts/stamp_descriptor.py
       # `shasum -a 256 scripts/stamp_descriptor.py` prints this.
       sha256: a9356ac8d5412d94a940ebeef1e2508eaed6b77f1d923ada88edbacccf9d9b81
-      # Pinned to DUCKDB_VERSION in .github/workflows/descriptors.yml. The stamp
+      # Pinned to the DuckDB that engine_version names. The stamp
       # rewrites no data page, so this need not be the DuckDB that wrote the Parquet.
       deps:
-        - duckdb==1.5.5
+        - duckdb==2.0.0
       args:
         - stamp
         - --descriptor
