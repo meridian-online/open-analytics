@@ -24,7 +24,7 @@ SELECT * FROM read_parquet('https://openlake.meridian.online/census/naics_2022.p
 
 ## Ask a dataset what it is
 
-Every dataset at its current address carries its own description; the frozen flat files from before the move do not. Each Protocol's last step stamps the descriptor into the Parquet it just built, and all eight current objects were published through that step; by 2026-11-02 the query below returned the descriptor for each. `check_descriptors.py` prints how many of the published resources carry their own description on every run, and the stamp's own behaviour is covered on every pull request. What nothing here covers is a Protocol run end to end, because no workflow runs `arc run`.
+Every dataset at its current address carries its own description; the frozen flat files from before the move do not. Each Protocol's last step stamps the descriptor into the Parquet it just built, and all eighteen current objects were published through that step; on 2026-11-18 the query below returned the descriptor for each. `check_descriptors.py` prints how many of the published resources carry their own description on every run, and the stamp's own behaviour is covered on every pull request. What nothing here covers is a Protocol run end to end, because no workflow runs `arc run`.
 
 A stamped dataset carries its description **inside the file**, in the Parquet
 footer, so a URL is the only thing you need to know about it — no second file, no
@@ -291,23 +291,18 @@ rather than from the published object's footer because a restamp moves the foote
 ```sh
 pip install duckdb pyyaml
 pip install frictionless==5.19.0                # the reference implementation
-python scripts/check_descriptors.py            # every descriptor against its data
-python scripts/check_descriptors.py --write-catalogue   # rewrite the Rows column from the counted rows
+python scripts/emit_descriptor.py --all --tree /tmp/oa-tree --bypass-edge   # every stored descriptor, laid out like datasets/
+python scripts/lake_check.py --tree /tmp/oa-tree --repo .   # every check above over it, verify included (--check NAME for one)
+python scripts/check_descriptors.py --datasets-dir /tmp/oa-tree/datasets --readme README.md --write-catalogue   # rewrite the Rows column from the counted rows
 python scripts/test_check_descriptors.py       # the self-test: the check on deliberately broken fixtures
 python scripts/test_stamp_descriptor.py        # the self-test: the stamp lands, the data does not move
 python scripts/test_publish_dataset.py         # the self-test: publish against a scratch object store
 python scripts/check_protocol_readme.py        # every README's step list against its manifest
 python scripts/check_protocol_readme.py --write  # regenerate each README's step block
 python scripts/test_check_protocol_readme.py   # the self-test: the step-list check on broken fixtures
-python scripts/publish_dataset.py verify       # every declared bytes + hash against the object served
 python scripts/publish_dataset.py trace URL    # the Run that made a served object, from its URL alone
-python scripts/check_label_agreement.py         # every concept, as each package describes it
-python scripts/check_label_agreement.py --strict  # and fail on a difference with no stated reason
 python scripts/test_check_label_agreement.py   # the self-test: the cross-package check on broken fixtures
-python scripts/check_frictionless.py           # every descriptor through the reference implementation
 python scripts/test_check_frictionless.py      # the self-test: the conformance check on broken fixtures
-python scripts/check_constraint_ratchet.py     # every hand-held constraint, against origin/main
-python scripts/check_constraint_ratchet.py --base HEAD~1  # or against the previous commit
 python scripts/test_check_constraint_ratchet.py  # the self-test: the ratchet on scratch repositories
 ```
 
