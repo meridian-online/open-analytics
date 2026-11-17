@@ -59,6 +59,8 @@ And once, over the catalogue in README.md:
                      omits is a disagreement too, so a row cannot be deleted to make
                      the check pass. `--write-catalogue` corrects the figures from the
                      measurement rather than by hand. See `render_count` for the rule.
+                     `--no-catalogue` skips it, for the check a Protocol runs just
+                     before it publishes: the catalogue is the lake check's to read.
 
 And over every descriptor in `datasets/` AND in `examples/`:
 
@@ -668,12 +670,15 @@ def check_resource(
     document: dict[str, Any],
     resource: dict[str, Any],
     require_self_description: bool,
+    read_from: dict[str, str] | None = None,
 ) -> tuple[list[Violation], bool]:
     name = resource.get("name") or resource.get("path") or "<unnamed>"
     raw_path = resource.get("path")
     if not raw_path:
         raise CheckError(f"{package}: resource {name!r} declares no path")
-    path, is_remote = resolve_path(descriptor_path, raw_path)
+    # `--read-from`: the bytes are read from a local build while the descriptor keeps
+    # the address it will be published at, so its self-description still agrees.
+    path, is_remote = resolve_path(descriptor_path, (read_from or {}).get(raw_path, raw_path))
 
     schema = resource.get("schema") or {}
     fields = schema.get("fields") or []
@@ -1825,7 +1830,30 @@ def main(argv: list[str] | None = None) -> int:
         "Off by default: the published objects predate stamping, and a check that demanded one "
         "would report every one of them as a disagreement about data that is in fact correct.",
     )
+    parser.add_argument(
+        "--no-catalogue",
+        action="store_true",
+        help="skip rule 8, the README catalogue. For a check run before a publish, where the "
+        "catalogue is the lake check's to read.",
+    )
+    parser.add_argument(
+        "--read-from",
+        action="append",
+        default=[],
+        metavar="DECLARED=LOCAL",
+        help="read the resource whose `path` is DECLARED from the local file LOCAL instead "
+        "(repeatable). The descriptor is not changed, so rule 6 compares it unaltered. A "
+        "DECLARED no checked resource carries is refused.",
+    )
     args = parser.parse_args(argv)
+    if args.no_catalogue and args.write_catalogue:
+        parser.error("--no-catalogue and --write-catalogue cannot both be given")
+    read_from: dict[str, str] = {}
+    for mapping in args.read_from:
+        declared, sep, local = mapping.partition("=")
+        if not sep or not declared or not local:
+            parser.error(f"--read-from {mapping!r} is not DECLARED=LOCAL")
+        read_from[declared] = local
 
     try:
         import duckdb
@@ -1881,6 +1909,7 @@ def main(argv: list[str] | None = None) -> int:
     violations: list[Violation] = []
     self_described: list[str] = []
     resource_count = 0
+    read_from_used: set[Any] = set()
 
     for descriptor_path in descriptor_paths:
         package = str(descriptor_path)
@@ -1892,14 +1921,24 @@ def main(argv: list[str] | None = None) -> int:
             for resource in resources:
                 resource_count += 1
                 found, carried = check_resource(
-                    con, descriptor_path, package, descriptor, resource, args.require_self_description
+                    con, descriptor_path, package, descriptor, resource, args.require_self_description, read_from
                 )
+                read_from_used.add(resource.get("path"))
                 violations.extend(found)
                 if carried:
                     self_described.append(f"{descriptor_path.parent.name}::{resource.get('name')}")
         except CheckError as exc:
             print(f"descriptor check: {exc}", file=sys.stderr)
             return EXIT_ERROR
+
+    unread = sorted(set(read_from) - read_from_used)
+    if unread:
+        print(
+            f"descriptor check: --read-from names {', '.join(unread)}, which no checked resource "
+            "declares as its path",
+            file=sys.stderr,
+        )
+        return EXIT_ERROR
 
     try:
         violations.extend(check_foreign_keys(all_packages, packages if args.only else None))
@@ -1925,20 +1964,22 @@ def main(argv: list[str] | None = None) -> int:
     notice_read = [str(Path(package).relative_to(args.datasets_dir)) for package in notice_packages]
 
     readme_path = args.readme if args.readme is not None else args.datasets_dir.parent / "README.md"
-    try:
-        catalogue_violations, catalogue_rows = check_catalogue(
-            con,
-            readme_path,
-            descriptor_paths,
-            packages,
-            set(args.only) if args.only else None,
-            args.write_catalogue,
-            args.datasets_dir,
-        )
-        violations.extend(catalogue_violations)
-    except CheckError as exc:
-        print(f"descriptor check: {exc}", file=sys.stderr)
-        return EXIT_ERROR
+    catalogue_rows = 0
+    if not args.no_catalogue:
+        try:
+            catalogue_violations, catalogue_rows = check_catalogue(
+                con,
+                readme_path,
+                descriptor_paths,
+                packages,
+                set(args.only) if args.only else None,
+                args.write_catalogue,
+                args.datasets_dir,
+            )
+            violations.extend(catalogue_violations)
+        except CheckError as exc:
+            print(f"descriptor check: {exc}", file=sys.stderr)
+            return EXIT_ERROR
 
     checked = ", ".join(path.parent.name for path in descriptor_paths)
 

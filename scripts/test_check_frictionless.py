@@ -337,6 +337,40 @@ class TheDeclarationMoves(ScratchTree):
         self.assertIn("names a package", result.stdout)
 
 
+class OnlyNarrowsToNamedPackages(ScratchTree):
+    """`--only` checks the named packages and holds only their entries."""
+
+    def test_only_leaves_a_refused_sibling_unread(self) -> None:
+        self.settled()
+        self.write(self.with_pattern("beta", "opened"))
+        self.assertEqual(self.run_check().returncode, EXIT_DISAGREEMENT)
+        result = self.run_check("--only", "alpha")
+        self.assertEqual(result.returncode, EXIT_OK, self.both(result))
+        self.assertIn("1 of 1 package(s) accepted", result.stdout)
+        self.assertNotIn("beta", result.stdout)
+
+    def test_only_still_refuses_the_named_package(self) -> None:
+        self.settled()
+        self.write(self.with_pattern("alpha", "opened"))
+        result = self.run_check("--only", "alpha")
+        self.assertEqual(result.returncode, EXIT_DISAGREEMENT, self.both(result))
+        self.assertIn("REFUSED   alpha", result.stdout)
+
+    def test_only_ignores_an_entry_for_a_package_it_does_not_read(self) -> None:
+        self.settled()
+        self.write(self.with_pattern("beta", "opened"))
+        self.rejections(entry(package="beta", pointer=pointer("beta", "opened")))
+        result = self.run_check("--only", "alpha")
+        self.assertEqual(result.returncode, EXIT_OK, self.both(result))
+        self.assertIn("0 stated rejection(s)", result.stdout)
+
+    def test_only_naming_an_absent_package_is_a_fault(self) -> None:
+        self.settled()
+        result = self.run_check("--only", "gamma")
+        self.assertEqual(result.returncode, EXIT_ERROR, self.both(result))
+        self.assertIn("gamma", result.stderr)
+
+
 class ARefusalNoFieldAccountsFor(ScratchTree):
     """An unattributed refusal must not read as no refusal."""
 

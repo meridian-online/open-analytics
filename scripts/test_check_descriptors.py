@@ -264,6 +264,57 @@ class DescriptorCheckSelfTest(unittest.TestCase):
         )
         self.assertOutcome(run_check(self.datasets), EXIT_OK, "agree with their data")
 
+    # ------------------------------------------------- before-publish narrowing
+
+    def test_no_catalogue_skips_the_catalogue_rule(self) -> None:
+        """`--no-catalogue` leaves rule 8 to the lake check; without it the wrong row reddens."""
+        write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT * FROM (VALUES ('AB')) t(code)",
+            fields=[{"name": "code", "type": "string"}],
+            catalogue="7",
+        )
+        self.assertOutcome(run_check(self.datasets), EXIT_VIOLATIONS, "catalogue.rows")
+        self.assertOutcome(
+            run_check(self.datasets, "--no-catalogue"), EXIT_OK, "0 catalogue row count(s) measured"
+        )
+
+    def test_read_from_reads_a_declared_url_from_a_local_file(self) -> None:
+        """A resource declaring its published URL is read from the local build named for it."""
+        address = "https://openlake.example.invalid/widgets.parquet"
+        descriptor = write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT * FROM (VALUES ('AB'), ('cd')) t(code)",
+            fields=[{"name": "code", "type": "string", "constraints": {"pattern": "^[A-Z]{2}$"}}],
+            resource_path=address,
+            catalogue=False,
+        )
+        local = descriptor.parent / "widgets.parquet"
+        self.assertOutcome(
+            run_check(self.datasets, "--no-catalogue", "--read-from", f"{address}={local}"),
+            EXIT_VIOLATIONS,
+            "widgets.code",
+            "constraints.pattern",
+            "'cd'",
+        )
+
+    def test_read_from_naming_no_resource_exits_2(self) -> None:
+        """A mapping no scanned resource declares is a typo, not a pass that read the remote."""
+        write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT * FROM (VALUES ('AB')) t(code)",
+            fields=[{"name": "code", "type": "string"}],
+            catalogue=False,
+        )
+        self.assertOutcome(
+            run_check(self.datasets, "--no-catalogue", "--read-from", "https://nowhere.invalid/x.parquet=/x"),
+            EXIT_ERROR,
+            "https://nowhere.invalid/x.parquet",
+        )
+
     # ------------------------------------------------------------- constraints
 
     def test_pattern_violation_names_the_field(self) -> None:

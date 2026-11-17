@@ -36,6 +36,7 @@ no entry is a failure; so is an entry naming a package that is now accepted.
 
     check_frictionless.py                report; exit 1 on an unaccounted or stale entry
     check_frictionless.py --json OUT     write the findings as JSON as well
+    check_frictionless.py --only SLUG    read only this package, and only its entries (repeatable)
 
 Exit 0 every descriptor is accepted, or every refusal is accounted for and every
 entry is still live. Exit 1 a refusal no entry accounts for, an entry whose notes no
@@ -237,6 +238,7 @@ def check(
     datasets_dir: Path,
     rejections_path: Path,
     installed_version: str,
+    only: list[str] | None = None,
 ) -> tuple[int, dict[str, Any]]:
     descriptors = sorted(datasets_dir.glob("*/datapackage.json"))
     if not descriptors:
@@ -245,6 +247,19 @@ def check(
             f"reference implementation, which is a fault and not a pass"
         )
     entries = read_rejections(rejections_path, installed_version)
+    if only:
+        # Narrowed both ways: a package outside `only` is not read, so an entry for it
+        # cannot be held to anything and is left alone rather than reported as naming
+        # a package this tree lacks.
+        wanted = set(only)
+        missing = wanted - {path.parent.name for path in descriptors}
+        if missing:
+            raise CheckError(
+                f"--only names {', '.join(sorted(missing))}, and {datasets_dir} has no "
+                f"<slug>/datapackage.json for it"
+            )
+        descriptors = [path for path in descriptors if path.parent.name in wanted]
+        entries = [entry for entry in entries if entry["package"] in wanted]
 
     measured: dict[str, dict[str, list[str]]] = {}
     order: dict[str, list[str]] = {}
@@ -350,6 +365,12 @@ def main(argv: list[str] | None = None) -> int:
         help="stated rejections (default: <datasets-dir>/frictionless-rejections.json)",
     )
     parser.add_argument("--json", dest="json_out", type=Path, default=None)
+    parser.add_argument(
+        "--only",
+        action="append",
+        metavar="SLUG",
+        help="read only this package and hold only its entries (repeatable)",
+    )
     args = parser.parse_args(argv)
     rejections_path = args.rejections or (args.datasets_dir / "frictionless-rejections.json")
 
@@ -373,6 +394,7 @@ def main(argv: list[str] | None = None) -> int:
             args.datasets_dir,
             rejections_path,
             frictionless.__version__,
+            args.only,
         )
     except CheckError as exc:
         print(f"frictionless check: {exc}", file=sys.stderr)
