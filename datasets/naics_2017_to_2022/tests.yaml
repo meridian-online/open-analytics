@@ -1,0 +1,160 @@
+# The census/naics_2017_to_2022 Protocol's tests, run by `arc test` from this folder (see
+# README.md).
+#
+# Fixtures, in testdata/ (see testdata/README.md): cut-down copies of Census's two
+# workbooks. The concordance keeps its three title rows and ten pairings: three one-to-one
+# (111110, 112120, 721310), the 212113 split with the two coal-mining merges it feeds,
+# the 334610 merge, and 531120 with Census's typo; 112120's row has a cell of whitespace
+# in column E, as Census's file does. The descriptions keep the seven 2022 codes, their
+# ancestors and the 31-33 sector range, so census/naics_2022's own load.sql builds a code
+# list from it.
+#
+# A break on an xlsx fixture sees the sheet as a table `fixture` with a `row` column (the
+# sheet row, 1 for the title) and one text column per sheet letter.
+
+- name: the fixture builds the crosswalk
+  risk: a crosswalk published with pairings lost or invented, 2022 codes that miss census/naics_2022, or Census's text changed
+  fixtures:
+    fetch_concordance: testdata/naics_2017_to_2022.xlsx
+    fetch_naics: testdata/naics_descriptions.xlsx
+  checks:
+    # Every pairing, and each one once.
+    - SELECT * FROM (SELECT count(*) AS n FROM naics_2017_to_2022_out) WHERE n <> 10
+    - >-
+      SELECT from_code, to_code FROM naics_2017_to_2022_out
+      EXCEPT
+      SELECT * FROM (VALUES ('111110', '111110'), ('112120', '112120'), ('212111', '212114'),
+        ('212112', '212115'), ('212113', '212114'), ('212113', '212115'), ('334613', '334610'),
+        ('334614', '334610'), ('531120', '531120'), ('721310', '721310'))
+    # The split names the piece that went to each 2022 industry.
+    - >-
+      SELECT * FROM (VALUES ('212114', 'Anthracite Mining - anthracite surface mining'),
+        ('212115', 'Anthracite Mining - anthracite underground mining')) v(to_code, from_description)
+      WHERE NOT EXISTS (SELECT 1 FROM naics_2017_to_2022_out x WHERE x.from_code = '212113'
+                        AND x.to_code = v.to_code AND x.from_description IS NOT DISTINCT FROM v.from_description)
+    # Editions and release on every row.
+    - >-
+      SELECT from_code FROM naics_2017_to_2022_out
+      WHERE from_edition IS DISTINCT FROM '2017' OR to_edition IS DISTINCT FROM '2022'
+         OR release IS DISTINCT FROM '2022'
+    # Every 2022 code is a national industry of the code list built in the run.
+    - >-
+      SELECT x.to_code FROM naics_2017_to_2022_out x LEFT JOIN naics c ON c.code = x.to_code
+      WHERE c.level IS DISTINCT FROM 'national_industry'
+    # Text: trailing spaces trimmed, Census's typo kept, the merge's 2022 title as printed.
+    - >-
+      SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM naics_2017_to_2022_out
+        WHERE from_code = '721310'
+          AND from_description IS NOT DISTINCT FROM 'Rooming and Boarding Houses, Dormitories, and Workers'' Camps'
+          AND to_description IS NOT DISTINCT FROM 'Rooming and Boarding Houses, Dormitories, and Workers'' Camps')
+    - >-
+      SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM naics_2017_to_2022_out
+        WHERE from_code = '334614'
+          AND from_description IS NOT DISTINCT FROM 'Software and Other Prerecorded Compact Disc, Tape, and Record Reproducing'
+          AND to_description IS NOT DISTINCT FROM 'Manufacturing and Reproducing Magnetic and Optical Media')
+    - >-
+      SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM naics_2017_to_2022_out
+        WHERE from_code = '531120'
+          AND from_description IS NOT DISTINCT FROM 'Lessors of Nonresidential Buildings (excpet Miniwarehouses)')
+    # The contract check ran over every row.
+    - SELECT * FROM contract_crosswalk_result WHERE rows_checked <> 10
+
+- name: a changed title is refused
+  risk: Census replaces the sheet with another concordance and its pairings publish under this one's editions
+  fixtures:
+    fetch_concordance: testdata/naics_2017_to_2022.xlsx
+    fetch_naics: testdata/naics_descriptions.xlsx
+  break:
+    fetch_concordance: UPDATE fixture SET A = '2012 NAICS U.S. Matched to 2017 NAICS U.S. (Full Concordance)' WHERE row = 1
+  expect:
+    fails_with: "NAICS concordance title has moved"
+
+- name: a changed header is refused
+  risk: Census reorders the columns and 2022 codes load as 2017 codes
+  fixtures:
+    fetch_concordance: testdata/naics_2017_to_2022.xlsx
+    fetch_naics: testdata/naics_descriptions.xlsx
+  break:
+    fetch_concordance: UPDATE fixture SET A = '2022 NAICS Code' WHERE row = 3
+  expect:
+    fails_with: "NAICS concordance header row has moved"
+
+- name: a value beyond column D is refused
+  risk: Census adds a column, such as a weight, and the crosswalk drops it unseen
+  fixtures:
+    fetch_concordance: testdata/naics_2017_to_2022.xlsx
+    fetch_naics: testdata/naics_descriptions.xlsx
+  break:
+    fetch_concordance: UPDATE fixture SET E = '0.5' WHERE A = '212113' AND C = '212114'
+  expect:
+    fails_with: "NAICS concordance has a value beyond column D: 0.5"
+
+- name: a 2017 code that is not six digits is refused
+  risk: a code that lost a digit publishes as a pairing nothing coded to 2017 joins to
+  fixtures:
+    fetch_concordance: testdata/naics_2017_to_2022.xlsx
+    fetch_naics: testdata/naics_descriptions.xlsx
+  break:
+    fetch_concordance: UPDATE fixture SET A = '21211' WHERE A = '212111'
+  expect:
+    fails_with: "NAICS concordance has a 2017 code that is not six digits: 21211"
+
+- name: a 2022 code that is not six digits is refused
+  risk: a five-digit industry publishes as a 2022 code that is not a national industry
+  fixtures:
+    fetch_concordance: testdata/naics_2017_to_2022.xlsx
+    fetch_naics: testdata/naics_descriptions.xlsx
+  break:
+    fetch_concordance: UPDATE fixture SET C = '21211' WHERE A = '212111'
+  expect:
+    fails_with: "NAICS concordance has a 2022 code that is not six digits: 21211"
+
+- name: a pairing without a 2017 code is refused
+  risk: a pairing whose 2017 cell is empty is published with a NULL code, or dropped unseen
+  fixtures:
+    fetch_concordance: testdata/naics_2017_to_2022.xlsx
+    fetch_naics: testdata/naics_descriptions.xlsx
+  break:
+    fetch_concordance: UPDATE fixture SET A = NULL WHERE A = '212111'
+  expect:
+    fails_with: "NAICS concordance pairing has no 2017 code: 212114 Bituminous Coal and Lignite Surface Mining"
+
+- name: a pairing without a 2022 code is refused
+  risk: a pairing whose 2022 cell is empty is published with a NULL code, or dropped unseen
+  fixtures:
+    fetch_concordance: testdata/naics_2017_to_2022.xlsx
+    fetch_naics: testdata/naics_descriptions.xlsx
+  break:
+    fetch_concordance: UPDATE fixture SET C = NULL WHERE A = '212111'
+  expect:
+    fails_with: "NAICS concordance pairing has no 2022 code: 212111 Bituminous Coal and Lignite Surface Mining"
+
+- name: a pairing without a 2017 title is refused
+  risk: a 2017 industry is published with no title, so a split's piece is lost
+  fixtures:
+    fetch_concordance: testdata/naics_2017_to_2022.xlsx
+    fetch_naics: testdata/naics_descriptions.xlsx
+  break:
+    fetch_concordance: UPDATE fixture SET B = NULL WHERE A = '212111'
+  expect:
+    fails_with: "NAICS concordance pairing has no 2017 title: 212111"
+
+- name: a 2022 code the code list lacks is refused
+  risk: Census renumbers an industry in the descriptions and the crosswalk points 2017 data at a code census/naics_2022 does not have
+  fixtures:
+    fetch_concordance: testdata/naics_2017_to_2022.xlsx
+    fetch_naics: testdata/naics_descriptions.xlsx
+  break:
+    fetch_naics: DELETE FROM fixture WHERE A = '212114'
+  expect:
+    fails_with: "crosswalk: to_code not in code list: 212114"
+
+- name: a repeated pairing is refused
+  risk: Census repeats a pairing and the published key is not unique
+  fixtures:
+    fetch_concordance: testdata/naics_2017_to_2022.xlsx
+    fetch_naics: testdata/naics_descriptions.xlsx
+  break:
+    fetch_concordance: INSERT INTO fixture (row, A, B, C, D) VALUES (14, '111110', 'Soybean Farming', '111110', 'Soybean Farming')
+  expect:
+    fails_with: "crosswalk: repeated pair: 111110 -> 111110"

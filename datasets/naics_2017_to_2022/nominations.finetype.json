@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "resources": {
+    "naics_2017_to_2022": {
+      "from_code": {
+        "label": "representation.identifier.numeric_code",
+        "why": "A six-digit national industry code of the 2017 NAICS (212113), stored as text so a leading digit's meaning is kept. finetype has no NAICS type, so the column is nominated the label for a classification code whose digits carry meaning, rather than left to inference, which may read six digits as a number or a date."
+      },
+      "to_code": {
+        "label": "representation.identifier.numeric_code",
+        "why": "A six-digit national industry code of the 2022 NAICS (212114), a code in census/naics_2022. finetype has no NAICS type, so the column is nominated the label for a classification code whose digits carry meaning, rather than left to inference, which may read six digits as a number or a date."
+      },
+      "from_description": {
+        "label": "representation.text.plain_text",
+        "why": "The 2017 industry's title as Census prints it in the concordance, such as Soybean Farming. Inferred, finetype may label it an entity name, an organisation's or product's name, which it is not; it is prose naming a kind of business. census/naics_2022_titles nominates its code_description the same way."
+      },
+      "to_description": {
+        "label": "representation.text.plain_text",
+        "why": "The 2022 industry's title as Census prints it in the concordance, such as Surface Coal Mining. Inferred, finetype may label it an entity name, which it is not; it is prose naming a kind of business."
+      },
+      "from_edition": {
+        "label": "representation.text.word",
+        "why": "A closed set of one edition name, 2017, stored as text. Inferred, finetype labels it a year and the descriptor would type the column as a year; it names an edition of the classification, and is one short token."
+      },
+      "to_edition": {
+        "label": "representation.text.word",
+        "why": "A closed set of one edition name, 2022, stored as text. Inferred, finetype labels it a year and the descriptor would type the column as a year; it names an edition of the classification, and is one short token."
+      },
+      "release": {
+        "label": "representation.identifier.alphanumeric_id",
+        "why": "The NAICS edition the concordance bridges to, 2022, stored as text as every release is. Inferred, finetype reads the four digits as a year and the descriptor would type the column as a year; the value names an edition, not a point in time."
+      }
+    }
+  }
+}

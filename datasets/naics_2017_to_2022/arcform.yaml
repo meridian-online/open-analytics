@@ -1,0 +1,185 @@
+# The `census/naics_2017_to_2022` Protocol — the reproducible *definition* of how the U.S.
+# Census Bureau's 2017 to 2022 NAICS concordance is ingested: one row per pairing of a
+# 2017 national industry with a 2022 national industry, as Census publishes it. `arc run`
+# executes this manifest; one Run → one Dataset version. See ./README.md.
+#
+# CONFIG ONLY. Every step is a first-class `sql:` model or a typed `op:` operator (the
+# arcform catalog). The fetches are http_fetch; the SQL reads Census's two workbooks, the
+# concordance and the NAICS descriptions the code list is built from; the COPY is
+# parquet_export; datapackage_describe emits the descriptor; the shared edition crosswalk
+# contract in ../../contracts/ holds the crosswalk to the code list; finetype_validate
+# gates it; and stamp_descriptor writes the published Parquet with its descriptor in the
+# footer. Operator code lives in the arcform repo, not here.
+#
+# THE CODE LIST. The contract holds every 2022 code to the code list built in the same
+# Run. census/naics_2022 is a Protocol of its own (../naics), so this one fetches the same
+# Census descriptions workbook and builds the list with that Protocol's own model
+# (`sql: ../naics/models/load.sql`), as the NAICS index does. The 2017 edition is not
+# hosted: its codes are checked by their shape, and its titles ride on the crosswalk.
+#
+# TESTS. tests.yaml beside this file holds the Protocol's tests, which `arc test` runs
+# against the cut-down Census workbooks in testdata/, with no network and no publish.
+#
+# ONE WRITER PER FILE. The export and describe work on build/stage/; stamp_descriptor
+# alone writes the published build/naics_2017_to_2022.parquet and datapackage.json.
+#
+# THE RELEASE. Census's concordance states no release: its title names the two editions
+# and no date, and the only date the file carries is the save time Excel wrote into the
+# workbook's properties (2021-11-16), which is not Census's statement of a revision. The
+# concordance bridges to the fixed 2022 edition, so `release` is that edition, 2022, as
+# the NAICS index's is.
+#
+# PUBLISH. The last step, `publish` (ducklake_write), writes the table into the shared
+# open lake as one snapshot: the catalog, the data file and the table's readable Parquet
+# copy on R2 (public at https://openlake.meridian.online/). With all three R2 variables
+# set, from .env or the environment, EVERY `arc run` publishes into the live lake;
+# `arc run --publish` only makes a missing credential fail the run instead of publishing
+# into build/lake/. For local work keep .env absent and the variables unset. Keep the
+# credential outside this folder and export it for the publishing command only. Readers
+# need DuckDB 2.0 or later. It reads only what stamp_descriptor wrote, so it runs after it.
+#
+# Produces: build/naics_2017_to_2022.parquet  →  published as census/naics_2017_to_2022
+name: naics_2017_to_2022
+engine: duckdb
+# Kept in step with ../soc_2018, which pins the DuckDB that arc links (2.0), the writer of its published Parquet.
+engine_version: ">=2.0"
+db: build/naics_2017_to_2022.db
+# The R2 write credential, if a .env is present (see .env.example); the process environment also counts.
+dotenv: [.env]
+
+defaults:
+  retry:
+    max_attempts: 3
+    backoff_sec: 2.0
+
+steps:
+  # ── Fetch: Census's concordance, and the descriptions the code list is from ─────
+  - name: fetch_concordance
+    op: http_fetch@1
+    with:
+      url: https://www.census.gov/naics/concordances/2017_to_2022_NAICS.xlsx
+      out: build/census/2017_to_2022_NAICS.xlsx
+      headers:
+        User-Agent: "Meridian Protocol (open-analytics; research@meridian.online)"
+
+  # The path is the one ../naics/models/load.sql reads, relative to the Protocol folder.
+  - name: fetch_naics
+    op: http_fetch@1
+    with:
+      url: https://www.census.gov/naics/2022NAICS/2022_NAICS_Descriptions.xlsx
+      out: build/naics_desc.xlsx
+      headers:
+        User-Agent: "Meridian Protocol (open-analytics; research@meridian.online)"
+
+  # ── Code list: census/naics_2022's own model, over the same Census workbook ─────
+  - name: load_naics
+    sql: ../naics/models/load.sql
+    depends_on: [build/naics_desc.xlsx]
+    produces: [naics]
+
+  # ── Load: stage the pairings ────────────────────────────────────────────────────
+  # Fails the run on a title or header row that has moved, a value beyond column D, and
+  # a pairing missing a code or a title or with a code that is not six digits. See the
+  # model's header.
+  - name: load
+    sql: models/load.sql
+    depends_on: [build/census/2017_to_2022_NAICS.xlsx]
+    produces: [naics_concordance]
+
+  # ── Build: the crosswalk in the contract's columns ──────────────────────────────
+  - name: crosswalk
+    sql: models/crosswalk.sql
+    depends_on: [naics_concordance]
+    produces: [naics_2017_to_2022_out]
+
+  # ── Export: write the Parquet the later steps read ──────────────────────────────
+  # order_by the primary key (from_code, to_code) is a total order → reproducible bytes.
+  - name: export_naics_2017_to_2022
+    op: parquet_export@1
+    with:
+      input: naics_2017_to_2022_out
+      dest: build/stage/naics_2017_to_2022.parquet
+      compression: zstd
+      order_by: "from_code, to_code"
+
+  # ── Describe: EMIT the descriptor from the built Parquet ────────────────────────
+  - name: describe
+    op: datapackage_describe@1
+    with:
+      parquet: build/stage/naics_2017_to_2022.parquet
+      overrides: descriptor.overrides.json
+      nominations: nominations.finetype.json
+      out: build/stage/described.json
+
+  # ── Contract: hold the crosswalk to the edition crosswalk contract ──────────────
+  # check_inputs points the shared check at the exported crosswalk and the code list
+  # built in this Run, at the national-industry level Census pairs; the check fails the
+  # run on any broken rule (see contracts/README.md).
+  - name: check_inputs
+    sql: models/check_inputs.sql
+    depends_on: [build/stage/naics_2017_to_2022.parquet, naics]
+    produces: [contract_code_list, contract_crosswalk, contract_crosswalk_shape]
+
+  - name: check_crosswalk
+    sql: ../../contracts/check_crosswalk.sql
+    depends_on: [contract_crosswalk, contract_crosswalk_shape, contract_code_list]
+    produces: [contract_crosswalk_result]
+
+  # ── Validate: GATE the built Parquet against the self-derived finetype contract ─
+  - name: validate
+    op: finetype_validate@1
+    with:
+      parquet: build/stage/naics_2017_to_2022.parquet
+      schema: schema.finetype.json
+
+  # ── Self-describe: write the published Parquet with its descriptor inside ───────
+  - name: stamp_descriptor
+    op: uv@1
+    with:
+      script: ../../scripts/stamp_descriptor.py
+      sha256: a9356ac8d5412d94a940ebeef1e2508eaed6b77f1d923ada88edbacccf9d9b81
+      deps:
+        - duckdb==2.0.0
+      args:
+        - stamp
+        - --descriptor
+        - build/stage/described.json
+        - --parquet
+        - build/stage/naics_2017_to_2022.parquet
+        - --out
+        - build/naics_2017_to_2022.parquet
+        - --out-descriptor
+        - datapackage.json
+        - --carry-created
+      reads:
+        - build/stage/described.json
+        - build/stage/naics_2017_to_2022.parquet
+      produces:
+        - build/naics_2017_to_2022.parquet
+        - datapackage.json
+
+  # ── Publish: the table into the open lake, one snapshot ─────────────────────────
+  # Runs on every `arc run`. With R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY and R2_ACCOUNT_ID
+  # all set, every run publishes live; otherwise into build/lake/, and `arc run --publish`
+  # fails instead.
+  - name: publish
+    op: ducklake_write@1
+    with:
+      public_base: https://openlake.meridian.online/
+      catalog: catalog/open.ducklake
+      data_path: lake/
+      runs: runs/
+      manifest: manifest.json
+      local_catalog: build/lake/open.ducklake
+      tables:
+        - table: census.naics_2017_to_2022
+          from: build/naics_2017_to_2022.parquet
+          descriptor: datapackage.json
+          readable_copy: census/naics_2017_to_2022.parquet
+      credential:
+        type: r2
+        bucket: meridian-open
+        env:
+          key_id: R2_ACCESS_KEY_ID
+          secret: R2_SECRET_ACCESS_KEY
+          account_id: R2_ACCOUNT_ID
