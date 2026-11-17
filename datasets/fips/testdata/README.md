@@ -11,7 +11,7 @@ Cut-down copies of the three Census files the Protocol fetches, downloaded on 20
 
 The fixtures are named `.csv` so `arc test` can rewrite them for a `break:`; arc places each at the `.txt` path its step writes, which is where `load.sql` reads it and takes the vintage from the name. If `gazetteer_counties.csv` changes, rebuild the zip from it: copy it to `2026_Gaz_counties_national.txt` in an empty folder and run `zip -X gazetteer.zip 2026_Gaz_counties_national.txt` there.
 
-The lake fixtures were emitted from the open lake on 2026-11-17 with `python scripts/emit_descriptor.py --all --bundle <file>`, from the repository root, and need regenerating when a table they hold is republished with different declarations:
+The lake fixtures were emitted from the open lake on 2026-11-17 with `python scripts/emit_descriptor.py --all --bundle <file>`, from the repository root, with `census.naics_2022` replaced on 2026-11-18 by the descriptor its Protocol builds on the code-list contract, as the lake will hold it once that build is published, and need regenerating when a table they hold is republished with different declarations:
 
 | Fixture | Stands in for | Kept |
 |---|---|---|

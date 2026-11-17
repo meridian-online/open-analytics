@@ -2,13 +2,61 @@
   "version": 1,
   "resources": {
     "naics": {
+      "code": {
+        "label": "identity.industry.naics",
+        "why": "NAICS codes of two to six digits and the three sector ranges. Inferred, the share of two- and three-digit codes in the sample can move the label; nominated so it stays the NAICS type the table has carried since it was first published."
+      },
+      "code_display": {
+        "label": "identity.industry.naics",
+        "why": "The same values as code, nominated with it."
+      },
+      "parent_code": {
+        "label": "identity.industry.naics",
+        "why": "A NAICS code one level up, two to five characters, nominated with code."
+      },
       "description": {
         "label": "representation.text.plain_text",
-        "why": "The Census Bureau's own prose describing each industry, carried as free text and NULL where a code defers to its child. Inferred, finetype labels this column `unknown`, and an `unknown` field publishes no length bounds at all; the column is prose, so plain text is what it is."
+        "why": "Census's title for the code, such as Soybean Farming: free text, labelled as the other code lists label their descriptions. Inferred, finetype can read short titles as words or names."
+      },
+      "description_full": {
+        "label": "representation.text.plain_text",
+        "why": "The title in context, its ancestors' titles first, labelled with description."
+      },
+      "release": {
+        "label": "representation.identifier.alphanumeric_id",
+        "why": "The NAICS edition, 2022, stored as text as every code list's release is. Inferred, finetype reads the four digits as a year; the value names an edition, not a point in time."
+      },
+      "text_source": {
+        "label": "representation.text.word",
+        "why": "Whose text description is, always census: a closed set of one word, as the other code lists label it."
       },
       "corpus": {
         "label": "representation.text.plain_text",
-        "why": "A derived search field: title and description, lowercased, accent-stripped and concatenated. It is free text by construction, not a source attribute. Inferred, finetype labels it `unknown` and it publishes no length bounds."
+        "why": "The lowered, accent-stripped description_full the search reads, labelled with it."
+      },
+      "title": {
+        "label": "representation.text.plain_text",
+        "why": "Census's title, the same values as description, kept under the name the table published before the contract; nominated so it keeps the label it was published with."
+      },
+      "definition": {
+        "label": "representation.text.plain_text",
+        "why": "Census's paragraph defining the industry, free text, NULL where Census gives none. Inferred, finetype labelled this text `unknown` when it was the description column, and an `unknown` field publishes no length bounds."
+      },
+      "sector_code": {
+        "label": "identity.industry.naics",
+        "why": "The sector's NAICS code, two digits or a range, nominated with code."
+      },
+      "subsector_code": {
+        "label": "identity.industry.naics",
+        "why": "The subsector's three-digit NAICS code, nominated with code."
+      },
+      "industry_group_code": {
+        "label": "identity.industry.naics",
+        "why": "The industry group's four-digit NAICS code, nominated with code."
+      },
+      "naics_industry_code": {
+        "label": "identity.industry.naics",
+        "why": "The NAICS industry's five-digit code, nominated with code."
       }
     }
   }
