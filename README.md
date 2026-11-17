@@ -63,7 +63,7 @@ The emitter needs `duckdb` and `pyyaml`, and no credential; `--all --bundle FILE
 
 | Dataset | Rows | License | Source | Readable copy |
 |---|---|---|---|---|
-| GLEIF — Legal Entity Identifiers | 3.50M | CC0-1.0 | [GLEIF](https://www.gleif.org/) | [lei.parquet](https://openlake.meridian.online/gleif/lei.parquet) |
+| GLEIF — Legal Entity Identifiers | 3.5M | CC0-1.0 | [GLEIF](https://www.gleif.org/) | [lei.parquet](https://openlake.meridian.online/gleif/lei.parquet) |
 | SEC EDGAR — Company Tickers | 10K | Public domain | [SEC](https://www.sec.gov/) | [company_tickers_exchange.parquet](https://openlake.meridian.online/sec/company_tickers_exchange.parquet) |
 | NAICS — Industry Classification (2022) | 2,125 | Public domain | [U.S. Census Bureau](https://www.census.gov/naics/) | [naics_2022.parquet](https://openlake.meridian.online/census/naics_2022.parquet) |
 | NAICS 2017 to 2022 concordance | 1,150 | Public domain | [U.S. Census Bureau](https://www.census.gov/naics/) | [naics_2017_to_2022.parquet](https://openlake.meridian.online/census/naics_2017_to_2022.parquet) |
