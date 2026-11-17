@@ -83,6 +83,9 @@ class Scratch:
             (d / "build" / "leftover.parquet").write_text("x")
             (d / "arcform.yaml").write_text(arcform(tables))
             (d / "descriptor.overrides.json").write_text("{}")
+            for _, name in tables:
+                (d / name).write_text('{"committed": true}')
+            (d / "other.datapackage.json").write_text('{"committed": true}')
         (self.datasets / "label-agreement.json").write_text("{}")
 
     def run(self, *args: str, catalog=None) -> subprocess.CompletedProcess:
@@ -174,10 +177,56 @@ class Emit(unittest.TestCase):
             self.assertEqual(r.returncode, 0, r.stderr)
             self.assertIn("not yet published: bls.soc_2018", r.stderr)
             self.assertFalse((out / "datasets/soc_2018/soc_2018.datapackage.json").exists())
+            self.assertFalse((out / "datasets/soc_2018/other.datapackage.json").exists())
+            self.assertEqual(list((out / "datasets/soc_2018").glob("*datapackage.json")), [])
+            self.assertTrue((out / "datasets/fips/datapackage.json").is_file())
             r = s.run("--all", "--bundle", str(bundle))
             self.assertEqual(r.returncode, 0, r.stderr)
             self.assertIn("not yet published: bls.soc_2018", r.stderr)
             self.assertEqual(list(json.loads(bundle.read_text())), ["census.fips"])
+
+    def test_bad_manifest_entries_refused(self) -> None:
+        good = ENTRIES["census/fips"]
+        cases = {
+            "short hash": ({**good, "sha256": HEX[:16]}, "sha256"),
+            "prefixed hash": ({**good, "sha256": "sha256:" + HEX}, "sha256"),
+            "upper hash": ({**good, "sha256": HEX.upper()}, "sha256"),
+            "no bytes": ({k: v for k, v in good.items() if k != "bytes"}, "`bytes`"),
+            "no published": ({k: v for k, v in good.items() if k != "published"}, "`published`"),
+            "no sha256": ({k: v for k, v in good.items() if k != "sha256"}, "`sha256`"),
+        }
+        for label, (entry, word) in cases.items():
+            with self.subTest(label), tempfile.TemporaryDirectory() as tmp:
+                r = Scratch(tmp, entries={"census/fips": entry}).run("census.fips")
+                self.assertEqual(r.returncode, 1, r.stderr)
+                self.assertIn("census.fips", r.stderr)
+                self.assertIn(word, r.stderr)
+                self.assertNotIn("Traceback", r.stderr)
+
+    def test_manifest_entry_without_stored_descriptor_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            s = Scratch(tmp, stored={"census.fips": STORED["census.fips"]})
+            r = s.run("--all", "--bundle", str(Path(tmp) / "b.json"))
+            self.assertEqual(r.returncode, 1)
+            self.assertIn("bls.soc_2018", r.stderr)
+
+    def test_single_table_ignores_other_tables_gaps(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            s = Scratch(tmp, entries={"census/fips": ENTRIES["census/fips"]})
+            r = s.run("census.fips")
+            self.assertEqual(r.returncode, 0, r.stderr)
+
+    def test_one_encoding_for_every_mode(self) -> None:
+        stored = {"census.fips": descriptor("fips", FIPS_PATH)}
+        stored["census.fips"]["description"] = "Census\u2019s codes"
+        with tempfile.TemporaryDirectory() as tmp:
+            s = Scratch(tmp, stored=stored, entries={"census/fips": ENTRIES["census/fips"]})
+            single = s.run("census.fips").stdout
+            out = Path(tmp) / "out"
+            s.run("--all", "--tree", str(out))
+            tree = (out / "datasets/fips/datapackage.json").read_text(encoding="utf-8")
+            self.assertEqual(single, tree)
+            self.assertIn("Census\u2019s", single.encode().decode())
 
 
 if __name__ == "__main__":

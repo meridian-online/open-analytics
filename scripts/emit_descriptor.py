@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 import sys
 import urllib.request
@@ -72,26 +73,49 @@ def read_manifest(manifest: str) -> dict:
         raise Refused(f"cannot read the manifest {manifest}: {e}") from e
 
 
+HEX64 = re.compile(r"[0-9a-f]{64}")
+
+
 def full_descriptor(table: str, stored: dict, manifest: dict) -> dict:
     """`stored` plus `created`, and its sole resource's `bytes` and `hash`, from the manifest."""
     entry = manifest.get("datasets", {}).get(table.replace(".", "/"))
     if entry is None:
         raise Refused(f"{table}: the manifest has no entry for this table")
+    for key in ("published", "bytes", "sha256"):
+        if key not in entry:
+            raise Refused(f"{table}: the manifest entry has no `{key}`")
+    sha = entry["sha256"]
+    if not isinstance(sha, str) or not HEX64.fullmatch(sha):
+        raise Refused(
+            f"{table}: the manifest sha256 must be 64 lowercase hex characters, found {sha!r}"
+        )
     out = json.loads(json.dumps(stored))
     resources = out.get("resources") or []
     if len(resources) != 1:
         raise Refused(f"{table}: the stored descriptor has {len(resources)} resources, not one")
     out["created"] = entry["published"]
     resources[0]["bytes"] = entry["bytes"]
-    resources[0]["hash"] = f"sha256:{entry['sha256']}"
+    resources[0]["hash"] = f"sha256:{sha}"
     return out
 
 
-def load_descriptors(catalog: str, manifest: str) -> dict[str, dict]:
-    """Table name (`census.fips`) to its full descriptor, for every table in the lake."""
+def load_descriptors(
+    catalog: str, manifest: str, tables: set[str] | None = None
+) -> dict[str, dict]:
+    """Table name (`census.fips`) to its full descriptor, for `tables` or else every stored table.
+
+    A table asked for that the lake does not store is left out; only a table that is
+    returned needs a manifest entry. A table the manifest lists, among `tables`, with no
+    stored descriptor is the lake contradicting itself and is refused.
+    """
     stored = read_stored(catalog)
     m = read_manifest(manifest)
-    return {t: full_descriptor(t, d, m) for t, d in stored.items()}
+    chosen = set(stored) if tables is None else tables & set(stored)
+    if tables is not None:
+        published = {k.replace("/", ".", 1) for k in m.get("datasets", {})}
+        for t in sorted((tables - set(stored)) & published):
+            raise Refused(f"{t}: the manifest lists this table but meta.descriptors has no row for it")
+    return {t: full_descriptor(t, stored[t], m) for t in sorted(chosen)}
 
 
 def protocol_tables(datasets_dir: Path) -> list[tuple[str, str, str]]:
@@ -107,9 +131,14 @@ def protocol_tables(datasets_dir: Path) -> list[tuple[str, str, str]]:
     return found
 
 
+def encode(value: object) -> str:
+    """The one JSON encoding every output mode uses."""
+    return json.dumps(value, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
+
+
 def write_json(path: Path, value: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(value, indent=2, sort_keys=True, ensure_ascii=False) + "\n")
+    path.write_text(encode(value), encoding="utf-8")
 
 
 def write_bundle(descriptors: dict[str, dict], out: Path) -> None:
@@ -120,12 +149,22 @@ def write_tree(
     datasets_dir: Path, descriptors: dict[str, dict], out: Path, bypass_edge: bool
 ) -> None:
     dest = out / "datasets"
-    shutil.copytree(
-        datasets_dir,
-        dest,
-        ignore=shutil.ignore_patterns("build"),
-        dirs_exist_ok=True,
-    )
+    root = Path(datasets_dir).resolve()
+    publishing = {slug for slug, _, _ in protocol_tables(datasets_dir)}
+    named = {(slug, filename) for slug, _, filename in protocol_tables(datasets_dir)}
+
+    def ignore(directory: str, names: list[str]) -> set[str]:
+        skip = {n for n in names if n == "build"}
+        d = Path(directory).resolve()
+        if d.parent == root and d.name in publishing:
+            skip |= {
+                n
+                for n in names
+                if n.endswith("datapackage.json") or (d.name, n) in named
+            }
+        return skip
+
+    shutil.copytree(datasets_dir, dest, ignore=ignore, dirs_exist_ok=True)
     for slug, table, filename in protocol_tables(datasets_dir):
         d = descriptors.get(table)
         if d is None:
@@ -158,20 +197,20 @@ def main() -> int:
         ap.error("--all needs --bundle or --tree")
 
     try:
-        descriptors = load_descriptors(args.catalog, args.manifest)
         if args.table:
+            descriptors = load_descriptors(args.catalog, args.manifest, {args.table})
             if args.table not in descriptors:
                 raise Refused(f"{args.table}: not in the lake's meta.descriptors")
-            text = json.dumps(descriptors[args.table], indent=2, sort_keys=True) + "\n"
+            text = encode(descriptors[args.table])
             if args.out:
-                args.out.write_text(text)
+                args.out.write_text(text, encoding="utf-8")
             else:
                 sys.stdout.write(text)
             return 0
         wanted = {t for _, t, _ in protocol_tables(args.datasets)}
+        descriptors = load_descriptors(args.catalog, args.manifest, wanted)
         for table in sorted(wanted - set(descriptors)):
             print(f"not yet published: {table}", file=sys.stderr)
-        descriptors = {t: d for t, d in descriptors.items() if t in wanted}
         if args.bundle:
             write_bundle(descriptors, args.bundle)
         if args.tree:
