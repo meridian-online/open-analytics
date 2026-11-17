@@ -450,6 +450,9 @@ jobs:
         protocol: [fips, ourairports, naics_2022_titles, naics_2017_to_2022]
     steps:
       - uses: actions/checkout@v4
+        with:
+          # check_before_publish reads the overrides at the last commit before the lake's created, so a shallow clone exits 2.
+          fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ env.ARC_RUST_TOOLCHAIN }}
