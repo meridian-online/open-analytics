@@ -21,6 +21,7 @@ It holds three things per table: the table itself, under the catalogue's data pa
 The last step of the Protocol is `publish`, of `op: ducklake_write@1`. In `datasets/soc_2018/arcform.yaml` it names the lake (`public_base: https://openlake.meridian.online/`, `catalog: catalog/open.ducklake`, `data_path: lake/`, `runs: runs/`, `manifest: manifest.json`), a local fallback (`local_catalog: build/lake/open.ducklake`), the tables, and the credential:
 
 - `tables`: one entry per table, naming the SQL name it is published as (`bls.soc_2018`), the stamped Parquet the stamp step wrote (`build/soc_2018.parquet`), its descriptor (`build/soc_2018.datapackage.json`, under `build/` and never committed) and its readable copy (`bls/soc_2018.parquet`).
+- `on_descriptor_change: fail`, on every table: before writing, the step compares the table's new descriptor with the one `meta.descriptors` holds, ignoring `created`, the resource's `bytes` and `hash` and each field's `x-finetype-confidence`, and prints each difference. It refuses the publish, writing nothing, when a field present in both has an `x-finetype-label` that moved, appeared or disappeared and the new field is not marked `x-finetype-nominated: true`; nominating the label in `nominations.finetype.json`, a committed input, is the fix. A labelled field new to the table, and a table the lake does not hold yet, are only reported. This catches finetype's inference drifting on the same data, which moved NDC's, Schedule B's and FIPS's labels before.
 - `credential`: `type: r2`, `bucket: meridian-open`, and the names of the three environment variables that carry it, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` and `R2_ACCOUNT_ID`.
 
 The step reads only what the stamp steps wrote, so it runs after them, and after `check_before_publish` (see "Before the publish" below). It writes every table the Protocol names as one snapshot, upserting each on the `primaryKey` its descriptor declares (`code` for a code list, `entry_id` for a title index, `from_code, to_code` for a crosswalk), and commits nothing it has not finished: a publish that fails leaves the catalogue as it was. A Run over unchanged data commits nothing and says so. arc sets the readable copies and `manifest.json` entries in the same step, and writes `manifest.json`, the readable copies and any extra files with `cache-control: public, max-age=60` (readable copies and extra files from arcform PR 173 on), so a reader may see the previous version for up to a minute.
@@ -39,8 +40,9 @@ With any of the three variables unset, `arc run` still finishes green. The step 
 (set -a; . /path/outside/the/repo/openlake.env; set +a; arc run --publish)
 ```
 
-Two things a publisher must do first:
+Three things a publisher must do first:
 
+- **Publish with an `arc` at `ARC_REV` in `.github/workflows/descriptors.yml` or later.** Every Protocol sets `on_descriptor_change`, which an older `arc` refuses as an unknown field: `cargo install --locked --git https://github.com/meridian-online/arcform --rev <ARC_REV> --bin arc`.
 - **A full run needs finetype's DuckDB extension built for DuckDB 2.0.** The `describe` and `validate` steps load it from `FINETYPE_DUCKDB_EXT`, which must point at the extension built for the DuckDB the Protocol runs on; an extension built for 1.x does not load.
 - **After moving a Protocol to a new arc or DuckDB, force a rebuild before publishing.** arc skips a step it judges fresh, and a change of engine alone does not make a step stale, so the Parquet built by the old engine would be published as it stands. Run `arc run --force` with the credential unset, which rebuilds every step and publishes only locally, then publish. This happened with SOC: its builds had been written by DuckDB 1.5.6, a forced rebuild rewrote them on 2.0.0, and the descriptors were restamped from the new Parquet before the live publish.
 
@@ -239,7 +241,6 @@ edgar_gleif published on 2026-11-17, from its second pull request's branch, afte
 - **Every open Protocol has moved.** edgar_gleif was the last, on 2026-11-17 (see its section above). Each publishes by `arc run` alone, on DuckDB 2.0, and the engine check holds its footers to that pin.
 - **infra's publish scripts and workflow can be deleted**, now that all of them have moved. Until they are, they refuse to run.
 - **The website reads the catalogue** instead of `manifest.json`, at which point the manifest and its stale fields retire, and the emitter takes `created`, `bytes` and `hash` from the catalogue instead. The SOC dataset pages come with that work.
-- **arc's `publish` gains a descriptor diff**, `on_descriptor_change` on `ducklake_write@1`: report every difference from the stored descriptor by default, and with `fail`, refuse a finetype label that moved on a field the new descriptor does not nominate. Then `ARC_REV` moves here and each Protocol sets the option.
 - **An `arc` command to emit a descriptor.** `scripts/emit_descriptor.py` does it until then.
 - **The SOC per-table descriptors join label agreement**, with the reasons their labels need (see "Before the publish").
 - **Each crosswalk's `x-joins` links take the website's address at its dataset's next publish** (see "The address a join links to").

@@ -122,13 +122,15 @@ env:
   # runtime.
   FRICTIONLESS_VERSION: "5.19.0"
   # The `arc` revision `arc-manifest-load` links, by git rev because `arc` has no
-  # release channel. It is brightfield's pin: brightfield loads these same manifests
-  # through its own `arc`, and two pins that drift give two answers to whether a manifest
-  # is valid. scripts/arc_manifest_load/Cargo.toml carries the rev once and says how to
+  # release channel. brightfield loads these same manifests through its own `arc`, and
+  # two pins that drift can give two answers to whether a manifest is valid; this one is
+  # ahead of brightfield's because every Protocol here sets `ducklake_write@1`'s
+  # `on_descriptor_change`, which older revisions refuse. It is also the `arc` that
+  # `protocol-tests` builds, and a publisher's `arc` must be this revision or later. scripts/arc_manifest_load/Cargo.toml carries the rev once and says how to
   # move all three literals together; `arc-manifest-load` refuses a Cargo.lock whose
   # arcform sources are not all at this rev, and `--locked` refuses a Cargo.toml the lock
   # does not match.
-  ARC_REV: "f57ff3c4b37326704aa94667bfd04fe8ece01e1d"
+  ARC_REV: "c57f7bf2d4414827f32b741343400f4e823124f6"
   # The toolchain and the DuckDB C library arcform's own CI builds `arc` with at
   # `ARC_REV`, and they move with it. The loader calls no DuckDB function; it links the
   # library because `arc` does. This is a separate literal from `DUCKDB_VERSION`, which
