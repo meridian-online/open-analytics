@@ -96,4 +96,4 @@ The last step publishes `census.naics_2017_to_2022` into the open lake (<https:/
 
 ## Run
 
-Needs the `arc` binary at a revision with `arc test` (arcform main from `f57ff3c`; no tagged release has it yet), `duckdb`, `uv` (for the stamp), and `finetype` with its DuckDB extension (`FINETYPE_DUCKDB_EXT`): `arc run`, and `arc test` for the tests. The full run over Census's two workbooks takes under a minute; the tests take under three minutes.
+Needs the `arc` binary at a revision with `arc test` (arcform main from `c57f7bf`, the `ARC_REV` in `.github/workflows/descriptors.yml`, since every Protocol sets `on_descriptor_change`; no tagged release has it yet), `duckdb`, `uv` (for the stamp), and `finetype` with its DuckDB extension (`FINETYPE_DUCKDB_EXT`): `arc run`, and `arc test` for the tests. The full run over Census's two workbooks takes under a minute; the tests take under three minutes.

@@ -92,4 +92,4 @@ The last step publishes `census.fips` into the open lake (<https://openlake.meri
 
 ## Run
 
-Needs the `arc` binary at a revision with `arc test` (arcform main from `f57ff3c`; no tagged release has it yet), `duckdb`, `uv` (for `check_code_list` and the stamp), and `finetype` with its DuckDB extension (`FINETYPE_DUCKDB_EXT`): `arc run`, and `arc test` for the tests. The full run over Census's three files takes a few seconds; the tests take about two minutes.
+Needs the `arc` binary at a revision with `arc test` (arcform main from `c57f7bf`, the `ARC_REV` in `.github/workflows/descriptors.yml`, since every Protocol sets `on_descriptor_change`; no tagged release has it yet), `duckdb`, `uv` (for `check_code_list` and the stamp), and `finetype` with its DuckDB extension (`FINETYPE_DUCKDB_EXT`): `arc run`, and `arc test` for the tests. The full run over Census's three files takes a few seconds; the tests take about two minutes.

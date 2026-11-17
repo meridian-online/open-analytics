@@ -104,4 +104,4 @@ The last step publishes `library.ourairports` into the open lake (<https://openl
 
 ## Run
 
-Needs the `arc` binary at a revision with `arc test` (arcform main from `f57ff3c`; no tagged release has it yet), `duckdb`, `uv` (for `check_code_list` and the stamp), and `finetype` with its DuckDB extension (`FINETYPE_DUCKDB_EXT`): `arc run`, and `arc test` for the tests. The full run over OurAirports' three files takes under a minute; the tests take about five minutes.
+Needs the `arc` binary at a revision with `arc test` (arcform main from `c57f7bf`, the `ARC_REV` in `.github/workflows/descriptors.yml`, since every Protocol sets `on_descriptor_change`; no tagged release has it yet), `duckdb`, `uv` (for `check_code_list` and the stamp), and `finetype` with its DuckDB extension (`FINETYPE_DUCKDB_EXT`): `arc run`, and `arc test` for the tests. The full run over OurAirports' three files takes under a minute; the tests take about five minutes.
