@@ -149,13 +149,14 @@ class Scratch(unittest.TestCase):
         descriptor.write_text(json.dumps(document, indent=2) + "\n")
         self.built.append((descriptor, parquet))
 
-    def commit(self) -> None:
-        """Commit the scratch repository as it stands: the overrides check reads HEAD."""
+    def commit(self, when: str | None = None) -> None:
+        """Commit the scratch repository as it stands: the overrides check reads git."""
         git = ["git", "-C", str(self.root), "-c", "user.name=t", "-c", "user.email=t@example.test"]
         if not (self.root / ".git").exists():
             subprocess.run(["git", "init", "-q", str(self.root)], check=True)
+        env = {**os.environ, **({"GIT_AUTHOR_DATE": when, "GIT_COMMITTER_DATE": when} if when else {})}
         subprocess.run([*git, "add", "-A"], check=True, capture_output=True)
-        subprocess.run([*git, "commit", "-q", "--allow-empty", "-m", "scratch"], check=True, capture_output=True)
+        subprocess.run([*git, "commit", "-q", "--allow-empty", "-m", "scratch"], check=True, capture_output=True, env=env)
 
     def sidecar(self, slug: str, fields: dict[str, Any], name: str = "descriptor.overrides.json") -> None:
         (self.datasets / slug / name).write_text(json.dumps({"fields": fields}, indent=2) + "\n")
@@ -429,64 +430,90 @@ class ACheckThatCannotRun(Scratch):
         self.assertIn("FAILED  frictionless (exit 2)", out)
 
 
-class OverridesAtHead(Scratch):
+class OverridesRatchet(Scratch):
     """The ratchet's refusal, moved to where a descriptor is regenerated now.
 
-    The built descriptor's `code` carries `^[0-9]{2}$` (see `code_list`). Each case sets
-    what the overrides held at HEAD and in the working tree, and nothing else differs.
+    The lake's `t.alpha` was published at FEB. The sidecar at the last commit before that
+    is the base; HEAD's sidecar is what the Run's describe step applied. The built
+    descriptor's `code` carries `^[0-9]{2}$` unless a case says otherwise.
     """
 
+    JAN, FEB, MAR = "2026-01-01T00:00:00Z", "2026-02-01T00:00:00Z", "2026-03-01T00:00:00Z"
     TWO = {"code": {"constraints": {"pattern": "^[0-9]{2}$"}}}
     ANY = {"code": {"constraints": {"pattern": "^[0-9]+$"}}}
+    LOOSE = {"pattern": "^[0-9]+$"}
+
+    def published(self) -> None:
+        self.two_code_lists()
+        self.bundle["t.alpha"]["created"] = self.FEB
+        # The sibling declares the looser pattern too, so label agreement has nothing to say.
+        self.bundle["t.beta"] = code_list("beta", "t.beta", constraints=self.LOOSE)
 
     def overrides(self, result: subprocess.CompletedProcess[str], report: dict[str, Any] | None) -> dict[str, Any]:
         self.assertIsNotNone(report, self.both(result))
         return next(c for c in report["checks"] if c["check"] == "overrides")
 
-    def test_a_built_descriptor_carrying_what_head_holds_passes(self) -> None:
-        self.two_code_lists()
+    def test_a_built_descriptor_carrying_what_the_base_held_passes(self) -> None:
+        self.published()
         self.sidecar("alpha", self.TWO)
+        self.commit(self.JAN)
+        self.bundle["t.beta"] = code_list("beta", "t.beta")
         self.build("alpha", "datapackage.json", code_list("alpha", "t.alpha"))
-        result, report = self.run_check()
+        result, report = self.run_check(commit=False)
         self.assertEqual(result.returncode, EXIT_OK, self.both(result))
-        self.assertChecks(report, label_agreement=True, frictionless=True, descriptors=True)
-        self.assertIn("0 hand-held constraint(s) replaced or ignored; 1 held at HEAD", self.overrides(result, report)["output"])
+        self.assertIn("base descriptor.overrides.json at", self.overrides(result, report)["output"])
 
-    def test_a_constraint_head_holds_and_the_build_lost_is_refused(self) -> None:
-        """Dropped from the working sidecar and regenerated looser: main's `replaced`."""
-        self.two_code_lists()
+    def test_a_sidecar_entry_dropped_and_committed_then_regenerated_looser_is_refused(self) -> None:
+        """Main's `replaced`: the drop merged before the Run, and the Run regenerates looser."""
+        self.published()
         self.sidecar("alpha", self.TWO)
-        self.commit()
+        self.commit(self.JAN)
         self.sidecar("alpha", {})
-        # The sibling declares the same, so label agreement has nothing to say.
-        self.bundle["t.beta"] = code_list("beta", "t.beta", constraints={"pattern": "^[0-9]+$"})
-        self.build("alpha", "datapackage.json", code_list("alpha", "t.alpha", constraints={"pattern": "^[0-9]+$"}))
+        self.commit(self.MAR)
+        self.build("alpha", "datapackage.json", code_list("alpha", "t.alpha", constraints=self.LOOSE))
         result, report = self.run_check(commit=False)
         self.assertEqual(result.returncode, EXIT_FAILED, self.both(result))
         self.assertChecks(report, label_agreement=True, frictionless=True, descriptors=True, overrides=False)
-        self.assertIn("FAILED  overrides", result.stdout)
+        check = self.overrides(result, report)
+        self.assertEqual([v["kind"] for v in check["findings"]["violations"]], ["replaced"])
         self.assertIn("alpha/datapackage.json.code: constraints.pattern", result.stdout)
-        self.assertEqual([v["kind"] for v in self.overrides(result, report)["findings"]["violations"]], ["replaced"])
+        self.assertIn("the last commit before t.alpha's created 2026-02-01T00:00:00Z", check["output"])
+
+    def test_the_looser_value_declared_in_the_sidecar_passes(self) -> None:
+        self.published()
+        self.sidecar("alpha", self.TWO)
+        self.commit(self.JAN)
+        self.sidecar("alpha", self.ANY)
+        self.commit(self.MAR)
+        self.build("alpha", "datapackage.json", code_list("alpha", "t.alpha", constraints=self.LOOSE))
+        result, report = self.run_check(commit=False)
+        self.assertEqual(result.returncode, EXIT_OK, self.both(result))
 
     def test_a_constraint_head_holds_that_the_build_did_not_apply_is_refused(self) -> None:
-        self.two_code_lists()
+        self.published()
         self.sidecar("alpha", self.ANY)
+        self.commit(self.JAN)
         self.build("alpha", "datapackage.json", code_list("alpha", "t.alpha"))
-        result, report = self.run_check()
-        self.assertEqual(result.returncode, EXIT_FAILED, self.both(result))
-        self.assertChecks(report, label_agreement=True, frictionless=True, descriptors=True, overrides=False)
+        result, report = self.run_check(commit=False)
+        self.assertFalse(self.overrides(result, report)["passed"])
+        self.assertIn("constraints.pattern", self.overrides(result, report)["output"])
 
-    def test_a_constraint_moved_in_the_sidecar_passes(self) -> None:
-        """Moving a constraint in the sidecar, where the diff shows it, is not refused."""
-        self.two_code_lists()
+    def test_a_first_publish_has_no_base_and_only_ignored_applies(self) -> None:
+        self.two_code_lists(alpha_in_lake=False)
+        self.bundle["t.beta"] = code_list("beta", "t.beta", constraints=self.LOOSE)
         self.sidecar("alpha", self.TWO)
-        self.commit()
-        self.sidecar("alpha", self.ANY)
-        # The sibling declares the same, so label agreement has nothing to say.
-        self.bundle["t.beta"] = code_list("beta", "t.beta", constraints={"pattern": "^[0-9]+$"})
-        self.build("alpha", "datapackage.json", code_list("alpha", "t.alpha", constraints={"pattern": "^[0-9]+$"}))
+        self.commit(self.JAN)
+        self.sidecar("alpha", {})
+        self.commit(self.MAR)
+        self.build("alpha", "datapackage.json", code_list("alpha", "t.alpha", constraints=self.LOOSE))
         result, report = self.run_check(commit=False)
         self.assertEqual(result.returncode, EXIT_OK, self.both(result))
+        self.assertIn("no base (t.alpha not in the lake yet), so only `ignored` applies", self.overrides(result, report)["output"])
+        # And `ignored` still applies: HEAD's sidecar declares a value the build does not carry.
+        self.sidecar("alpha", self.TWO)
+        self.commit(self.MAR)
+        result, report = self.run_check(commit=False)
+        self.assertFalse(self.overrides(result, report)["passed"])
 
     def test_a_per_table_descriptor_reads_its_own_sidecar(self) -> None:
         self.two_code_lists()

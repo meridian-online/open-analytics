@@ -19,17 +19,21 @@ Run built to the overrides committed at HEAD:
                      licence rules, read against the local Parquet. The catalogue rule
                      is the lake check's.
   overrides        — the constraint ratchet's rules (`check_constraint_ratchet.py`) on
-                     each built descriptor, with HEAD's overrides sidecar as the
-                     predecessor: a constraint HEAD's `descriptor.overrides.json` (or
-                     `<name>.overrides.json`) holds that the built descriptor no longer
-                     carries is refused unless the working sidecar declares the new
-                     value (`replaced`), and so is a constraint the working sidecar
-                     declares that the built descriptor does not carry (`ignored`).
-                     Before descriptors left the repository, the ratchet refused a
-                     regenerated committed descriptor this way; the Run is where a
-                     descriptor is regenerated now. A sidecar edit alone is still never
-                     refused. The Protocol must be in a git checkout: with no HEAD there
-                     is no predecessor, and the check cannot run (exit 2).
+                     each built descriptor. `replaced`: a constraint the overrides
+                     sidecar (`descriptor.overrides.json`, or `<name>.overrides.json`)
+                     held when the lake's current table was published, which the built
+                     descriptor no longer carries, is refused unless the sidecar at
+                     HEAD declares the new value. That base is the sidecar at the last
+                     first-parent commit before the stored descriptor's `created` (the
+                     lake's run records name no commit); a table the lake does not hold
+                     yet has no base. `ignored`: a constraint HEAD's sidecar declares
+                     that the built descriptor does not carry is refused. This is the
+                     refusal the ratchet made of a regenerated committed descriptor
+                     before descriptors left the repository, so a sidecar entry
+                     dropped and merged is refused at the next Run that regenerates
+                     the descriptor looser. A sidecar edit alone is never refused. The
+                     output names the base used. The Protocol must be in a git checkout
+                     (exit 2 otherwise).
 
     check_before_publish.py --datasets-dir ../../datasets --slug <slug> \\
         --lake-bundle build/lake_descriptors.json \\
@@ -195,43 +199,67 @@ def sidecar_for(filename: str) -> str:
     return filename.removesuffix(PER_TABLE_SUFFIX) + ".overrides.json"
 
 
+def base_commit(root: Path, created: str | None) -> str | None:
+    """The last first-parent commit on the current branch before `created`, or None."""
+    if not created:
+        return None
+    done = check_constraint_ratchet.run_git(root, "rev-list", "-1", "--first-parent", f"--before={created}", "HEAD")
+    if done.returncode != 0:
+        return None
+    return done.stdout.strip() or None
+
+
 def overrides_main(argv: list[str]) -> int:
-    """The constraint ratchet on each built descriptor, against HEAD's overrides. Exit 0, 1 or 2."""
+    """The constraint ratchet on each built descriptor. Exit 0, 1 or 2.
+
+    `--descriptor PATH=TABLE`: the built descriptor and the table it publishes, whose
+    stored descriptor in `--lake-bundle` dates the base.
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument("--datasets-dir", type=Path, required=True)
     parser.add_argument("--slug", required=True)
-    parser.add_argument("--descriptor", type=Path, action="append", required=True)
+    parser.add_argument("--lake-bundle", type=Path, required=True)
+    parser.add_argument("--descriptor", action="append", required=True, metavar="PATH=TABLE")
     parser.add_argument("--json", type=Path, required=True)
     args = parser.parse_args(argv)
     ratchet = check_constraint_ratchet
     findings: list[Any] = []
-    held_count = 0
+    bases: dict[str, str] = {}
     try:
+        bundle = read_json(args.lake_bundle, "the lake bundle")
         root = ratchet.repo_root(args.datasets_dir)
-        sha = ratchet.resolve_base(root, "HEAD")
-        for descriptor in args.descriptor:
-            sidecar = args.datasets_dir / args.slug / sidecar_for(descriptor.name)
-            package = f"{args.slug}/{descriptor.name}"
-            built = ratchet.fields_of(ratchet.read_working(descriptor) or {}, str(descriptor))
-            base_held = ratchet.held_by(ratchet.read_at(root, sha, sidecar), f"{sidecar.name} at HEAD")
-            head_held = ratchet.held_by(ratchet.read_working(sidecar), str(sidecar))
-            held_count += sum(len(keys) for keys in base_held.values())
+        head = ratchet.resolve_base(root, "HEAD")
+        for value in args.descriptor:
+            descriptor, _, table = value.partition("=")
+            descriptor_path = Path(descriptor)
+            sidecar = args.datasets_dir / args.slug / sidecar_for(descriptor_path.name)
+            package = f"{args.slug}/{descriptor_path.name}"
+            built = ratchet.fields_of(ratchet.read_working(descriptor_path) or {}, str(descriptor_path))
+            head_held = ratchet.held_by(ratchet.read_at(root, head, sidecar), f"{sidecar.name} at HEAD")
+            stored = bundle.get(table) if isinstance(bundle, dict) else None
+            created = stored.get("created") if isinstance(stored, dict) else None
+            base = base_commit(root, created)
+            if base is None:
+                why = "not in the lake yet" if stored is None else f"no commit before its created {created!r}"
+                bases[package] = f"no base ({table} {why}), so only `ignored` applies"
+                base_held = None
+            else:
+                bases[package] = f"{sidecar.name} at {base[:12]}, the last commit before {table}'s created {created}"
+                base_held = ratchet.held_by(ratchet.read_at(root, base, sidecar), f"{sidecar.name} at {base[:12]}")
             found, _ = ratchet.refusals(package, base_held, built, head_held)
             findings.extend(found)
-    except ratchet.CheckError as exc:
+    except (ratchet.CheckError, Fault) as exc:
         print(f"overrides: {exc}")
         return EXIT_ERROR
     args.json.write_text(
-        json.dumps({"base_sha": sha, "held_at_head": held_count, "violations": [vars(f) for f in findings]}, indent=2)
-        + "\n",
+        json.dumps({"head_sha": head, "bases": bases, "violations": [vars(f) for f in findings]}, indent=2) + "\n",
         encoding="utf-8",
     )
+    for package, base in bases.items():
+        print(f"overrides: {package}: base {base}")
     for finding in findings:
         print(finding.line())
-    print(
-        f"overrides: {len(findings)} hand-held constraint(s) replaced or ignored; "
-        f"{held_count} held at HEAD ({sha[:12]})"
-    )
+    print(f"overrides: {len(findings)} hand-held constraint(s) replaced or ignored")
     return EXIT_FAILED if findings else EXIT_OK
 
 
@@ -284,6 +312,7 @@ def main(argv: list[str] | None = None) -> int:
 
     datasets = TREE / "datasets"
     packages = TREE / "packages"
+    tables = {filename: table for s, table, filename in emit_descriptor.protocol_tables(args.datasets_dir) if s == args.slug}
     only = [arg for name in names for arg in ("--only", name)]
     checks = [
         run(
@@ -321,7 +350,9 @@ def main(argv: list[str] | None = None) -> int:
                 str(args.datasets_dir),
                 "--slug",
                 args.slug,
-                *(arg for descriptor, _ in built for arg in ("--descriptor", str(descriptor))),
+                "--lake-bundle",
+                str(args.lake_bundle),
+                *(arg for descriptor, _ in built for arg in ("--descriptor", f"{descriptor}={tables[descriptor.name]}")),
             ],
             TREE / "overrides.json",
         ),

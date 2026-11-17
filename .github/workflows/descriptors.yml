@@ -5,8 +5,8 @@
 #   Before a publish, in the Protocol's own Run. `check_before_publish.py` holds the
 #   built descriptor to the built Parquet (fields, types, constraints, key, bytes,
 #   self-description, licence, licence notice), puts it through Frictionless, holds its
-#   labels to every other table's in the lake with label agreement `--strict`, and holds
-#   it to the constraints HEAD's overrides sidecar holds (the ratchet's rules). A
+#   labels to every other table's in the lake with label agreement `--strict`, and runs
+#   the constraint ratchet on it against the overrides sidecar (see below). A
 #   refusal stops the Run before anything is written. A code-list Protocol also runs
 #   `check_code_list.py` on its built file.
 #
@@ -18,10 +18,11 @@
 #   against a repository input `main` has changed since the publish is reported as
 #   awaiting publish. `scripts/lake_check.py` says how each is sorted.
 #
-#   The ratchet's other half, a regenerated descriptor that lost a constraint HEAD's
-#   overrides hold, is refused in the Run by `check_before_publish.py`, where a
-#   descriptor is regenerated now. A pull request that only edits overrides is refused
-#   by nothing, as before.
+#   The ratchet's other half is refused in the Run by `check_before_publish.py`, where
+#   a descriptor is regenerated now: a built descriptor that lost a constraint the
+#   sidecar held when the lake's table was published (the sidecar at the last commit
+#   before its `created`), unless HEAD's sidecar declares the new value. A pull request
+#   that only edits overrides is refused by nothing, as before.
 #
 # What stays here is what can be judged without the lake, and it is mostly self-tests.
 # Each builds scratch inputs with a deliberate disagreement and asserts the exit status

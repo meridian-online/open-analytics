@@ -350,6 +350,30 @@ class AdapterTest(unittest.TestCase):
         text = lc.summary([], [], {"engine": 1}, notes)
         self.assertIn("widgets/datapackage.json is held to its Protocol's pin at HEAD", text)
 
+    def test_a_run_that_is_not_an_object_takes_the_head_pin_path(self) -> None:
+        self.package("widgets", [{"name": "n", "type": "integer"}], "SELECT 1 AS n")
+        self.head_pin("9.9.9")
+        manifest = Path(self.published_by("9.9.9"))
+        document = json.loads(manifest.read_text())
+        document["datasets"]["t/widgets"]["run"] = "x"
+        manifest.write_text(json.dumps(document))
+        ran, found, notes = lc.check_engine(self.tree(), self.work, str(manifest))
+        self.assertEqual(len(notes), 1, ran.log)
+        self.assertIn("names no run record", notes[0])
+        self.assertEqual(found[0].inputs, ["datasets/widgets/arcform.yaml"])
+
+    def test_a_run_record_naming_no_stamp_pin_takes_the_head_pin_path(self) -> None:
+        self.package("widgets", [{"name": "n", "type": "integer"}], "SELECT 1 AS n")
+        self.head_pin("9.9.9")
+        manifest = self.published_by("9.9.9")
+        original = lc.read_source
+        lc.read_source = lambda where: {"steps": []} if where == self.RECORD else original(where)
+        ran, found, notes = lc.check_engine(self.tree(), self.work, manifest)
+        self.assertEqual(len(notes), 1, ran.log)
+        self.assertIn("names no stamp step's duckdb pin", notes[0])
+        self.assertFalse(found[0].lake_only)
+        self.assertEqual(found[0].inputs, ["datasets/widgets/arcform.yaml"])
+
     def test_a_relative_record_resolves_against_the_manifest_url_never_a_local_path(self) -> None:
         self.assertEqual(lc.record_url("runs/a.json", "https://lake.example/manifest.json?v=1"), "https://lake.example/runs/a.json")
         self.assertEqual(lc.record_url("runs/a.json", "/some/local/manifest.json"), "https://openlake.meridian.online/runs/a.json")

@@ -341,15 +341,18 @@ def snapshot_pins(manifest: dict[str, Any], plain_url: str, manifest_source: str
 
     Read from the lake's own record of that Run (`manifest.json`'s `run.record`), so the
     pin is the one that wrote the object, not `main`'s. `pins` is None when the manifest
-    has no entry or names no record for it, or the record cannot be read.
+    has no entry or names no record for it, the record cannot be read, or it names no
+    stamp step's `duckdb==` pin.
     """
     for entry in (manifest.get("datasets") or {}).values():
         if str(entry.get("url", "")).split("?", 1)[0] != plain_url:
             continue
-        run_ref = entry.get("run") or {}
-        if not run_ref.get("record"):
+        run_ref = entry.get("run")
+        run_ref = run_ref if isinstance(run_ref, dict) else {}  # as publish_dataset.py's trace_entry reads it
+        reference = run_ref.get("record")
+        if not isinstance(reference, str) or not reference.strip():
             return Snapshot(None, "the manifest names no run record for it")
-        url = record_url(str(run_ref["record"]), manifest_source)
+        url = record_url(reference.strip(), manifest_source)
         try:
             record = read_source(url)
             steps = record.get("steps") or []
@@ -360,6 +363,8 @@ def snapshot_pins(manifest: dict[str, Any], plain_url: str, manifest_source: str
                     pins.extend(dep for dep in resolved.get("deps") or [] if str(dep).startswith("duckdb=="))
         except (OSError, ValueError, AttributeError, TypeError) as exc:
             return Snapshot(None, f"its run record {url} could not be read: {exc}")
+        if not pins:
+            return Snapshot(None, f"its run record {url} names no stamp step's duckdb pin")
         return Snapshot(pins, f"in run {run_ref.get('id') or url}")
     return Snapshot(None, "the manifest has no entry for it")
 
