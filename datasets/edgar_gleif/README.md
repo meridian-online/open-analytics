@@ -209,8 +209,6 @@ The last step publishes `library.edgar_lei` into the open lake (<https://openlak
 
 `library.edgar_lei` is already in the lake, so before a live publish check that the rebuilt table still has the live table's shape: `python scripts/check_lake_shape.py --catalog https://openlake.meridian.online/catalog/open.ducklake --table library.edgar_lei --parquet datasets/edgar_gleif/build/edgar_gleif.parquet` from the repository root must print `shape ok`. Publish the crosswalk after `edgar` and `gleif`, since it reads their published copies. [`docs/publishing.md`](../../docs/publishing.md) says what else a publisher needs first.
 
-Do not publish from `main` yet: the DuckDB pins in `arcform.yaml` (`engine_version` and the `uv@1` steps' `duckdb==`) still name 1.x, and they move to 2.0 with the descriptor in the next change.
-
 ## Boundaries (deliberate)
 
 - The arcform **engine** and the **operator catalog** live in the `arcform` repo; this
@@ -302,7 +300,7 @@ against scratch packages.
   `gleif_ra_fetch` and `datapackage_describe` operators run their frozen scripts via
   `uv run`, and `derive_join_coverage` and `stamp_descriptor` are `op: uv@1` steps
   running this repo's own Python — each pinned to its script's SHA-256 and to
-  `duckdb==1.5.5`, with the interpreter pinned in the script's PEP 723 header, so
+  `duckdb==2.0.0`, with the interpreter pinned in the script's PEP 723 header, so
   neither needs a venv to exist or a global install), and `finetype` on `PATH` (the
-  describe operator shells out to it); `arc run --param as_of=YYYY-MM-DD`. At full scale the resolve step is real compute (~100M candidate
+  describe operator shells out to it), with `FINETYPE_DUCKDB_EXT` at its DuckDB 2.0 extension; `arc run --param as_of=YYYY-MM-DD`. At full scale the resolve step is real compute (~100M candidate
   pairs) — run it deliberately.

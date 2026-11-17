@@ -29,7 +29,7 @@
 # Produces: build/edgar_gleif.parquet  →  published as library.edgar_lei
 name: edgar_gleif
 engine: duckdb
-engine_version: ">=1.2"
+engine_version: ">=2.0"
 db: build/edgar_gleif.db
 # The R2 write credential, if a .env is present (see .env.example); the process environment also counts.
 dotenv: [.env]
@@ -316,7 +316,7 @@ steps:
       # it. The interpreter is pinned in the script's own PEP 723 block (3.12), which is
       # where `uv run --script` reads it; `op: uv@1` carries no `python:` field.
       deps:
-        - duckdb==1.5.5
+        - duckdb==2.0.0
       args:
         - --write
         - --package
@@ -431,7 +431,7 @@ steps:
       # uv resolves the interpreter and the package itself, so this needs no venv and no
       # global install.
       deps:
-        - duckdb==1.5.5
+        - duckdb==2.0.0
       args:
         - stamp
         - --descriptor
