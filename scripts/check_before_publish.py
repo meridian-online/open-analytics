@@ -33,7 +33,12 @@ Run built to the overrides committed at HEAD:
                      dropped and merged is refused at the next Run that regenerates
                      the descriptor looser. A sidecar edit alone is never refused. The
                      output names the base used. The Protocol must be in a git checkout
-                     (exit 2 otherwise).
+                     with the history back to the table's `created` (exit 2 otherwise,
+                     as in a shallow clone).
+                     LIMITATION: the base is dated from `created` on the current
+                     branch. A table published from another branch was published
+                     under that branch's sidecar, which this base can miss. Publishing
+                     from `main` after the merge is the normal path, where the two agree.
 
     check_before_publish.py --datasets-dir ../../datasets --slug <slug> \\
         --lake-bundle build/lake_descriptors.json \\
@@ -127,13 +132,19 @@ def parse_built(values: list[str]) -> list[tuple[Path, Path]]:
     return pairs
 
 
+def protocol_tables(datasets_dir: Path) -> list[tuple[str, str, str]]:
+    """`emit_descriptor.protocol_tables`, with a manifest it cannot read as a Fault, not a traceback."""
+    try:
+        return emit_descriptor.protocol_tables(datasets_dir)
+    except Exception as exc:  # noqa: BLE001 - YAML errors, a table entry missing a key, a wrong type
+        raise Fault(f"cannot read the publish steps of the arcform.yaml files under {datasets_dir}: {exc!r}") from exc
+
+
 def lay_out(
     datasets_dir: Path, slug: str, bundle: dict[str, Any], built: list[tuple[Path, Path]], tree: Path
 ) -> tuple[list[str], dict[str, str]]:
     """Build the tree; return the built packages' names and each built path's local Parquet."""
-    published = {
-        filename: table for s, table, filename in emit_descriptor.protocol_tables(datasets_dir) if s == slug
-    }
+    published = {filename: table for s, table, filename in protocol_tables(datasets_dir) if s == slug}
     if not published:
         raise Fault(f"{datasets_dir / slug / 'arcform.yaml'} publishes no table, so there is nothing to check")
 
@@ -175,7 +186,7 @@ def lay_out(
     sources: dict[str, Path] = {}
     for path in sorted(datasets.glob(f"*/{PACKAGE_FILE}")):
         sources[path.parent.name] = path
-    for s, _, filename in emit_descriptor.protocol_tables(datasets_dir):
+    for s, _, filename in protocol_tables(datasets_dir):
         path = datasets / s / filename
         if filename == PACKAGE_FILE or not path.exists():
             continue
@@ -197,6 +208,18 @@ def sidecar_for(filename: str) -> str:
     if filename == PACKAGE_FILE:
         return check_constraint_ratchet.SIDECAR
     return filename.removesuffix(PER_TABLE_SUFFIX) + ".overrides.json"
+
+
+def table_of_each(datasets_dir: Path, slug: str, built: list[tuple[Path, Path]]) -> dict[str, str]:
+    """Each built descriptor's file name to the table the Protocol's publish step names for it."""
+    published = {f: t for s, t, f in protocol_tables(datasets_dir) if s == slug}
+    for descriptor, _ in built:
+        if descriptor.name not in published:
+            raise Fault(
+                f"--built {descriptor}: {slug}'s publish step names no table for {descriptor.name}; "
+                f"it names {', '.join(sorted(published)) or 'none'}"
+            )
+    return published
 
 
 def base_commit(root: Path, created: str | None) -> str | None:
@@ -238,11 +261,19 @@ def overrides_main(argv: list[str]) -> int:
             head_held = ratchet.held_by(ratchet.read_at(root, head, sidecar), f"{sidecar.name} at HEAD")
             stored = bundle.get(table) if isinstance(bundle, dict) else None
             created = stored.get("created") if isinstance(stored, dict) else None
-            base = base_commit(root, created)
-            if base is None:
-                why = "not in the lake yet" if stored is None else f"no commit before its created {created!r}"
-                bases[package] = f"no base ({table} {why}), so only `ignored` applies"
+            base = base_commit(root, created) if stored is not None else None
+            if stored is None:
+                bases[package] = f"no base ({table} not in the lake yet), so only `ignored` applies"
                 base_held = None
+            elif base is None:
+                # A base that cannot be read is never a pass: falling back to `ignored`
+                # alone would silently drop the refusal this check exists for.
+                raise ratchet.CheckError(
+                    f"{package}: the lake holds {table}, created {created!r}, and this checkout has no "
+                    "commit before that, so the overrides it was published under cannot be read; the "
+                    "history is too shallow to find the base (fetch full history, e.g. "
+                    "`git fetch --unshallow`)"
+                )
             else:
                 bases[package] = f"{sidecar.name} at {base[:12]}, the last commit before {table}'s created {created}"
                 base_held = ratchet.held_by(ratchet.read_at(root, base, sidecar), f"{sidecar.name} at {base[:12]}")
@@ -306,13 +337,13 @@ def main(argv: list[str] | None = None) -> int:
         if not isinstance(bundle, dict):
             raise Fault(f"{args.lake_bundle} is not a JSON object of table name to descriptor")
         names, read_from = lay_out(args.datasets_dir, args.slug, bundle, built, TREE)
+        tables = table_of_each(args.datasets_dir, args.slug, built)
     except Fault as exc:
         print(f"check before publish: {exc}", file=sys.stderr)
         return EXIT_ERROR
 
     datasets = TREE / "datasets"
     packages = TREE / "packages"
-    tables = {filename: table for s, table, filename in emit_descriptor.protocol_tables(args.datasets_dir) if s == args.slug}
     only = [arg for name in names for arg in ("--only", name)]
     checks = [
         run(

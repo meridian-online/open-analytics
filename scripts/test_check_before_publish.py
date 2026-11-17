@@ -63,6 +63,9 @@ def code_list(name: str, table: str, *, description_label: str = PLAIN, **code_e
     return {
         "name": name,
         "title": name,
+        # A lake descriptor always states `created`; this one dates after every scratch
+        # commit, so the overrides check's base is the scratch HEAD. `build` replaces it.
+        "created": "2090-01-01T00:00:00Z",
         "description": f"The {name} code list.",
         "licenses": LICENCE,
         "resources": [
@@ -367,6 +370,18 @@ class CheckBeforePublish(Scratch):
         self.assertEqual(result.returncode, EXIT_OK, self.both(result))
         self.assertFalse(stale.exists())
 
+    def test_a_publish_step_it_cannot_read_is_exit_2_with_a_message(self) -> None:
+        """A table entry with no `descriptor`: a message and exit 2, not a traceback."""
+        self.two_code_lists()
+        (self.datasets / "alpha" / "arcform.yaml").write_text(
+            "steps:\n  - name: publish\n    op: ducklake_write@1\n    with:\n      tables:\n        - table: t.alpha\n"
+        )
+        self.build("alpha", "datapackage.json", code_list("alpha", "t.alpha"))
+        result, _ = self.run_check()
+        self.assertEqual(result.returncode, EXIT_ERROR, self.both(result))
+        self.assertIn("cannot read the publish steps", result.stderr)
+        self.assertNotIn("Traceback", self.both(result))
+
     def test_a_built_descriptor_the_slug_does_not_publish_is_refused(self) -> None:
         self.two_code_lists()
         self.build("alpha", "other.datapackage.json", code_list("alpha", "t.alpha"))
@@ -524,6 +539,19 @@ class OverridesRatchet(Scratch):
         result, report = self.run_check("gamma")
         self.assertEqual(result.returncode, EXIT_FAILED, self.both(result))
         self.assertIn("gamma/g_one.datapackage.json.code", result.stdout)
+
+    def test_a_lake_held_table_with_no_history_before_its_created_cannot_run(self) -> None:
+        """As in a shallow clone: no base is never a pass, nor a quiet fall back to `ignored`."""
+        self.published()
+        self.bundle["t.beta"] = code_list("beta", "t.beta")
+        self.sidecar("alpha", self.TWO)
+        self.commit(self.MAR)  # the only commit is after the publish at FEB
+        self.build("alpha", "datapackage.json", code_list("alpha", "t.alpha"))
+        result, report = self.run_check(commit=False)
+        self.assertEqual(result.returncode, EXIT_ERROR, self.both(result))
+        check = self.overrides(result, report)
+        self.assertEqual(check["exit"], EXIT_ERROR)
+        self.assertIn("history is too shallow to find the base", check["output"])
 
     def test_outside_a_git_checkout_the_check_cannot_run(self) -> None:
         self.two_code_lists()

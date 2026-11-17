@@ -269,7 +269,7 @@ steps:
     op: uv@1
     with:
       script: ../../scripts/check_before_publish.py
-      sha256: cef8ef77c8f3f15d31ba6bb911e4b6acfcb00acfce6acc1ba6a0e5e73994efa4
+      sha256: a3d0c0d28f8e0fd380e67599243492ddbda18905b404a0056416936d579831ca
       deps:
         - duckdb==2.0.0
         - pyyaml==6.0.3
