@@ -1,0 +1,150 @@
+# The census/naics_2022 Protocol's tests, run by `arc test` from this folder (see
+# README.md).
+#
+# Fixture, in testdata/ (see testdata/README.md): a cut-down copy of Census's
+# descriptions workbook, 37 rows. It keeps eight national industries and every code above
+# them, among them the chains under two of the three range sectors (311111 under 31-33,
+# 441110 under 44-45), and two industry groups with no paragraph of their own (3111 and 8134).
+#
+# A break on an xlsx fixture sees the sheet as a table `fixture` with a `row` column (the
+# sheet row, 1 for the header) and one text column per sheet letter: A is the code, B the
+# title, C the paragraph.
+#
+# The lake: every test gives emit_descriptors testdata/lake_descriptors.json, the open
+# lake's descriptors, so no test reads the network. finetype infers a descriptor from the
+# rows it reads, and on the fixture's 37 rows it can label columns differently from the
+# descriptor of the full table, so the tests that run describe on the fixture give
+# check_before_publish a stand-in report, and "a build carrying the lake's descriptor
+# passes the check before publish" runs the check for real, with describe's fixture the
+# descriptor of the full table, testdata/described.json.
+#
+# check_code_list is a uv step and its findings are not reported by arc, so a broken
+# ladder is tested here by load's own refusals, which stop the run before the export;
+# scripts/test_check_code_list.py tests the contract check itself.
+
+- name: the fixture builds the code list
+  risk: a code list published with a subsector under no sector, a broken ladder, or Census's text changed
+  fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
+    check_before_publish: testdata/check_before_publish.json
+    fetch_naics: testdata/naics_descriptions.xlsx
+  checks:
+    # Every row, at its level and depth.
+    - SELECT * FROM (SELECT count(*) AS n FROM naics_out) WHERE n <> 37
+    - >-
+      SELECT level, depth, count(*) AS n FROM naics_out GROUP BY ALL
+      EXCEPT
+      SELECT * FROM (VALUES ('sector', 0, 7), ('subsector', 1, 7), ('industry_group', 2, 7),
+        ('naics_industry', 3, 8), ('national_industry', 4, 8))
+    # The contract's ten columns lead, in order.
+    - >-
+      SELECT column_name, ordinal_position FROM information_schema.columns
+      WHERE table_name = 'naics_out' AND ordinal_position <= 10
+      EXCEPT
+      SELECT * FROM (VALUES ('code', 1), ('code_display', 2), ('level', 3), ('depth', 4),
+        ('parent_code', 5), ('description', 6), ('description_full', 7), ('release', 8),
+        ('text_source', 9), ('corpus', 10))
+    # Parents: a range sector's subsectors sit under the range, and below the subsector a
+    # parent is the code less its last digit.
+    - >-
+      SELECT * FROM (VALUES ('11', NULL), ('31-33', NULL), ('111', '11'), ('311', '31-33'),
+        ('441', '44-45'), ('3111', '311'), ('31111', '3111'), ('311111', '31111'),
+        ('441110', '44111')) v(code, parent_code)
+      WHERE NOT EXISTS (SELECT 1 FROM naics_out o
+                        WHERE o.code = v.code AND o.parent_code IS NOT DISTINCT FROM v.parent_code)
+    # The code of each level above, NULL at the row's own level and below.
+    - >-
+      SELECT * FROM (VALUES
+        ('31-33', NULL, NULL, NULL, NULL), ('311', '31-33', NULL, NULL, NULL),
+        ('3111', '31-33', '311', NULL, NULL), ('31111', '31-33', '311', '3111', NULL),
+        ('311111', '31-33', '311', '3111', '31111'), ('111110', '11', '111', '1111', '11111'))
+        v(code, sector_code, subsector_code, industry_group_code, naics_industry_code)
+      WHERE NOT EXISTS (SELECT 1 FROM naics_out o WHERE o.code = v.code
+        AND o.sector_code IS NOT DISTINCT FROM v.sector_code
+        AND o.subsector_code IS NOT DISTINCT FROM v.subsector_code
+        AND o.industry_group_code IS NOT DISTINCT FROM v.industry_group_code
+        AND o.naics_industry_code IS NOT DISTINCT FROM v.naics_industry_code)
+    # Text: the trilateral T stripped, title kept as description, the paragraph as
+    # definition, the ancestors' titles in description_full and corpus.
+    - >-
+      SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM naics_out WHERE code = '311111'
+        AND description = 'Dog and Cat Food Manufacturing'
+        AND description_full IS NOT DISTINCT FROM
+          'Manufacturing › Food Manufacturing › Animal Food Manufacturing › Animal Food Manufacturing › Dog and Cat Food Manufacturing'
+        AND corpus IS NOT DISTINCT FROM
+          'manufacturing › food manufacturing › animal food manufacturing › animal food manufacturing › dog and cat food manufacturing')
+    - SELECT code FROM naics_out WHERE description LIKE '%T' OR title IS DISTINCT FROM description
+    - SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM naics_out WHERE code = '11111' AND description = 'Soybean Farming')
+    - >-
+      SELECT code FROM naics_out
+      WHERE (code IN ('3111', '8134')) <> (definition IS NULL)
+         OR (code = '11111' AND definition IS DISTINCT FROM 'See industry description for 111110.')
+    # The edition and whose text it is, on every row.
+    - SELECT code FROM naics_out WHERE release IS DISTINCT FROM '2022' OR text_source IS DISTINCT FROM 'census'
+
+- name: a subsector with no sector above it is refused
+  risk: Census drops or renumbers a sector and its subsectors publish with no parent
+  fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
+    fetch_naics: testdata/naics_descriptions.xlsx
+  break:
+    fetch_naics: DELETE FROM fixture WHERE A = '31-33'
+  expect:
+    fails_with: "NAICS subsector 311 has no sector above it"
+
+- name: a subsector two sectors cover is refused
+  risk: Census prints a two-digit sector inside a range and a subsector's parent is picked arbitrarily
+  fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
+    fetch_naics: testdata/naics_descriptions.xlsx
+  break:
+    fetch_naics: INSERT INTO fixture (row, A, B, C) VALUES (39, '31', 'ManufacturingT', 'A second sector.')
+  expect:
+    fails_with: "NAICS subsector 311 falls under more than one sector"
+
+- name: a code whose parent is missing is refused
+  risk: Census drops an industry group and the industries under it publish pointing at a code the list lacks
+  fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
+    fetch_naics: testdata/naics_descriptions.xlsx
+  break:
+    fetch_naics: DELETE FROM fixture WHERE A = '3111'
+  expect:
+    fails_with: "NAICS code 31111 has no parent 3111"
+
+- name: a code of another shape is refused
+  risk: a code with a letter or a lost digit publishes as a level the list does not have
+  fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
+    fetch_naics: testdata/naics_descriptions.xlsx
+  break:
+    fetch_naics: UPDATE fixture SET A = '31111X' WHERE A = '311111'
+  expect:
+    fails_with: "NAICS code is neither 2 to 6 digits nor a sector range: 31111X"
+
+- name: a repeated code is refused
+  risk: Census repeats a code and the published key is not unique
+  fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
+    fetch_naics: testdata/naics_descriptions.xlsx
+  break:
+    fetch_naics: INSERT INTO fixture (row, A, B, C) VALUES (39, '311111', 'Dog and Cat Food Manufacturing', NULL)
+  expect:
+    fails_with: "NAICS code is repeated: 311111"
+
+- name: a code without a title is refused
+  risk: a code publishes with no description, which the contract refuses only after the export
+  fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
+    fetch_naics: testdata/naics_descriptions.xlsx
+  break:
+    fetch_naics: UPDATE fixture SET B = NULL WHERE A = '311111'
+  expect:
+    fails_with: "NAICS code has no title: 311111"
+
+- name: a build carrying the lake's descriptor passes the check before publish
+  risk: a table whose descriptor agrees with the lake is refused before publish, or the check is never run
+  fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
+    describe: testdata/described.json
+    fetch_naics: testdata/naics_descriptions.xlsx

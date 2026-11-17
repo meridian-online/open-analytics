@@ -1,0 +1,309 @@
+{
+  "$schema": "https://datapackage.org/profiles/2.0/datapackage.json",
+  "contributors": [
+    {
+      "path": "https://www.census.gov/naics/",
+      "roles": [
+        "author"
+      ],
+      "title": "U.S. Census Bureau"
+    },
+    {
+      "path": "https://meridian.online",
+      "roles": [
+        "publisher",
+        "wrangler"
+      ],
+      "title": "Meridian"
+    }
+  ],
+  "created": "2026-11-17T22:59:59Z",
+  "description": "The 2022 North American Industry Classification System, the standard for classifying business establishments by industry: one row per sector, subsector, industry group, NAICS industry and national industry, each under the level above it, with Census's title and its definition of the industry. Every row also carries the code of each level above it, so a national industry rolls up to its sector with one GROUP BY. Codes are as Census prints them, digits from two to six, and the three sectors Census numbers as ranges keep their range as their code (31-33 Manufacturing, 44-45 Retail Trade, 48-49 Transportation and Warehousing), the form sector-level data carries; a subsector's parent is the sector whose range covers its first two digits, so 311 sits under 31-33. Read from the U.S. Census Bureau's 2022 NAICS descriptions workbook; Census's files are U.S. Government works in the public domain. census/naics_2022_titles codes Census's index of business descriptions to these industries, and census/naics_2017_to_2022 pairs the 2017 edition's codes with them. Since the table took the shared code-list columns, description holds Census's title, as title does, and Census's paragraph about the industry, which description held before, is definition.",
+  "homepage": "https://meridian.online/datasets/naics",
+  "licenses": [
+    {
+      "name": "other-pd",
+      "path": "https://www.census.gov/about/policies/open-gov/open-data.html",
+      "title": "Public domain (U.S. Census Bureau)"
+    }
+  ],
+  "name": "naics",
+  "resources": [
+    {
+      "bytes": 286970,
+      "format": "parquet",
+      "hash": "sha256:9c5957d1c0790952694a7611b8af34bc40586c7925384191c55d9e11591fc90e",
+      "mediatype": "application/vnd.apache.parquet",
+      "name": "naics",
+      "path": "https://openlake.meridian.online/census/naics_2022.parquet",
+      "schema": {
+        "fields": [
+          {
+            "constraints": {
+              "pattern": "^(11|2[1-3]|3[1-3]|4[1-2]|4[4-5]|4[8-9]|5[1-6]|6[1-2]|7[1-2]|8[1-2]|9[1-2])[0-9]{0,4}$|^(31-33|44-45|48-49)$"
+            },
+            "description": "The NAICS 2022 code as Census prints it, the form other data carries: two digits for a sector (11), or for the three range sectors their range (31-33, 44-45, 48-49), three for a subsector (311), four for an industry group (3111), five for a NAICS industry (31111) and six for a national industry (311111).",
+            "name": "code",
+            "type": "string",
+            "x-finetype-label": "identity.industry.naics",
+            "x-finetype-nominated": true
+          },
+          {
+            "constraints": {
+              "pattern": "^(11|2[1-3]|3[1-3]|4[1-2]|4[4-5]|4[8-9]|5[1-6]|6[1-2]|7[1-2]|8[1-2]|9[1-2])[0-9]{0,4}$|^(31-33|44-45|48-49)$"
+            },
+            "description": "The code as Census prints it, the same as code: Census's form is also the form other data carries.",
+            "name": "code_display",
+            "type": "string",
+            "x-finetype-label": "identity.industry.naics",
+            "x-finetype-nominated": true
+          },
+          {
+            "constraints": {
+              "enum": [
+                "sector",
+                "subsector",
+                "industry_group",
+                "naics_industry",
+                "national_industry"
+              ]
+            },
+            "description": "Hierarchy level, read from the code's shape: sector, subsector, industry_group, naics_industry or national_industry, the last the six-digit level most data is coded to.",
+            "name": "level",
+            "type": "string",
+            "x-finetype-confidence": 0.6,
+            "x-finetype-enum-domain": {
+              "cohesion": 0.6000000238418579,
+              "distinct": 5,
+              "domain": [
+                "industry_group",
+                "naics_industry",
+                "national_industry",
+                "sector",
+                "subsector"
+              ],
+              "open": true,
+              "rows": 2125
+            },
+            "x-finetype-label": "representation.text.word"
+          },
+          {
+            "description": "0 for a sector, 1 for a subsector, 2 for an industry group, 3 for a NAICS industry, 4 for a national industry.",
+            "name": "depth",
+            "type": "integer",
+            "x-finetype-confidence": 0.6,
+            "x-finetype-display": {
+              "number": ",d"
+            },
+            "x-finetype-label": "representation.numeric.integer_number",
+            "x-finetype-unsupported-constraints": {
+              "pattern": "^-?[0-9]+$"
+            }
+          },
+          {
+            "constraints": {
+              "pattern": "^(11|2[1-3]|3[1-3]|4[1-2]|4[4-5]|4[8-9]|5[1-6]|6[1-2]|7[1-2]|8[1-2]|9[1-2])[0-9]{0,4}$|^(31-33|44-45|48-49)$"
+            },
+            "description": "The code one level up. Below the subsector it is the code with its last digit dropped (311111 under 31111). A subsector's parent is its sector: the sector whose two digits it starts with (111 under 11), or whose range covers them (311 under 31-33). NULL for a sector.",
+            "name": "parent_code",
+            "type": "string",
+            "x-finetype-label": "identity.industry.naics",
+            "x-finetype-nominated": true
+          },
+          {
+            "constraints": {
+              "maxLength": 65536,
+              "minLength": 1
+            },
+            "description": "Census's title for the code (Soybean Farming), with the superscript T Census prints after titles comparable across Canada, Mexico and the United States removed. The same as title.",
+            "name": "description",
+            "type": "string",
+            "x-finetype-label": "representation.text.plain_text",
+            "x-finetype-nominated": true
+          },
+          {
+            "constraints": {
+              "maxLength": 65536,
+              "minLength": 1
+            },
+            "description": "The titles of the levels above the row, from the sector down, then the row's own, joined with ' › '. Where a level has a single child with the same title, as many NAICS industries and their one national industry do, the title appears twice, as Census prints both.",
+            "name": "description_full",
+            "type": "string",
+            "x-finetype-label": "representation.text.plain_text",
+            "x-finetype-nominated": true
+          },
+          {
+            "constraints": {
+              "enum": [
+                "2022"
+              ]
+            },
+            "description": "The NAICS edition, 2022. Census's descriptions workbook states no release or revision date of its own.",
+            "name": "release",
+            "type": "string",
+            "x-finetype-label": "representation.identifier.alphanumeric_id",
+            "x-finetype-nominated": true,
+            "x-finetype-pattern-fit": {
+              "canonical": "^[A-Za-z][A-Za-z0-9 /_.#-]*[0-9][A-Za-z0-9 /_.#-]*$|^[0-9][A-Za-z0-9 /_.#-]*[A-Za-z][A-Za-z0-9 /_.#-]*$",
+              "outcome": "widened"
+            }
+          },
+          {
+            "constraints": {
+              "enum": [
+                "census"
+              ]
+            },
+            "description": "Whose text description is: always census, the Census Bureau's own title.",
+            "name": "text_source",
+            "type": "string",
+            "x-finetype-enum-domain": {
+              "cohesion": 1.0,
+              "distinct": 1,
+              "domain": [
+                "census"
+              ],
+              "open": true,
+              "rows": 2125
+            },
+            "x-finetype-label": "representation.text.word",
+            "x-finetype-nominated": true
+          },
+          {
+            "constraints": {
+              "maxLength": 65536,
+              "minLength": 1
+            },
+            "description": "Lowercased, accent-stripped description_full: a derived free-text search field, not a source attribute.",
+            "name": "corpus",
+            "type": "string",
+            "x-finetype-label": "representation.text.plain_text",
+            "x-finetype-nominated": true
+          },
+          {
+            "constraints": {
+              "maxLength": 65536,
+              "minLength": 1
+            },
+            "description": "Census's title for the code, the same as description, under the name this table gave it before it took the shared code-list columns.",
+            "name": "title",
+            "type": "string",
+            "x-finetype-label": "representation.text.plain_text",
+            "x-finetype-nominated": true
+          },
+          {
+            "constraints": {
+              "maxLength": 65536,
+              "minLength": 1
+            },
+            "description": "Census's definition of the industry, the paragraph its descriptions workbook gives, with runs of whitespace collapsed to one space. NULL where Census gives none: an industry group whose definition is that of the one NAICS industry under it.",
+            "name": "definition",
+            "type": "string",
+            "x-finetype-label": "representation.text.plain_text",
+            "x-finetype-nominated": true
+          },
+          {
+            "constraints": {
+              "maxLength": 5,
+              "minLength": 2,
+              "pattern": "^(11|2[1-3]|42|5[1-6]|6[1-2]|7[1-2]|8[1-2]|92)$|^(31-33|44-45|48-49)$"
+            },
+            "description": "The code of the sector the row falls under (11, or 31-33 for manufacturing), so data coded to any level rolls up to its sector in one GROUP BY. NULL on a sector's own row.",
+            "name": "sector_code",
+            "type": "string",
+            "x-finetype-enum-domain": {
+              "cohesion": 0.8500000238418579,
+              "distinct": 20,
+              "domain": [
+                "11",
+                "21",
+                "22",
+                "23",
+                "31-33",
+                "42",
+                "44-45",
+                "48-49",
+                "51",
+                "52",
+                "53",
+                "54",
+                "55",
+                "56",
+                "61",
+                "62",
+                "71",
+                "72",
+                "81",
+                "92"
+              ],
+              "open": true,
+              "rows": 2105
+            },
+            "x-finetype-label": "identity.industry.naics",
+            "x-finetype-nominated": true
+          },
+          {
+            "constraints": {
+              "maxLength": 3,
+              "minLength": 3,
+              "pattern": "^[0-9]{3}$"
+            },
+            "description": "The code of the subsector the row falls under (311). NULL on sector and subsector rows.",
+            "name": "subsector_code",
+            "type": "string",
+            "x-finetype-label": "identity.industry.naics",
+            "x-finetype-nominated": true
+          },
+          {
+            "constraints": {
+              "maxLength": 4,
+              "minLength": 4,
+              "pattern": "^[0-9]{4}$"
+            },
+            "description": "The code of the industry group the row falls under (3111). NULL on rows at the industry group level and above.",
+            "name": "industry_group_code",
+            "type": "string",
+            "x-finetype-label": "identity.industry.naics",
+            "x-finetype-nominated": true
+          },
+          {
+            "constraints": {
+              "maxLength": 5,
+              "minLength": 5,
+              "pattern": "^[0-9]{5}$"
+            },
+            "description": "The code of the NAICS industry a national industry falls under (31111). NULL on every row above the national industry level.",
+            "name": "naics_industry_code",
+            "type": "string",
+            "x-finetype-label": "identity.industry.naics",
+            "x-finetype-nominated": true
+          }
+        ],
+        "primaryKey": [
+          "code"
+        ]
+      }
+    }
+  ],
+  "sources": [
+    {
+      "path": "https://www.census.gov/naics/",
+      "title": "North American Industry Classification System — U.S. Census Bureau"
+    },
+    {
+      "path": "https://www.census.gov/naics/2022NAICS/2022_NAICS_Descriptions.xlsx",
+      "title": "2022 NAICS descriptions (2022_NAICS_Descriptions.xlsx) — U.S. Census Bureau"
+    }
+  ],
+  "title": "NAICS — Industry Classification (2022)",
+  "x-finetype-version": "0.6.67",
+  "x-meridian-code-list": {
+    "levels": [
+      "sector",
+      "subsector",
+      "industry_group",
+      "naics_industry",
+      "national_industry"
+    ]
+  }
+}
