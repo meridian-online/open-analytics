@@ -4,8 +4,9 @@
 #
 #   Before a publish, in the Protocol's own Run. `check_before_publish.py` holds the
 #   built descriptor to the built Parquet (fields, types, constraints, key, bytes,
-#   self-description, licence, licence notice), puts it through Frictionless, and holds
-#   its labels to every other table's in the lake with label agreement `--strict`. A
+#   self-description, licence, licence notice), puts it through Frictionless, holds its
+#   labels to every other table's in the lake with label agreement `--strict`, and holds
+#   it to the constraints HEAD's overrides sidecar holds (the ratchet's rules). A
 #   refusal stops the Run before anything is written. A code-list Protocol also runs
 #   `check_code_list.py` on its built file.
 #
@@ -13,8 +14,14 @@
 #   stored descriptor and runs over them the descriptor check with the README catalogue,
 #   the engine pin, label agreement, Frictionless, the code-list contract, the declared
 #   joins, the constraint ratchet against HEAD's overrides, and a full re-hash of every
-#   served object. A finding `main` is ahead on is reported as awaiting publish; one it
-#   is not is drift, and fails the run. `scripts/lake_check.py` says how each is sorted.
+#   served object. The lake contradicting itself is drift and fails the run; a finding
+#   against a repository input `main` has changed since the publish is reported as
+#   awaiting publish. `scripts/lake_check.py` says how each is sorted.
+#
+#   The ratchet's other half, a regenerated descriptor that lost a constraint HEAD's
+#   overrides hold, is refused in the Run by `check_before_publish.py`, where a
+#   descriptor is regenerated now. A pull request that only edits overrides is refused
+#   by nothing, as before.
 #
 # What stays here is what can be judged without the lake, and it is mostly self-tests.
 # Each builds scratch inputs with a deliberate disagreement and asserts the exit status
@@ -51,7 +58,8 @@
 # second blackholes `github.com` and `raw.githubusercontent.com` in `/etc/hosts`,
 # watches the old path (fetching `datapackage.json` out of the repository) stop
 # working, and asserts an object served from loopback still answers. It refuses to run,
-# exit 2, while a repository host is still reachable.
+# exit 2, while a repository host is still reachable. It reads no lake object, which is
+# why it stays on pull requests rather than moving to lake.yml.
 #
 # `protocol-readme-self-test` and `protocol-readme` read `arcform.yaml` as YAML and hold
 # each README's step list to its manifest. The manifest is PARSED, never grepped:
@@ -714,7 +722,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      - name: install duckdb and pyyaml
-        run: python -m pip install --disable-pip-version-check "duckdb==${DUCKDB_VERSION}" "pyyaml==${PYYAML_VERSION}"
-      - name: scratch repositories and a loopback object, exit status and sorting
+      - name: install duckdb, pyyaml and frictionless
+        run: python -m pip install --disable-pip-version-check "duckdb==${DUCKDB_VERSION}" "pyyaml==${PYYAML_VERSION}" "frictionless==${FRICTIONLESS_VERSION}"
+      - name: scratch repositories, each checker's own output and a loopback object, exit status and sorting
         run: python scripts/test_lake_check.py

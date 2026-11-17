@@ -2,7 +2,8 @@
 """Check a Protocol's built tables against the lake, just before they are published.
 
 Three checks can only be known at the point of publishing, because each needs both
-what this Run built and what the open lake already holds:
+what this Run built and what the open lake already holds, and a fourth holds what this
+Run built to the overrides committed at HEAD:
 
   label agreement  — `check_label_agreement.py --strict` over every
                      `<slug>/datapackage.json`, the coverage the lake check has: the
@@ -17,6 +18,18 @@ what this Run built and what the open lake already holds:
                      --require-self-description --no-catalogue`: rules 1 to 7 and the
                      licence rules, read against the local Parquet. The catalogue rule
                      is the lake check's.
+  overrides        — the constraint ratchet's rules (`check_constraint_ratchet.py`) on
+                     each built descriptor, with HEAD's overrides sidecar as the
+                     predecessor: a constraint HEAD's `descriptor.overrides.json` (or
+                     `<name>.overrides.json`) holds that the built descriptor no longer
+                     carries is refused unless the working sidecar declares the new
+                     value (`replaced`), and so is a constraint the working sidecar
+                     declares that the built descriptor does not carry (`ignored`).
+                     Before descriptors left the repository, the ratchet refused a
+                     regenerated committed descriptor this way; the Run is where a
+                     descriptor is regenerated now. A sidecar edit alone is still never
+                     refused. The Protocol must be in a git checkout: with no HEAD there
+                     is no predecessor, and the check cannot run (exit 2).
 
     check_before_publish.py --datasets-dir ../../datasets --slug <slug> \\
         --lake-bundle build/lake_descriptors.json \\
@@ -69,6 +82,7 @@ from typing import Any, Callable
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import check_constraint_ratchet  # noqa: E402
 import check_descriptors  # noqa: E402
 import check_frictionless  # noqa: E402
 import check_label_agreement  # noqa: E402
@@ -174,6 +188,53 @@ def lay_out(
     return names, read_from
 
 
+def sidecar_for(filename: str) -> str:
+    """The overrides a built descriptor's describe step reads: the ratchet's naming."""
+    if filename == PACKAGE_FILE:
+        return check_constraint_ratchet.SIDECAR
+    return filename.removesuffix(PER_TABLE_SUFFIX) + ".overrides.json"
+
+
+def overrides_main(argv: list[str]) -> int:
+    """The constraint ratchet on each built descriptor, against HEAD's overrides. Exit 0, 1 or 2."""
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--datasets-dir", type=Path, required=True)
+    parser.add_argument("--slug", required=True)
+    parser.add_argument("--descriptor", type=Path, action="append", required=True)
+    parser.add_argument("--json", type=Path, required=True)
+    args = parser.parse_args(argv)
+    ratchet = check_constraint_ratchet
+    findings: list[Any] = []
+    held_count = 0
+    try:
+        root = ratchet.repo_root(args.datasets_dir)
+        sha = ratchet.resolve_base(root, "HEAD")
+        for descriptor in args.descriptor:
+            sidecar = args.datasets_dir / args.slug / sidecar_for(descriptor.name)
+            package = f"{args.slug}/{descriptor.name}"
+            built = ratchet.fields_of(ratchet.read_working(descriptor) or {}, str(descriptor))
+            base_held = ratchet.held_by(ratchet.read_at(root, sha, sidecar), f"{sidecar.name} at HEAD")
+            head_held = ratchet.held_by(ratchet.read_working(sidecar), str(sidecar))
+            held_count += sum(len(keys) for keys in base_held.values())
+            found, _ = ratchet.refusals(package, base_held, built, head_held)
+            findings.extend(found)
+    except ratchet.CheckError as exc:
+        print(f"overrides: {exc}")
+        return EXIT_ERROR
+    args.json.write_text(
+        json.dumps({"base_sha": sha, "held_at_head": held_count, "violations": [vars(f) for f in findings]}, indent=2)
+        + "\n",
+        encoding="utf-8",
+    )
+    for finding in findings:
+        print(finding.line())
+    print(
+        f"overrides: {len(findings)} hand-held constraint(s) replaced or ignored; "
+        f"{held_count} held at HEAD ({sha[:12]})"
+    )
+    return EXIT_FAILED if findings else EXIT_OK
+
+
 def run(name: str, main: Callable[[list[str]], int], argv: list[str], findings: Path) -> dict[str, Any]:
     """One check, in-process, with its output captured and its findings read back."""
     out = io.StringIO()
@@ -251,6 +312,18 @@ def main(argv: list[str] | None = None) -> int:
                 *(arg for declared, local in read_from.items() for arg in ("--read-from", f"{declared}={local}")),
             ],
             TREE / "descriptors.json",
+        ),
+        run(
+            "overrides",
+            overrides_main,
+            [
+                "--datasets-dir",
+                str(args.datasets_dir),
+                "--slug",
+                args.slug,
+                *(arg for descriptor, _ in built for arg in ("--descriptor", str(descriptor))),
+            ],
+            TREE / "overrides.json",
         ),
     ]
 

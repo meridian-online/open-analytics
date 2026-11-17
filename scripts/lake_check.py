@@ -20,21 +20,34 @@ It runs the checks that read the lake over that tree:
 
 and sorts every finding into one of two kinds.
 
-  awaiting_publish  `main` is ahead of the lake: the table is not published yet, or the
-                    repository inputs the finding compares against changed in git after
-                    the table's `created`. Reported; the run stays green. This is the
-                    expected gap between a merge and its publish.
-  drift             the lake contradicts itself, or `main` was not changed since the
-                    publish and still disagrees. The run fails.
+  drift             the lake contradicts itself, whatever `main` did since: a served
+                    object whose bytes or hash differ from its stored descriptor, a
+                    stored descriptor that disagrees with its object's bytes or with the
+                    copy stamped in its footer, a footer written by an engine other than
+                    the one its Protocol pinned when the table was published, a code list
+                    that breaks the contract, a declared join that fails. Also a check
+                    that crashed, and a finding about `examples/`. The run fails.
+  awaiting_publish  a finding that compares the lake with a repository input, when that
+                    input changed in git after the table's `created`, or a table that is
+                    not published yet. Reported; the run stays green. This is the
+                    expected gap between a merge and its publish. The same finding with
+                    the input unchanged since the publish is drift.
 
-The inputs a finding compares against are `datasets/<slug>/` for the table's own
-Protocol, `README.md` alone for a catalogue finding, `datasets/label-agreement.json`
-as well for a label finding, and `datasets/frictionless-rejections.json` as well for a
-Frictionless one. Their time is `git log -1 --format=%cI -- <paths>`, so the checkout
-needs full history. A check that crashes (exit 2, or a failure no finding explains)
-is drift: a check that did not run has not passed.
+The repository inputs, each finding to its own:
 
-    lake_check.py --tree DIR --repo . --json FILE [--check NAME ...]
+  catalogue rows             README.md
+  licence notices            datasets/licence-notices.json
+  label agreement            datasets/label-agreement.json
+  Frictionless refusals      datasets/frictionless-rejections.json
+  overrides ratchet          the table's overrides sidecar (`descriptor.overrides.json`
+                             or `<name>.overrides.json`)
+
+An input's time is `git log -1 --format=%cI -- <path>`, so the checkout needs full
+history. The engine pin a table is held to is the one its stamp steps resolved in the
+Run that published it, read from the lake's run record (`manifest.json`'s `run.record`),
+so a pin bump on `main` waits for the next publish rather than reading as drift.
+
+    lake_check.py --tree DIR --repo . --json FILE [--manifest URL] [--check NAME ...]
 
 Exit codes: 0 no drift (awaiting-publish findings may be listed); 1 drift; 2 this
 script could not run (no tree, no git history).
@@ -45,6 +58,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -118,7 +132,7 @@ class Finding:
     detail: str
     subjects: list[Subject] = field(default_factory=list)
     inputs: list[str] = field(default_factory=list)  # repository paths beyond datasets/<slug>/
-    own_dir: bool = True  # whether datasets/<slug>/ is an input; not for a catalogue finding
+    lake_only: bool = False  # the lake against itself: drift whatever git says
     kind: str = ""
     published_at: str | None = None
     last_change_at: str | None = None
@@ -127,18 +141,18 @@ class Finding:
 def sort_finding(repo: Path, tree: "Tree", finding: Finding) -> Kind:
     """Classify `finding`, recording the times it was judged on.
 
-    A finding with no subject is drift: a crash, or a disagreement about the repository
-    alone (an `examples/` licence), which no publish can close. A finding about several
-    tables is awaiting a publish when any one of them is.
+    The lake against itself is drift. So is a finding with no table: a crash, or a
+    disagreement about the repository alone, which no publish can close. A finding that
+    compares the lake with repository inputs is sorted by `classify`, and one about
+    several tables is awaiting a publish when any one of them is.
     """
-    if not finding.subjects:
+    if finding.lake_only or not finding.subjects:
         finding.kind = DRIFT
         return DRIFT
     kinds = []
     for subject in finding.subjects:
         published = tree.created(subject.descriptor)
-        paths = [*([f"datasets/{subject.slug}/"] if finding.own_dir else []), *finding.inputs]
-        changed = last_change(repo, paths)
+        changed = last_change(repo, finding.inputs) if finding.inputs else NEVER
         kinds.append(classify(subject.slug, published, changed))
         finding.published_at = published.isoformat() if published else None
         finding.last_change_at = changed.isoformat() if changed is not NEVER else None
@@ -213,6 +227,25 @@ def crashed(ran: Ran, parsed: list[Finding]) -> list[Finding]:
     return [*parsed, Finding(ran.check, f"exit {ran.status} with no finding this script can attribute:\n{tail}")]
 
 
+def each(check: str, items: Any, convert: Any) -> list[Finding]:
+    """`convert` over a check's reported items; one this script cannot read is kept, as drift.
+
+    A shape this adapter does not expect must not drop a finding, least of all beside
+    others it could read, which would let the run pass on the ones it understood.
+    """
+    found: list[Finding] = []
+    for item in items if isinstance(items, list) else [items]:
+        try:
+            result = convert(item)
+        except (KeyError, TypeError, ValueError, AttributeError, IndexError) as exc:
+            text = json.dumps(item, ensure_ascii=False, default=str)
+            found.append(Finding(check, f"a reported item this script cannot read ({exc!r}): {text[:500]}"))
+            continue
+        if result is not None:
+            found.append(result)
+    return found
+
+
 def read_json(path: Path) -> dict[str, Any]:
     try:
         return json.loads(path.read_text(encoding="utf-8"))
@@ -234,10 +267,11 @@ def check_descriptors(tree: Tree, repo: Path, work: Path, links: dict[str, str])
         ],
     )
     report = read_json(out)
-    found = []
-    for item in [*report.get("violations", []), *report.get("pending", [])]:
-        detail = f"{item['rule']}: {item['detail']}"
-        if item["rule"].startswith("catalogue."):
+
+    def convert(item: dict[str, Any]) -> Finding:
+        rule = item["rule"]
+        detail = f"{rule}: {item['detail']}"
+        if rule.startswith("catalogue."):
             subject = tree.subject_for_path(item["resource"]) or tree.subject_for_object(item["resource"])
             if subject is None:
                 # A row linking an object the lake does not hold: awaiting its first publish
@@ -245,24 +279,109 @@ def check_descriptors(tree: Tree, repo: Path, work: Path, links: dict[str, str])
                 address = item["resource"].split("?", 1)[0].split("://", 1)[-1].split("/", 1)[-1]
                 slug = links.get(address.removesuffix(".parquet"))
                 subject = Subject(slug, None) if slug else None
-            found.append(
-                Finding("descriptors", f"{item['resource']}: {detail}", [subject] if subject else [], ["README.md"], own_dir=False)
-            )
+            return Finding("descriptors", f"{item['resource']}: {detail}", [subject] if subject else [], ["README.md"])
+        subject = tree.subject_for_path(item["package"])
+        where = f"{item['package']} :: {item['resource']}: {detail}"
+        if subject is None:
+            return Finding("descriptors", where)  # examples/, which no publish can close
+        if rule.startswith("licence.notice"):
+            return Finding("descriptors", where, [subject], ["datasets/licence-notices.json"])
+        return Finding("descriptors", where, [subject], lake_only=True)
+
+    found = each("descriptors", [*report.get("violations", []), *report.get("pending", [])], convert)
+    return ran, crashed(ran, found)
+
+
+PUBLIC_MANIFEST = "https://openlake.meridian.online/manifest.json"
+
+
+def read_source(where: str) -> Any:
+    """JSON from a URL or a local path."""
+    import urllib.request
+
+    if where.startswith(("http://", "https://")):
+        request = urllib.request.Request(where, headers={"User-Agent": "open-analytics-lake-check"})
+        with urllib.request.urlopen(request, timeout=60) as response:
+            return json.load(response)
+    return json.loads(Path(where).read_text(encoding="utf-8"))
+
+
+def snapshot_pins(manifest: dict[str, Any], plain_url: str) -> tuple[list[str], str] | None:
+    """The `duckdb==` deps the stamp steps resolved in the Run that published this object.
+
+    Read from the lake's own record of that Run (`manifest.json`'s `run.record`), so the
+    pin is the one that wrote the object, not `main`'s. None when the manifest names no
+    record for it.
+    """
+    for entry in (manifest.get("datasets") or {}).values():
+        if str(entry.get("url", "")).split("?", 1)[0] != plain_url:
             continue
-        subject = tree.subject_for_path(item["package"])
-        found.append(Finding("descriptors", f"{item['package']} :: {item['resource']}: {detail}", [subject] if subject else []))
-    return ran, crashed(ran, found)
+        run_ref = entry.get("run") or {}
+        if not run_ref.get("record"):
+            return None
+        record = read_source(run_ref["record"])
+        pins = []
+        for step in record.get("steps") or []:
+            resolved = step.get("resolved_with") or {}
+            if "stamp_descriptor" in str(resolved.get("script", "")):
+                pins.extend(dep for dep in resolved.get("deps") or [] if str(dep).startswith("duckdb=="))
+        return pins, run_ref.get("id") or run_ref["record"]
+    return None
 
 
-def check_engine(tree: Tree, work: Path) -> tuple[Ran, list[Finding]]:
+def check_engine(tree: Tree, work: Path, manifest_source: str) -> tuple[Ran, list[Finding]]:
+    """Each footer against the DuckDB the Run that published it pinned for its stamp steps.
+
+    Each descriptor is laid in a directory of its own beside an `arcform.yaml` holding that
+    Run's stamp pins, as the lake's run record states them, so a pin bump on `main` waits
+    for the next publish instead of reading as drift. A table whose Run the manifest does
+    not record is held to the Protocol's pin at HEAD, and the finding says so.
+    """
+    try:
+        manifest = read_source(manifest_source)
+    except (OSError, ValueError) as exc:
+        return Ran("engine", EXIT_ERROR, f"cannot read the manifest {manifest_source}: {exc}"), [
+            Finding("engine", f"cannot read the manifest {manifest_source}: {exc}")
+        ]
+    engine = work / "engine"
+    laid: dict[str, tuple[Subject, str]] = {}
+    for index, (rel, document) in enumerate(sorted(tree.documents.items())):
+        slug, name = rel.split("/", 1)
+        folder = engine / f"{index:03d}-{slug}"
+        folder.mkdir(parents=True)
+        relaid = json.loads(json.dumps(document))
+        resources = relaid.get("resources") or []
+        for resource in resources:
+            path = resource.get("path")
+            if isinstance(path, str) and "://" not in path:
+                resource["path"] = str((tree.datasets / slug / path).resolve())  # a local path moves with it
+        (folder / name).write_text(json.dumps(relaid), encoding="utf-8")
+        plain = str((document.get("resources") or [{}])[0].get("path", "")).split("?", 1)[0]
+        try:
+            found = snapshot_pins(manifest, plain)
+        except (OSError, ValueError) as exc:
+            found = None
+            print(f"engine: cannot read the run record for {rel}: {exc}")
+        if found is not None:
+            pins, run_id = found
+            steps = "".join(f"  - name: stamp_{i}\n    with:\n      script: stamp_descriptor.py\n      deps:\n        - {pin}\n" for i, pin in enumerate(pins))
+            (folder / "arcform.yaml").write_text("steps:\n" + steps, encoding="utf-8")
+            where = f"in run {run_id}"
+        else:
+            head = tree.datasets / slug / "arcform.yaml"
+            if head.exists():
+                shutil.copyfile(head, folder / "arcform.yaml")
+            where = "at HEAD, since the manifest records no run for it"
+        laid[str((folder / name).resolve())] = (Subject(slug, rel), where)
     out = work / "engine.json"
-    ran = run("engine", [str(SCRIPTS / "check_engine_version.py"), "--datasets-dir", str(tree.datasets), "--json", str(out)])
-    found = []
-    for item in read_json(out).get("mismatches", []):
-        subject = tree.subject_for_path(item["package"])
-        detail = f"{item['package']} :: {item['resource']}: written by {item['writer_version']}, pinned {item['reader_pin']} ({item['pin_source']})"
-        found.append(Finding("engine", detail, [subject] if subject else []))
-    return ran, crashed(ran, found)
+    ran = run("engine", [str(SCRIPTS / "check_engine_version.py"), "--datasets-dir", str(engine), "--json", str(out)])
+
+    def convert(item: dict[str, Any]) -> Finding:
+        subject, where = laid[str(Path(item["package"]).resolve())]
+        detail = f"{subject.descriptor} :: {item['resource']}: written by {item['writer_version']}, pinned {item['reader_pin']} ({item['pin_source']}, {where})"
+        return Finding("engine", detail, [subject], lake_only=True)
+
+    return ran, crashed(ran, each("engine", read_json(out).get("mismatches", []), convert))
 
 
 def check_labels(tree: Tree, work: Path) -> tuple[Ran, list[Finding]]:
@@ -273,39 +392,51 @@ def check_labels(tree: Tree, work: Path) -> tuple[Ran, list[Finding]]:
     def subjects(values: dict[str, Any]) -> list[Subject]:
         return [tree.package(slug) for slug in sorted({ident.split(".", 1)[0] for ident in values})]
 
-    found = []
-    for item in report.get("differences", []):
-        if not item.get("reason"):
-            found.append(Finding("labels", f"{item['kind']} {item['key']!r}, {item['property']}: no stated reason", subjects(item["values"])))
-    for item in report.get("stale_reasons", []):
-        found.append(Finding("labels", f"{item['kind']} {item['key']!r}, {item['property']}: a stated reason matches no difference", subjects(item["values"])))
-    for item in report.get("corrections", []):
-        if item.get("state") != "declared":
-            found.append(Finding("labels", f"{item['package']} {item['pointer']}: correction {item['state']}", [tree.package(item["package"])]))
-    for finding in found:
-        finding.inputs = ["datasets/label-agreement.json"]
+    inputs = ["datasets/label-agreement.json"]
+
+    def open_difference(item: dict[str, Any]) -> Finding | None:
+        if item.get("reason"):
+            return None
+        return Finding("labels", f"{item['kind']} {item['key']!r}, {item['property']}: no stated reason", subjects(item["values"]), inputs)
+
+    def stale(item: dict[str, Any]) -> Finding:
+        return Finding("labels", f"{item['kind']} {item['key']!r}, {item['property']}: a stated reason matches no difference", subjects(item["values"]), inputs)
+
+    def lapsed(item: dict[str, Any]) -> Finding | None:
+        if item["state"] == "declared":
+            return None
+        return Finding("labels", f"{item['package']} {item['pointer']}: correction {item['state']}", [tree.package(item["package"])], inputs)
+
+    found = [
+        *each("labels", report.get("differences", []), open_difference),
+        *each("labels", report.get("stale_reasons", []), stale),
+        *each("labels", report.get("corrections", []), lapsed),
+    ]
     return ran, crashed(ran, found)
 
 
 def check_frictionless(tree: Tree, work: Path) -> tuple[Ran, list[Finding]]:
     out = work / "frictionless.json"
     ran = run("frictionless", [str(SCRIPTS / "check_frictionless.py"), "--datasets-dir", str(tree.datasets), "--json", str(out)])
-    found = []
-    for fault in read_json(out).get("faults", []):
+
+    def convert(fault: str) -> Finding:
         slug = fault.split(":", 1)[0]
         subject = tree.package(slug) if (tree.datasets / slug).is_dir() else None
-        found.append(Finding("frictionless", fault, [subject] if subject else [], ["datasets/frictionless-rejections.json"]))
-    return ran, crashed(ran, found)
+        return Finding("frictionless", fault, [subject] if subject else [], ["datasets/frictionless-rejections.json"])
+
+    return ran, crashed(ran, each("frictionless", read_json(out).get("faults", []), convert))
 
 
 def check_code_list(tree: Tree, work: Path) -> tuple[Ran, list[Finding]]:
     out = work / "code_list.json"
     ran = run("code_list", [str(SCRIPTS / "check_code_list.py"), "--datasets-dir", str(tree.datasets), "--json", str(out)])
-    found = []
-    for slug, lines in (read_json(out).get("files") or {}).items():
-        for line in lines:
-            found.append(Finding("code_list", f"{slug}: {line}", [tree.package(slug)]))
-    return ran, crashed(ran, found)
+    files = read_json(out).get("files") or {}
+    pairs = [{"slug": slug, "line": line} for slug, lines in files.items() for line in lines]
+
+    def convert(pair: dict[str, Any]) -> Finding:
+        return Finding("code_list", f"{pair['slug']}: {pair['line']}", [tree.package(pair["slug"])], lake_only=True)
+
+    return ran, crashed(ran, each("code_list", pairs, convert))
 
 
 def check_joins(tree: Tree) -> tuple[list[Ran], list[Finding]]:
@@ -316,7 +447,7 @@ def check_joins(tree: Tree) -> tuple[list[Ran], list[Finding]]:
         runs.append(ran)
         if ran.status == 1:
             tail = "\n".join(ran.log.splitlines()[-5:])
-            found.append(Finding("joins", f"{slug}: a declared join fails against the published bytes:\n{tail}", [tree.package(slug)]))
+            found.append(Finding("joins", f"{slug}: a declared join fails against the published bytes:\n{tail}", [tree.package(slug)], lake_only=True))
         else:
             found.extend(crashed(ran, []))
     return runs, found
@@ -343,7 +474,7 @@ def check_ratchet(tree: Tree, repo: Path) -> list[Finding]:
             continue
         refused, _ = ratchet.refusals(rel, None, fields, held)
         for item in refused:
-            found.append(Finding("ratchet", item.line(), [Subject(slug, rel)]))
+            found.append(Finding("ratchet", item.line(), [Subject(slug, rel)], [f"datasets/{slug}/{sidecar}"]))
     return found
 
 
@@ -363,11 +494,11 @@ def check_verify(tree: Tree) -> list[Finding]:
                     raise pd.PublishError(f"declares no bytes/hash for {url}")
                 served = pd.measure_url(url)
             except pd.PublishError as exc:
-                found.append(Finding("verify", f"{rel} :: {name}: {exc}", [subject]))
+                found.append(Finding("verify", f"{rel} :: {name}: {exc}", [subject], lake_only=True))
                 continue
             if served != declared:
                 found.append(
-                    Finding("verify", f"{rel} :: {name}: declares {declared.describe()}; {url} serves {served.describe()}", [subject])
+                    Finding("verify", f"{rel} :: {name}: declares {declared.describe()}; {url} serves {served.describe()}", [subject], lake_only=True)
                 )
             else:
                 print(f"verify: {rel} :: {name} — {served.describe()}")
@@ -387,7 +518,7 @@ def summary(drift: list[Finding], awaiting: list[Finding], statuses: dict[str, A
         if not items:
             lines.append("None.")
         for item in items:
-            when = f" (published {item.published_at}, inputs last changed {item.last_change_at})" if item.subjects else ""
+            when = f" (published {item.published_at}, inputs last changed {item.last_change_at})" if item.inputs and item.subjects else ""
             lines.append(f"- **{item.check}**{when}")
             lines.append("")
             lines.append("  ```")
@@ -401,6 +532,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--tree", type=Path, required=True, help="the directory emit_descriptor.py --tree wrote")
     ap.add_argument("--repo", type=Path, default=ROOT, help="the checkout: README.md, examples/, overrides and git history")
     ap.add_argument("--json", type=Path, help="write every finding, sorted, as JSON")
+    ap.add_argument("--manifest", default=PUBLIC_MANIFEST, help="the lake's manifest.json, a URL or a path, for each table's run record")
     ap.add_argument("--check", action="append", choices=CHECKS, help="run only this check (repeatable; default every one)")
     args = ap.parse_args(argv)
     wanted = args.check or list(CHECKS)
@@ -423,7 +555,7 @@ def main(argv: list[str] | None = None) -> int:
             work = Path(tmp)
             steps = {
                 "descriptors": lambda: check_descriptors(tree, repo, work, protocol_tables(repo)),
-                "engine": lambda: check_engine(tree, work),
+                "engine": lambda: check_engine(tree, work, args.manifest),
                 "labels": lambda: check_labels(tree, work),
                 "frictionless": lambda: check_frictionless(tree, work),
                 "code_list": lambda: check_code_list(tree, work),

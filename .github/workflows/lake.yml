@@ -7,27 +7,38 @@
 # runs over that tree:
 #
 #   - the descriptor check (`check_descriptors.py --require-self-description`): each
-#     stored descriptor against the bytes it describes and against the copy stamped in
-#     the object's footer, the licence and licence-notice rules, foreign keys, and the
-#     README catalogue's row counts against the objects its rows link to;
+#     `datasets/*/datapackage.json` against the bytes it describes and against the copy
+#     stamped in the object's footer, with the licence rule and foreign keys; the licence
+#     notice rule over every stored descriptor; and the README catalogue's row counts
+#     against the objects its rows link to. The six per-table SOC descriptors
+#     (`soc_2018/*.datapackage.json`, `soc_2020/*.datapackage.json`) get the catalogue and
+#     licence notice rules only, as before descriptors left the repository;
 #   - the engine pin (`check_engine_version.py`): each footer's `created_by` against the
-#     DuckDB its own Protocol pins;
-#   - label agreement (`check_label_agreement.py --strict`), over `datasets/*/datapackage.json`;
-#   - Frictionless (`check_frictionless.py`) and the code-list contract (`check_code_list.py`;
-#     exit 2, no code list found, is a crash and not a pass);
+#     DuckDB the Run that published it pinned for its stamp steps, read from the lake's
+#     run record;
+#   - label agreement (`check_label_agreement.py --strict`), Frictionless
+#     (`check_frictionless.py`) and the code-list contract (`check_code_list.py`; exit 2,
+#     no code list found, is a crash and not a pass), each over `datasets/*/datapackage.json`;
 #   - every declared join (`crosswalk_join.py`), per package that declares `x-joins`;
 #   - the constraint ratchet: each stored descriptor still carries every constraint its
 #     committed overrides hold at HEAD;
-#   - a full download and re-hash of every served object against its declared `bytes`
-#     and `hash` (`publish_dataset.py verify`'s measurement). This is why the job takes
-#     minutes.
+#   - a full download and re-hash of every served object, all 18 tables, against its
+#     declared `bytes` and `hash` (`publish_dataset.py verify`'s measurement). This is
+#     why the job takes minutes.
 #
-# Each finding is sorted. AWAITING PUBLISH: the table is not published yet, or the
-# repository inputs the finding compares against changed in git after the table's
-# `created` — the expected gap between a merge and its publish. Reported in the step
-# summary; the run stays green. DRIFT: the lake contradicts itself, or `main` has not
-# changed since the publish and still disagrees. The run fails. A check that crashes is
-# drift. `lake_check.py`'s docstring names the inputs each kind of finding reads.
+# Each finding is sorted. DRIFT: the lake contradicts itself (verify, a stored
+# descriptor against its bytes or its footer, the engine against the pin of the Run that published it, the
+# code-list contract, a declared join), whatever `main` did since; a check that crashes;
+# or a finding that compares the lake with a repository input that has not changed
+# since the publish. The run fails. AWAITING PUBLISH: a table not published yet, or a
+# finding against a repository input (a catalogue row, a licence notice, a label
+# agreement reason, a Frictionless rejection, an overrides sidecar) that changed in git
+# after the table's `created`, the expected gap between a merge and its publish.
+# Reported in the step summary; the run stays green. `lake_check.py`'s docstring names
+# each finding's input.
+#
+# `description-needs-no-repository` is not here: it serves a scratch object from
+# loopback and reads no lake object, so it stays on pull requests (descriptors.yml).
 #
 # READING PAST THE EDGE. Every read goes to the origin, not a cached copy. The catalogue
 # is attached as `ducklake:<url>?v=<run id>`: DuckLake accepts the query string (checked
@@ -81,7 +92,9 @@ jobs:
             --catalog "ducklake:https://openlake.meridian.online/catalog/open.ducklake?v=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
             --manifest "https://openlake.meridian.online/manifest.json?v=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
       - name: the lake against itself and against main
-        run: python scripts/lake_check.py --tree "$RUNNER_TEMP/tree" --repo . --json lake-check.json
+        run: |
+          python scripts/lake_check.py --tree "$RUNNER_TEMP/tree" --repo . --json lake-check.json \
+            --manifest "https://openlake.meridian.online/manifest.json?v=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
       - name: upload the findings
         if: always()
         uses: actions/upload-artifact@v4

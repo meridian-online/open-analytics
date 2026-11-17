@@ -359,7 +359,8 @@ class WiredIntoCiTest(unittest.TestCase):
 
         self.assertIn("ratchet", lake_check.CHECKS)
         text = (WORKFLOW.parent / "lake.yml").read_text(encoding="utf-8")
-        self.assertRegex(text, r"run: python scripts/lake_check\.py\b(?![^\n]*--check)")
+        self.assertRegex(text, r"python scripts/lake_check\.py\b")
+        self.assertNotIn("--check", text, "the lake workflow must run every check, the ratchet among them")
         self.assertIn("fetch-depth: 0", text, "a shallow checkout has no history to sort a finding by")
 
 

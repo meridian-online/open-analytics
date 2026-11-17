@@ -224,7 +224,7 @@ steps:
     op: uv@1
     with:
       script: ../../scripts/check_before_publish.py
-      sha256: a5ed1f3bc4ba55e6345be646491f8b417b4946ff690eb10135d32653cde9b7b5
+      sha256: b3cf7ed12b64d6c6b8c2e8e46b140bdfa2f19aa934b0878bfcfea6c06f42901b
       deps:
         - duckdb==2.0.0
         - pyyaml==6.0.3
@@ -249,6 +249,7 @@ steps:
         - ../../datasets/frictionless-rejections.json
         - ../../datasets/licence-notices.json
         - ../../scripts/check_descriptors.py
+        - ../../scripts/check_constraint_ratchet.py
         - ../../scripts/check_frictionless.py
         - ../../scripts/check_label_agreement.py
         - ../../scripts/emit_descriptor.py

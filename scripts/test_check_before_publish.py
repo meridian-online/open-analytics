@@ -149,7 +149,22 @@ class Scratch(unittest.TestCase):
         descriptor.write_text(json.dumps(document, indent=2) + "\n")
         self.built.append((descriptor, parquet))
 
-    def run_check(self, slug: str = "alpha") -> tuple[subprocess.CompletedProcess[str], dict[str, Any] | None]:
+    def commit(self) -> None:
+        """Commit the scratch repository as it stands: the overrides check reads HEAD."""
+        git = ["git", "-C", str(self.root), "-c", "user.name=t", "-c", "user.email=t@example.test"]
+        if not (self.root / ".git").exists():
+            subprocess.run(["git", "init", "-q", str(self.root)], check=True)
+        subprocess.run([*git, "add", "-A"], check=True, capture_output=True)
+        subprocess.run([*git, "commit", "-q", "--allow-empty", "-m", "scratch"], check=True, capture_output=True)
+
+    def sidecar(self, slug: str, fields: dict[str, Any], name: str = "descriptor.overrides.json") -> None:
+        (self.datasets / slug / name).write_text(json.dumps({"fields": fields}, indent=2) + "\n")
+
+    def run_check(
+        self, slug: str = "alpha", *, commit: bool = True
+    ) -> tuple[subprocess.CompletedProcess[str], dict[str, Any] | None]:
+        if commit:
+            self.commit()
         folder = self.datasets / slug
         (folder / "build").mkdir(parents=True, exist_ok=True)
         (folder / "build" / "lake_descriptors.json").write_text(json.dumps(self.bundle, indent=2))
@@ -177,6 +192,7 @@ class Scratch(unittest.TestCase):
     def assertChecks(self, report: dict[str, Any] | None, **passed: bool) -> None:  # noqa: N802
         self.assertIsNotNone(report)
         got = {check["check"]: check["passed"] for check in report["checks"]}
+        passed.setdefault("overrides", True)
         want = {name.replace("_", " "): value for name, value in passed.items()}
         self.assertEqual(got, want)
 
@@ -189,7 +205,7 @@ class CheckBeforePublish(Scratch):
         self.assertEqual(result.returncode, EXIT_OK, self.both(result))
         self.assertChecks(report, label_agreement=True, frictionless=True, descriptors=True)
         self.assertTrue(report["passed"])
-        self.assertIn("3 of 3 check(s) passed", result.stdout)
+        self.assertIn("4 of 4 check(s) passed", result.stdout)
         # The built descriptor, not the lake's older copy, is the one in the tree.
         laid = json.loads((self.datasets / "alpha/build/check_tree/datasets/alpha/datapackage.json").read_text())
         self.assertIn("bytes", laid["resources"][0])
@@ -372,6 +388,7 @@ class ACheckThatCannotRun(Scratch):
         self.build("alpha", "datapackage.json", code_list("alpha", "t.alpha"))
         folder = self.datasets / "alpha"
         (folder / "build" / "lake_descriptors.json").write_text(json.dumps(self.bundle))
+        self.commit()
         module = getattr(cbp, broken)
         original = module.main
 
@@ -408,7 +425,86 @@ class ACheckThatCannotRun(Scratch):
         self.assertIn("RuntimeError: the check fell over", checks["frictionless"]["output"])
         self.assertTrue(checks["label agreement"]["passed"])
         self.assertTrue(checks["descriptors"]["passed"])
+        self.assertTrue(checks["overrides"]["passed"])
         self.assertIn("FAILED  frictionless (exit 2)", out)
+
+
+class OverridesAtHead(Scratch):
+    """The ratchet's refusal, moved to where a descriptor is regenerated now.
+
+    The built descriptor's `code` carries `^[0-9]{2}$` (see `code_list`). Each case sets
+    what the overrides held at HEAD and in the working tree, and nothing else differs.
+    """
+
+    TWO = {"code": {"constraints": {"pattern": "^[0-9]{2}$"}}}
+    ANY = {"code": {"constraints": {"pattern": "^[0-9]+$"}}}
+
+    def overrides(self, result: subprocess.CompletedProcess[str], report: dict[str, Any] | None) -> dict[str, Any]:
+        self.assertIsNotNone(report, self.both(result))
+        return next(c for c in report["checks"] if c["check"] == "overrides")
+
+    def test_a_built_descriptor_carrying_what_head_holds_passes(self) -> None:
+        self.two_code_lists()
+        self.sidecar("alpha", self.TWO)
+        self.build("alpha", "datapackage.json", code_list("alpha", "t.alpha"))
+        result, report = self.run_check()
+        self.assertEqual(result.returncode, EXIT_OK, self.both(result))
+        self.assertChecks(report, label_agreement=True, frictionless=True, descriptors=True)
+        self.assertIn("0 hand-held constraint(s) replaced or ignored; 1 held at HEAD", self.overrides(result, report)["output"])
+
+    def test_a_constraint_head_holds_and_the_build_lost_is_refused(self) -> None:
+        """Dropped from the working sidecar and regenerated looser: main's `replaced`."""
+        self.two_code_lists()
+        self.sidecar("alpha", self.TWO)
+        self.commit()
+        self.sidecar("alpha", {})
+        # The sibling declares the same, so label agreement has nothing to say.
+        self.bundle["t.beta"] = code_list("beta", "t.beta", constraints={"pattern": "^[0-9]+$"})
+        self.build("alpha", "datapackage.json", code_list("alpha", "t.alpha", constraints={"pattern": "^[0-9]+$"}))
+        result, report = self.run_check(commit=False)
+        self.assertEqual(result.returncode, EXIT_FAILED, self.both(result))
+        self.assertChecks(report, label_agreement=True, frictionless=True, descriptors=True, overrides=False)
+        self.assertIn("FAILED  overrides", result.stdout)
+        self.assertIn("alpha/datapackage.json.code: constraints.pattern", result.stdout)
+        self.assertEqual([v["kind"] for v in self.overrides(result, report)["findings"]["violations"]], ["replaced"])
+
+    def test_a_constraint_head_holds_that_the_build_did_not_apply_is_refused(self) -> None:
+        self.two_code_lists()
+        self.sidecar("alpha", self.ANY)
+        self.build("alpha", "datapackage.json", code_list("alpha", "t.alpha"))
+        result, report = self.run_check()
+        self.assertEqual(result.returncode, EXIT_FAILED, self.both(result))
+        self.assertChecks(report, label_agreement=True, frictionless=True, descriptors=True, overrides=False)
+
+    def test_a_constraint_moved_in_the_sidecar_passes(self) -> None:
+        """Moving a constraint in the sidecar, where the diff shows it, is not refused."""
+        self.two_code_lists()
+        self.sidecar("alpha", self.TWO)
+        self.commit()
+        self.sidecar("alpha", self.ANY)
+        # The sibling declares the same, so label agreement has nothing to say.
+        self.bundle["t.beta"] = code_list("beta", "t.beta", constraints={"pattern": "^[0-9]+$"})
+        self.build("alpha", "datapackage.json", code_list("alpha", "t.alpha", constraints={"pattern": "^[0-9]+$"}))
+        result, report = self.run_check(commit=False)
+        self.assertEqual(result.returncode, EXIT_OK, self.both(result))
+
+    def test_a_per_table_descriptor_reads_its_own_sidecar(self) -> None:
+        self.two_code_lists()
+        self.protocol("gamma", [("t.g_one", "g_one.datapackage.json")])
+        self.bundle["t.g_one"] = code_list("g_one", "t.g_one")
+        self.sidecar("gamma", self.ANY, "g_one.overrides.json")
+        self.build("gamma", "g_one.datapackage.json", code_list("g_one", "t.g_one"))
+        result, report = self.run_check("gamma")
+        self.assertEqual(result.returncode, EXIT_FAILED, self.both(result))
+        self.assertIn("gamma/g_one.datapackage.json.code", result.stdout)
+
+    def test_outside_a_git_checkout_the_check_cannot_run(self) -> None:
+        self.two_code_lists()
+        self.build("alpha", "datapackage.json", code_list("alpha", "t.alpha"))
+        result, report = self.run_check(commit=False)
+        self.assertEqual(result.returncode, EXIT_ERROR, self.both(result))
+        self.assertEqual(self.overrides(result, report)["exit"], EXIT_ERROR)
+        self.assertIn("not inside a git work tree", result.stdout)
 
 
 if __name__ == "__main__":
