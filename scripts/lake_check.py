@@ -41,11 +41,15 @@ The repository inputs, each finding to its own:
   Frictionless refusals      datasets/frictionless-rejections.json
   overrides ratchet          the table's overrides sidecar (`descriptor.overrides.json`
                              or `<name>.overrides.json`)
+  engine, no run record      the Protocol's `arcform.yaml` (see below)
 
 An input's time is `git log -1 --format=%cI -- <path>`, so the checkout needs full
 history. The engine pin a table is held to is the one its stamp steps resolved in the
-Run that published it, read from the lake's run record (`manifest.json`'s `run.record`),
-so a pin bump on `main` waits for the next publish rather than reading as drift.
+Run that published it, read from the lake's run record (`manifest.json`'s `run.record`,
+a relative reference resolved against the manifest's URL); a mismatch is drift. A table
+whose record is missing or unreadable is held to its Protocol's `arcform.yaml` at HEAD
+instead, and a mismatch is sorted by when that file changed; the step summary names
+each such table in its notes.
 
     lake_check.py --tree DIR --repo . --json FILE [--manifest URL] [--check NAME ...]
 
@@ -306,82 +310,118 @@ def read_source(where: str) -> Any:
     return json.loads(Path(where).read_text(encoding="utf-8"))
 
 
-def snapshot_pins(manifest: dict[str, Any], plain_url: str) -> tuple[list[str], str] | None:
+PUBLIC_ORIGIN = "https://openlake.meridian.online/"
+
+
+def record_url(reference: str, manifest_source: str) -> str:
+    """A run record's address: absolute as written, else against the manifest's URL.
+
+    A relative reference is never read as a local path. A manifest read from a file has
+    no URL to resolve against, so the public lake's origin stands in, as it does for
+    `publish_dataset.py trace`.
+    """
+    from urllib.parse import urljoin
+
+    if "://" in reference:
+        return reference
+    base = manifest_source if manifest_source.startswith(("http://", "https://")) else PUBLIC_ORIGIN
+    return urljoin(base, reference)
+
+
+@dataclass
+class Snapshot:
+    """The stamp pins of the Run that published a table, or why they are not known."""
+
+    pins: list[str] | None
+    where: str  # the phrase a finding or a note uses for where the pin came from
+
+
+def snapshot_pins(manifest: dict[str, Any], plain_url: str, manifest_source: str) -> Snapshot:
     """The `duckdb==` deps the stamp steps resolved in the Run that published this object.
 
     Read from the lake's own record of that Run (`manifest.json`'s `run.record`), so the
-    pin is the one that wrote the object, not `main`'s. None when the manifest names no
-    record for it.
+    pin is the one that wrote the object, not `main`'s. `pins` is None when the manifest
+    has no entry or names no record for it, or the record cannot be read.
     """
     for entry in (manifest.get("datasets") or {}).values():
         if str(entry.get("url", "")).split("?", 1)[0] != plain_url:
             continue
         run_ref = entry.get("run") or {}
         if not run_ref.get("record"):
-            return None
-        record = read_source(run_ref["record"])
-        pins = []
-        for step in record.get("steps") or []:
-            resolved = step.get("resolved_with") or {}
-            if "stamp_descriptor" in str(resolved.get("script", "")):
-                pins.extend(dep for dep in resolved.get("deps") or [] if str(dep).startswith("duckdb=="))
-        return pins, run_ref.get("id") or run_ref["record"]
-    return None
+            return Snapshot(None, "the manifest names no run record for it")
+        url = record_url(str(run_ref["record"]), manifest_source)
+        try:
+            record = read_source(url)
+            steps = record.get("steps") or []
+            pins = []
+            for step in steps:
+                resolved = step.get("resolved_with") or {}
+                if "stamp_descriptor" in str(resolved.get("script", "")):
+                    pins.extend(dep for dep in resolved.get("deps") or [] if str(dep).startswith("duckdb=="))
+        except (OSError, ValueError, AttributeError, TypeError) as exc:
+            return Snapshot(None, f"its run record {url} could not be read: {exc}")
+        return Snapshot(pins, f"in run {run_ref.get('id') or url}")
+    return Snapshot(None, "the manifest has no entry for it")
 
 
-def check_engine(tree: Tree, work: Path, manifest_source: str) -> tuple[Ran, list[Finding]]:
+def check_engine(tree: Tree, work: Path, manifest_source: str) -> tuple[Ran, list[Finding], list[str]]:
     """Each footer against the DuckDB the Run that published it pinned for its stamp steps.
 
     Each descriptor is laid in a directory of its own beside an `arcform.yaml` holding that
-    Run's stamp pins, as the lake's run record states them, so a pin bump on `main` waits
-    for the next publish instead of reading as drift. A table whose Run the manifest does
-    not record is held to the Protocol's pin at HEAD, and the finding says so.
+    Run's stamp pins, as the lake's run record states them. A mismatch against those is
+    the lake contradicting itself, and drift. A table whose record is missing or cannot be
+    read is held to its Protocol's `arcform.yaml` at HEAD instead; a mismatch then compares
+    the lake with the repository and is sorted by when that file changed, so a pin bump on
+    `main` waits for the next publish. Every such table is also returned as a note, for the
+    step summary, so a missing record is visible rather than silently downgraded.
     """
     try:
         manifest = read_source(manifest_source)
     except (OSError, ValueError) as exc:
         return Ran("engine", EXIT_ERROR, f"cannot read the manifest {manifest_source}: {exc}"), [
             Finding("engine", f"cannot read the manifest {manifest_source}: {exc}")
-        ]
+        ], []
     engine = work / "engine"
-    laid: dict[str, tuple[Subject, str]] = {}
+    laid: dict[str, tuple[Subject, Snapshot]] = {}
+    notes: list[str] = []
     for index, (rel, document) in enumerate(sorted(tree.documents.items())):
         slug, name = rel.split("/", 1)
         folder = engine / f"{index:03d}-{slug}"
         folder.mkdir(parents=True)
         relaid = json.loads(json.dumps(document))
-        resources = relaid.get("resources") or []
-        for resource in resources:
+        for resource in relaid.get("resources") or []:
             path = resource.get("path")
             if isinstance(path, str) and "://" not in path:
                 resource["path"] = str((tree.datasets / slug / path).resolve())  # a local path moves with it
         (folder / name).write_text(json.dumps(relaid), encoding="utf-8")
         plain = str((document.get("resources") or [{}])[0].get("path", "")).split("?", 1)[0]
-        try:
-            found = snapshot_pins(manifest, plain)
-        except (OSError, ValueError) as exc:
-            found = None
-            print(f"engine: cannot read the run record for {rel}: {exc}")
-        if found is not None:
-            pins, run_id = found
-            steps = "".join(f"  - name: stamp_{i}\n    with:\n      script: stamp_descriptor.py\n      deps:\n        - {pin}\n" for i, pin in enumerate(pins))
+        snapshot = snapshot_pins(manifest, plain, manifest_source)
+        if snapshot.pins is not None:
+            steps = "".join(
+                f"  - name: stamp_{i}\n    with:\n      script: stamp_descriptor.py\n      deps:\n        - {pin}\n"
+                for i, pin in enumerate(snapshot.pins)
+            )
             (folder / "arcform.yaml").write_text("steps:\n" + steps, encoding="utf-8")
-            where = f"in run {run_id}"
         else:
             head = tree.datasets / slug / "arcform.yaml"
             if head.exists():
                 shutil.copyfile(head, folder / "arcform.yaml")
-            where = "at HEAD, since the manifest records no run for it"
-        laid[str((folder / name).resolve())] = (Subject(slug, rel), where)
+            notes.append(f"engine: {rel} is held to its Protocol's pin at HEAD, because {snapshot.where}")
+        laid[str((folder / name).resolve())] = (Subject(slug, rel), snapshot)
+    for note in notes:
+        print(note)
     out = work / "engine.json"
     ran = run("engine", [str(SCRIPTS / "check_engine_version.py"), "--datasets-dir", str(engine), "--json", str(out)])
 
     def convert(item: dict[str, Any]) -> Finding:
-        subject, where = laid[str(Path(item["package"]).resolve())]
-        detail = f"{subject.descriptor} :: {item['resource']}: written by {item['writer_version']}, pinned {item['reader_pin']} ({item['pin_source']}, {where})"
-        return Finding("engine", detail, [subject], lake_only=True)
+        subject, snapshot = laid[str(Path(item["package"]).resolve())]
+        written = f"{subject.descriptor} :: {item['resource']}: written by {item['writer_version']}, pinned {item['reader_pin']} ({item['pin_source']}"
+        if snapshot.pins is not None:
+            return Finding("engine", f"{written}, {snapshot.where})", [subject], lake_only=True)
+        detail = f"{written} at HEAD, because {snapshot.where})"
+        return Finding("engine", detail, [subject], [f"datasets/{subject.slug}/arcform.yaml"])
 
-    return ran, crashed(ran, each("engine", read_json(out).get("mismatches", []), convert))
+    return ran, crashed(ran, each("engine", read_json(out).get("mismatches", []), convert)), notes
 
 
 def check_labels(tree: Tree, work: Path) -> tuple[Ran, list[Finding]]:
@@ -508,11 +548,14 @@ def check_verify(tree: Tree) -> list[Finding]:
 # ------------------------------------------------------------------ the report
 
 
-def summary(drift: list[Finding], awaiting: list[Finding], statuses: dict[str, Any]) -> str:
+def summary(drift: list[Finding], awaiting: list[Finding], statuses: dict[str, Any], notes: list[str] | None = None) -> str:
     lines = ["### Lake check", ""]
     lines.append("| check | exit |")
     lines.append("|---|---|")
     lines.extend(f"| {name} | {status} |" for name, status in statuses.items())
+    if notes:
+        lines += ["", f"#### Notes ({len(notes)}) — read these, they are not findings", ""]
+        lines.extend(f"- {note}" for note in notes)
     for title, items in ((f"Drift ({len(drift)}) — the run fails", drift), (f"Awaiting publish ({len(awaiting)}) — reported, not failed on", awaiting)):
         lines += ["", f"#### {title}", ""]
         if not items:
@@ -551,11 +594,17 @@ def main(argv: list[str] | None = None) -> int:
 
         findings: list[Finding] = []
         statuses: dict[str, Any] = {}
+        notes: list[str] = []
+
+        def engine_with_notes(result: tuple[Ran, list[Finding], list[str]]) -> tuple[Ran, list[Finding]]:
+            notes.extend(result[2])
+            return result[0], result[1]
+
         with tempfile.TemporaryDirectory(prefix="lake-check-") as tmp:
             work = Path(tmp)
             steps = {
                 "descriptors": lambda: check_descriptors(tree, repo, work, protocol_tables(repo)),
-                "engine": lambda: check_engine(tree, work, args.manifest),
+                "engine": lambda: engine_with_notes(check_engine(tree, work, args.manifest)),
                 "labels": lambda: check_labels(tree, work),
                 "frictionless": lambda: check_frictionless(tree, work),
                 "code_list": lambda: check_code_list(tree, work),
@@ -588,7 +637,7 @@ def main(argv: list[str] | None = None) -> int:
 
     drift = [f for f in findings if f.kind == DRIFT]
     awaiting = [f for f in findings if f.kind == AWAITING]
-    text = summary(drift, awaiting, statuses)
+    text = summary(drift, awaiting, statuses, notes)
     print("\n" + text)
     if os.environ.get("GITHUB_STEP_SUMMARY"):
         with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as handle:
@@ -596,7 +645,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.json:
         args.json.write_text(
             json.dumps(
-                {"checks": statuses, DRIFT: [asdict(f) for f in drift], AWAITING: [asdict(f) for f in awaiting]},
+                {"checks": statuses, DRIFT: [asdict(f) for f in drift], AWAITING: [asdict(f) for f in awaiting], "notes": notes},
                 indent=2,
                 ensure_ascii=False,
             )
