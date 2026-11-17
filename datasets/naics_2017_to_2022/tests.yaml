@@ -18,6 +18,12 @@
 # On this fixture the build agrees with the lake, so the pass case runs the check for
 # real.
 
+# This case runs describe on the fixture rows and then the real check before publish, so
+# it passes only while finetype labels the fixture's columns as it labelled the full table.
+# It does today. If a finetype change makes it label one differently, as fixture rows
+# already are in fips, naics_2022_titles and ourairports, this fails for no defect: give
+# it a stand-in check_before_publish fixture and add a case with describe fixtured to the
+# lake's descriptor, as those Protocols do.
 - name: the fixture builds the crosswalk
   risk: a crosswalk published with pairings lost or invented, 2022 codes that miss census/naics_2022, or Census's text changed
   fixtures:

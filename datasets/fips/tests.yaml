@@ -29,10 +29,13 @@
 # check_before_publish is a uv step that prints its findings on standard output, which arc
 # does not report, so its refusal is matched by "step 'check_before_publish' failed (exit
 # code 1)", exit 1 being a finding rather than a check that could not run. The refusal
-# case differs from the case before it only in the bundle, so that pair is what shows the
-# disagreeing label fails it. The disagreement is a second fixture file, not a break: arc
-# reads a JSON fixture as an array or as one object per line, and the bundle is one object
-# over many lines, which DuckDB refuses as malformed.
+# case differs from the case before it only in the bundle, so that pair shows the bundle
+# is what fails it; it is an end-to-end case and cannot say which finding. Relabelling
+# naics.level also leaves reasons that pin it stale, so scripts/test_check_before_publish.py
+# shows a label disagreement failing on its own, by the report's text, with no reason
+# shipped. The disagreement is a second fixture file, not a break: arc reads a JSON
+# fixture as an array or as one object per line, and the bundle is one object over many
+# lines, which DuckDB refuses as malformed.
 
 - name: the fixture builds the code list
   risk: a FIPS table published with Connecticut's codes, the Island Areas or the current flag wrong

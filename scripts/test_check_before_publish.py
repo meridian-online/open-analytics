@@ -205,6 +205,24 @@ class CheckBeforePublish(Scratch):
         self.assertIn("field name 'description'", result.stdout)
         self.assertIn(f'alpha.description: "{WORD}"', result.stdout)
 
+    def test_a_sibling_in_the_lake_labelled_differently_fails_on_that_difference_alone(self) -> None:
+        """The arc refusal case in census/fips can match only an exit status, and the label it
+        moves is also pinned by reasons, so a stale reason would fail it too. Here no reason
+        is shipped at all: the one thing that can fail is the field-name disagreement, and
+        the report has to name it as an open difference."""
+        self.two_code_lists()
+        self.bundle["t.beta"] = code_list("beta", "t.beta", description_label=WORD)
+        self.build("alpha", "datapackage.json", code_list("alpha", "t.alpha"))
+        self.assertFalse((self.datasets / "label-agreement.json").exists())
+        result, report = self.run_check()
+        self.assertEqual(result.returncode, EXIT_FAILED, self.both(result))
+        self.assertChecks(report, label_agreement=False, frictionless=True, descriptors=True)
+        self.assertIn("field name 'description' — x-finetype-label differs [OPEN]", result.stdout)
+        self.assertIn(f'beta.description: "{WORD}"', result.stdout)
+        self.assertIn(f'alpha.description: "{PLAIN}"', result.stdout)
+        self.assertIn("FAILED under --strict", result.stdout)
+        self.assertNotIn("no longer describe", self.both(result))
+
     def test_override_broken_by_data(self) -> None:
         self.two_code_lists()
         # The sibling declares the same, so label agreement has nothing to say: only the data does.

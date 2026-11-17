@@ -229,5 +229,20 @@ class Emit(unittest.TestCase):
             self.assertIn("Census\u2019s", single.encode().decode())
 
 
+class LakeBundleFixtures(unittest.TestCase):
+    """The lake bundle the tests read is one snapshot, copied into each Protocol whose
+    `arc test` fixtures `emit_descriptors`, because a fixture lives in its Protocol's folder.
+    A copy regenerated without the others would test that Protocol against another lake."""
+
+    def test_every_protocol_copy_is_the_scripts_copy(self) -> None:
+        root = Path(__file__).resolve().parent.parent
+        canonical = (root / "scripts" / "testdata" / "lake_descriptors.json").read_bytes()
+        copies = sorted((root / "datasets").glob("*/testdata/lake_descriptors.json"))
+        self.assertTrue(copies, "no Protocol carries a lake bundle fixture")
+        for copy in copies:
+            with self.subTest(copy=str(copy.relative_to(root))):
+                self.assertEqual(copy.read_bytes(), canonical, "regenerate every copy together")
+
+
 if __name__ == "__main__":
     unittest.main()
