@@ -258,10 +258,14 @@ steps:
       runs: runs/
       manifest: manifest.json
       local_catalog: build/lake/open.ducklake
+      # on_descriptor_change: fail refuses the publish, writing nothing, when a field's FineType
+      # label moved against the descriptor the lake holds and the field is not nominated;
+      # every other difference is reported.
       tables:
         - table: sec.company_tickers_exchange
           from: build/edgar.parquet
           descriptor: build/datapackage.json
+          on_descriptor_change: fail
           readable_copy: sec/company_tickers_exchange.parquet
       credential:
         type: r2

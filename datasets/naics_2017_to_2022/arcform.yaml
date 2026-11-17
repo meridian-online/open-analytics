@@ -256,10 +256,14 @@ steps:
       runs: runs/
       manifest: manifest.json
       local_catalog: build/lake/open.ducklake
+      # on_descriptor_change: fail refuses the publish, writing nothing, when a field's FineType
+      # label moved against the descriptor the lake holds and the field is not nominated;
+      # every other difference is reported.
       tables:
         - table: census.naics_2017_to_2022
           from: build/naics_2017_to_2022.parquet
           descriptor: build/datapackage.json
+          on_descriptor_change: fail
           readable_copy: census/naics_2017_to_2022.parquet
       credential:
         type: r2
