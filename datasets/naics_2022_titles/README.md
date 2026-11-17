@@ -8,7 +8,7 @@ The U.S. Census Bureau's 2022 NAICS index file as a title index: one row per ind
 | `datapackage.json` | **Descriptor** — what it is | schema, finetype labels, the title-index declaration |
 | `../registry.json` (this dataset's entry) | **Address** — how it's found | stable `uid`, `census/naics_2022_titles`, manifest pointer |
 
-`census/naics_2022_titles` is not yet published. As FIPS and OurAirports were, it is published after the Protocol merges, and its descriptor, registry entry and the repository README's Datasets row are committed with that publish, since CI holds every committed descriptor to the object the lake serves. Until then `datapackage.json` is in this folder's `.gitignore`; the change that commits it from the publishing run removes that line. That change also carries any reasons `datasets/label-agreement.json` needs for this descriptor's fields, which `scripts/check_label_agreement.py --strict` reports when run with the built descriptor in place.
+`census/naics_2022_titles` was first published on 2026-11-17, after the Protocol merged, as FIPS and OurAirports were: snapshot 18 of the open lake, 20,373 entries at release 2022. The descriptor, registry entry, the repository README's Datasets row and the reasons `datasets/label-agreement.json` gives for this descriptor's fields were committed together after that publish, since CI holds every committed descriptor to the object the lake serves.
 
 ## The Protocol
 
