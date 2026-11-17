@@ -8,7 +8,7 @@ The U.S. Census Bureau's own concordance from the 2017 North American Industry C
 | `datapackage.json` | **Descriptor** — what it is | schema, finetype labels, the crosswalk declaration |
 | `../registry.json` (this dataset's entry) | **Address** — how it's found | stable `uid`, `census/naics_2017_to_2022`, manifest pointer |
 
-`census/naics_2017_to_2022` is not yet published. As FIPS, OurAirports and the NAICS index were, it is published after the Protocol merges, and its descriptor, registry entry and the repository README's Datasets row are committed with that publish, since CI holds every committed descriptor to the object the lake serves. Until then `datapackage.json` is in this folder's `.gitignore`; the change that commits it from the publishing run removes that line. That change also carries any reasons `datasets/label-agreement.json` needs for this descriptor's fields, which `scripts/check_label_agreement.py --strict` reports when run with the built descriptor in place.
+`census/naics_2017_to_2022` was first published on 2026-11-17, after the Protocol merged, as FIPS, OurAirports and the NAICS index were: snapshot 17 of the open lake, 1,150 rows at release 2022. The descriptor, registry entry, the repository README's Datasets row and the reasons `datasets/label-agreement.json` gives for this descriptor's fields were committed together after that publish, since CI holds every committed descriptor to the object the lake serves.
 
 ## The Protocol
 

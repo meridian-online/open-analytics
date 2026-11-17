@@ -183,6 +183,16 @@
       "protocol": "datasets/fips/arcform.yaml"
     },
     {
+      "uid": "326b0564-97c5-4f47-a1d9-00acabb56467",
+      "schema": "census",
+      "name": "naics_2017_to_2022",
+      "title": "NAICS 2017 to 2022 concordance — U.S. Census Bureau",
+      "aliases": [],
+      "manifest": "https://openlake.meridian.online/manifest.json",
+      "doi": null,
+      "protocol": "datasets/naics_2017_to_2022/arcform.yaml"
+    },
+    {
       "uid": "09002603-616c-4776-ba30-f7ece4b9d551",
       "schema": "library",
       "name": "ourairports",
