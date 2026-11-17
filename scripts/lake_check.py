@@ -59,8 +59,8 @@ such edit turn a real mismatch into "awaiting publish":
                     added or removed lines name its key, which is a reason's removal.
                     A difference no commit has reasoned about is dated never: drift.
 
-A line range git cannot follow, as in a checkout whose README.md differs from HEAD, is
-dated by the whole file instead. The engine pin a table is held to is the one its stamp steps resolved in the
+Line dating reads HEAD's lines, so a checkout whose README.md or reasons file differs
+from HEAD, or a range git cannot follow, is dated by the whole file instead. The engine pin a table is held to is the one its stamp steps resolved in the
 Run that published it, read from the lake's run record (`manifest.json`'s `run.record`,
 a relative reference resolved against the manifest's URL); a mismatch is drift. A table
 whose record is missing or unreadable is held to its Protocol's `arcform.yaml` at HEAD
@@ -161,7 +161,9 @@ def dated(repo: Path, finding: "Finding") -> datetime:
         return last_change(repo, finding.inputs) if finding.inputs else NEVER
     times = [NEVER]
     for path, first, last in finding.lines:
-        moment = first_time(repo, [f"-L{first},{last}:{path}"])
+        # The finding's line numbers are the working tree's; -L reads HEAD's.
+        dirty = subprocess.run(["git", "-C", str(repo), "diff", "--quiet", "HEAD", "--", path], check=False).returncode != 0
+        moment = None if dirty else first_time(repo, [f"-L{first},{last}:{path}"])
         times.append(moment if moment is not None else last_change(repo, [path]))
     for path, pattern in finding.mentions:
         moment = first_time(repo, [f"-G{pattern}", "--", path])
@@ -171,9 +173,9 @@ def dated(repo: Path, finding: "Finding") -> datetime:
     return max(times)
 
 
-def basic_regex(text: str) -> str:
-    """`text` as a POSIX basic regular expression matching it literally."""
-    return "".join("\\" + ch if ch in ".[]*^$\\" else ch for ch in text)
+def literal_regex(text: str) -> str:
+    """`text` as the extended regular expression `git log -G` compiles, matching it literally."""
+    return "".join("\\" + ch if ch in ".[]*^$\\+?(){}|" else ch for ch in text)
 
 
 def entry_spans(text: str) -> dict[str, list[tuple[int, int, Any]]]:
@@ -232,7 +234,7 @@ class Finding:
     lake_only: bool = False  # the lake against itself: drift whatever git says
     # When either is set, the finding is dated by these instead of by `inputs` whole:
     lines: list[tuple[str, int, int]] = field(default_factory=list)  # (path, first, last) for `git log -L`
-    mentions: list[tuple[str, str]] = field(default_factory=list)  # (path, basic regex) for `git log -G`
+    mentions: list[tuple[str, str]] = field(default_factory=list)  # (path, extended regex) for `git log -G`
     kind: str = ""
     published_at: str | None = None
     last_change_at: str | None = None
@@ -387,7 +389,7 @@ def check_descriptors(tree: Tree, repo: Path, work: Path, links: dict[str, str])
             elif subject is not None and subject.descriptor in tree.documents:
                 resources = tree.documents[subject.descriptor].get("resources") or [{}]
                 link = str(resources[0].get("path", "")).split("?", 1)[0].split("://", 1)[-1].split("/", 1)[-1]
-                found.mentions = [("README.md", basic_regex(link or subject.descriptor))]
+                found.mentions = [("README.md", literal_regex(link or subject.descriptor))]
             return found
         subject = tree.subject_for_path(item["package"])
         where = f"{item['package']} :: {item['resource']}: {detail}"
@@ -569,7 +571,7 @@ def check_labels(tree: Tree, work: Path, repo: Path = ROOT) -> tuple[Ran, list[F
             return None
         found = Finding("labels", f"{item['kind']} {item['key']!r}, {item['property']}: no stated reason", subjects(item["values"]), inputs)
         found.lines = reason_lines(item, values=False)
-        found.mentions = [(path, basic_regex(f'"{grouping(item["kind"])}": "{item["key"]}"'))]
+        found.mentions = [(path, literal_regex(f'"{grouping(item["kind"])}": "{item["key"]}"'))]
         return found
 
     def stale(item: dict[str, Any]) -> Finding:

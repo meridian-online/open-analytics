@@ -435,6 +435,22 @@ class AdapterTest(unittest.TestCase):
         self.assertEqual(kinds["field 'code', x-finetype-label: a stated reason matches no difference"], lc.AWAITING)
         self.assertEqual(kinds["field 'code', x-finetype-label: no stated reason"], lc.AWAITING)
 
+    def test_a_removed_reason_whose_key_has_regex_characters_is_found(self) -> None:
+        """`git log -G` reads an extended regex, so `+` and `(` in a key must match literally."""
+        finding = lc.Finding("labels", "d", [lc.Subject("widgets", None)], ["r.json"])
+        commit(self.repo, JAN, {"r.json": '{"reasons": [{"field": "a+b(c)"}]}\n'})
+        commit(self.repo, MAR, {"r.json": '{"reasons": []}\n'})
+        finding.mentions = [("r.json", lc.literal_regex('"field": "a+b(c)"'))]
+        self.assertEqual(lc.dated(self.repo, finding), MAR)
+
+    def test_a_readme_differing_from_head_is_dated_by_the_whole_file(self) -> None:
+        commit(self.repo, JAN, {"README.md": "row\n"})
+        commit(self.repo, MAR, {"other.md": "x\n", "README.md": "row\nmore\n"})
+        finding = lc.Finding("descriptors", "d", [], ["README.md"], lines=[("README.md", 1, 1)])
+        self.assertEqual(lc.dated(self.repo, finding), JAN)
+        (self.repo / "README.md").write_text("inserted\nrow\nmore\n", encoding="utf-8")
+        self.assertEqual(lc.dated(self.repo, finding), MAR)
+
     def catalogue_findings(self) -> list[lc.Finding]:
         ran, found = lc.check_descriptors(self.tree(), self.repo, self.work, {})
         rows = [f for f in found if "catalogue.rows" in f.detail]
