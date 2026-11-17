@@ -5,10 +5,10 @@ OurAirports' airports that carry an ICAO code, the four-letter code air traffic 
 | File | Facet | Answers |
 |---|---|---|
 | `arcform.yaml` (+ `models/`) | **Protocol** — how it's made | run `arc run` → produces the Dataset |
-| `datapackage.json` | **Descriptor** — what it is | schema, finetype labels, the code-list declaration |
+| `build/datapackage.json` | **Descriptor** — what it is (built by `arc run`, not committed: the open lake holds the published copy) | schema, finetype labels, the code-list declaration |
 | `../registry.json` (this dataset's entry) | **Address** — how it's found | stable `uid`, `library/ourairports`, manifest pointer |
 
-`library/ourairports` was first published on 2026-11-17, after the Protocol merged, as FIPS was: snapshot 13 of the open lake, 10,734 rows at release 2026-11-16. The descriptor, registry entry, the repository README's Datasets row and the reasons `datasets/label-agreement.json` gives for this descriptor's fields were committed together after that publish, since CI holds every committed descriptor to the object the lake serves and reads only committed descriptors.
+`library/ourairports` was first published on 2026-11-17, after the Protocol merged, as FIPS was: snapshot 13 of the open lake, 10,734 rows at release 2026-11-16. The descriptor, registry entry, the repository README's Datasets row and the reasons `datasets/label-agreement.json` gives for this descriptor's fields were committed together after that publish, since CI then held every committed descriptor to the object the lake serves and read only committed descriptors. The repository no longer commits a descriptor: the open lake holds the published copy.
 
 ## The Protocol
 
@@ -22,14 +22,15 @@ OurAirports' airports that carry an ICAO code, the four-letter code air traffic 
 6. **describe** — emit the descriptor from the Parquet, typed by finetype with `nominations.finetype.json` and `descriptor.overrides.json` applied.
 7. **check_code_list** — hold the Parquet to the shared code-list contract (`scripts/check_code_list.py`, see `docs/code-lists.md`).
 8. **validate** — gate the Parquet against `schema.finetype.json`.
-9. **stamp_descriptor** — write the published `build/ourairports.parquet` with the finished descriptor in its footer, and `datapackage.json` beside it.
-10. **publish** — upsert `library.ourairports` into the open lake on `code`, with its descriptor in the lake's `meta` schema and the readable copy at `library/ourairports.parquet` (see *Publish*).
+9. **stamp_descriptor** — write the published `build/ourairports.parquet` with the finished descriptor in its footer, and `build/datapackage.json` beside it.
+10. **check before publishing** — `emit_descriptors` writes every published table's descriptor, as the open lake holds it, to `build/lake_descriptors.json`. It runs before the stamp, which keeps the lake's `created` when it writes the object the lake already serves. `check_before_publish` then holds the built descriptor to label agreement with them, to the frictionless reference implementation, and to `scripts/check_descriptors.py`'s rules read against the local Parquet. A failing check stops the run before publish.
+11. **publish** — upsert `library.ourairports` into the open lake on `code`, with its descriptor in the lake's `meta` schema and the readable copy at `library/ourairports.parquet` (see *Publish*).
 
 Produces `build/ourairports.parquet`.
 
 <!-- protocol-steps: generated from arcform.yaml by scripts/check_protocol_readme.py — do not edit this block by hand -->
 
-All 15 steps are `sql:` models or typed `op:` operators from the arcform catalog. This Protocol runs no opaque `command:`/shell step.
+All 17 steps are `sql:` models or typed `op:` operators from the arcform catalog. This Protocol runs no opaque `command:`/shell step.
 
 | # | Step | How it runs |
 |---|---|---|
@@ -46,8 +47,10 @@ All 15 steps are `sql:` models or typed `op:` operators from the arcform catalog
 | 11 | `describe` | `op: datapackage_describe@1` |
 | 12 | `check_code_list` | `op: uv@1` |
 | 13 | `validate` | `op: finetype_validate@1` |
-| 14 | `stamp_descriptor` | `op: uv@1` |
-| 15 | `publish` | `op: ducklake_write@1` |
+| 14 | `emit_descriptors` | `op: uv@1` |
+| 15 | `stamp_descriptor` | `op: uv@1` |
+| 16 | `check_before_publish` | `op: uv@1` |
+| 17 | `publish` | `op: ducklake_write@1` |
 
 <!-- /protocol-steps -->
 

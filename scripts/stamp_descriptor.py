@@ -58,14 +58,25 @@ when its data pages are byte-identical, and an analyst who pinned the `hash` out
 the third fact a file cannot state about itself without changing it, and the only one
 of the three that moves when nothing else does.
 
-In the repository copy, beside the object, `created` means *when this data first
+In the descriptor beside the object, `created` means *when this data first
 appeared*, not *when this run happened*. With `--carry-created`, a stamp that finds
-the same data pages already published at its output keeps the `created` that
-descriptor states; a stamp over different pages takes the fresh one `describe` wrote.
+the same data pages already at its output keeps the `created` that descriptor
+states; a stamp over different pages takes the fresh one `describe` wrote.
+
+`--carry-created-from BUNDLE --table NS.NAME` carries it from the lake instead: BUNDLE
+is `emit_descriptor.py --all --bundle`'s output, table name to the descriptor the lake
+holds. When the stamped file is byte for byte the object the lake already serves (its
+`hash` equals the lake copy's), the lake's `created` is kept. Otherwise, or when the
+lake holds no such table yet (a first publish), the fresh `created` stands. Here
+`created` is when the published file was created, and the comparison is of the whole
+file, footer included: a republish that changes only the descriptor rewrites the file,
+so it takes a new `created` even though no data page moved. The lake's bundle names the
+published object's hash, not its pages'.
 
     stamp_descriptor.py stamp --descriptor datapackage.json --parquet build/x.parquet
     stamp_descriptor.py stamp --descriptor stage/measured.json --parquet stage/x.parquet
-        --out build/x.parquet --out-descriptor datapackage.json --carry-created
+        --out build/x.parquet --out-descriptor build/datapackage.json
+        --carry-created-from build/lake_descriptors.json --table census.x
     stamp_descriptor.py read  https://openlake.meridian.online/naics.parquet
 
 Exit codes are distinct on purpose, because a status alone cannot tell a refusal
@@ -574,6 +585,35 @@ def carried_created(parquet: Path, descriptor: Path, digest: str) -> str | None:
     return created if isinstance(created, str) and created else None
 
 
+def lake_created(bundle_path: Path, table: str, resource_name: Any, digest: str) -> str | None:
+    """The lake's `created` for `table` when the lake serves exactly these bytes, else None.
+
+    None also when the lake holds no such table (a first publish). An unreadable bundle,
+    or a lake copy that declares no usable resource, is a StampError: it cannot vouch
+    either way, and a silent fresh `created` would read as a verdict.
+    """
+    try:
+        bundle = json.loads(bundle_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise StampError(f"cannot read the lake bundle {bundle_path}: {exc}") from exc
+    if not isinstance(bundle, dict):
+        raise StampError(f"{bundle_path} is not a JSON object of table name to descriptor")
+    entry = bundle.get(table)
+    if entry is None:
+        return None
+    resources = entry.get("resources") if isinstance(entry, dict) else None
+    if not isinstance(resources, list) or not resources or not all(isinstance(r, dict) for r in resources):
+        raise StampError(f"{bundle_path}: {table}'s descriptor declares no resources")
+    named = [r for r in resources if r.get("name") == resource_name]
+    lake = named[0] if named else resources[0] if len(resources) == 1 else None
+    if lake is None:
+        raise StampError(f"{bundle_path}: {table} declares no resource named {resource_name!r}")
+    created = entry.get("created")
+    if lake.get("hash") != digest or not isinstance(created, str) or not created:
+        return None
+    return created
+
+
 # ──────────────────────────────────────────────────────────────── subcommands
 
 
@@ -582,6 +622,13 @@ def command_stamp(args: argparse.Namespace) -> int:
     parquet = Path(args.parquet)
     if not parquet.exists():
         raise StampError(f"{parquet} does not exist")
+
+    if args.carry_created_from and args.carry_created:
+        raise StampError("--carry-created and --carry-created-from are two answers to one question; give one")
+    if bool(args.carry_created_from) != bool(args.table):
+        raise StampError("--carry-created-from and --table go together")
+    if args.carry_created_from and args.keep_declared_bytes:
+        raise StampError("--carry-created-from compares the stamped file's hash, which --keep-declared-bytes does not declare")
 
     document = load_descriptor(descriptor_path)
     resource = pick_resource(document, descriptor_path, args.resource)
@@ -619,6 +666,13 @@ def command_stamp(args: argparse.Namespace) -> int:
     if not args.keep_declared_bytes:
         resource["bytes"] = size
         resource["hash"] = digest
+    if args.carry_created_from:
+        carried = lake_created(Path(args.carry_created_from), args.table, resource.get("name"), digest)
+        if carried is not None:
+            document["created"] = carried
+            print(f"stamp: {args.table} is the object the lake serves; keeps created {carried}", file=sys.stderr)
+        else:
+            print(f"stamp: {args.table} differs from the lake's copy, or is not in it; created {document.get('created')}", file=sys.stderr)
     if not args.keep_declared_bytes or args.out_descriptor:
         save_descriptor(out_descriptor, document)
 
@@ -674,6 +728,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="keep the `created` of the descriptor already at --out-descriptor when the Parquet already at "
         "--out holds the same data pages: `created` then means when this data first appeared",
     )
+    stamp.add_argument(
+        "--carry-created-from",
+        metavar="BUNDLE",
+        help="keep the lake's `created` for --table when the stamped file, footer included, is byte for byte the "
+        "object the lake serves: `created` is then when the published file was created, so a descriptor-only "
+        "republish takes a new one. BUNDLE is emit_descriptor.py --all --bundle output. A table the lake does not "
+        "hold takes the fresh one",
+    )
+    stamp.add_argument("--table", metavar="NS.NAME", help="the lake table --carry-created-from reads")
     stamp.add_argument(
         "--keep-declared-bytes",
         action="store_true",

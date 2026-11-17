@@ -58,13 +58,14 @@ moves a declaration in a package and asserts what the report says about it:
     otherwise be checked by: no `becomes`, a `becomes` that changes nothing, a
     `verdict: right` naming no disputant, no `blocked_on`, no `reason`, both pin forms
     at once, and an index-form pointer;
-  * THE ENTRIES THIS REPOSITORY SHIPS, run against the descriptors it ships. Every case
-    above is a scratch tree, which is the right altitude for the mechanism and the wrong
-    one for the entries: a shipped pointer naming a field no descriptor carries would be
-    a verdict about a declaration that does not exist, and every scratch case would
-    still pass.
+  * THE ENTRIES THIS REPOSITORY SHIPS, run against the lake's descriptors, from the
+    bundle in `scripts/testdata/lake_descriptors.json`. Every case above is a scratch
+    tree, which is the right altitude for the mechanism and the wrong one for the
+    entries: a shipped pointer naming a field no descriptor carries would be a verdict
+    about a declaration that does not exist, and every scratch case would still pass.
+    Its pair moves one lake value a shipped reason pins and asserts the check fails.
 
-Nothing here touches the network or the real `datasets/` tree.
+Nothing here touches the network or writes to the real `datasets/` tree.
 """
 
 from __future__ import annotations
@@ -887,31 +888,140 @@ class ACorrectionWithoutItsClaimIsRefused(ScratchTree):
         self.assertIn("2 element(s) carry that name", result.stderr)
 
 
+LAKE_BUNDLE = Path(__file__).resolve().parent / "testdata" / "lake_descriptors.json"
+SHIPPED = Path(__file__).resolve().parent.parent / "datasets" / "label-agreement.json"
+
+
+class InvolvingJudgesOnlyTheNamedPackages(ScratchTree):
+    """`--involving`, the pre-publish view: one package's publish is judged on its own.
+
+    `alpha` is in the lake; `y1` and `y2` are two lists merged on one day, each with a
+    reason pinning all three, and neither published. Each publish lays only its own list
+    over the lake, so the other is absent from its tree.
+    """
+
+    LABEL_NAME = "representation.text.entity_name"
+
+    def lst(self, slug: str, max_length: int) -> dict[str, Any]:
+        return package(slug, [field("legal_name", self.LABEL_NAME, constraints={"maxLength": max_length})])
+
+    def entry(self, values: dict[str, Any]) -> dict[str, Any]:
+        return {"concept": self.LABEL_NAME, "property": "constraints.maxLength", "values": values, "reason": "Registers differ."}
+
+    def siblings(self) -> None:
+        self.write(self.lst("alpha", 500))
+        self.reasons(self.entry({"alpha.legal_name": 500, "y1.legal_name": 200, "y2.legal_name": 300}))
+
+    def test_without_involving_the_absent_sibling_makes_the_reason_stale(self) -> None:
+        """The lake check's view is unchanged: a reason naming an absent package is stale."""
+        self.siblings()
+        self.write(self.lst("y1", 200))
+        result = self.run_check("--strict")
+        self.assertEqual(result.returncode, EXIT_DISAGREEMENT, self.both(result))
+        self.assertIn("no longer describe any difference", result.stderr)
+
+    def test_each_of_two_unpublished_siblings_passes_on_its_own(self) -> None:
+        self.siblings()
+        self.write(self.lst("y1", 200))
+        result = self.run_check("--strict", "--involving", "y1", "--json", str(self.datasets / "out.json"))
+        self.assertEqual(result.returncode, EXIT_OK, self.both(result))
+        self.assertIn("awaiting y2; closes the difference on the members present", result.stdout)
+        report = json.loads((self.datasets / "out.json").read_text(encoding="utf-8"))
+        self.assertEqual(report["stale_reasons"], [])
+        self.assertEqual([r["awaiting"] for r in report["awaiting_reasons"]], [["y2"]])
+
+        (self.datasets / "y1").joinpath("datapackage.json").unlink()
+        self.write(self.lst("y2", 300))
+        result = self.run_check("--strict", "--involving", "y2")
+        self.assertEqual(result.returncode, EXIT_OK, self.both(result))
+        self.assertIn("awaiting y1", result.stdout)
+
+    def test_the_named_packages_own_new_difference_with_no_reason_is_refused(self) -> None:
+        self.write(self.lst("alpha", 500))
+        self.write(self.lst("y1", 200))
+        result = self.run_check("--strict", "--involving", "y1")
+        self.assertEqual(result.returncode, EXIT_DISAGREEMENT, self.both(result))
+        self.assertIn("constraints.maxLength differs [OPEN]", result.stdout)
+        self.assertIn("FAILED under --strict", result.stderr)
+
+    def test_a_present_member_off_its_pin_does_not_close_the_difference(self) -> None:
+        """The partial match is exact on the members present, so it licenses nothing new."""
+        self.siblings()
+        self.write(self.lst("y1", 250))
+        result = self.run_check("--strict", "--involving", "y1")
+        self.assertEqual(result.returncode, EXIT_DISAGREEMENT, self.both(result))
+        self.assertIn("constraints.maxLength differs [OPEN]", result.stdout)
+        self.assertIn("awaiting y2; matches nothing yet", result.stdout)
+
+    def test_a_stale_reason_involving_the_named_package_is_refused(self) -> None:
+        self.write(self.lst("alpha", 500))
+        self.write(self.lst("y1", 250))
+        self.reasons(self.entry({"alpha.legal_name": 500, "y1.legal_name": 200}))
+        result = self.run_check("--involving", "y1")
+        self.assertEqual(result.returncode, EXIT_DISAGREEMENT, self.both(result))
+        self.assertIn("it pins y1.legal_name: 200", result.stderr)
+
+    def test_differences_reasons_and_corrections_of_other_packages_are_left_to_the_lake_check(self) -> None:
+        self.write(self.lst("alpha", 500))
+        self.write(self.lst("beta", 400))  # alpha and beta differ, with no reason
+        self.write(package("y1", [field("other", "representation.text.word")]))
+        self.agreement(
+            reasons=[self.entry({"alpha.legal_name": 500, "beta.legal_name": 100})],  # stale
+            corrections=[correction()],  # beta declares 400, not the pinned 200: moved
+        )
+        result = self.run_check("--strict", "--involving", "y1")
+        self.assertEqual(result.returncode, EXIT_OK, self.both(result))
+        self.assertIn(
+            "left to the lake check: 1 difference(s), 1 unmatched reason(s) and 1 correction(s)", result.stdout
+        )
+        result = self.run_check("--strict", "--involving", "beta")
+        self.assertEqual(result.returncode, EXIT_DISAGREEMENT, self.both(result))
+
+
+def lake_tree(root: Path) -> Path:
+    """The lake's descriptors as a datasets/ tree, beside the agreement file this repository ships.
+
+    The repository commits no descriptor, so the shipped entries are read against a
+    bundle emitted once from the lake (`emit_descriptor.py --all --bundle`), kept in
+    testdata/ so nothing here touches the network. Each package is laid out under its
+    resource's name, which is its slug.
+    """
+    bundle = json.loads(LAKE_BUNDLE.read_text(encoding="utf-8"))
+    for descriptor in bundle.values():
+        slug = descriptor["resources"][0]["name"]
+        (root / slug).mkdir(parents=True, exist_ok=True)
+        (root / slug / "datapackage.json").write_text(json.dumps(descriptor, indent=2), encoding="utf-8")
+    (root / SHIPPED.name).write_text(SHIPPED.read_text(encoding="utf-8"), encoding="utf-8")
+    return root
+
+
 class TheShippedAgreementFileIsRead(unittest.TestCase):
-    """The corrections this repository actually ships, held to the packages it ships.
+    """The reasons and corrections this repository actually ships, held to the lake's packages.
 
     The cases above run on scratch trees, which is the right altitude for the mechanism
     and the wrong one for the entries. An entry whose pointer named nothing in a real
     descriptor would be a verdict about a declaration that does not exist, and every
-    scratch case above would still pass.
+    scratch case above would still pass. The repository commits no descriptor, so the
+    packages are the lake's, from the bundle in testdata/.
 
-    The list is empty when no verdict is outstanding. The loop below then holds nothing,
-    so the case pins the other half: a file that carries no corrections prints no
-    corrections block, and one that carries them prints each.
+    The corrections list is empty when no verdict is outstanding. The loop below then
+    holds nothing, so the case pins the other half: a file that carries no corrections
+    prints no corrections block, and one that carries them prints each.
     """
 
-    def test_every_shipped_correction_resolves_and_is_live(self) -> None:
-        root = Path(__file__).resolve().parent.parent / "datasets"
-        if not (root / "label-agreement.json").exists():  # pragma: no cover
-            self.skipTest("no shipped agreement file")
-        result = subprocess.run(
-            [sys.executable, str(CHECK), "--datasets-dir", str(root)],
+    def run_check(self, root: Path, *extra: str) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            [sys.executable, str(CHECK), "--datasets-dir", str(root), *extra],
             capture_output=True,
             text=True,
         )
+
+    def test_every_shipped_correction_resolves_and_is_live(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self.run_check(lake_tree(Path(tmp)))
         self.assertEqual(result.returncode, EXIT_OK, result.stdout + result.stderr)
         self.assertNotIn("no longer describe", result.stderr)
-        entries = json.loads((root / "label-agreement.json").read_text())["corrections"]
+        entries = json.loads(SHIPPED.read_text(encoding="utf-8"))["corrections"]
         self.assertEqual(
             "declaration(s) adjudicated in" in result.stdout,
             bool(entries),
@@ -919,6 +1029,21 @@ class TheShippedAgreementFileIsRead(unittest.TestCase):
         )
         for entry in entries:
             self.assertIn(f"· {entry['pointer']}", result.stdout)
+
+    def test_a_lake_value_a_shipped_reason_pins_moving_fails(self) -> None:
+        """The same tree and the same shipped file, with one pinned value moved."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = lake_tree(Path(tmp))
+            path = root / "ourairports" / "datapackage.json"
+            document = json.loads(path.read_text(encoding="utf-8"))
+            fields = document["resources"][0]["schema"]["fields"]
+            target = next(f for f in fields if f["name"] == "iso_country")
+            target["constraints"]["pattern"] = "^[A-Z]{3}$"
+            path.write_text(json.dumps(document), encoding="utf-8")
+            result = self.run_check(root)
+        self.assertEqual(result.returncode, EXIT_DISAGREEMENT, result.stdout + result.stderr)
+        self.assertIn("no longer describe", result.stderr)
+        self.assertIn("it pins ourairports.iso_country", result.stderr)
 
 
 if __name__ == "__main__":

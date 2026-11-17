@@ -96,7 +96,7 @@
     "lei"
   ],
   "x-joins": {
-    "$comment": "How to join this crosswalk to the packages it references, and how far each join reaches. These are NOT `schema.foreignKeys`: a Data Package foreign key asserts that every value on the left exists on the right, and neither of these joins satisfies that against the published bytes \u2014 see each `cardinality` and (in the built descriptor) `coverage`. Declaring them as foreign keys would advertise a guarantee the data does not keep, so the guarantee is dropped and the reachable part is stated instead. `coverage` does NOT live in this file: a hand-typed row count decays as soon as an upstream source grows, which is exactly what happened here (four weeks stale on 2026-08-13). `crosswalk_join.py --write` measures it from the build and writes it into the generated `datapackage.json` instead.",
+    "$comment": "How to join this crosswalk to the packages it references, and how far each join reaches. These are NOT `schema.foreignKeys`: a Data Package foreign key asserts that every value on the left exists on the right, and neither of these joins satisfies that against the published bytes \u2014 see each `cardinality` and (in the built descriptor) `coverage`. Declaring them as foreign keys would advertise a guarantee the data does not keep, so the guarantee is dropped and the reachable part is stated instead. `coverage` does NOT live in this file: a hand-typed row count decays as soon as an upstream source grows, which is exactly what happened here (four weeks stale on 2026-08-13). `crosswalk_join.py --write` measures it from the build and writes it into the built descriptor instead, which publish stores in the lake.",
     "joins": [
       {
         "cardinality": "partial \u2014 most left rows have no match, and the referenced side also holds keys this crosswalk does not carry. Neither side contains the other.",
@@ -107,7 +107,7 @@
           "key"
         ],
         "name": "edgar",
-        "package": "https://github.com/meridian-online/open-analytics/blob/main/datasets/edgar/datapackage.json",
+        "package": "https://meridian.online/datasets/sec/company_tickers_exchange/datapackage.json",
         "reference": {
           "fields": [
             "cik"
@@ -144,7 +144,7 @@
           "lei"
         ],
         "name": "gleif",
-        "package": "https://github.com/meridian-online/open-analytics/blob/main/datasets/gleif/datapackage.json",
+        "package": "https://meridian.online/datasets/gleif/lei/datapackage.json",
         "reference": {
           "fields": [
             "lei"
@@ -153,6 +153,6 @@
         }
       }
     ],
-    "verifiedBy": "datasets/edgar_gleif/scripts/crosswalk_join.py \u2014 the same script both writes and checks `coverage`. Run with `--write`, right after `describe`, it measures each join above against this build's own Parquet and writes `coverage` into datapackage.json (arcform.yaml step `derive_join_coverage`). Run with no flags, it re-measures against the published objects instead and fails if the committed `coverage` disagrees."
+    "verifiedBy": "datasets/edgar_gleif/scripts/crosswalk_join.py \u2014 the same script both writes and checks `coverage`. Run with `--write`, right after `describe`, it measures each join above against this build's own Parquet and writes `coverage` into the built descriptor (arcform.yaml step `derive_join_coverage`). Run with no flags, it re-measures against the published objects instead and fails if the published `coverage` disagrees."
   }
 }

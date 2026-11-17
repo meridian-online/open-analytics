@@ -5,7 +5,7 @@ The Harmonized Tariff Schedule of the United States, issued by the U.S. Internat
 | File | Facet | Answers |
 |---|---|---|
 | `arcform.yaml` (+ `models/`) | **Protocol** — how it's made | run `arc run` → produces the Dataset |
-| `datapackage.json` | **Descriptor** — what it is | schema, finetype labels, the code-list declaration |
+| `build/datapackage.json` | **Descriptor** — what it is (built by `arc run`, not committed: the open lake holds the published copy) | schema, finetype labels, the code-list declaration |
 | `../registry.json` (this dataset's entry) | **Address** — how it's found | stable `uid`, `usitc/hts`, manifest pointer |
 
 ## The Protocol
@@ -17,11 +17,12 @@ The Harmonized Tariff Schedule of the United States, issued by the U.S. Internat
 3. **load** (`models/load.sql`) — build the ladder (every numbered code plus the prefixes USITC prints only through longer codes, with a parent one level up for each), the text and `description_full`, the rates, and the revision. Chapter and section titles come from `chapters.csv`. A printed line that prints none of the three rates takes all three from its nearest printed ancestor that prints a general rate, and `rate_from_code` names it; on 2026HTSRev22 only statistical lines do.
 4. **package** (`models/package.sql`) — add the search `corpus`, hand off the terminal table.
 5. **export** — write the terminal zstd Parquet, ordered by `code`.
-6. **describe** — emit `datapackage.json` from the Parquet, typed by finetype with `nominations.finetype.json` and `descriptor.overrides.json` applied.
+6. **describe** — emit `build/datapackage.json` from the Parquet, typed by finetype with `nominations.finetype.json` and `descriptor.overrides.json` applied.
 7. **check_code_list** — hold the Parquet to the shared code-list contract (`scripts/check_code_list.py`): the core columns, a parent one level up for every row, `depth` as the level's position.
 8. **validate** — gate the Parquet against `schema.finetype.json`.
 9. **stamp_descriptor** — write the finished descriptor into the Parquet's own footer.
-10. **publish** — upsert `usitc.hts` into the open lake on `code`, with its descriptor in the lake's `meta` schema and the readable copy at `usitc/hts.parquet` (see *Publish*).
+10. **check before publishing** — `emit_descriptors` writes every published table's descriptor, as the open lake holds it, to `build/lake_descriptors.json`. It runs before the stamp, which keeps the lake's `created` when it writes the object the lake already serves. `check_before_publish` then holds the built descriptor to label agreement with them, to the frictionless reference implementation, and to `scripts/check_descriptors.py`'s rules read against the local Parquet. A failing check stops the run before publish.
+11. **publish** — upsert `usitc.hts` into the open lake on `code`, with its descriptor in the lake's `meta` schema and the readable copy at `usitc/hts.parquet` (see *Publish*).
 
 Produces `build/hts.parquet`.
 
@@ -51,7 +52,7 @@ Needs the `arc` binary, `duckdb`, `uv` (for `check_code_list` and the stamp), an
 
 <!-- protocol-steps: generated from arcform.yaml by scripts/check_protocol_readme.py — do not edit this block by hand -->
 
-All 12 steps are `sql:` models or typed `op:` operators from the arcform catalog. This Protocol runs no opaque `command:`/shell step.
+All 14 steps are `sql:` models or typed `op:` operators from the arcform catalog. This Protocol runs no opaque `command:`/shell step.
 
 | # | Step | How it runs |
 |---|---|---|
@@ -65,7 +66,9 @@ All 12 steps are `sql:` models or typed `op:` operators from the arcform catalog
 | 8 | `describe` | `op: datapackage_describe@1` |
 | 9 | `check_code_list` | `op: uv@1` |
 | 10 | `validate` | `op: finetype_validate@1` |
-| 11 | `stamp_descriptor` | `op: uv@1` |
-| 12 | `publish` | `op: ducklake_write@1` |
+| 11 | `emit_descriptors` | `op: uv@1` |
+| 12 | `stamp_descriptor` | `op: uv@1` |
+| 13 | `check_before_publish` | `op: uv@1` |
+| 14 | `publish` | `op: ducklake_write@1` |
 
 <!-- /protocol-steps -->

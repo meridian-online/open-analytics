@@ -7,7 +7,7 @@ orthogonal facets:
 | File | Facet | Answers |
 |---|---|---|
 | `arcform.yaml` (+ `models/`, `descriptor.overrides.json`, `scripts/test_ingest_lei.py`) | **Protocol** — how it's made | run `arc run` → produces the Dataset **and** its descriptor; the test runs the models against scratch sources and pins what they refuse |
-| `datapackage.json` | **Descriptor** — what it is | schema, finetype labels, `x-joins`/evidence — **emitted** by the `describe` step (staged) and published by the stamp step, no longer hand-authored |
+| `build/datapackage.json` | **Descriptor** — what it is (built by `arc run`, not committed: the open lake holds the published copy) | schema, finetype labels, `x-joins`/evidence — **emitted** by the `describe` step (staged) and published by the stamp step, no longer hand-authored |
 | `scripts/crosswalk_join.py` (+ `test_crosswalk_join.py`) | **Proof** — that the join runs | executes every declared `x-joins` against the published objects and checks the coverage each one claims |
 | `../registry.json` (this dataset's entry) | **Address** — how it's found | stable `uid`, `library.edgar_lei` (alias `crosswalk.edgar_gleif`), manifest pointer |
 
@@ -25,7 +25,7 @@ happened to the sentence it replaces, and for months.
 
 <!-- protocol-steps: generated from arcform.yaml by scripts/check_protocol_readme.py — do not edit this block by hand -->
 
-All 24 steps are `sql:` models or typed `op:` operators from the arcform catalog. This Protocol runs no opaque `command:`/shell step.
+All 26 steps are `sql:` models or typed `op:` operators from the arcform catalog. This Protocol runs no opaque `command:`/shell step.
 
 | # | Step | How it runs |
 |---|---|---|
@@ -49,10 +49,12 @@ All 24 steps are `sql:` models or typed `op:` operators from the arcform catalog
 | 18 | `package` | `sql: models/package.sql` |
 | 19 | `export_edgar_gleif` | `op: parquet_export@1` |
 | 20 | `describe` | `op: datapackage_describe@1` |
-| 21 | `derive_join_coverage` | `op: uv@1` |
-| 22 | `validate` | `op: finetype_validate@1` |
-| 23 | `stamp_descriptor` | `op: uv@1` |
-| 24 | `publish` | `op: ducklake_write@1` |
+| 21 | `emit_descriptors` | `op: uv@1` |
+| 22 | `derive_join_coverage` | `op: uv@1` |
+| 23 | `validate` | `op: finetype_validate@1` |
+| 24 | `stamp_descriptor` | `op: uv@1` |
+| 25 | `check_before_publish` | `op: uv@1` |
+| 26 | `publish` | `op: ducklake_write@1` |
 
 <!-- /protocol-steps -->
 
@@ -96,23 +98,29 @@ What those steps do, in phases:
    writes nothing and moves no row).
 10. **stamp the descriptor into the Parquet** — write the finished descriptor into
     the footer of a copy of the staged Parquet, so the object answers for itself from
-    its URL alone, and publish both: `build/edgar_gleif.parquet` and `datapackage.json`,
+    its URL alone, and publish both: `build/edgar_gleif.parquet` and `build/datapackage.json`,
     the latter carrying the stamped file's `bytes`/`hash`. `op: uv@1` running
-    `../../scripts/stamp_descriptor.py`. It runs last because it embeds the FINISHED
-    descriptor, and everything before the footer is compared byte for byte — a stamp
+    `../../scripts/stamp_descriptor.py`. It is the last step that shapes the descriptor,
+    because it embeds the FINISHED one, and everything before the footer is compared byte for byte — a stamp
     that moved one data byte is refused with the original left in place.
 
-    **Each file has one writer, so a warm `arc run` with nothing changed re-runs no
-    step.** The stamp is the only step that writes the two published files; the export,
+    **Each file has one writer, so a warm `arc run` with nothing changed rebuilds
+    nothing before the coverage step.** `emit_descriptors` reads the live lake, so it
+    runs every time, and the steps that read its bundle (the coverage step, the stamp
+    and the check) run after it and write the same bytes again; publish then commits
+    nothing. Join coverage is re-measured on every run, because the lake descriptors
+    are re-read each time. The stamp is the only step that writes the two published files; the export,
     `describe` and the coverage step write into `build/stage/`. When two steps declared
     the same file, the later one rewrote the earlier one's output, arcform saw that
     output no longer match what its step had written, and the run re-did the export,
     `describe`, the coverage, the validation and the stamp on every invocation — and
     wrote a different Parquet each time, because `describe` stamps `created` from the
-    wall clock. The footer no longer carries `created`, and in `datapackage.json` it
-    means *when this data first appeared*: a republish over the same data pages keeps
-    it. `scripts/test_manifest_one_writer.py` holds the manifest to one writer per file.
-11. **publish** — upsert `library.edgar_lei` into the open lake on (`key_type`, `key`, `lei`), with its descriptor in the lake's `meta` schema and the readable copy at `library/edgar_lei.parquet` (see *Publish*).
+    wall clock. The footer no longer carries `created`, and in `build/datapackage.json` it
+    means *when the published file was created*: a stamp that writes the object the lake
+    already serves keeps the lake's `created`, and one that rewrites the file, even for a
+    descriptor-only change, takes a new one. `scripts/test_manifest_one_writer.py` holds the manifest to one writer per file.
+11. **check before publishing** — `emit_descriptors` writes every published table's descriptor, as the open lake holds it, to `build/lake_descriptors.json`. It runs before the coverage step, which resolves the tables this one joins to from the same bundle, and before the stamp, which keeps the lake's `created` when it writes the object the lake already serves. `check_before_publish` then holds the built descriptor to label agreement with them, to the frictionless reference implementation, and to `scripts/check_descriptors.py`'s rules read against the local Parquet. A failing check stops the run before publish.
+12. **publish** — upsert `library.edgar_lei` into the open lake on (`key_type`, `key`, `lei`), with its descriptor in the lake's `meta` schema and the readable copy at `library/edgar_lei.parquet` (see *Publish*).
 
 ## The identifier
 
@@ -134,7 +142,7 @@ An LEI is admitted when **either** test passes:
   digits the register gave it.
 
 The shape cannot do this job. `00000000000000000000` satisfies ISO 17442's
-eighteen-alphanumeric-plus-two-digit pattern, which is what `datapackage.json` and
+eighteen-alphanumeric-plus-two-digit pattern, which is what the descriptor and
 `schema.finetype.json` declare — a `pattern` does not evaluate a checksum. That is why
 the test is arithmetic, and why it runs in the Protocol, where a rejected value can be
 kept out of the bytes rather than reported after they are published.
@@ -216,11 +224,11 @@ The last step publishes `library.edgar_lei` into the open lake (<https://openlak
   operators embed their frozen script bytes (`resolve.py`, `describe.py`, the dlt
   paginator), so `@1` addresses an exact, reproducible implementation — the path-call
   the `resolve`/`describe`/fetch steps used before is retired.
-- **Describe** — `datapackage.json` is **emitted**, not hand-authored. The `describe`
+- **Describe** — `build/datapackage.json` is **emitted**, not hand-authored. The `describe`
   step reads the staged Parquet, `build/stage/edgar_gleif.parquet`, and writes
   `build/stage/described.json`; the coverage step writes a copy of it carrying the
   measured coverage to `build/stage/measured.json`; the stamp step alone writes
-  `datapackage.json`. The `describe` step splits the descriptor by authority:
+  `build/datapackage.json`. The `describe` step splits the descriptor by authority:
   - `finetype profile build/stage/edgar_gleif.parquet -o datapackage` types every column
     from its taxonomy — the *machine-decidable* half: per-field `type` / `format`,
     the `x-finetype-*` semantic labels + observed constraints, and the resource
@@ -298,9 +306,9 @@ against scratch packages.
   construction** (no PII published).
 - **Run**: needs the `arc` binary, `uv` on `PATH` (the `splink_resolve`,
   `gleif_ra_fetch` and `datapackage_describe` operators run their frozen scripts via
-  `uv run`, and `derive_join_coverage` and `stamp_descriptor` are `op: uv@1` steps
-  running this repo's own Python — each pinned to its script's SHA-256 and to
-  `duckdb==2.0.0`, with the interpreter pinned in the script's PEP 723 header, so
+  `uv run`, and `emit_descriptors`, `derive_join_coverage`, `stamp_descriptor` and
+  `check_before_publish` are `op: uv@1` steps running this repo's own Python — each
+  pinned to its script's SHA-256 and to `duckdb==2.0.0`, with the interpreter pinned in the script's PEP 723 header, so
   neither needs a venv to exist or a global install), and `finetype` on `PATH` (the
   describe operator shells out to it), with `FINETYPE_DUCKDB_EXT` at its DuckDB 2.0 extension; `arc run --param as_of=YYYY-MM-DD`. At full scale the resolve step is real compute (~100M candidate
   pairs) — run it deliberately.

@@ -10,3 +10,12 @@ Cut-down copies of the three Census files the Protocol fetches, downloaded on 20
 | `gazetteer.zip` | `fetch_gazetteer`, `2026_Gaz_counties_national.zip` | `gazetteer_counties.csv` under Census's member name, `2026_Gaz_counties_national.txt`, so `extract_gazetteer` runs on it |
 
 The fixtures are named `.csv` so `arc test` can rewrite them for a `break:`; arc places each at the `.txt` path its step writes, which is where `load.sql` reads it and takes the vintage from the name. If `gazetteer_counties.csv` changes, rebuild the zip from it: copy it to `2026_Gaz_counties_national.txt` in an empty folder and run `zip -X gazetteer.zip 2026_Gaz_counties_national.txt` there.
+
+The lake fixtures were emitted from the open lake on 2026-11-17 with `python scripts/emit_descriptor.py --all --bundle <file>`, from the repository root, and need regenerating when a table they hold is republished with different declarations:
+
+| Fixture | Stands in for | Kept |
+|---|---|---|
+| `lake_descriptors.json` | `emit_descriptors`, the bundle of every published table's descriptor | The twelve tables published with a `<slug>/datapackage.json`, which is every table the label check before publish compares; the six SOC tables, published with per-table descriptors, are left out because the check does not compare them. None of the twelve can go: `datasets/label-agreement.json` pins values from every one of them, and a pinned value that goes missing is a stale reason, which fails the check |
+| `described.json` | `describe`, in the test that runs the check before publish for real | The lake's descriptor of `census.fips`, as it is in `lake_descriptors.json`. finetype infers a descriptor from the rows it reads, so on the fixture's rows it labels some columns differently from the full table, and the label check would refuse that descriptor for a reason that is not a defect |
+| `check_before_publish.json` | `check_before_publish`, in the tests that run `describe` on the fixture | A stand-in report, which no step left in a test reads |
+| `lake_descriptors_disagreeing.json` | `emit_descriptors`, in the test that the check before publish refuses a disagreeing label | `lake_descriptors.json` with `census.naics_2022`'s `level` labelled `representation.text.plain_text` where every other code list's `level` is `representation.text.word`. A second file and not a `break:`: arc reads a JSON fixture as an array or as one object per line, and the bundle is one object over many lines |

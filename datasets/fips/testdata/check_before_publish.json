@@ -1,0 +1,9 @@
+{
+  "$comment": "Stands in for check_before_publish's report in the tests whose descriptor finetype infers from the fixture rows, which label some columns differently from the lake's descriptor of the full table. See README.md.",
+  "slug": "fips",
+  "packages": [
+    "fips"
+  ],
+  "passed": null,
+  "checks": []
+}

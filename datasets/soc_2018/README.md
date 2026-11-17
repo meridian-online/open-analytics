@@ -13,7 +13,7 @@ All three are registered in `../registry.json`. This directory holds their facet
 | File | Facet | Answers |
 |---|---|---|
 | `arcform.yaml` (+ `models/`) | **Protocol** — how they're made | run `arc run` → produces the three tables |
-| `<table>.datapackage.json` | **Descriptor** — what each is | schema, finetype labels, the table's contract declaration |
+| `build/<table>.datapackage.json` | **Descriptor** — what each is (built by `arc run`, not committed: the open lake holds the published copies) | schema, finetype labels, the table's contract declaration |
 | `<table>.overrides.json`, `<table>.nominations.finetype.json`, `<table>.schema.finetype.json` | the descriptor's inputs | the curated half, the declared finetype labels, the drift contract |
 
 ## The Protocol
@@ -28,8 +28,9 @@ All three are registered in `../registry.json`. This directory holds their facet
 6. **check_code_list** — hold the code list to the shared code-list contract (`scripts/check_code_list.py`, see `docs/code-lists.md`).
 7. **check_titles**, **check_crosswalk** — hold the title index and the crosswalk to their contracts (`contracts/check_titles.sql`, `contracts/check_crosswalk.sql`), each after `check_inputs_code_list` points both at the code list exported in the same Run and a `check_inputs_*` model points it at its exported table and the level BLS codes to: every title and every 2018 code must be a detailed occupation in that code list.
 8. **validate** — gate each Parquet against its `<table>.schema.finetype.json`.
-9. **stamp** — write each published `build/<table>.parquet` with its finished descriptor in the footer, and `<table>.datapackage.json` beside the manifest.
-10. **publish** (`ducklake_write`) — write the three tables into the open lake as one snapshot, each upserted on its key, with each descriptor in the lake's `meta` schema and a readable Parquet copy per table at `bls/<table>.parquet`.
+9. **stamp** — write each published `build/<table>.parquet` with its finished descriptor in the footer, and `build/<table>.datapackage.json` beside it.
+10. **check before publishing** — `emit_descriptors` writes every published table's descriptor, as the open lake holds it, to `build/lake_descriptors.json`. It runs before the stamp, which keeps the lake's `created` when it writes the object the lake already serves. `check_before_publish` then holds each built descriptor to the frictionless reference implementation and to `scripts/check_descriptors.py`'s rules read against the local Parquet, and runs label agreement across the bundle; label agreement does not yet compare a per-table descriptor such as these. A failing check stops the run before publish.
+11. **publish** (`ducklake_write`) — write the three tables into the open lake as one snapshot, each upserted on its key, with each descriptor in the lake's `meta` schema and a readable Parquet copy per table at `bls/<table>.parquet`.
 
 Produces `build/soc_2018.parquet`, `build/soc_2018_titles.parquet` and `build/soc_2010_to_2018.parquet`.
 
@@ -65,7 +66,7 @@ Needs the `arc` binary, `duckdb` with its `excel` extension, `uv` (for `check_co
 
 <!-- protocol-steps: generated from arcform.yaml by scripts/check_protocol_readme.py — do not edit this block by hand -->
 
-All 26 steps are `sql:` models or typed `op:` operators from the arcform catalog. This Protocol runs no opaque `command:`/shell step.
+All 28 steps are `sql:` models or typed `op:` operators from the arcform catalog. This Protocol runs no opaque `command:`/shell step.
 
 | # | Step | How it runs |
 |---|---|---|
@@ -91,9 +92,11 @@ All 26 steps are `sql:` models or typed `op:` operators from the arcform catalog
 | 20 | `validate_soc_2018` | `op: finetype_validate@1` |
 | 21 | `validate_soc_2018_titles` | `op: finetype_validate@1` |
 | 22 | `validate_soc_2010_to_2018` | `op: finetype_validate@1` |
-| 23 | `stamp_soc_2018` | `op: uv@1` |
-| 24 | `stamp_soc_2018_titles` | `op: uv@1` |
-| 25 | `stamp_soc_2010_to_2018` | `op: uv@1` |
-| 26 | `publish` | `op: ducklake_write@1` |
+| 23 | `emit_descriptors` | `op: uv@1` |
+| 24 | `stamp_soc_2018` | `op: uv@1` |
+| 25 | `stamp_soc_2018_titles` | `op: uv@1` |
+| 26 | `stamp_soc_2010_to_2018` | `op: uv@1` |
+| 27 | `check_before_publish` | `op: uv@1` |
+| 28 | `publish` | `op: ducklake_write@1` |
 
 <!-- /protocol-steps -->

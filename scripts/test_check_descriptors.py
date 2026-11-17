@@ -72,6 +72,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import stamp_descriptor as sd  # noqa: E402 - found beside this file
+from test_stamp_descriptor import ObjectServer  # noqa: E402 - found beside this file
 
 CHECKER = Path(__file__).with_name("check_descriptors.py")
 NOTICE_TABLE = Path(__file__).resolve().parent.parent / "datasets" / "licence-notices.json"
@@ -99,23 +100,25 @@ def write_parquet(target: Path, select_sql: str) -> int:
     return int(rows)
 
 
-def write_catalogue_row(root: Path, slug: str, stated: str) -> None:
+def write_catalogue_row(root: Path, slug: str, stated: str, link: str | None = None) -> None:
     """Add one row to the scratch README's catalogue, starting the table if needed.
 
     The checker locates the table by its `Rows` column and ties each row to a package
-    through the descriptor it links to, so this fixture only has to carry those two
+    through the object it links to, so this fixture only has to carry those two
     things — the other columns exist to keep it a plausible table rather than a
-    minimal one the real README could not be.
+    minimal one the real README could not be. `link` defaults to the Parquet
+    `write_package` lays down beside the descriptor.
     """
+    link = link if link is not None else f"{root.name}/{slug}/{slug}.parquet"
     readme = root.parent / "README.md"
     if not readme.exists():
         readme.write_text(
             "# scratch catalogue\n\n## Datasets\n\n"
-            "| Dataset | Rows | License | Descriptor |\n|---|---|---|---|\n",
+            "| Dataset | Rows | License | Readable copy |\n|---|---|---|---|\n",
             encoding="utf-8",
         )
     with readme.open("a", encoding="utf-8") as handle:
-        handle.write(f"| {slug} | {stated} | CC0-1.0 | [datapackage.json]({root.name}/{slug}/datapackage.json) |\n")
+        handle.write(f"| {slug} | {stated} | CC0-1.0 | [{Path(link).name}]({link}) |\n")
 
 
 def write_package(
@@ -168,7 +171,11 @@ def write_package(
     descriptor = package_dir / "datapackage.json"
     descriptor.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
     if catalogue is not False:
-        write_catalogue_row(root, slug, f"{rows:,}" if catalogue is True else catalogue)
+        link = None
+        if resource_path is not None:
+            remote = resource_path.lower().startswith(("http://", "https://"))
+            link = resource_path if remote else f"{root.name}/{slug}/{resource_path}"
+        write_catalogue_row(root, slug, f"{rows:,}" if catalogue is True else catalogue, link)
     return descriptor
 
 
@@ -211,6 +218,15 @@ def stamp_package(descriptor: Path, *, text: str | None = None) -> None:
     con = sd.connect()
     staged = parquet.with_suffix(".stamped")
     sd.stamp_parquet(con, parquet, staged, sd.embedded_text(document) if text is None else text)
+    os.replace(staged, parquet)
+
+
+def stamp_package_at(descriptor: Path, parquet: Path) -> None:
+    """`stamp_package` for a descriptor whose resource `path` is a URL rather than the local file."""
+    document = json.loads(descriptor.read_text(encoding="utf-8"))
+    con = sd.connect()
+    staged = parquet.with_suffix(".stamped")
+    sd.stamp_parquet(con, parquet, staged, sd.embedded_text(document))
     os.replace(staged, parquet)
 
 
@@ -263,6 +279,70 @@ class DescriptorCheckSelfTest(unittest.TestCase):
             ],
         )
         self.assertOutcome(run_check(self.datasets), EXIT_OK, "agree with their data")
+
+    # ------------------------------------------------- before-publish narrowing
+
+    def test_no_catalogue_skips_the_catalogue_rule(self) -> None:
+        """`--no-catalogue` leaves rule 8 to the lake check; without it the wrong row reddens."""
+        write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT * FROM (VALUES ('AB')) t(code)",
+            fields=[{"name": "code", "type": "string"}],
+            catalogue="7",
+        )
+        self.assertOutcome(run_check(self.datasets), EXIT_VIOLATIONS, "catalogue.rows")
+        self.assertOutcome(
+            run_check(self.datasets, "--no-catalogue"), EXIT_OK, "0 catalogue row count(s) measured"
+        )
+
+    def test_read_from_reads_a_declared_url_from_a_local_file(self) -> None:
+        """A resource declaring its published URL is read from the local build named for it."""
+        address = "https://openlake.example.invalid/widgets.parquet"
+        descriptor = write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT * FROM (VALUES ('AB'), ('cd')) t(code)",
+            fields=[{"name": "code", "type": "string", "constraints": {"pattern": "^[A-Z]{2}$"}}],
+            resource_path=address,
+            catalogue=False,
+        )
+        local = descriptor.parent / "widgets.parquet"
+        self.assertOutcome(
+            run_check(self.datasets, "--no-catalogue", "--read-from", f"{address}={local}"),
+            EXIT_VIOLATIONS,
+            "widgets.code",
+            "constraints.pattern",
+            "'cd'",
+        )
+
+    def test_no_catalogue_with_write_catalogue_is_refused(self) -> None:
+        write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT * FROM (VALUES ('AB')) t(code)",
+            fields=[{"name": "code", "type": "string"}],
+        )
+        self.assertOutcome(
+            run_check(self.datasets, "--no-catalogue", "--write-catalogue"),
+            EXIT_ERROR,
+            "--no-catalogue and --write-catalogue cannot both be given",
+        )
+
+    def test_read_from_naming_no_resource_exits_2(self) -> None:
+        """A mapping no scanned resource declares is a typo, not a pass that read the remote."""
+        write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT * FROM (VALUES ('AB')) t(code)",
+            fields=[{"name": "code", "type": "string"}],
+            catalogue=False,
+        )
+        self.assertOutcome(
+            run_check(self.datasets, "--no-catalogue", "--read-from", "https://nowhere.invalid/x.parquet=/x"),
+            EXIT_ERROR,
+            "https://nowhere.invalid/x.parquet",
+        )
 
     # ------------------------------------------------------------- constraints
 
@@ -1449,7 +1529,7 @@ class DescriptorCheckSelfTest(unittest.TestCase):
         }
         (multi / "things.datapackage.json").write_text(json.dumps(document), encoding="utf-8")
         with self.readme().open("a", encoding="utf-8") as handle:
-            handle.write(f"| things | {stated} | CC0-1.0 | [x](datasets/multi/things.datapackage.json) |\n")
+            handle.write(f"| things | {stated} | CC0-1.0 | [things.parquet](datasets/multi/things.parquet) |\n")
 
     def test_catalogue_row_linking_a_per_table_descriptor_is_measured(self) -> None:
         self.per_table_catalogue_row("7")
@@ -1459,22 +1539,71 @@ class DescriptorCheckSelfTest(unittest.TestCase):
         self.per_table_catalogue_row("8")
         self.assertOutcome(run_check(self.datasets), EXIT_VIOLATIONS, "catalogue.rows", "states 8")
 
-    def test_catalogue_row_linking_a_descriptor_outside_the_datasets_directory_is_an_error(self) -> None:
+    def test_catalogue_row_linking_an_object_described_outside_the_datasets_directory_is_unpublished(self) -> None:
+        """Only a descriptor under the datasets directory can tie a row to a table."""
         self.per_table_catalogue_row("7")
         docs = self.datasets.parent / "docs"
         docs.mkdir()
+        write_parquet(docs / "x.parquet", "SELECT 1 AS n")
         (docs / "x.datapackage.json").write_text(
             json.dumps({"resources": [{"path": "x.parquet"}]}), encoding="utf-8"
         )
         with self.readme().open("a", encoding="utf-8") as handle:
-            handle.write("| x | 1 | CC0-1.0 | [x](docs/x.datapackage.json) |\n")
-        self.assertOutcome(run_check(self.datasets), EXIT_ERROR, "outside the datasets directory")
+            handle.write("| x | 1 | CC0-1.0 | [x.parquet](docs/x.parquet) |\n")
+        self.assertOutcome(
+            run_check(self.datasets), EXIT_VIOLATIONS, "catalogue.unpublished", "docs/x.parquet"
+        )
+
+    def test_an_object_read_with_a_query_string_matches_its_plain_address(self) -> None:
+        """The lake check reads each object as `<path>?v=<hash>` to get past the edge.
+
+        The object's footer and the catalogue both name the plain address. The query is a
+        cache key, so neither the self-description rule nor the catalogue row may read it
+        as a different object. Served from loopback, so the path is a real URL.
+        """
+        descriptor = write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT i AS n FROM range(3) t(i)",
+            fields=[{"name": "n", "type": "integer"}],
+            catalogue=False,
+        )
+        parquet = descriptor.parent / "widgets.parquet"
+        document = json.loads(descriptor.read_text(encoding="utf-8"))
+        with ObjectServer(b"", "/widgets.parquet?v=0123") as server:
+            plain = server.url.split("?", 1)[0]
+            document["resources"][0]["path"] = plain
+            descriptor.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+            stamp_package_at(descriptor, parquet)
+            server.body = parquet.read_bytes()
+            document["resources"][0]["path"] = server.url
+            document["resources"][0]["bytes"] = len(server.body)
+            descriptor.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+            write_catalogue_row(self.datasets, "widgets", "3", plain)
+            self.assertOutcome(
+                run_check(self.datasets, "--require-self-description"),
+                EXIT_OK,
+                "1 of 1 resource(s) carry their own description",
+                "1 catalogue row count(s) measured",
+            )
+
+    def test_a_catalogue_row_linking_a_descriptor_is_refused(self) -> None:
+        """The last column links the readable copy now; a descriptor link measures nothing."""
+        write_package(
+            self.datasets,
+            "widgets",
+            select_sql="SELECT i AS n FROM range(3) t(i)",
+            fields=[{"name": "n", "type": "integer"}],
+            catalogue=False,
+        )
+        write_catalogue_row(self.datasets, "widgets", "3", "datasets/widgets/datapackage.json")
+        self.assertOutcome(run_check(self.datasets), EXIT_ERROR, "links to no readable copy")
 
     def test_removing_a_per_table_catalogue_row_is_reported_missing(self) -> None:
         self.per_table_catalogue_row("7")
         text = self.readme().read_text(encoding="utf-8")
         self.readme().write_text(
-            "".join(line for line in text.splitlines(True) if "things.datapackage.json" not in line),
+            "".join(line for line in text.splitlines(True) if "things.parquet" not in line),
             encoding="utf-8",
         )
         self.assertOutcome(
@@ -1642,7 +1771,8 @@ class DescriptorCheckSelfTest(unittest.TestCase):
             "no catalogue row in README.md links to it",
         )
 
-    def test_catalogue_row_naming_a_descriptor_that_is_not_there_is_an_error(self) -> None:
+    def test_catalogue_row_linking_an_object_no_descriptor_declares_is_unpublished(self) -> None:
+        """A table merged before its first publish, or a typo: a disagreement either way, never a pass."""
         write_package(
             self.datasets,
             "widgets",
@@ -1650,7 +1780,9 @@ class DescriptorCheckSelfTest(unittest.TestCase):
             fields=[{"name": "n", "type": "integer"}],
         )
         write_catalogue_row(self.datasets, "ghosts", "7")
-        self.assertOutcome(run_check(self.datasets), EXIT_ERROR, "ghosts/datapackage.json")
+        self.assertOutcome(
+            run_check(self.datasets), EXIT_VIOLATIONS, "catalogue.unpublished", "ghosts/ghosts.parquet"
+        )
 
     def test_a_missing_catalogue_is_an_error_not_a_pass(self) -> None:
         write_package(
@@ -1672,7 +1804,7 @@ class DescriptorCheckSelfTest(unittest.TestCase):
         )
         self.readme().write_text(
             "# scratch\n\n| Dataset | Size | Descriptor |\n|---|---|---|\n"
-            "| widgets | 3 | [datapackage.json](datasets/widgets/datapackage.json) |\n",
+            "| widgets | 3 | [widgets.parquet](datasets/widgets/widgets.parquet) |\n",
             encoding="utf-8",
         )
         self.assertOutcome(run_check(self.datasets), EXIT_ERROR, "no table with a 'rows' column")
@@ -1719,7 +1851,7 @@ class DescriptorCheckSelfTest(unittest.TestCase):
         )
         self.readme().write_text(
             "# scratch\n\n| Dataset | Rows | License | Descriptor |\n|---|---|---|---|\n"
-            "| widgets \\| 3 | 6,570 | [datapackage.json](datasets/widgets/datapackage.json) |\n",
+            "| widgets \\| 3 | 6,570 | [widgets.parquet](datasets/widgets/widgets.parquet) |\n",
             encoding="utf-8",
         )
         self.assertOutcome(run_check(self.datasets), EXIT_ERROR, "3 cell(s) against a header of 4")
@@ -1735,7 +1867,7 @@ class DescriptorCheckSelfTest(unittest.TestCase):
         )
         self.readme().write_text(
             "# scratch\n\n| Dataset | Rows | License | Descriptor |\n|---|---|---|---|\n"
-            "| widgets \\| gadgets | 3 | CC0-1.0 | [datapackage.json](datasets/widgets/datapackage.json) |\n",
+            "| widgets \\| gadgets | 3 | CC0-1.0 | [widgets.parquet](datasets/widgets/widgets.parquet) |\n",
             encoding="utf-8",
         )
         self.assertOutcome(run_check(self.datasets), EXIT_OK, "1 catalogue row count(s) measured")
@@ -1755,7 +1887,7 @@ class DescriptorCheckSelfTest(unittest.TestCase):
         )
         self.readme().write_text(
             "# scratch\n\n| Dataset | Rows | License | Descriptor |\n|---|---|---|---|\n"
-            "| widgets \\\\| 3 | CC0-1.0 | [datapackage.json](datasets/widgets/datapackage.json) |\n",
+            "| widgets \\\\| 3 | CC0-1.0 | [widgets.parquet](datasets/widgets/widgets.parquet) |\n",
             encoding="utf-8",
         )
         self.assertOutcome(run_check(self.datasets), EXIT_OK, "1 catalogue row count(s) measured")
@@ -1777,7 +1909,7 @@ class DescriptorCheckSelfTest(unittest.TestCase):
         )
         self.readme().write_text(
             "# scratch\n\n| Dataset | Rows | License | Descriptor |\n|---|---|---|---|\n"
-            "| widgets | 3 | CC0-1.0 | [datapackage.json](datasets/widgets/datapackage.json)\n",
+            "| widgets | 3 | CC0-1.0 | [widgets.parquet](datasets/widgets/widgets.parquet)\n",
             encoding="utf-8",
         )
         self.assertOutcome(
@@ -1807,7 +1939,7 @@ class DescriptorCheckSelfTest(unittest.TestCase):
         )
         self.assertOutcome(run_check(self.datasets, "--write-catalogue"), EXIT_OK, "4,000 -> 1,234")
         self.assertIn(
-            "| widgets | 1,234 | CC0-1.0 | [datapackage.json](datasets/widgets/datapackage.json) |",
+            "| widgets | 1,234 | CC0-1.0 | [widgets.parquet](datasets/widgets/widgets.parquet) |",
             self.readme().read_text(encoding="utf-8"),
         )
         self.assertOutcome(run_check(self.datasets), EXIT_OK, "agree with their data")
@@ -2370,6 +2502,26 @@ class LicenceNoticeSelfTest(unittest.TestCase):
         shutil.copy(NOTICE_TABLE, other)
         (self.datasets / "licence-notices.json").unlink()
         self.assertOutcome(self.check("--notice-table", str(other)), EXIT_OK)
+
+
+class ShippedExamplesTest(unittest.TestCase):
+    """Rule 9 over the demo Protocols this repository ships, on every pull request.
+
+    `examples/` keeps its descriptors in the repository, and the licence rule is the only
+    rule that reads them. The full check over `datasets/` now runs in the lake workflow,
+    against descriptors emitted from the lake, so this case is what keeps an example that
+    drops its licence or its restriction sentence from merging.
+    """
+
+    def test_every_shipped_example_carries_a_licence_that_states_its_restriction(self) -> None:
+        import check_descriptors as cd
+
+        examples = sorted((CHECKER.parent.parent / "examples").glob("*/datapackage.json"))
+        self.assertGreaterEqual(len(examples), 11, "examples/ lost descriptors, so the rule reads less than it did")
+        for path in examples:
+            with self.subTest(example=path.parent.name):
+                found = cd.check_licence(str(path), cd.load_descriptor(path))
+                self.assertEqual([v.line() for v in found], [])
 
 
 if __name__ == "__main__":

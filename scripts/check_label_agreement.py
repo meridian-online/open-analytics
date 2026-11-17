@@ -79,6 +79,29 @@ sibling, and a join's cardinality that is not a field property at all.
     check_label_agreement.py              report; exit 1 on a stale reason or correction
     check_label_agreement.py --strict     also exit 1 on a difference with no reason
     check_label_agreement.py --json OUT   write the findings as JSON as well
+    check_label_agreement.py --involving PKG [--involving PKG ...]
+                                          judge only what involves these packages
+
+`--involving` IS THE PRE-PUBLISH VIEW. `check_before_publish.py` lays the Protocol it
+built over the lake's descriptors and runs this with `--involving` naming the built
+package, so one Protocol's publish is judged on its own tables and not on every other
+Protocol's merged reasons. Under it:
+
+  * a difference counts, for `--strict`, only when one of its members is a named
+    package; the rest are counted and left to the lake check;
+  * a reason is judged stale only when it names a named package and every package it
+    names is in this tree. A reason that names a package this tree does not hold — a
+    list merged with its reasons and not yet published — is AWAITING, not stale. It
+    may still close a difference on the members this tree does hold: it matches when
+    the difference's members are exactly its members that are present, at its pinned
+    values. Two sibling lists merged on one day, each pinning the other, so each
+    publish on its own;
+  * a reason that names no named package is not judged here;
+  * a correction is judged only when its package is a named package.
+
+Without `--involving` nothing above applies: every difference, reason and correction is
+judged, and a reason naming an absent package is stale. That is the lake check's view,
+which sorts such a reason by when it changed.
 
 Exit 0 agreement, or differences that are all closed by a reason. Exit 1 a stale or
 unused reason, a correction whose declaration moved or whose fix landed, or — under
@@ -383,6 +406,18 @@ class Reason:
     text: str
     used: bool = False
     where: str = ""
+    # Packages this reason names that the tree does not hold, under `--involving`: it is
+    # awaiting their publish, not stale.
+    awaiting: list[str] = dataclass_field(default_factory=list)
+
+    @property
+    def packages(self) -> set[str]:
+        return packages_of(self.values)
+
+
+def packages_of(values: dict[str, Any]) -> set[str]:
+    """The packages a difference's or a reason's `<package>.<field>` identifiers name."""
+    return {ident.split(".", 1)[0] for ident in values}
 
 
 def read_agreement(path: Path) -> dict[str, Any]:
@@ -465,6 +500,33 @@ def attach(differences: list[Difference], reasons: list[Reason]) -> None:
                 and reason.key == difference.key
                 and reason.prop == difference.prop
                 and reason.values == difference.values
+            ):
+                reason.used = True
+                difference.reason = reason.text
+                break
+
+
+def attach_awaiting(differences: list[Difference], reasons: list[Reason], present: set[str]) -> None:
+    """Under `--involving`: a reason naming a package not in this tree awaits its publish.
+
+    It closes a difference when the difference's members are exactly the reason's
+    members that are present, at the values it pins for them: once the absent package
+    publishes, the whole entry is matched as `attach` matches it.
+    """
+    for reason in reasons:
+        absent = sorted(reason.packages - present)
+        if reason.used or not absent:
+            continue
+        reason.awaiting = absent
+        held = {ident: value for ident, value in reason.values.items() if ident.split(".", 1)[0] in present}
+        for difference in differences:
+            if difference.reason:
+                continue
+            if (
+                reason.kind == difference.kind
+                and reason.key == difference.key
+                and reason.prop == difference.prop
+                and held == difference.values
             ):
                 reason.used = True
                 difference.reason = reason.text
@@ -787,7 +849,16 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="exit 1 on a difference with no stated reason, not only on a stale one",
     )
+    parser.add_argument(
+        "--involving",
+        action="append",
+        default=None,
+        metavar="PACKAGE",
+        help="judge only differences, reasons and corrections involving this package (repeatable); "
+        "a reason naming a package not in the tree is awaiting, not stale",
+    )
     args = parser.parse_args(argv)
+    involving = set(args.involving or [])
     reasons_path = args.reasons or (args.datasets_dir / "label-agreement.json")
 
     descriptors = sorted(args.datasets_dir.glob("*/datapackage.json"))
@@ -833,8 +904,23 @@ def main(argv: list[str] | None = None) -> int:
     names, name_groups = name_differences(fields)
     differences = concepts + names
     attach(differences, reasons)
+    unjudged: dict[str, int] = {"differences": 0, "reasons": 0, "corrections": 0}
+    if involving:
+        attach_awaiting(differences, reasons, set(documents))
+        judged = [item for item in differences if packages_of(item.values) & involving]
+        unjudged["differences"] = len(differences) - len(judged)
+        differences = judged
+        unjudged["reasons"] = sum(
+            1 for r in reasons if not r.used and not r.awaiting and not (r.packages & involving)
+        )
+        reasons_judged = [r for r in reasons if r.awaiting or r.used or r.packages & involving]
+        unjudged["corrections"] = sum(1 for c in corrections if c.package not in involving)
+        corrections = [c for c in corrections if c.package in involving]
+    else:
+        reasons_judged = reasons
     attach_corrections(differences, corrections)
-    stale = [reason for reason in reasons if not reason.used]
+    awaiting = [reason for reason in reasons_judged if reason.awaiting]
+    stale = [reason for reason in reasons_judged if not reason.used and not reason.awaiting]
     live = [item for item in corrections if item.state == "declared"]
     lapsed = [item for item in corrections if item.state != "declared"]
     ungrouped = sorted(
@@ -907,6 +993,19 @@ def main(argv: list[str] | None = None) -> int:
                         }
                         for reason in stale
                     ],
+                    "involving": sorted(involving) or None,
+                    "awaiting_reasons": [
+                        {
+                            "kind": reason.kind,
+                            "key": reason.key,
+                            "property": reason.prop,
+                            "values": reason.values,
+                            "awaiting": reason.awaiting,
+                            "closes": reason.used,
+                        }
+                        for reason in awaiting
+                    ],
+                    "not_judged": unjudged if involving else None,
                     "faults": faults,
                 },
                 indent=2,
@@ -938,6 +1037,25 @@ def main(argv: list[str] | None = None) -> int:
         )
         for line in report(differences):
             print(line)
+
+    if involving:
+        print(
+            f"\nlabel agreement: judged what involves {', '.join(sorted(involving))}; left to the "
+            f"lake check: {unjudged['differences']} difference(s), {unjudged['reasons']} unmatched "
+            f"reason(s) and {unjudged['corrections']} correction(s) that do not"
+        )
+    if awaiting:
+        print(
+            f"\nlabel agreement: {len(awaiting)} stated reason(s) name a package this tree does not "
+            f"hold yet, so each awaits that publish and is not judged stale here:"
+        )
+        for reason in awaiting:
+            named = "concept" if reason.kind == "concept" else "field"
+            state = "closes the difference on the members present" if reason.used else "matches nothing yet"
+            print(
+                f"  {reason.where}: {named} {reason.key!r}, {reason.prop} — awaiting "
+                f"{', '.join(reason.awaiting)}; {state}"
+            )
 
     if live:
         print(

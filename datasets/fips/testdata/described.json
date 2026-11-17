@@ -17,7 +17,7 @@
       "title": "Meridian"
     }
   ],
-  "created": "2026-11-16T00:16:54Z",
+  "created": "2026-11-16T00:22:11Z",
   "description": "The Census Bureau's FIPS codes (ANSI/INCITS 38 and 31) for US states and counties: one row per state or state-equivalent and per county or county-equivalent, with Census's name, the USPS abbreviation, the GNIS code, Census's class and functional-status codes, and whether the code is in Census's current vintage. The two-digit state code and the five-digit county code are the keys most US government data is joined on. Built from Census's ANSI code lists (2020 vintage, the latest Census publishes), which cover the 50 states, DC, Puerto Rico, the Island Areas and the U.S. Minor Outlying Islands, and from its 2026 Gazetteer county file, which adds the nine Connecticut planning regions that replaced Connecticut's eight counties as county-equivalents in 2022. The eight counties are kept, marked as no longer current, since data from before 2022 uses them. U.S. Census Bureau data, a US Government work in the public domain; Meridian prepared this table from Census's files, and Census does not endorse it.",
   "homepage": "https://meridian.online/datasets/census/fips",
   "licenses": [

@@ -80,7 +80,7 @@ class OneWriterPerFile(unittest.TestCase):
         manifest = yaml.safe_load((DATASETS / "edgar_gleif" / "arcform.yaml").read_text(encoding="utf-8"))
         writers = declared_writers(manifest)
         self.assertEqual(writers["build/edgar_gleif.parquet"], ["stamp_descriptor"])
-        self.assertEqual(writers["datapackage.json"], ["stamp_descriptor"])
+        self.assertEqual(writers["build/datapackage.json"], ["stamp_descriptor"])
 
     # ------------------------------------------------- the check can fail, and on what
 

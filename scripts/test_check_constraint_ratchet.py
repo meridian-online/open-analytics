@@ -347,20 +347,21 @@ class RatchetSelfTest(unittest.TestCase):
 
 
 class WiredIntoCiTest(unittest.TestCase):
-    """A check nobody runs reddens nothing. The workflow must run it and its self-test."""
+    """A check nobody runs reddens nothing. Its self-test runs on every pull request, and
+    the lake workflow holds each stored descriptor to HEAD's overrides through lake_check.py."""
 
-    def test_the_workflow_runs_the_check_and_its_self_test(self) -> None:
+    def test_the_pull_request_workflow_runs_the_self_test(self) -> None:
         text = WORKFLOW.read_text(encoding="utf-8")
         self.assertRegex(text, r"run: python scripts/test_check_constraint_ratchet\.py")
-        self.assertRegex(text, r"python scripts/check_constraint_ratchet\.py\b")
 
-    def test_the_gate_reads_a_history_that_contains_its_base(self) -> None:
-        text = WORKFLOW.read_text(encoding="utf-8")
-        job = re.search(r"\n  constraint-ratchet:\n(.*?)(?=\n  [a-z][a-z-]*:\n|\Z)", text, re.S)
-        if job is None:
-            self.fail("no constraint-ratchet job")
-        self.assertIn("fetch-depth: 0", job.group(1), "a shallow checkout has no origin/main to hold the tree to")
-        self.assertIn("--base origin/main", job.group(1))
+    def test_the_lake_workflow_runs_the_ratchet_over_a_full_history(self) -> None:
+        import lake_check
+
+        self.assertIn("ratchet", lake_check.CHECKS)
+        text = (WORKFLOW.parent / "lake.yml").read_text(encoding="utf-8")
+        self.assertRegex(text, r"python scripts/lake_check\.py\b")
+        self.assertNotIn("--check", text, "the lake workflow must run every check, the ratchet among them")
+        self.assertIn("fetch-depth: 0", text, "a shallow checkout has no history to sort a finding by")
 
 
 if __name__ == "__main__":

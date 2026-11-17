@@ -50,11 +50,12 @@ below moves a declaration or an entry and asserts what the report says about it:
     could not otherwise be checked by;
   * an empty `datasets/` directory, a missing rejections file and an unreadable
     descriptor: the vacuous pass and the partial sweep, each refused by name;
-  * THE ENTRIES THIS REPOSITORY SHIPS, run against the descriptors it ships. Every case
-    above is a scratch tree, which is the right altitude for the mechanism and the wrong
-    one for the entries: a shipped entry pinning a note the reference implementation no
-    longer raises would be an accounting of a refusal that does not exist, and every
-    scratch case would still pass.
+  * THE ENTRIES THIS REPOSITORY SHIPS, run against the lake's descriptors, from the
+    bundle in `scripts/testdata/lake_descriptors.json`. Every case above is a scratch
+    tree, which is the right altitude for the mechanism and the wrong one for the
+    entries: a shipped entry pinning a note the reference implementation no longer
+    raises would be an accounting of a refusal that does not exist, and every scratch
+    case would still pass. Its pair breaks one lake field and asserts the check fails.
 
 Nothing here touches the network.
 """
@@ -337,6 +338,40 @@ class TheDeclarationMoves(ScratchTree):
         self.assertIn("names a package", result.stdout)
 
 
+class OnlyNarrowsToNamedPackages(ScratchTree):
+    """`--only` checks the named packages and holds only their entries."""
+
+    def test_only_leaves_a_refused_sibling_unread(self) -> None:
+        self.settled()
+        self.write(self.with_pattern("beta", "opened"))
+        self.assertEqual(self.run_check().returncode, EXIT_DISAGREEMENT)
+        result = self.run_check("--only", "alpha")
+        self.assertEqual(result.returncode, EXIT_OK, self.both(result))
+        self.assertIn("1 of 1 package(s) accepted", result.stdout)
+        self.assertNotIn("beta", result.stdout)
+
+    def test_only_still_refuses_the_named_package(self) -> None:
+        self.settled()
+        self.write(self.with_pattern("alpha", "opened"))
+        result = self.run_check("--only", "alpha")
+        self.assertEqual(result.returncode, EXIT_DISAGREEMENT, self.both(result))
+        self.assertIn("REFUSED   alpha", result.stdout)
+
+    def test_only_ignores_an_entry_for_a_package_it_does_not_read(self) -> None:
+        self.settled()
+        self.write(self.with_pattern("beta", "opened"))
+        self.rejections(entry(package="beta", pointer=pointer("beta", "opened")))
+        result = self.run_check("--only", "alpha")
+        self.assertEqual(result.returncode, EXIT_OK, self.both(result))
+        self.assertIn("0 stated rejection(s)", result.stdout)
+
+    def test_only_naming_an_absent_package_is_a_fault(self) -> None:
+        self.settled()
+        result = self.run_check("--only", "gamma")
+        self.assertEqual(result.returncode, EXIT_ERROR, self.both(result))
+        self.assertIn("gamma", result.stderr)
+
+
 class ARefusalNoFieldAccountsFor(ScratchTree):
     """An unattributed refusal must not read as no refusal."""
 
@@ -485,36 +520,71 @@ class TheSweepMustBeWhole(ScratchTree):
         self.assertEqual(findings["frictionless_version"], installed_version())
 
 
+LAKE_BUNDLE = Path(__file__).resolve().parent / "testdata" / "lake_descriptors.json"
+SHIPPED = Path(__file__).resolve().parent.parent / "datasets" / "frictionless-rejections.json"
+
+
+def lake_tree(root: Path) -> Path:
+    """The lake's descriptors as a datasets/ tree, beside the rejections file this repository ships.
+
+    The repository commits no descriptor, so the shipped entries are read against a
+    bundle emitted once from the lake (`emit_descriptor.py --all --bundle`), kept in
+    testdata/ so nothing here touches the network. Each package is laid out under its
+    resource's name, which is its slug.
+    """
+    bundle = json.loads(LAKE_BUNDLE.read_text(encoding="utf-8"))
+    for descriptor in bundle.values():
+        slug = descriptor["resources"][0]["name"]
+        (root / slug).mkdir(parents=True, exist_ok=True)
+        (root / slug / "datapackage.json").write_text(json.dumps(descriptor, indent=2), encoding="utf-8")
+    (root / SHIPPED.name).write_text(SHIPPED.read_text(encoding="utf-8"), encoding="utf-8")
+    return root
+
+
 class TheEntriesThisRepositoryShips(unittest.TestCase):
     """The scratch cases above are the right altitude for the mechanism, not the entries.
 
     A shipped entry pinning a note the reference implementation no longer raises, or a
-    refusal nothing accounts for, would leave every case above passing.
+    refusal nothing accounts for, would leave every case above passing. The entries are
+    read against the lake's descriptors, from the bundle in testdata/.
     """
 
-    def test_every_shipped_entry_is_live_and_every_refusal_is_accounted_for(self) -> None:
-        root = Path(__file__).resolve().parent.parent / "datasets"
-        if not (root / "frictionless-rejections.json").exists():  # pragma: no cover
-            self.skipTest("no shipped rejections file")
-        result = subprocess.run(
+    def run_check(self, root: Path) -> subprocess.CompletedProcess:
+        return subprocess.run(
             [sys.executable, str(CHECK), "--datasets-dir", str(root)],
             capture_output=True,
             text=True,
         )
+
+    def test_every_shipped_entry_is_live_and_every_refusal_is_accounted_for(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self.run_check(lake_tree(Path(tmp)))
         self.assertEqual(result.returncode, EXIT_OK, result.stdout + result.stderr)
         self.assertIn("0 fault(s)", result.stdout)
-        document = json.loads((root / "frictionless-rejections.json").read_text())
+        document = json.loads(SHIPPED.read_text(encoding="utf-8"))
         for stated in document["rejections"]:
             for note in stated["notes"]:
                 self.assertIn(f"{stated['pointer']}: {note}", result.stdout)
 
+    def test_a_refusal_in_a_lake_descriptor_that_nothing_accounts_for_fails(self) -> None:
+        """The same tree and the same shipped file, with one lake field made refusable."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = lake_tree(Path(tmp))
+            path = root / "fips" / "datapackage.json"
+            document = json.loads(path.read_text(encoding="utf-8"))
+            fields = document["resources"][0]["schema"]["fields"]
+            target = next(f for f in fields if f["name"] == "gnis_code")
+            target["type"] = "date"
+            path.write_text(json.dumps(document), encoding="utf-8")
+            result = self.run_check(root)
+        self.assertEqual(result.returncode, EXIT_DISAGREEMENT, result.stdout + result.stderr)
+        self.assertIn("fields[name=gnis_code]", result.stdout)
+        self.assertIn(NOTE_PATTERN_ON_DATE, result.stdout)
+
     def test_the_edgar_descriptor_is_accepted(self) -> None:
         """The one this repository fixed by hand: `cik` is `integer` and carries no pattern."""
-        root = Path(__file__).resolve().parent.parent / "datasets"
-        descriptor = root / "edgar" / "datapackage.json"
-        if not descriptor.exists():  # pragma: no cover
-            self.skipTest("no shipped edgar descriptor")
-        document = json.loads(descriptor.read_text())
+        bundle = json.loads(LAKE_BUNDLE.read_text(encoding="utf-8"))
+        document = bundle["sec.company_tickers_exchange"]
         cik = next(
             f for f in document["resources"][0]["schema"]["fields"] if f["name"] == "cik"
         )

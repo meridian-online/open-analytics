@@ -9,10 +9,24 @@
 #
 # A break on an xlsx fixture sees the sheet as a table `fixture` with a `row` column (the
 # sheet row, 1 for the header) and one text column per sheet letter.
+#
+# The lake: every test gives emit_descriptors testdata/lake_descriptors.json, the open
+# lake's descriptors as `python scripts/emit_descriptor.py --all --bundle` emitted them,
+# so no test reads the network. check_before_publish holds the build against that bundle.
+# finetype infers a descriptor from the rows it reads, and on the fixture's rows it labels
+# some columns differently from the lake's descriptor of the full table (text_source as a
+# country), so the label check would fail on the fixture's own descriptor. The tests that
+# run describe on the fixture therefore give check_before_publish its fixture too, a
+# stand-in report, and "a build carrying the lake's descriptor passes the check before
+# publish" runs the check for real: describe's fixture there is the lake's own descriptor
+# of this table, testdata/described.json, which the stamp writes into the Parquet built
+# from the fixture.
 
 - name: the fixture builds the index
   risk: an index published with cross-references as entries, codes that miss census/naics_2022, or Census's text changed
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
+    check_before_publish: testdata/check_before_publish.json
     fetch_index: testdata/naics_index.xlsx
     fetch_naics: testdata/naics_descriptions.xlsx
   checks:
@@ -59,6 +73,7 @@
 - name: a changed header is refused
   risk: Census reworks the index file's columns and descriptions load as codes or codes as descriptions
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
     fetch_index: testdata/naics_index.xlsx
     fetch_naics: testdata/naics_descriptions.xlsx
   break:
@@ -69,6 +84,7 @@
 - name: a code that is not six digits is refused
   risk: a code that lost a digit, or a five-digit industry, publishes as an entry nothing in census/naics_2022 joins to
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
     fetch_index: testdata/naics_index.xlsx
     fetch_naics: testdata/naics_descriptions.xlsx
   break:
@@ -79,6 +95,7 @@
 - name: an entry without a code is refused
   risk: an entry whose code cell is empty is published with a NULL code, or dropped unseen
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
     fetch_index: testdata/naics_index.xlsx
     fetch_naics: testdata/naics_descriptions.xlsx
   break:
@@ -89,6 +106,7 @@
 - name: an entry without a description is refused
   risk: a code with an empty description publishes an entry an analyst can never match
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
     fetch_index: testdata/naics_index.xlsx
     fetch_naics: testdata/naics_descriptions.xlsx
   break:
@@ -99,6 +117,7 @@
 - name: a ****** row that is not a cross-reference is refused
   risk: an ordinary entry whose code Census blanked to ****** is dropped as a cross-reference and the index silently loses it
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
     fetch_index: testdata/naics_index.xlsx
     fetch_naics: testdata/naics_descriptions.xlsx
   break:
@@ -109,6 +128,7 @@
 - name: a code the code list lacks is refused
   risk: Census drops or renumbers an industry in the descriptions and the index publishes entries that join to nothing
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
     fetch_index: testdata/naics_index.xlsx
     fetch_naics: testdata/naics_descriptions.xlsx
   break:
@@ -119,9 +139,18 @@
 - name: a repeated entry is refused
   risk: Census repeats an entry and the published key is not unique
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
     fetch_index: testdata/naics_index.xlsx
     fetch_naics: testdata/naics_descriptions.xlsx
   break:
     fetch_index: INSERT INTO fixture (row, A, B) VALUES (24, '111110', 'Soybean farming, field and seed production')
   expect:
     fails_with: "titles: repeated entry_id: 111110|Soybean farming, field and seed production"
+
+- name: a build carrying the lake's descriptor passes the check before publish
+  risk: a table whose descriptor agrees with the lake is refused before publish, or the check is never run
+  fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
+    describe: testdata/described.json
+    fetch_index: testdata/naics_index.xlsx
+    fetch_naics: testdata/naics_descriptions.xlsx

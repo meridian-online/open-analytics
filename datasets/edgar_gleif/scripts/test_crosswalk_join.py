@@ -39,6 +39,7 @@ from __future__ import annotations
 import hashlib
 import http.server
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -678,6 +679,190 @@ class CrosswalkJoinSelfTest(unittest.TestCase):
     def test_malformed_measured_against_refuses(self) -> None:
         self.lay_left(measuredAgainst="3dc65776711ebb9a")
         self.assertOutcome(run_join(self.datasets), EXIT_ERROR, "`measuredAgainst` must be 'sha256:'")
+
+    # ------------------------------------------------- descriptors from the lake
+
+    def lake_bundle(self, *slugs: str, **changes: Any) -> Path:
+        """A lake bundle (table name to descriptor) holding each slug's descriptor, with an
+        absolute resource path, as the lake's are; the committed copies are then removed."""
+        bundle: dict[str, Any] = {}
+        for slug in slugs:
+            path = self.datasets / slug / "datapackage.json"
+            document = json.loads(path.read_text(encoding="utf-8"))
+            resource = document["resources"][0]
+            resource["path"] = str((path.parent / resource["path"]).resolve())
+            document.update(changes.get(slug, {}))
+            bundle[f"lake.{slug}"] = document
+        for slug in slugs:
+            (self.datasets / slug / "datapackage.json").unlink()
+        out = self.datasets.parent / "lake_descriptors.json"
+        out.write_text(json.dumps(bundle, indent=2) + "\n", encoding="utf-8")
+        return out
+
+    def test_lake_bundle_resolves_siblings_with_no_descriptor_committed(self) -> None:
+        """No `datapackage.json` under --datasets-dir at all: the reference resolves through
+        the bundle, and this package's own descriptor is the staged one."""
+        self.lay_left(include_coverage=False)
+        staged = self.stage_left()
+        bundle = self.lake_bundle("right", "left")
+        self.assertEqual(sorted(self.datasets.glob("*/datapackage.json")), [])
+        measured = self.datasets.parent / "stage" / "measured.json"
+        self.assertOutcome(
+            run_join(
+                self.datasets,
+                "--lake-bundle",
+                str(bundle),
+                "--write",
+                "--package",
+                "left",
+                "--descriptor",
+                f"left={staged}",
+                "--local",
+                f"left={self.datasets / 'left' / 'left.parquet'}",
+                "--out",
+                str(measured),
+            ),
+            EXIT_OK,
+            "coverage written: rows 3  matched 2",
+        )
+        written = json.loads(measured.read_text(encoding="utf-8"))
+        self.assertEqual(written["x-joins"]["joins"][0]["coverage"], {"rows": 3, "matched": 2})
+
+    def test_lake_bundle_accepts_the_measured_packages_own_slug_on_its_first_publish(self) -> None:
+        """The bundle holds only the referenced table: the staged descriptor is the only one
+        of `left`, because the lake does not hold it yet."""
+        self.lay_left(include_coverage=False)
+        staged = self.stage_left()
+        bundle = self.lake_bundle("right")
+        (self.datasets / "left" / "datapackage.json").unlink()
+        measured = self.datasets.parent / "stage" / "measured.json"
+        self.assertOutcome(
+            run_join(
+                self.datasets, "--lake-bundle", str(bundle), "--write", "--package", "left",
+                "--descriptor", f"left={staged}",
+                "--local", f"left={self.datasets / 'left' / 'left.parquet'}",
+                "--out", str(measured),
+            ),
+            EXIT_OK,
+            "coverage written: rows 3  matched 2",
+        )
+        written = json.loads(measured.read_text(encoding="utf-8"))
+        self.assertEqual(written["x-joins"]["joins"][0]["coverage"], {"rows": 3, "matched": 2})
+
+    def test_lake_bundle_refuses_an_unknown_slug_that_package_does_not_name(self) -> None:
+        """First-publish leniency is for the measured package only, not any slug."""
+        self.lay_left(include_coverage=False)
+        staged = self.stage_left()
+        bundle = self.lake_bundle("right")
+        self.assertOutcome(
+            run_join(
+                self.datasets, "--lake-bundle", str(bundle), "--write", "--package", "right",
+                "--descriptor", f"left={staged}",
+            ),
+            EXIT_ERROR,
+            "--descriptor names no dataset 'left'",
+        )
+
+    def test_lake_bundle_refuses_a_descriptor_slug_it_does_not_hold(self) -> None:
+        """A misspelt slug must not leave `--package` measuring the lake's copy."""
+        self.lay_left(include_coverage=False)
+        staged = self.stage_left()
+        bundle = self.lake_bundle("right", "left")
+        self.assertOutcome(
+            run_join(
+                self.datasets, "--lake-bundle", str(bundle), "--write", "--package", "left",
+                "--descriptor", f"lfet={staged}",
+            ),
+            EXIT_ERROR,
+            "--descriptor names no dataset 'lfet'",
+        )
+
+    def test_lake_bundle_staged_descriptor_replaces_the_lake_copy(self) -> None:
+        self.lay_left(coverage={"rows": 999, "matched": 999})
+        staged = self.stage_left(title="staged")
+        bundle = self.lake_bundle("right", "left", left={"title": "lake"})
+        measured = self.datasets.parent / "stage" / "measured.json"
+        self.assertOutcome(
+            run_join(
+                self.datasets,
+                "--lake-bundle",
+                str(bundle),
+                "--write",
+                "--package",
+                "left",
+                "--descriptor",
+                f"left={staged}",
+                "--local",
+                f"left={self.datasets / 'left' / 'left.parquet'}",
+                "--out",
+                str(measured),
+            ),
+            EXIT_OK,
+            "coverage written: rows 3  matched 2",
+        )
+        written = json.loads(measured.read_text(encoding="utf-8"))
+        self.assertEqual(written["title"], "staged", "the lake's copy was read, not the staged one")
+
+    def test_lake_bundle_checks_against_the_lake_copies(self) -> None:
+        """CHECK mode over a bundle alone: the same verdict as over committed descriptors."""
+        self.lay_left(coverage={"rows": 3, "matched": 1})
+        bundle = self.lake_bundle("right", "left")
+        self.assertOutcome(
+            run_join(self.datasets, "--lake-bundle", str(bundle)),
+            EXIT_VIOLATIONS,
+            "descriptor declares 1 matched row(s); the join finds 2",
+        )
+
+    def test_lake_bundle_refuses_a_descriptor_with_no_package_name(self) -> None:
+        bundle = self.lake_bundle("right", right={"name": ""})
+        self.assertOutcome(
+            run_join(self.datasets, "--lake-bundle", str(bundle)),
+            EXIT_ERROR,
+            "lake.right's descriptor declares no usable package `name`",
+        )
+
+    def test_lake_bundle_refuses_two_descriptors_of_one_package(self) -> None:
+        self.lay_left()
+        bundle = self.lake_bundle("right", "left", left={"name": "right"})
+        self.assertOutcome(
+            run_join(self.datasets, "--lake-bundle", str(bundle)),
+            EXIT_ERROR,
+            "more than one descriptor declares package 'right'",
+        )
+
+
+class ShippedJoinLinks(unittest.TestCase):
+    """Each shipped join's `package` link is the address the site serves the referenced
+    table's descriptor at, and names the table the join's `reference.resource` resolves
+    to. The repository commits no descriptor, so a link into it would 404."""
+
+    LINK = re.compile(r"^https://meridian\.online/datasets/([a-z0-9_]+)/([a-z0-9_]+)/datapackage\.json$")
+
+    def test_every_shipped_join_links_the_site_address_of_the_table_it_references(self) -> None:
+        datasets = RUNNER.resolve().parents[2]
+        # table name -> the slug of the Protocol whose publish step names it
+        owner = {
+            table: manifest.parent.name
+            for manifest in datasets.glob("*/arcform.yaml")
+            for table in re.findall(r"^\s+- table: (\S+)\s*$", manifest.read_text(encoding="utf-8"), re.M)
+        }
+        self.assertIn("census.naics_2022", owner, "the manifests were not read")
+        seen = 0
+        for overrides in sorted(datasets.glob("*/descriptor.overrides.json")):
+            joins = (json.loads(overrides.read_text(encoding="utf-8")).get("x-joins") or {}).get("joins") or []
+            for join in joins:
+                seen += 1
+                label = f"{overrides.parent.name} join {join.get('name')!r}"
+                match = self.LINK.match(join.get("package", ""))
+                self.assertIsNotNone(match, f"{label}: package {join.get('package')!r} is not a site descriptor address")
+                table = f"{match.group(1)}.{match.group(2)}"
+                self.assertIn(table, owner, f"{label}: no Protocol publishes {table}")
+                self.assertEqual(
+                    owner[table], join["reference"]["resource"],
+                    f"{label}: links {table} but references resource {join['reference']['resource']!r}",
+                )
+        self.assertEqual(seen, 3, "the shipped joins are edgar_gleif's two and schedule_b's one")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

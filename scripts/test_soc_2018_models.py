@@ -7,9 +7,9 @@ checks in `contracts/`, behind the `check_inputs_*.sql` models. Each case copies
 the fixtures in `scripts/testdata/soc_2018/` into a scratch `build/bls/`, runs `load` and
 `code_list` on one DuckDB connection with the scratch directory as its file search path, as
 the Protocol's `sql:` steps run them, exports the terminal table to `build/stage/` as the
-export step does, and runs `check_code_list.py` over that file. `DescriptorTest` holds the
-three committed `<table>.datapackage.json` files to the tables built from the fixtures and
-to their overrides, since CI's descriptor sweeps do not read them before they are published.
+export step does, and runs `check_code_list.py` over that file. `OverridesTest` holds
+each table's overrides to the tables built from the fixtures and to the manifest; the
+repository commits no descriptor.
 
 The fixtures are cut from BLS's SOC 2018 downloads of 2026-11-03 (see the README beside
 them): major groups 11 and 15, the minor groups 11-3000, 11-9000 and 15-1200, and every
@@ -465,11 +465,11 @@ def fetch_urls(manifest: Path) -> dict:
     return urls
 
 
-class DescriptorTest(unittest.TestCase):
-    """The committed `<table>.datapackage.json` files, which CI's descriptor sweeps do not
-    read until they are published, held to the tables the models build and to their
-    overrides: field order, primary key, contract declaration, licence and descriptions,
-    the release the overrides quote, and the fetched URLs among the sources."""
+class OverridesTest(unittest.TestCase):
+    """Each table's `<table>.overrides.json`, held to the table the models build and to the
+    manifest: field order, primary key, contract declaration, licence, descriptions,
+    the release the overrides quote, and the fetched URLs among the sources. The repository
+    commits no descriptor, so these hold the overrides that `describe` builds it from."""
 
     @classmethod
     def setUpClass(cls):
@@ -481,59 +481,45 @@ class DescriptorTest(unittest.TestCase):
     def tearDownClass(cls):
         cls.scratch.close()
 
-    def documents(self, table: str) -> tuple[dict, dict]:
-        descriptor = json.loads((PROTOCOL / f"{table}.datapackage.json").read_text(encoding="utf-8"))
-        overrides = json.loads((PROTOCOL / f"{table}.overrides.json").read_text(encoding="utf-8"))
-        return descriptor, overrides
+    def overrides(self, table: str) -> dict:
+        return json.loads((PROTOCOL / f"{table}.overrides.json").read_text(encoding="utf-8"))
 
     def test_fields_are_the_out_tables_columns_in_order(self):
         for table, out, *_ in DESCRIPTORS:
             with self.subTest(table=table):
-                descriptor, _ = self.documents(table)
-                fields = [f["name"] for f in descriptor["resources"][0]["schema"]["fields"]]
                 columns = [d[0] for d in self.con.execute(f"SELECT * FROM {out} LIMIT 0").description]
-                self.assertEqual(fields, columns)
+                self.assertEqual(list(self.overrides(table)["fields"]), columns)
 
     def test_primary_key(self):
         for table, _, key, *_ in DESCRIPTORS:
             with self.subTest(table=table):
-                descriptor, overrides = self.documents(table)
-                self.assertEqual(descriptor["resources"][0]["schema"]["primaryKey"], key)
-                self.assertEqual(overrides["primaryKey"], key)
+                self.assertEqual(self.overrides(table)["primaryKey"], key)
 
     def test_contract_declaration(self):
         for table, _, _, name, value in DESCRIPTORS:
             with self.subTest(table=table):
-                descriptor, overrides = self.documents(table)
-                self.assertEqual(descriptor.get(name), value)
+                overrides = self.overrides(table)
                 self.assertEqual(overrides.get(name), value)
                 others = {d[3] for d in DESCRIPTORS} - {name}
-                self.assertFalse(others & descriptor.keys(), f"{table} declares another table's contract")
+                self.assertFalse(others & overrides.keys(), f"{table} declares another table's contract")
 
-    def test_licence_is_public_domain_and_matches_the_overrides(self):
+    def test_licence_is_public_domain(self):
         for table, *_ in DESCRIPTORS:
             with self.subTest(table=table):
-                descriptor, overrides = self.documents(table)
-                self.assertEqual([lic["name"] for lic in descriptor["licenses"]], ["other-pd"])
-                self.assertEqual(descriptor["licenses"], overrides["licenses"])
+                self.assertEqual([lic["name"] for lic in self.overrides(table)["licenses"]], ["other-pd"])
 
-    def test_every_field_has_the_overrides_description(self):
+    def test_every_field_has_a_description(self):
         for table, *_ in DESCRIPTORS:
             with self.subTest(table=table):
-                descriptor, overrides = self.documents(table)
-                fields = descriptor["resources"][0]["schema"]["fields"]
-                self.assertEqual([f["name"] for f in fields], list(overrides["fields"]))
-                for field in fields:
-                    self.assertTrue(field.get("description", "").strip(), f"{table}.{field['name']} has no description")
-                    self.assertEqual(field["description"], overrides["fields"][field["name"]]["description"])
+                for name, field in self.overrides(table)["fields"].items():
+                    self.assertTrue(field.get("description", "").strip(), f"{table}.{name} has no description")
 
     def test_the_built_release_is_the_one_the_overrides_quote(self):
         for table, out, *_ in DESCRIPTORS:
             with self.subTest(table=table):
-                _, overrides = self.documents(table)
                 releases = self.con.execute(f"SELECT DISTINCT release FROM {out}").fetchall()
                 self.assertEqual(len(releases), 1)
-                self.assertIn(releases[0][0], overrides["fields"]["release"]["description"])
+                self.assertIn(releases[0][0], self.overrides(table)["fields"]["release"]["description"])
 
     def test_every_fetched_url_is_a_source_of_the_tables_it_feeds(self):
         urls = fetch_urls(PROTOCOL / "arcform.yaml")
@@ -541,9 +527,7 @@ class DescriptorTest(unittest.TestCase):
         for step, tables in FEEDS.items():
             for table in tables:
                 with self.subTest(step=step, table=table):
-                    descriptor, overrides = self.documents(table)
-                    self.assertIn(urls[step], [s["path"] for s in overrides["sources"]])
-                    self.assertIn(urls[step], [s["path"] for s in descriptor["sources"]])
+                    self.assertIn(urls[step], [s["path"] for s in self.overrides(table)["sources"]])
 
 
 if __name__ == "__main__":

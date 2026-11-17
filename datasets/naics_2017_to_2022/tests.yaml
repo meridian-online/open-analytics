@@ -11,10 +11,23 @@
 #
 # A break on an xlsx fixture sees the sheet as a table `fixture` with a `row` column (the
 # sheet row, 1 for the title) and one text column per sheet letter.
+#
+# The lake: every test gives emit_descriptors testdata/lake_descriptors.json, the open
+# lake's descriptors as `python scripts/emit_descriptor.py --all --bundle` emitted them,
+# so no test reads the network. check_before_publish holds the build against that bundle.
+# On this fixture the build agrees with the lake, so the pass case runs the check for
+# real.
 
+# This case runs describe on the fixture rows and then the real check before publish, so
+# it passes only while finetype labels the fixture's columns as it labelled the full table.
+# It does today. If a finetype change makes it label one differently, as fixture rows
+# already are in fips, naics_2022_titles and ourairports, this fails for no defect: give
+# it a stand-in check_before_publish fixture and add a case with describe fixtured to the
+# lake's descriptor, as those Protocols do.
 - name: the fixture builds the crosswalk
   risk: a crosswalk published with pairings lost or invented, 2022 codes that miss census/naics_2022, or Census's text changed
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
     fetch_concordance: testdata/naics_2017_to_2022.xlsx
     fetch_naics: testdata/naics_descriptions.xlsx
   checks:
@@ -62,6 +75,7 @@
 - name: a changed title is refused
   risk: Census replaces the sheet with another concordance and its pairings publish under this one's editions
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
     fetch_concordance: testdata/naics_2017_to_2022.xlsx
     fetch_naics: testdata/naics_descriptions.xlsx
   break:
@@ -72,6 +86,7 @@
 - name: a changed header is refused
   risk: Census reorders the columns and 2022 codes load as 2017 codes
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
     fetch_concordance: testdata/naics_2017_to_2022.xlsx
     fetch_naics: testdata/naics_descriptions.xlsx
   break:
@@ -82,6 +97,7 @@
 - name: a value beyond column D is refused
   risk: Census adds a column, such as a weight, and the crosswalk drops it unseen
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
     fetch_concordance: testdata/naics_2017_to_2022.xlsx
     fetch_naics: testdata/naics_descriptions.xlsx
   break:
@@ -92,6 +108,7 @@
 - name: a value past column I is refused
   risk: Census adds a column past the last of its stray whitespace cells (column I) and the crosswalk drops it unseen
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
     fetch_concordance: testdata/naics_2017_to_2022.xlsx
     fetch_naics: testdata/naics_descriptions.xlsx
   break:
@@ -102,6 +119,7 @@
 - name: a 2017 code that is not six digits is refused
   risk: a code that lost a digit publishes as a pairing nothing coded to 2017 joins to
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
     fetch_concordance: testdata/naics_2017_to_2022.xlsx
     fetch_naics: testdata/naics_descriptions.xlsx
   break:
@@ -112,6 +130,7 @@
 - name: a 2022 code that is not six digits is refused
   risk: a five-digit industry publishes as a 2022 code that is not a national industry
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
     fetch_concordance: testdata/naics_2017_to_2022.xlsx
     fetch_naics: testdata/naics_descriptions.xlsx
   break:
@@ -122,6 +141,7 @@
 - name: a pairing without a 2017 code is refused
   risk: a pairing whose 2017 cell is empty is published with a NULL code, or dropped unseen
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
     fetch_concordance: testdata/naics_2017_to_2022.xlsx
     fetch_naics: testdata/naics_descriptions.xlsx
   break:
@@ -132,6 +152,7 @@
 - name: a pairing without a 2022 code is refused
   risk: a pairing whose 2022 cell is empty is published with a NULL code, or dropped unseen
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
     fetch_concordance: testdata/naics_2017_to_2022.xlsx
     fetch_naics: testdata/naics_descriptions.xlsx
   break:
@@ -142,6 +163,7 @@
 - name: a pairing without a 2017 title is refused
   risk: a 2017 industry is published with no title, so a split's piece is lost
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
     fetch_concordance: testdata/naics_2017_to_2022.xlsx
     fetch_naics: testdata/naics_descriptions.xlsx
   break:
@@ -152,6 +174,7 @@
 - name: a pairing without a 2022 title is refused
   risk: a 2022 industry is published with no title, so the bridge names a code it cannot describe
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
     fetch_concordance: testdata/naics_2017_to_2022.xlsx
     fetch_naics: testdata/naics_descriptions.xlsx
   break:
@@ -162,6 +185,7 @@
 - name: a 2022 code the code list lacks is refused
   risk: Census renumbers an industry in the descriptions and the crosswalk points 2017 data at a code census/naics_2022 does not have
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
     fetch_concordance: testdata/naics_2017_to_2022.xlsx
     fetch_naics: testdata/naics_descriptions.xlsx
   break:
@@ -172,6 +196,7 @@
 - name: a repeated pairing is refused
   risk: Census repeats a pairing and the published key is not unique
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
     fetch_concordance: testdata/naics_2017_to_2022.xlsx
     fetch_naics: testdata/naics_descriptions.xlsx
   break:

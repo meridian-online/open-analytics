@@ -17,7 +17,7 @@
       "title": "Meridian"
     }
   ],
-  "created": "2026-11-16T20:55:43Z",
+  "created": "2026-11-16T20:57:54Z",
   "description": "OurAirports' airports that carry an ICAO code, the four-letter code air traffic control, flight plans and airspace data use for an airport: one row per ICAO code, with OurAirports' name for the airport, its type, coordinates and elevation, its country and region codes and names, the place it serves, whether it has scheduled airline service, its GPS and local codes, and links to its website and Wikipedia article. Airports without an ICAO code are not included. IATA's three-letter airport codes are left out, since IATA's code list is not open data: OurAirports' iata_code column is not read into the table, and its keywords column is dropped because it carries IATA codes. Data from OurAirports (https://ourairports.com/), which its maintainers release to the public domain and which comes with no guarantee of accuracy; Meridian prepared this table from OurAirports' files, and OurAirports does not endorse it. The date in release is the UTC date of the commit OurAirports last made to its data repository before the run, the commit the files were read at. GitHub records a commit only when the files change; in practice airports.csv changes nightly. Meridian refreshes this dataset fortnightly, so the data is as of the date in release.",
   "homepage": "https://meridian.online/datasets/library/ourairports",
   "licenses": [

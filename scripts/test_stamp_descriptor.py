@@ -544,6 +544,68 @@ class StampDescriptorSelfTest(unittest.TestCase):
             json.loads(descriptor.read_text(encoding="utf-8"))["created"], "2026-06-30T12:34:56Z"
         )
 
+    # ───────────── 3d. `created` carried from the lake's copy, not the last build
+
+    def stamp_from_lake(self, staged_created: str, bundle: Path, *, rows: int = 4, out: str = "fresh"):
+        """A stamp on a clean checkout: nothing at --out yet, `created` judged against the bundle."""
+        stage = self.root / f"stage-{out}"
+        descriptor, parquet = build_dataset(stage, rows=rows, created=staged_created)
+        published = self.root / out
+        published.mkdir(parents=True, exist_ok=True)
+        result = run_cli(
+            "stamp",
+            "--descriptor", str(descriptor),
+            "--parquet", str(parquet),
+            "--out", str(published / "widgets.parquet"),
+            "--out-descriptor", str(published / "datapackage.json"),
+            "--carry-created-from", str(bundle),
+            "--table", "demo.widgets",
+        )
+        return result, published / "datapackage.json"
+
+    def lake_bundle(self, document: dict | None) -> Path:
+        self.root.mkdir(parents=True, exist_ok=True)
+        bundle = self.root / "lake_descriptors.json"
+        bundle.write_text(json.dumps({} if document is None else {"demo.widgets": document}), encoding="utf-8")
+        return bundle
+
+    def published_once(self) -> dict:
+        """What the lake would hold after one publish on 2026-01-01."""
+        _, _, _, descriptor = self.stage_and_publish("2026-01-01T00:00:00Z", carry=False)
+        return json.loads(descriptor.read_text(encoding="utf-8"))
+
+    def test_created_is_carried_from_the_lake_when_it_serves_these_bytes(self) -> None:
+        bundle = self.lake_bundle(self.published_once())
+        result, descriptor = self.stamp_from_lake("2026-06-30T12:34:56Z", bundle)
+        self.assertOutcome(result, EXIT_OK, "keeps created 2026-01-01T00:00:00Z")
+        self.assertEqual(json.loads(descriptor.read_text(encoding="utf-8"))["created"], "2026-01-01T00:00:00Z")
+
+    def test_created_is_fresh_when_the_lake_serves_other_bytes(self) -> None:
+        bundle = self.lake_bundle(self.published_once())
+        result, descriptor = self.stamp_from_lake("2026-06-30T12:34:56Z", bundle, rows=5)
+        self.assertOutcome(result, EXIT_OK, "differs from the lake's copy")
+        self.assertEqual(json.loads(descriptor.read_text(encoding="utf-8"))["created"], "2026-06-30T12:34:56Z")
+
+    def test_created_is_fresh_on_a_first_publish(self) -> None:
+        result, descriptor = self.stamp_from_lake("2026-06-30T12:34:56Z", self.lake_bundle(None))
+        self.assertOutcome(result, EXIT_OK, "or is not in it")
+        self.assertEqual(json.loads(descriptor.read_text(encoding="utf-8"))["created"], "2026-06-30T12:34:56Z")
+
+    def test_an_unreadable_bundle_refuses_rather_than_stamping_a_fresh_created(self) -> None:
+        self.root.mkdir(parents=True, exist_ok=True)
+        bundle = self.root / "lake_descriptors.json"
+        bundle.write_text("not json", encoding="utf-8")
+        result, _ = self.stamp_from_lake("2026-06-30T12:34:56Z", bundle)
+        self.assertOutcome(result, EXIT_ERROR, "cannot read the lake bundle")
+
+    def test_carry_created_from_needs_its_table(self) -> None:
+        descriptor, parquet = build_dataset(self.root / "lone")
+        result = run_cli(
+            "stamp", "--descriptor", str(descriptor), "--parquet", str(parquet),
+            "--carry-created-from", str(self.lake_bundle(None)),
+        )
+        self.assertOutcome(result, EXIT_ERROR, "--carry-created-from and --table go together")
+
     # ──────────────────────────────── 4. one URL, one ranged request, nothing else
 
     def test_reading_over_http_asks_for_the_object_and_nothing_else(self) -> None:

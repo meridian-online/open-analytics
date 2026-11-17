@@ -16,10 +16,24 @@
 # check_code_list is a uv step, so a refusal of its own could be matched only by
 # "step 'check_code_list' failed (exit code n)"; the contract it holds is tested by
 # scripts/test_check_code_list.py, and the pass case shows this table meets it.
+#
+# The lake: every test gives emit_descriptors testdata/lake_descriptors.json, the open
+# lake's descriptors as `python scripts/emit_descriptor.py --all --bundle` emitted them,
+# so no test reads the network. check_before_publish holds the build against that bundle.
+# finetype infers a descriptor from the rows it reads, and on the fixture's rows it labels
+# some columns differently from the lake's descriptor of the full table (iso_region as a
+# country, and home_link with a pattern the lake's descriptor does not declare), so the
+# label check would fail on the fixture's own descriptor. The tests that run describe on
+# the fixture therefore give check_before_publish its fixture too, a stand-in report, and
+# "a build carrying the lake's descriptor passes the check before publish" runs the check
+# for real: describe's fixture there is the lake's own descriptor of this table,
+# testdata/described.json, which the stamp writes into the Parquet built from the fixture.
 
 - name: the fixture builds the code list
   risk: an ICAO list published with airports missing, IATA codes republished, or names, countries or regions wrong
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
+    check_before_publish: testdata/check_before_publish.json
     fetch_release_before: testdata/commit.json
     fetch_tree: testdata/tree.json
     fetch_airports: testdata/airports.csv
@@ -106,6 +120,8 @@
 - name: a commit late in the UTC day takes its UTC date
   risk: the release is read in the machine's time zone and a late commit publishes under the next day's date
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
+    check_before_publish: testdata/check_before_publish.json
     fetch_release_before: testdata/commit.json
     fetch_tree: testdata/tree.json
     fetch_airports: testdata/airports.csv
@@ -122,6 +138,8 @@
 - name: a tree with a folder hashes as git hashes it
   risk: OurAirports adds a folder to its repository, GitHub writes its mode as 040000 where git hashes 40000, and every run is refused
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
+    check_before_publish: testdata/check_before_publish.json
     fetch_release_before: testdata/commit_with_folder.json
     fetch_tree: testdata/tree_with_folder.json
     fetch_airports: testdata/airports.csv
@@ -134,6 +152,7 @@
 - name: two different commits in the release bracket are refused
   risk: OurAirports commits between the two release fetches and the table is published under a date some of its rows are not from
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
     fetch_release_before: testdata/commit.json
     fetch_tree: testdata/tree.json
     fetch_airports: testdata/airports.csv
@@ -148,6 +167,7 @@
 - name: a fetched file that is not the tree's is refused
   risk: GitHub's file cache serves the previous night's airports after a commit and they publish under the new date
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
     fetch_release_before: testdata/commit.json
     fetch_tree: testdata/tree.json
     fetch_airports: testdata/airports.csv
@@ -162,6 +182,7 @@
 - name: a tree without one of the files is refused
   risk: a file the tree does not name is published unchecked
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
     fetch_release_before: testdata/commit.json
     fetch_tree: testdata/tree.json
     fetch_airports: testdata/airports.csv
@@ -176,6 +197,7 @@
 - name: a commit date that does not parse is refused
   risk: GitHub changes its date format and the table publishes with no release, or a wrong one
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
     fetch_release_before: testdata/commit.json
     fetch_tree: testdata/tree.json
     fetch_airports: testdata/airports.csv
@@ -191,6 +213,7 @@
 - name: a tree that is not the commit's is refused
   risk: GitHub's API cache answers the tree from one moment and the commit from another, and files are checked against the wrong commit
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
     fetch_release_before: testdata/commit.json
     fetch_tree: testdata/tree.json
     fetch_airports: testdata/airports.csv
@@ -206,6 +229,7 @@
 - name: a tree whose other entries differ from the commit's is refused
   risk: the tree's three files match but it is not the commit's tree, so the check rests on a tree from another moment
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
     fetch_release_before: testdata/commit.json
     fetch_tree: testdata/tree.json
     fetch_airports: testdata/airports.csv
@@ -220,6 +244,7 @@
 - name: an empty commits answer is refused
   risk: GitHub answers with no commit and the table publishes with no release
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
     fetch_release_before: testdata/commit.json
     fetch_tree: testdata/tree.json
     fetch_airports: testdata/airports.csv
@@ -234,6 +259,7 @@
 - name: a changed airports header is refused
   risk: OurAirports renames or reorders its airports columns and codes or names load into the wrong fields
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
     fetch_release_before: testdata/commit.json
     fetch_tree: testdata/tree.json
     fetch_airports: testdata/airports.csv
@@ -249,6 +275,7 @@
 - name: a changed countries header is refused
   risk: OurAirports changes its countries file and country names are read from the wrong field
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
     fetch_release_before: testdata/commit.json
     fetch_tree: testdata/tree.json
     fetch_airports: testdata/airports.csv
@@ -264,6 +291,7 @@
 - name: a changed regions header is refused
   risk: OurAirports changes its regions file and region names are read from the wrong field
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
     fetch_release_before: testdata/commit.json
     fetch_tree: testdata/tree.json
     fetch_airports: testdata/airports.csv
@@ -279,6 +307,7 @@
 - name: a repeated ICAO code is refused
   risk: two airports publish under one ICAO code and a join on it doubles rows
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
     fetch_release_before: testdata/commit.json
     fetch_tree: testdata/tree.json
     fetch_airports: testdata/airports.csv
@@ -294,6 +323,7 @@
 - name: a malformed ICAO code is refused
   risk: a code that is not an ICAO code publishes as a key nothing joins to
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
     fetch_release_before: testdata/commit.json
     fetch_tree: testdata/tree.json
     fetch_airports: testdata/airports.csv
@@ -309,6 +339,7 @@
 - name: an empty name is refused
   risk: an airport publishes with no name to show or search
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
     fetch_release_before: testdata/commit.json
     fetch_tree: testdata/tree.json
     fetch_airports: testdata/airports.csv
@@ -324,6 +355,7 @@
 - name: a country missing from the countries file is refused
   risk: an airport publishes with no country name
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
     fetch_release_before: testdata/commit.json
     fetch_tree: testdata/tree.json
     fetch_airports: testdata/airports.csv
@@ -339,6 +371,7 @@
 - name: a region missing from the regions file is refused
   risk: an airport publishes with no region name
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
     fetch_release_before: testdata/commit.json
     fetch_tree: testdata/tree.json
     fetch_airports: testdata/airports.csv
@@ -354,6 +387,7 @@
 - name: a region of another country is refused
   risk: an airport publishes with a region its country does not have
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
     fetch_release_before: testdata/commit.json
     fetch_tree: testdata/tree.json
     fetch_airports: testdata/airports.csv
@@ -369,6 +403,7 @@
 - name: a repeated country code is refused
   risk: a country listed twice doubles its airports' rows in the join
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
     fetch_release_before: testdata/commit.json
     fetch_tree: testdata/tree.json
     fetch_airports: testdata/airports.csv
@@ -384,6 +419,7 @@
 - name: a repeated region code is refused
   risk: a region listed twice doubles its airports' rows in the join
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
     fetch_release_before: testdata/commit.json
     fetch_tree: testdata/tree.json
     fetch_airports: testdata/airports.csv
@@ -399,6 +435,7 @@
 - name: an unknown airport type is refused
   risk: OurAirports adds a type and it publishes before anyone describes it
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
     fetch_release_before: testdata/commit.json
     fetch_tree: testdata/tree.json
     fetch_airports: testdata/airports.csv
@@ -414,6 +451,7 @@
 - name: a scheduled_service other than yes or no is refused
   risk: a value load does not know publishes as false
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
     fetch_release_before: testdata/commit.json
     fetch_tree: testdata/tree.json
     fetch_airports: testdata/airports.csv
@@ -429,6 +467,7 @@
 - name: a latitude out of range is refused
   risk: an airport publishes at a position that does not exist
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
     fetch_release_before: testdata/commit.json
     fetch_tree: testdata/tree.json
     fetch_airports: testdata/airports.csv
@@ -444,6 +483,7 @@
 - name: a longitude out of range is refused
   risk: an airport publishes at a position that does not exist
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
     fetch_release_before: testdata/commit.json
     fetch_tree: testdata/tree.json
     fetch_airports: testdata/airports.csv
@@ -459,6 +499,7 @@
 - name: an elevation that is not an integer is refused
   risk: an elevation is rounded into a whole number OurAirports did not give
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
     fetch_release_before: testdata/commit.json
     fetch_tree: testdata/tree.json
     fetch_airports: testdata/airports.csv
@@ -474,6 +515,7 @@
 - name: an id that is not an integer is refused
   risk: OurAirports' record id changes form and ourairports_id fails to cast or joins to nothing
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
     fetch_release_before: testdata/commit.json
     fetch_tree: testdata/tree.json
     fetch_airports: testdata/airports.csv
@@ -489,6 +531,7 @@
 - name: an airports file with almost no ICAO codes is refused
   risk: OurAirports drops most of its ICAO codes and a table of a few airports publishes over the full one
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
     fetch_release_before: testdata/commit.json
     fetch_tree: testdata/tree.json
     fetch_airports: testdata/airports.csv
@@ -500,3 +543,15 @@
     fetch_airports: "UPDATE fixture SET icao_code = NULL WHERE ident <> 'EGLL'"
   expect:
     fails_with: "only 1 of 25 airports have an ICAO code, below the 5% floor"
+
+- name: a build carrying the lake's descriptor passes the check before publish
+  risk: a table whose descriptor agrees with the lake is refused before publish, or the check is never run
+  fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
+    describe: testdata/described.json
+    fetch_release_before: testdata/commit.json
+    fetch_tree: testdata/tree.json
+    fetch_airports: testdata/airports.csv
+    fetch_countries: testdata/countries.csv
+    fetch_regions: testdata/regions.csv
+    fetch_release_after: testdata/commit.json

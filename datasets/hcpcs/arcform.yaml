@@ -15,7 +15,7 @@
 #
 # ONE WRITER PER FILE. The export, the licence check and describe work on
 # build/stage/; stamp_descriptor alone writes the published build/hcpcs.parquet and
-# datapackage.json.
+# build/datapackage.json.
 #
 # THE QUARTER. CMS publishes each quarter's file at its own URL
 # (/files/zip/<month>-<year>-alpha-numeric-hcpcs-file.zip), and the text file inside
@@ -163,19 +163,57 @@ steps:
       parquet: build/stage/hcpcs.parquet
       schema: schema.finetype.json
 
+  # ── Lake: every published table's descriptor, as the open lake holds it ─────────
+  # The repository commits no descriptor: the lake's meta.descriptors and manifest.json
+  # hold the one stored copy, and emit_descriptor.py joins the two back into each
+  # table's full descriptor and writes them all to one bundle, table name to descriptor.
+  # It runs before the stamp, which keeps the lake's `created` when it writes the object
+  # the lake already serves; the check before publish compares this build against it. It
+  # reads the public catalogue and manifest, with no credential, and declares both as
+  # remote reads, so arc runs it on every run. One file, so `arc test` can fixture this
+  # step by name.
+  # `shasum -a 256 scripts/emit_descriptor.py` prints the digest.
+  - name: emit_descriptors
+    op: uv@1
+    with:
+      script: ../../scripts/emit_descriptor.py
+      sha256: 897e2c94fc2c51187f852f595d8bd61a04308ecac6a35a2f28e57c1183e2aaec
+      deps:
+        - duckdb==2.0.0
+        - pyyaml==6.0.3
+      args:
+        - --all
+        - --bundle
+        - build/lake_descriptors.json
+      # The tables it emits are the ones every Protocol's publish step names.
+      reads:
+        - https://openlake.meridian.online/catalog/open.ducklake
+        - https://openlake.meridian.online/manifest.json
+        - ../../datasets/*/arcform.yaml
+      produces:
+        - build/lake_descriptors.json
+
   # ── Self-describe: write the published Parquet with its descriptor inside ───────
   # The object answers for itself from its URL alone; the embedded copy omits the
-  # resource `bytes` and `hash` and the package's `created`. It runs last because it
-  # embeds the FINISHED descriptor.
+  # resource `bytes` and `hash` and the package's `created`. It is the last step that
+  # shapes the descriptor, because it embeds the FINISHED one; only the checks before
+  # publish follow it.
+  # `--carry-created-from` keeps the `created` the lake's copy states when the stamped
+  # file is the object the lake already serves; anything else, a first publish included,
+  # takes the one `describe` wrote.
   - name: stamp_descriptor
     op: uv@1
     with:
       script: ../../scripts/stamp_descriptor.py
-      sha256: a9356ac8d5412d94a940ebeef1e2508eaed6b77f1d923ada88edbacccf9d9b81
+      sha256: c36284fd200d76a6e5f3da9e3051a9dd8fe057df99603ed80e79043ef6dbb5a1
       deps:
         - duckdb==2.0.0
       args:
         - stamp
+        - --carry-created-from
+        - build/lake_descriptors.json
+        - --table
+        - cms.hcpcs
         - --descriptor
         - build/stage/described.json
         - --parquet
@@ -183,14 +221,62 @@ steps:
         - --out
         - build/hcpcs.parquet
         - --out-descriptor
-        - datapackage.json
-        - --carry-created
+        - build/datapackage.json
       reads:
+        - build/lake_descriptors.json
         - build/stage/described.json
         - build/stage/hcpcs.parquet
       produces:
         - build/hcpcs.parquet
-        - datapackage.json
+        - build/datapackage.json
+
+  # ── Check: the built table against the lake, before it is published ─────────────
+  # check_before_publish.py runs four checks on this build. Three read the lake too:
+  # label agreement (strict, on what involves this table) against every other table's
+  # descriptor in the bundle, the frictionless reference implementation over the built
+  # descriptor, and check_descriptors.py's rules read against the local Parquet. The
+  # fourth holds the build to the committed overrides. A failing check fails
+  # the run, so publish never runs. Each built descriptor keeps the path it is published
+  # at; the script reads the bytes from the local Parquet instead. It imports its
+  # sibling checks in-process and the digest pins only its own bytes, so those scripts
+  # are reads too: editing one makes this step stale.
+  # `shasum -a 256 scripts/check_before_publish.py` prints the digest.
+  - name: check_before_publish
+    op: uv@1
+    with:
+      script: ../../scripts/check_before_publish.py
+      sha256: 53bd12b2ba03901deea8a9d559764639557ca5b7539567d10abda6b0a62e99a5
+      deps:
+        - duckdb==2.0.0
+        - pyyaml==6.0.3
+        - frictionless==5.19.0
+      args:
+        - --datasets-dir
+        - ../../datasets
+        - --slug
+        - hcpcs
+        - --lake-bundle
+        - build/lake_descriptors.json
+        - --built
+        - build/datapackage.json=build/hcpcs.parquet
+        - --json
+        - build/check_before_publish.json
+      reads:
+        - build/lake_descriptors.json
+        - build/datapackage.json
+        - build/hcpcs.parquet
+        - ../../datasets/*/arcform.yaml
+        - ../../datasets/label-agreement.json
+        - ../../datasets/frictionless-rejections.json
+        - ../../datasets/licence-notices.json
+        - ../../scripts/check_descriptors.py
+        - ../../scripts/check_constraint_ratchet.py
+        - ../../scripts/check_frictionless.py
+        - ../../scripts/check_label_agreement.py
+        - ../../scripts/emit_descriptor.py
+        - ../../scripts/stamp_descriptor.py
+      produces:
+        - build/check_before_publish.json
 
   # ── Publish: the table into the open lake, one snapshot ─────────────────────────
   # Runs on every `arc run`. With R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY and R2_ACCOUNT_ID
@@ -208,7 +294,7 @@ steps:
       tables:
         - table: cms.hcpcs
           from: build/hcpcs.parquet
-          descriptor: datapackage.json
+          descriptor: build/datapackage.json
           readable_copy: cms/hcpcs.parquet
       credential:
         type: r2

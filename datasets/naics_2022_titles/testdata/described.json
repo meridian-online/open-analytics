@@ -17,7 +17,7 @@
       "title": "Meridian"
     }
   ],
-  "created": "2026-11-17T05:32:29Z",
+  "created": "2026-11-17T05:35:17Z",
   "description": "The U.S. Census Bureau's 2022 NAICS index file, for coding free-text business descriptions (company profiles, permit and licence records, survey answers) to the 2022 North American Industry Classification System: one row per index entry, a short description of a kind of business such as Soybean farming, field and seed production, with the six-digit national industry Census codes it to and that industry's title in census/naics_2022. Every code is a national industry in census/naics_2022, which the run checks against the code list it builds from Census's descriptions workbook; two national industries (112130 and 541120) have no entries in Census's file. Census's 25 cross-references, whose code cell is ****** and whose text points to other entries (Dealers -- see type), name no code and are left out. Census's files are U.S. Government works in the public domain.",
   "homepage": "https://meridian.online/datasets/census/naics_2022_titles",
   "licenses": [

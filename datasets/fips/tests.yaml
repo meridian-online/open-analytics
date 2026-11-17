@@ -13,10 +13,35 @@
 # check_code_list is a uv step, so a refusal of its own could be matched only by
 # "step 'check_code_list' failed (exit code n)"; the contract it holds is tested by
 # scripts/test_check_code_list.py, and the pass case shows this table meets it.
+#
+# The lake: every test gives emit_descriptors testdata/lake_descriptors.json, the open
+# lake's descriptors as `python scripts/emit_descriptor.py --all --bundle` emitted them,
+# so no test reads the network. check_before_publish holds the build against that bundle.
+# finetype infers a descriptor from the rows it reads, and on the fixture's rows it labels
+# some columns differently from the lake's descriptor of the full table (depth as a
+# boolean, gnis_code as a date), so the label check would fail on the fixture's own
+# descriptor. The tests that run describe on the fixture therefore give
+# check_before_publish its fixture too, a stand-in report, and "a build carrying the
+# lake's descriptor passes the check before publish" runs the check for real: describe's
+# fixture there is the lake's own descriptor of this table, testdata/described.json, which
+# the stamp writes into the Parquet built from the fixture.
+#
+# check_before_publish is a uv step that prints its findings on standard output, which arc
+# does not report, so its refusal is matched by "step 'check_before_publish' failed (exit
+# code 1)", exit 1 being a finding rather than a check that could not run. The refusal
+# case differs from the case before it only in the bundle, so that pair shows the bundle
+# is what fails it; it is an end-to-end case and cannot say which finding. Relabelling
+# naics.level also leaves reasons that pin it stale, so scripts/test_check_before_publish.py
+# shows a label disagreement failing on its own, by the report's text, with no reason
+# shipped. The disagreement is a second fixture file, not a break: arc reads a JSON
+# fixture as an array or as one object per line, and the bundle is one object over many
+# lines, which DuckDB refuses as malformed.
 
 - name: the fixture builds the code list
   risk: a FIPS table published with Connecticut's codes, the Island Areas or the current flag wrong
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
+    check_before_publish: testdata/check_before_publish.json
     fetch_states: testdata/national_state.csv
     fetch_counties: testdata/national_county.csv
     fetch_gazetteer: testdata/gazetteer.zip
@@ -73,6 +98,8 @@
 - name: a county only the Gazetteer lists is added
   risk: Census adds a county-equivalent in a later vintage and the table leaves it out, so current data fails to join
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
+    check_before_publish: testdata/check_before_publish.json
     fetch_states: testdata/national_state.csv
     fetch_counties: testdata/national_county.csv
     fetch_gazetteer: testdata/gazetteer.zip
@@ -89,6 +116,7 @@
 - name: a changed state header is refused
   risk: Census reorders or renames the state file's columns and names or codes load into the wrong fields
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
     fetch_states: testdata/national_state.csv
     fetch_counties: testdata/national_county.csv
     fetch_gazetteer: testdata/gazetteer.zip
@@ -100,6 +128,7 @@
 - name: a changed Gazetteer header is refused
   risk: Census changes the Gazetteer's columns and its GNIS codes or names are read from the wrong field
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
     fetch_states: testdata/national_state.csv
     fetch_counties: testdata/national_county.csv
     fetch_gazetteer: testdata/gazetteer.zip
@@ -112,6 +141,7 @@
 - name: a malformed county code is refused
   risk: a county code that lost its leading zeros publishes as a key nothing joins to
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
     fetch_states: testdata/national_state.csv
     fetch_counties: testdata/national_county.csv
     fetch_gazetteer: testdata/gazetteer.zip
@@ -123,6 +153,7 @@
 - name: a county whose state is missing is refused
   risk: counties publish under a parent code the table does not hold
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
     fetch_states: testdata/national_state.csv
     fetch_counties: testdata/national_county.csv
     fetch_gazetteer: testdata/gazetteer.zip
@@ -134,6 +165,7 @@
 - name: a county renamed in the Gazetteer is refused
   risk: a county renamed in a later vintage publishes under its old ANSI name without anyone deciding which is right
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
     fetch_states: testdata/national_state.csv
     fetch_counties: testdata/national_county.csv
     fetch_gazetteer: testdata/gazetteer.zip
@@ -146,6 +178,7 @@
 - name: a GNIS code that differs between the files is refused
   risk: a county publishes with a GNIS code one of Census's own files contradicts
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
     fetch_states: testdata/national_state.csv
     fetch_counties: testdata/national_county.csv
     fetch_gazetteer: testdata/gazetteer.zip
@@ -158,6 +191,7 @@
 - name: a county abbreviation that differs from its state's is refused
   risk: county rows publish a state abbreviation that contradicts their own state's row
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
     fetch_states: testdata/national_state.csv
     fetch_counties: testdata/national_county.csv
     fetch_gazetteer: testdata/gazetteer.zip
@@ -169,6 +203,7 @@
 - name: a Gazetteer county whose state is missing is refused
   risk: a county only the Gazetteer lists publishes under a state the table does not hold
   fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
     fetch_states: testdata/national_state.csv
     fetch_counties: testdata/national_county.csv
     fetch_gazetteer: testdata/gazetteer.zip
@@ -179,3 +214,25 @@
         '1', '1', '1', '1', '1', '1'
   expect:
     fails_with: "county whose state is not in the ANSI state file: 99001"
+
+- name: a build carrying the lake's descriptor passes the check before publish
+  risk: a table whose descriptor agrees with the lake is refused before publish, or the check is never run
+  fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
+    describe: testdata/described.json
+    fetch_states: testdata/national_state.csv
+    fetch_counties: testdata/national_county.csv
+    fetch_gazetteer: testdata/gazetteer.zip
+
+- name: a sibling code list that labels a shared field differently is refused before publish
+  risk: census/fips publishes beside a code list that labels the same field another way, and nothing says so
+  fixtures:
+    # census/naics_2022's level labelled representation.text.plain_text; fips.level is
+    # representation.text.word.
+    emit_descriptors: testdata/lake_descriptors_disagreeing.json
+    describe: testdata/described.json
+    fetch_states: testdata/national_state.csv
+    fetch_counties: testdata/national_county.csv
+    fetch_gazetteer: testdata/gazetteer.zip
+  expect:
+    fails_with: "step 'check_before_publish' failed (exit code 1)"
