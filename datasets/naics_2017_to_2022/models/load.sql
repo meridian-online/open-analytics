@@ -34,15 +34,15 @@ FROM read_xlsx('build/census/2017_to_2022_NAICS.xlsx', header = false, all_varch
                stop_at_empty = false, range = 'A3:D3');
 
 -- A value beyond column D is a column Census added (a weight, a note), which would
--- otherwise be dropped unseen. Census's file has whitespace there and nothing else.
-SELECT error('NAICS concordance has a value beyond column D: ' || v)
+-- otherwise be dropped unseen. Census's file has whitespace in E to I and nothing else.
+-- Every cell from E to Z is read; UNPIVOT drops the empty ones.
+SELECT error('NAICS concordance has a value beyond column D, in ' || col || ': ' || v)
 FROM (
-  SELECT coalesce(nullif(trim(E), ''), nullif(trim(F), ''), nullif(trim(G), ''),
-                  nullif(trim(H), ''), nullif(trim(I), '')) AS v
-  FROM read_xlsx('build/census/2017_to_2022_NAICS.xlsx', header = false, all_varchar = true,
-                 stop_at_empty = false, range = 'E1:I')
+  UNPIVOT (SELECT * FROM read_xlsx('build/census/2017_to_2022_NAICS.xlsx', header = false, all_varchar = true,
+                                   stop_at_empty = false, range = 'E1:Z'))
+  ON COLUMNS(*) INTO NAME col VALUE v
 )
-WHERE v IS NOT NULL
+WHERE nullif(trim(v), '') IS NOT NULL
 LIMIT 1;
 
 CREATE OR REPLACE TABLE naics_concordance AS

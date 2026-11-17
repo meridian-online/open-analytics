@@ -78,7 +78,7 @@ steps:
     produces: [naics]
 
   # ── Load: stage the pairings ────────────────────────────────────────────────────
-  # Fails the run on a title or header row that has moved, a value beyond column D, and
+  # Fails the run on a title or header row that has moved, a value in columns E to Z, and
   # a pairing missing a code or a title or with a code that is not six digits. See the
   # model's header.
   - name: load

@@ -67,7 +67,7 @@ The run fails on any of these, each with an `error()` naming what it found:
 
 - a title in A1 other than `2017 NAICS U.S. Matched to 2022 NAICS U.S. (Full Concordance)`;
 - a header row in A3:D3 other than `2017 NAICS Code`, `2017 NAICS Title`, `2022 NAICS Code`, `2022 NAICS Title` (the second cell's first line);
-- a value in columns E to I, where Census's file holds whitespace and nothing else, so a column Census adds is not dropped unseen;
+- a value in columns E to Z, where Census's file holds whitespace (in E to I) and nothing else, so a column Census adds is not dropped unseen;
 - a pairing with no 2017 or 2022 code, or no 2017 or 2022 title;
 - a code that is not six digits.
 
@@ -85,7 +85,7 @@ Census's concordance names no release. Its title names the two editions and no d
 
 ## Tests
 
-`tests.yaml` holds the Protocol's tests, which `arc test` runs from this folder against the cut-down Census workbooks in `testdata/` (see `testdata/README.md`): each test runs the real steps in a copy of the Protocol, with the fixtures in place of the fetches and the publish left out. One case builds the fixture and holds the table to inline checks (the pairings, the split's pieces, the editions and release, each 2022 code a national industry, trimmed text, the typo kept); eight breaks rewrite the concordance fixture with SQL and show `load` refuses it with its own message; and two show the contract check refuses a 2022 code the code list lacks and a repeated pair. CI runs them in the `protocol-tests` job.
+`tests.yaml` holds the Protocol's tests, which `arc test` runs from this folder against the cut-down Census workbooks in `testdata/` (see `testdata/README.md`): each test runs the real steps in a copy of the Protocol, with the fixtures in place of the fetches and the publish left out. One case builds the fixture and holds the table to inline checks (the pairings, the split's pieces, the editions and release, each 2022 code a national industry, trimmed text, the typo kept); ten breaks rewrite the concordance fixture with SQL and show `load` refuses it with its own message; and two show the contract check refuses a 2022 code the code list lacks and a repeated pair. CI runs them in the `protocol-tests` job.
 
 ## Publish
 

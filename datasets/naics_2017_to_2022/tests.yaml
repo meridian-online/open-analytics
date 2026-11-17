@@ -87,7 +87,17 @@
   break:
     fetch_concordance: UPDATE fixture SET E = '0.5' WHERE A = '212113' AND C = '212114'
   expect:
-    fails_with: "NAICS concordance has a value beyond column D: 0.5"
+    fails_with: "NAICS concordance has a value beyond column D, in E: 0.5"
+
+- name: a value past column I is refused
+  risk: Census adds a column past the last of its stray whitespace cells (column I) and the crosswalk drops it unseen
+  fixtures:
+    fetch_concordance: testdata/naics_2017_to_2022.xlsx
+    fetch_naics: testdata/naics_descriptions.xlsx
+  break:
+    fetch_concordance: ALTER TABLE fixture ADD COLUMN J VARCHAR; UPDATE fixture SET J = 'note' WHERE A = '212113' AND C = '212114'
+  expect:
+    fails_with: "NAICS concordance has a value beyond column D, in J: note"
 
 - name: a 2017 code that is not six digits is refused
   risk: a code that lost a digit publishes as a pairing nothing coded to 2017 joins to
@@ -138,6 +148,16 @@
     fetch_concordance: UPDATE fixture SET B = NULL WHERE A = '212111'
   expect:
     fails_with: "NAICS concordance pairing has no 2017 title: 212111"
+
+- name: a pairing without a 2022 title is refused
+  risk: a 2022 industry is published with no title, so the bridge names a code it cannot describe
+  fixtures:
+    fetch_concordance: testdata/naics_2017_to_2022.xlsx
+    fetch_naics: testdata/naics_descriptions.xlsx
+  break:
+    fetch_concordance: UPDATE fixture SET D = NULL WHERE A = '212111'
+  expect:
+    fails_with: "NAICS concordance pairing has no 2022 title: 212114"
 
 - name: a 2022 code the code list lacks is refused
   risk: Census renumbers an industry in the descriptions and the crosswalk points 2017 data at a code census/naics_2022 does not have
