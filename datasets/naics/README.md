@@ -7,7 +7,7 @@ national industries. This directory holds the dataset's three orthogonal facets:
 | File | Facet | Answers |
 |---|---|---|
 | `arcform.yaml` (+ `models/`) | **Protocol** — how it's made | run `arc run` → produces the Dataset |
-| `datapackage.json` | **Descriptor** — what it is | schema, finetype labels |
+| `build/datapackage.json` | **Descriptor** — what it is (built by `arc run`, not committed: the open lake holds the published copy) | schema, finetype labels |
 | `../registry.json` (this dataset's entry) | **Address** — how it's found | stable `uid`, `census.naics_2022` (alias `source.naics`), manifest pointer |
 
 ## The Protocol
@@ -24,7 +24,8 @@ freshness lever. The step DAG:
    code shape.
 3. **package** (`models/package.sql`) — add the search `corpus`, sort by `code`, write
    the terminal zstd Parquet.
-4. **publish** — upsert `census.naics_2022` into the open lake on `code`, with its descriptor in the lake's `meta` schema and the readable copy at `census/naics_2022.parquet` (see *Publish*).
+4. **check before publishing** — `emit_descriptors` writes every published table's descriptor, as the open lake holds it, to `build/lake_descriptors.json`. `check_before_publish` then holds the built descriptor to label agreement with them, to the frictionless reference implementation, and to `scripts/check_descriptors.py`'s rules read against the local Parquet. A failing check stops the run before publish.
+5. **publish** — upsert `census.naics_2022` into the open lake on `code`, with its descriptor in the lake's `meta` schema and the readable copy at `census/naics_2022.parquet` (see *Publish*).
 
 Produces `build/naics.parquet`.
 
@@ -42,7 +43,7 @@ Needs the `arc` binary, `duckdb` (with the `excel` extension), `uv` (for the sta
 
 <!-- protocol-steps: generated from arcform.yaml by scripts/check_protocol_readme.py — do not edit this block by hand -->
 
-All 8 steps are `sql:` models or typed `op:` operators from the arcform catalog. This Protocol runs no opaque `command:`/shell step.
+All 10 steps are `sql:` models or typed `op:` operators from the arcform catalog. This Protocol runs no opaque `command:`/shell step.
 
 | # | Step | How it runs |
 |---|---|---|
@@ -53,6 +54,8 @@ All 8 steps are `sql:` models or typed `op:` operators from the arcform catalog.
 | 5 | `describe` | `op: datapackage_describe@1` |
 | 6 | `validate` | `op: finetype_validate@1` |
 | 7 | `stamp_descriptor` | `op: uv@1` |
-| 8 | `publish` | `op: ducklake_write@1` |
+| 8 | `emit_descriptors` | `op: uv@1` |
+| 9 | `check_before_publish` | `op: uv@1` |
+| 10 | `publish` | `op: ducklake_write@1` |
 
 <!-- /protocol-steps -->

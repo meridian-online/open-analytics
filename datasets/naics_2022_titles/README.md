@@ -5,7 +5,7 @@ The U.S. Census Bureau's 2022 NAICS index file as a title index: one row per ind
 | File | Facet | Answers |
 |---|---|---|
 | `arcform.yaml` (+ `models/`) | **Protocol** — how it's made | run `arc run` → produces the Dataset |
-| `datapackage.json` | **Descriptor** — what it is | schema, finetype labels, the title-index declaration |
+| `build/datapackage.json` | **Descriptor** — what it is (built by `arc run`, not committed: the open lake holds the published copy) | schema, finetype labels, the title-index declaration |
 | `../registry.json` (this dataset's entry) | **Address** — how it's found | stable `uid`, `census/naics_2022_titles`, manifest pointer |
 
 `census/naics_2022_titles` was first published on 2026-11-17, after the Protocol merged, as FIPS and OurAirports were: snapshot 18 of the open lake, 20,373 entries at release 2022. The descriptor, registry entry, the repository README's Datasets row and the reasons `datasets/label-agreement.json` gives for this descriptor's fields were committed together after that publish, since CI holds every committed descriptor to the object the lake serves.
@@ -22,14 +22,15 @@ The U.S. Census Bureau's 2022 NAICS index file as a title index: one row per ind
 6. **describe** — emit the descriptor from the Parquet, typed by finetype with `nominations.finetype.json` and `descriptor.overrides.json` applied.
 7. **check_inputs**, **check_titles** — hold the index to the shared job-title index contract (`../../contracts/check_titles.sql`, see `docs/code-lists.md`): every code a national industry of the code list, every key present and unique, one release.
 8. **validate** — gate the Parquet against `schema.finetype.json`.
-9. **stamp_descriptor** — write the published `build/naics_2022_titles.parquet` with the finished descriptor in its footer, and `datapackage.json` beside it.
-10. **publish** — write `census.naics_2022_titles` into the open lake, with its descriptor in the lake's `meta` schema and the readable copy at `census/naics_2022_titles.parquet` (see *Publish*).
+9. **stamp_descriptor** — write the published `build/naics_2022_titles.parquet` with the finished descriptor in its footer, and `build/datapackage.json` beside it.
+10. **check before publishing** — `emit_descriptors` writes every published table's descriptor, as the open lake holds it, to `build/lake_descriptors.json`. `check_before_publish` then holds the built descriptor to label agreement with them, to the frictionless reference implementation, and to `scripts/check_descriptors.py`'s rules read against the local Parquet. A failing check stops the run before publish.
+11. **publish** — write `census.naics_2022_titles` into the open lake, with its descriptor in the lake's `meta` schema and the readable copy at `census/naics_2022_titles.parquet` (see *Publish*).
 
 Produces `build/naics_2022_titles.parquet`.
 
 <!-- protocol-steps: generated from arcform.yaml by scripts/check_protocol_readme.py — do not edit this block by hand -->
 
-All 12 steps are `sql:` models or typed `op:` operators from the arcform catalog. This Protocol runs no opaque `command:`/shell step.
+All 14 steps are `sql:` models or typed `op:` operators from the arcform catalog. This Protocol runs no opaque `command:`/shell step.
 
 | # | Step | How it runs |
 |---|---|---|
@@ -44,7 +45,9 @@ All 12 steps are `sql:` models or typed `op:` operators from the arcform catalog
 | 9 | `check_titles` | `sql: ../../contracts/check_titles.sql` |
 | 10 | `validate` | `op: finetype_validate@1` |
 | 11 | `stamp_descriptor` | `op: uv@1` |
-| 12 | `publish` | `op: ducklake_write@1` |
+| 12 | `emit_descriptors` | `op: uv@1` |
+| 13 | `check_before_publish` | `op: uv@1` |
+| 14 | `publish` | `op: ducklake_write@1` |
 
 <!-- /protocol-steps -->
 

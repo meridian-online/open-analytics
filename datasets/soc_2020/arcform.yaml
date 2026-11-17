@@ -16,7 +16,7 @@
 #
 # ONE WRITER PER FILE. The exports and describes work on build/stage/; each table's
 # stamp_descriptor step alone writes its published build/<table>.parquet and its
-# <table>.datapackage.json. Each table's descriptor inputs sit beside this file under
+# build/<table>.datapackage.json. Each table's descriptor inputs sit beside this file under
 # the same prefix (<table>.overrides.json, .nominations.finetype.json,
 # .schema.finetype.json).
 #
@@ -264,14 +264,14 @@ steps:
         - --out
         - build/soc_2020.parquet
         - --out-descriptor
-        - soc_2020.datapackage.json
+        - build/soc_2020.datapackage.json
         - --carry-created
       reads:
         - build/stage/soc_2020.described.json
         - build/stage/soc_2020.parquet
       produces:
         - build/soc_2020.parquet
-        - soc_2020.datapackage.json
+        - build/soc_2020.datapackage.json
 
   - name: stamp_soc_2020_titles
     op: uv@1
@@ -289,14 +289,14 @@ steps:
         - --out
         - build/soc_2020_titles.parquet
         - --out-descriptor
-        - soc_2020_titles.datapackage.json
+        - build/soc_2020_titles.datapackage.json
         - --carry-created
       reads:
         - build/stage/soc_2020_titles.described.json
         - build/stage/soc_2020_titles.parquet
       produces:
         - build/soc_2020_titles.parquet
-        - soc_2020_titles.datapackage.json
+        - build/soc_2020_titles.datapackage.json
 
   - name: stamp_soc_2010_to_2020
     op: uv@1
@@ -314,14 +314,98 @@ steps:
         - --out
         - build/soc_2010_to_2020.parquet
         - --out-descriptor
-        - soc_2010_to_2020.datapackage.json
+        - build/soc_2010_to_2020.datapackage.json
         - --carry-created
       reads:
         - build/stage/soc_2010_to_2020.described.json
         - build/stage/soc_2010_to_2020.parquet
       produces:
         - build/soc_2010_to_2020.parquet
-        - soc_2010_to_2020.datapackage.json
+        - build/soc_2010_to_2020.datapackage.json
+
+  # ── Lake: every published table's descriptor, as the open lake holds it ─────────
+  # The repository commits no descriptor: the lake's meta.descriptors and manifest.json
+  # hold the one stored copy, and emit_descriptor.py joins the two back into each
+  # table's full descriptor and writes them all to one bundle, table name to descriptor.
+  # The check below compares this build against it. It reads the public catalogue and
+  # manifest, with no credential, and declares both as remote reads, so arc runs it on
+  # every run. One file, so `arc test` can fixture this step by name.
+  # `shasum -a 256 scripts/emit_descriptor.py` prints the digest.
+  - name: emit_descriptors
+    op: uv@1
+    with:
+      script: ../../scripts/emit_descriptor.py
+      sha256: 300a284f5a2fdc7be0ae0d1bffb5d8962860bba10382f45c84634fe073181a2e
+      deps:
+        - duckdb==2.0.0
+        - pyyaml==6.0.3
+      args:
+        - --all
+        - --bundle
+        - build/lake_descriptors.json
+      # The tables it emits are the ones every Protocol's publish step names.
+      reads:
+        - https://openlake.meridian.online/catalog/open.ducklake
+        - https://openlake.meridian.online/manifest.json
+        - ../../datasets/*/arcform.yaml
+      produces:
+        - build/lake_descriptors.json
+
+  # ── Check: the built tables against the lake, before they are published ────────
+  # check_before_publish.py runs the three checks that need both this build and what the
+  # lake holds: label agreement (strict) across the descriptors in the bundle, the
+  # frictionless reference implementation over each built descriptor, and
+  # check_descriptors.py's rules read against the local Parquet. Label agreement reads
+  # only a Protocol's own datapackage.json, as the lake check does, so these three
+  # per-table descriptors are not yet compared by it. A failing check fails the run, so
+  # publish never runs. Each built descriptor keeps the path it is published
+  # at; the script reads the bytes from the local Parquet instead. It imports its
+  # sibling checks in-process and the digest pins only its own bytes, so those scripts
+  # are reads too: editing one makes this step stale.
+  # `shasum -a 256 scripts/check_before_publish.py` prints the digest.
+  - name: check_before_publish
+    op: uv@1
+    with:
+      script: ../../scripts/check_before_publish.py
+      sha256: a5ed1f3bc4ba55e6345be646491f8b417b4946ff690eb10135d32653cde9b7b5
+      deps:
+        - duckdb==2.0.0
+        - pyyaml==6.0.3
+        - frictionless==5.19.0
+      args:
+        - --datasets-dir
+        - ../../datasets
+        - --slug
+        - soc_2020
+        - --lake-bundle
+        - build/lake_descriptors.json
+        - --built
+        - build/soc_2020.datapackage.json=build/soc_2020.parquet
+        - --built
+        - build/soc_2020_titles.datapackage.json=build/soc_2020_titles.parquet
+        - --built
+        - build/soc_2010_to_2020.datapackage.json=build/soc_2010_to_2020.parquet
+        - --json
+        - build/check_before_publish.json
+      reads:
+        - build/lake_descriptors.json
+        - build/soc_2020.datapackage.json
+        - build/soc_2020.parquet
+        - build/soc_2020_titles.datapackage.json
+        - build/soc_2020_titles.parquet
+        - build/soc_2010_to_2020.datapackage.json
+        - build/soc_2010_to_2020.parquet
+        - ../../datasets/*/arcform.yaml
+        - ../../datasets/label-agreement.json
+        - ../../datasets/frictionless-rejections.json
+        - ../../datasets/licence-notices.json
+        - ../../scripts/check_descriptors.py
+        - ../../scripts/check_frictionless.py
+        - ../../scripts/check_label_agreement.py
+        - ../../scripts/emit_descriptor.py
+        - ../../scripts/stamp_descriptor.py
+      produces:
+        - build/check_before_publish.json
 
   # ── Publish: the three tables into the open lake, one snapshot ───────────────────
   # Runs on every `arc run`. With R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY and R2_ACCOUNT_ID
@@ -339,15 +423,15 @@ steps:
       tables:
         - table: ons.soc_2020
           from: build/soc_2020.parquet
-          descriptor: soc_2020.datapackage.json
+          descriptor: build/soc_2020.datapackage.json
           readable_copy: ons/soc_2020.parquet
         - table: ons.soc_2020_titles
           from: build/soc_2020_titles.parquet
-          descriptor: soc_2020_titles.datapackage.json
+          descriptor: build/soc_2020_titles.datapackage.json
           readable_copy: ons/soc_2020_titles.parquet
         - table: ons.soc_2010_to_2020
           from: build/soc_2010_to_2020.parquet
-          descriptor: soc_2010_to_2020.datapackage.json
+          descriptor: build/soc_2010_to_2020.datapackage.json
           readable_copy: ons/soc_2010_to_2020.parquet
       credential:
         type: r2

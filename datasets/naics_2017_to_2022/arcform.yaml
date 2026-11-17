@@ -21,7 +21,7 @@
 # against the cut-down Census workbooks in testdata/, with no network and no publish.
 #
 # ONE WRITER PER FILE. The export and describe work on build/stage/; stamp_descriptor
-# alone writes the published build/naics_2017_to_2022.parquet and datapackage.json.
+# alone writes the published build/naics_2017_to_2022.parquet and build/datapackage.json.
 #
 # THE RELEASE. Census's concordance states no release: its title names the two editions
 # and no date, and the only date the file carries is the save time Excel wrote into the
@@ -149,14 +149,88 @@ steps:
         - --out
         - build/naics_2017_to_2022.parquet
         - --out-descriptor
-        - datapackage.json
+        - build/datapackage.json
         - --carry-created
       reads:
         - build/stage/described.json
         - build/stage/naics_2017_to_2022.parquet
       produces:
         - build/naics_2017_to_2022.parquet
-        - datapackage.json
+        - build/datapackage.json
+
+  # ── Lake: every published table's descriptor, as the open lake holds it ─────────
+  # The repository commits no descriptor: the lake's meta.descriptors and manifest.json
+  # hold the one stored copy, and emit_descriptor.py joins the two back into each
+  # table's full descriptor and writes them all to one bundle, table name to descriptor.
+  # The check below compares this build against it. It reads the public catalogue and
+  # manifest, with no credential, and declares both as remote reads, so arc runs it on
+  # every run. One file, so `arc test` can fixture this step by name.
+  # `shasum -a 256 scripts/emit_descriptor.py` prints the digest.
+  - name: emit_descriptors
+    op: uv@1
+    with:
+      script: ../../scripts/emit_descriptor.py
+      sha256: 300a284f5a2fdc7be0ae0d1bffb5d8962860bba10382f45c84634fe073181a2e
+      deps:
+        - duckdb==2.0.0
+        - pyyaml==6.0.3
+      args:
+        - --all
+        - --bundle
+        - build/lake_descriptors.json
+      # The tables it emits are the ones every Protocol's publish step names.
+      reads:
+        - https://openlake.meridian.online/catalog/open.ducklake
+        - https://openlake.meridian.online/manifest.json
+        - ../../datasets/*/arcform.yaml
+      produces:
+        - build/lake_descriptors.json
+
+  # ── Check: the built table against the lake, before it is published ─────────────
+  # check_before_publish.py runs the three checks that need both this build and what the
+  # lake holds: label agreement (strict) against every other table's descriptor in the
+  # bundle, the frictionless reference implementation over the built descriptor, and
+  # check_descriptors.py's rules read against the local Parquet. A failing check fails
+  # the run, so publish never runs. Each built descriptor keeps the path it is published
+  # at; the script reads the bytes from the local Parquet instead. It imports its
+  # sibling checks in-process and the digest pins only its own bytes, so those scripts
+  # are reads too: editing one makes this step stale.
+  # `shasum -a 256 scripts/check_before_publish.py` prints the digest.
+  - name: check_before_publish
+    op: uv@1
+    with:
+      script: ../../scripts/check_before_publish.py
+      sha256: a5ed1f3bc4ba55e6345be646491f8b417b4946ff690eb10135d32653cde9b7b5
+      deps:
+        - duckdb==2.0.0
+        - pyyaml==6.0.3
+        - frictionless==5.19.0
+      args:
+        - --datasets-dir
+        - ../../datasets
+        - --slug
+        - naics_2017_to_2022
+        - --lake-bundle
+        - build/lake_descriptors.json
+        - --built
+        - build/datapackage.json=build/naics_2017_to_2022.parquet
+        - --json
+        - build/check_before_publish.json
+      reads:
+        - build/lake_descriptors.json
+        - build/datapackage.json
+        - build/naics_2017_to_2022.parquet
+        - ../../datasets/*/arcform.yaml
+        - ../../datasets/label-agreement.json
+        - ../../datasets/frictionless-rejections.json
+        - ../../datasets/licence-notices.json
+        - ../../scripts/check_descriptors.py
+        - ../../scripts/check_frictionless.py
+        - ../../scripts/check_label_agreement.py
+        - ../../scripts/emit_descriptor.py
+        - ../../scripts/stamp_descriptor.py
+      produces:
+        - build/check_before_publish.json
 
   # ── Publish: the table into the open lake, one snapshot ─────────────────────────
   # Runs on every `arc run`. With R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY and R2_ACCOUNT_ID
@@ -174,7 +248,7 @@ steps:
       tables:
         - table: census.naics_2017_to_2022
           from: build/naics_2017_to_2022.parquet
-          descriptor: datapackage.json
+          descriptor: build/datapackage.json
           readable_copy: census/naics_2017_to_2022.parquet
       credential:
         type: r2

@@ -93,6 +93,12 @@ Two modes, one measurement:
   ships with, and the sentence that states it, are measured from that build rather
   than typed by hand.
 
+Where the descriptors come from. By default every `<datasets-dir>/*/datapackage.json`.
+The repository commits no descriptor, so a Protocol passes `--lake-bundle FILE`
+instead: `emit_descriptor.py --all --bundle`'s output, table name to the descriptor the
+open lake holds. Each is filed under its package `name`, which is its dataset's slug,
+and `--descriptor SLUG=PATH` still replaces one, or adds one the lake does not hold yet.
+
 Exit codes, distinct because a status alone cannot tell a refusal from a crash:
 
   0  every declared join ran — and, in CHECK mode, its declared coverage was exact
@@ -551,6 +557,14 @@ def main(argv: list[str] | None = None) -> int:
         "(repeatable); for a descriptor a step produced somewhere other than where it is published",
     )
     parser.add_argument(
+        "--lake-bundle",
+        type=Path,
+        metavar="PATH",
+        help="read every dataset's descriptor from this bundle (emit_descriptor.py --all --bundle: "
+        "table name to descriptor), each under its package `name`, instead of globbing "
+        "<datasets-dir>/*/datapackage.json",
+    )
+    parser.add_argument(
         "--out",
         type=Path,
         metavar="PATH",
@@ -574,9 +588,46 @@ def main(argv: list[str] | None = None) -> int:
             return EXIT_ERROR
         local_overrides[name] = str(Path(raw_path).resolve())
 
-    descriptor_paths = sorted(args.datasets_dir.glob("*/datapackage.json"))
-    if not descriptor_paths:
-        print(f"crosswalk join: no datasets/*/datapackage.json under {args.datasets_dir}", file=sys.stderr)
+    bundle_dir = tempfile.TemporaryDirectory(prefix="crosswalk-join-bundle-")
+    try:
+        return _main(args, duckdb, local_overrides, Path(bundle_dir.name))
+    finally:
+        bundle_dir.cleanup()
+
+
+def unbundle(bundle_path: Path, dest: Path) -> list[Path]:
+    """Write each descriptor in a lake bundle to `dest/<package name>/datapackage.json`."""
+    bundle = load_descriptor(bundle_path)
+    if not isinstance(bundle, dict):
+        raise JoinError(f"{bundle_path}: a lake bundle is a JSON object of table name to descriptor")
+    paths: list[Path] = []
+    for table, descriptor in sorted(bundle.items()):
+        name = descriptor.get("name") if isinstance(descriptor, dict) else None
+        if not isinstance(name, str) or not name or "/" in name or name.startswith("."):
+            raise JoinError(f"{bundle_path}: {table}'s descriptor declares no usable package `name`")
+        path = dest / name / "datapackage.json"
+        if path.exists():
+            raise JoinError(f"{bundle_path}: more than one descriptor declares package {name!r}")
+        path.parent.mkdir(parents=True)
+        path.write_text(json.dumps(descriptor), encoding="utf-8")
+        paths.append(path)
+    return paths
+
+
+def _main(args: argparse.Namespace, duckdb: Any, local_overrides: dict[str, str], bundle_dir: Path) -> int:
+    if args.lake_bundle:
+        try:
+            descriptor_paths = unbundle(args.lake_bundle, bundle_dir)
+        except JoinError as exc:
+            print(f"crosswalk join: {exc}", file=sys.stderr)
+            return EXIT_ERROR
+        source = str(args.lake_bundle)
+    else:
+        descriptor_paths = sorted(args.datasets_dir.glob("*/datapackage.json"))
+        source = str(args.datasets_dir)
+    if not descriptor_paths and not (args.lake_bundle and args.descriptor):
+        what = "descriptor in" if args.lake_bundle else "datasets/*/datapackage.json under"
+        print(f"crosswalk join: no {what} {source}", file=sys.stderr)
         return EXIT_ERROR
 
     descriptor_overrides: dict[str, Path] = {}
@@ -586,9 +637,13 @@ def main(argv: list[str] | None = None) -> int:
             print(f"crosswalk join: --descriptor expects SLUG=PATH, got {item!r}", file=sys.stderr)
             return EXIT_ERROR
         if slug not in {path.parent.name for path in descriptor_paths}:
-            print(f"crosswalk join: --descriptor names no dataset {slug!r} under {args.datasets_dir}", file=sys.stderr)
-            return EXIT_ERROR
+            if not args.lake_bundle:
+                print(f"crosswalk join: --descriptor names no dataset {slug!r} under {source}", file=sys.stderr)
+                return EXIT_ERROR
+            # A table the lake does not hold yet, as on its first publish.
+            descriptor_paths.append(bundle_dir / slug / "datapackage.json")
         descriptor_overrides[slug] = Path(raw_path)
+    descriptor_paths.sort()
     if args.out and not args.write:
         print("crosswalk join: --out only means something with --write", file=sys.stderr)
         return EXIT_ERROR

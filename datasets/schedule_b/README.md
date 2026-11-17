@@ -5,7 +5,7 @@ Schedule B, the U.S. Census Bureau's classification of exported goods: every ten
 | File | Facet | Answers |
 |---|---|---|
 | `arcform.yaml` (+ `models/`, `scripts/`) | **Protocol** — how it's made | run `arc run` → produces the Dataset |
-| `datapackage.json` | **Descriptor** — what it is | schema, finetype labels, the code-list declaration, the NAICS join |
+| `build/datapackage.json` | **Descriptor** — what it is (built by `arc run`, not committed: the open lake holds the published copy) | schema, finetype labels, the code-list declaration, the NAICS join |
 | `../registry.json` (this dataset's entry) | **Address** — how it's found | stable `uid`, `census/schedule_b`, manifest pointer |
 
 ## The Protocol
@@ -24,8 +24,9 @@ Schedule B, the U.S. Census Bureau's classification of exported goods: every ten
 10. **derive_join_coverage** — measure the NAICS join against the published `census/naics_2022` object (below).
 11. **check_code_list** — hold the Parquet to the shared code-list contract (`scripts/check_code_list.py`): the core columns, a parent one level up for every row, `depth` as the level's position.
 12. **validate** — gate the Parquet against `schema.finetype.json`.
-13. **stamp_descriptor** — write the finished descriptor into the Parquet's footer, and write the published `build/schedule_b.parquet` and `datapackage.json`. It is the only writer of both.
-14. **publish** — upsert `census.schedule_b` into the open lake on `code`, with its descriptor in the lake's `meta` schema and the readable copy at `census/schedule_b.parquet` (see *Publish*).
+13. **stamp_descriptor** — write the finished descriptor into the Parquet's footer, and write the published `build/schedule_b.parquet` and `build/datapackage.json`. It is the only writer of both.
+14. **check before publishing** — `emit_descriptors` writes every published table's descriptor, as the open lake holds it, to `build/lake_descriptors.json`. It runs before the coverage step, which resolves the tables this one joins to from the same bundle. `check_before_publish` then holds the built descriptor to label agreement with them, to the frictionless reference implementation, and to `scripts/check_descriptors.py`'s rules read against the local Parquet. A failing check stops the run before publish.
+15. **publish** — upsert `census.schedule_b` into the open lake on `code`, with its descriptor in the lake's `meta` schema and the readable copy at `census/schedule_b.parquet` (see *Publish*).
 
 Produces `build/schedule_b.parquet`.
 
@@ -74,13 +75,13 @@ The last step publishes `census.schedule_b` into the open lake (<https://openlak
 
 ## Run
 
-Needs the `arc` binary, `duckdb`, `uv` (for the four Python steps) and `finetype` with its DuckDB extension (`FINETYPE_DUCKDB_EXT`): `arc run`. A cold run, with USITC's 12.6 MB export, takes about a minute.
+Needs the `arc` binary, `duckdb`, `uv` (for the six Python steps) and `finetype` with its DuckDB extension (`FINETYPE_DUCKDB_EXT`): `arc run`. A cold run, with USITC's 12.6 MB export, takes about a minute.
 
 ## The step list
 
 <!-- protocol-steps: generated from arcform.yaml by scripts/check_protocol_readme.py — do not edit this block by hand -->
 
-All 17 steps are `sql:` models or typed `op:` operators from the arcform catalog. This Protocol runs no opaque `command:`/shell step.
+All 19 steps are `sql:` models or typed `op:` operators from the arcform catalog. This Protocol runs no opaque `command:`/shell step.
 
 | # | Step | How it runs |
 |---|---|---|
@@ -96,10 +97,12 @@ All 17 steps are `sql:` models or typed `op:` operators from the arcform catalog
 | 10 | `package` | `sql: models/package.sql` |
 | 11 | `export_schedule_b` | `op: parquet_export@1` |
 | 12 | `describe` | `op: datapackage_describe@1` |
-| 13 | `derive_join_coverage` | `op: uv@1` |
-| 14 | `check_code_list` | `op: uv@1` |
-| 15 | `validate` | `op: finetype_validate@1` |
-| 16 | `stamp_descriptor` | `op: uv@1` |
-| 17 | `publish` | `op: ducklake_write@1` |
+| 13 | `emit_descriptors` | `op: uv@1` |
+| 14 | `derive_join_coverage` | `op: uv@1` |
+| 15 | `check_code_list` | `op: uv@1` |
+| 16 | `validate` | `op: finetype_validate@1` |
+| 17 | `stamp_descriptor` | `op: uv@1` |
+| 18 | `check_before_publish` | `op: uv@1` |
+| 19 | `publish` | `op: ducklake_write@1` |
 
 <!-- /protocol-steps -->

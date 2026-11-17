@@ -7,7 +7,7 @@ registration status. This directory holds the dataset's three orthogonal facets:
 | File | Facet | Answers |
 |---|---|---|
 | `arcform.yaml` (+ `models/`, `scripts/`) | **Protocol** — how it's made | run `arc run` → produces the Dataset |
-| `datapackage.json` | **Descriptor** — what it is | schema, finetype labels |
+| `build/datapackage.json` | **Descriptor** — what it is (built by `arc run`, not committed: the open lake holds the published copy) | schema, finetype labels |
 | `../registry.json` (this dataset's entry) | **Address** — how it's found | stable `uid`, `gleif.lei` (alias `source.gleif`), manifest pointer |
 
 ## The Protocol
@@ -26,7 +26,8 @@ freshness lever. The step DAG:
 3. **package** (`models/package.sql`) — add the search `corpus`, sort by
    `country, legal_name` for row-group pruning, write the terminal zstd Parquet.
 4. **search** (`models/search.sql`) and **export_search** — build the search index the website's typeahead reads: one row per word token of each entity's legal name and city, with the entity's identity columns, written sorted by token in 20,000-row groups so a prefix scan reads about one group.
-5. **publish** — upsert `gleif.lei` into the open lake on `lei`, with its descriptor in the lake's `meta` schema, the readable copy at `gleif/lei.parquet` and the search index at `gleif/lei/search.parquet` (see *Publish*).
+5. **check before publishing** — `emit_descriptors` writes every published table's descriptor, as the open lake holds it, to `build/lake_descriptors.json`. `check_before_publish` then holds the built descriptor to label agreement with them, to the frictionless reference implementation, and to `scripts/check_descriptors.py`'s rules read against the local Parquet. A failing check stops the run before publish.
+6. **publish** — upsert `gleif.lei` into the open lake on `lei`, with its descriptor in the lake's `meta` schema, the readable copy at `gleif/lei.parquet` and the search index at `gleif/lei/search.parquet` (see *Publish*).
 
 Produces `build/gleif.parquet` and its search index, `build/gleif_search.parquet`.
 
@@ -46,7 +47,7 @@ Needs the `arc` binary, `duckdb`, `uv` (for the stamp) and `finetype` (for `desc
 
 <!-- protocol-steps: generated from arcform.yaml by scripts/check_protocol_readme.py — do not edit this block by hand -->
 
-10 steps, of which 2 run through an opaque `command:`/shell step: `fetch_gleif`, `stamp_version`. A shell step is invisible to the engine's staleness model and carries its interpreter and dependency pins inline, so what this Protocol guarantees stops short of it. Each shell step's row carries a fingerprint of its command line, so an edit to the line changes this block without the line being printed here.
+12 steps, of which 2 run through an opaque `command:`/shell step: `fetch_gleif`, `stamp_version`. A shell step is invisible to the engine's staleness model and carries its interpreter and dependency pins inline, so what this Protocol guarantees stops short of it. Each shell step's row carries a fingerprint of its command line, so an edit to the line changes this block without the line being printed here.
 
 | # | Step | How it runs |
 |---|---|---|
@@ -55,10 +56,12 @@ Needs the `arc` binary, `duckdb`, `uv` (for the stamp) and `finetype` (for `desc
 | 3 | `package` | `sql: models/package.sql` |
 | 4 | `export_gleif` | `op: parquet_export@1` |
 | 5 | `describe` | `op: datapackage_describe@1` |
-| 6 | `stamp_version` | `command:` (shell, sha256 `68794fb4cbe9`) |
+| 6 | `stamp_version` | `command:` (shell, sha256 `3aef89fa8146`) |
 | 7 | `stamp_descriptor` | `op: uv@1` |
 | 8 | `search` | `sql: models/search.sql` |
 | 9 | `export_search` | `op: parquet_export@1` |
-| 10 | `publish` | `op: ducklake_write@1` |
+| 10 | `emit_descriptors` | `op: uv@1` |
+| 11 | `check_before_publish` | `op: uv@1` |
+| 12 | `publish` | `op: ducklake_write@1` |
 
 <!-- /protocol-steps -->

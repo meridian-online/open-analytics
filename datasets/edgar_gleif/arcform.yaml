@@ -225,7 +225,7 @@ steps:
   # arcform correctly saw that output no longer match what this step wrote, and the run
   # re-ran this step and every step downstream of it on every invocation — a publish
   # could never be a no-op. The same holds for the three descriptors below
-  # (build/stage/described.json → build/stage/measured.json → datapackage.json).
+  # (build/stage/described.json → build/stage/measured.json → build/datapackage.json).
   - name: export_edgar_gleif
     op: parquet_export@1
     with:
@@ -274,13 +274,43 @@ steps:
       # as given, carries its label's bounds, marks it x-finetype-nominated and states no
       # confidence for it; the file says why each was declared.
       nominations: nominations.finetype.json
-      # Staged, not published: the published datapackage.json is written once, by the last
-      # step, and `created` in it is carried forward from the previous publish there.
+      # Staged, not published: the descriptor publish reads, build/datapackage.json, is
+      # written once, by the stamp step, and `created` in it is carried forward from the
+      # previous build there.
       out: build/stage/described.json
     preconditions:
       - tool:
           name: finetype
           version: "$ARC_TOOL --version"
+
+  # ── Lake: every published table's descriptor, as the open lake holds it ─────────
+  # The repository commits no descriptor: the lake's meta.descriptors and manifest.json
+  # hold the one stored copy, and emit_descriptor.py joins the two back into each
+  # table's full descriptor and writes them all to one bundle, table name to descriptor.
+  # The check below compares this build against it, and derive_join_coverage resolves
+  # the tables this one joins to from it. It reads the public catalogue and manifest,
+  # with no credential, and declares both as remote reads, so arc runs it on every run.
+  # One file, so `arc test` can fixture this step by name.
+  # `shasum -a 256 scripts/emit_descriptor.py` prints the digest.
+  - name: emit_descriptors
+    op: uv@1
+    with:
+      script: ../../scripts/emit_descriptor.py
+      sha256: 300a284f5a2fdc7be0ae0d1bffb5d8962860bba10382f45c84634fe073181a2e
+      deps:
+        - duckdb==2.0.0
+        - pyyaml==6.0.3
+      args:
+        - --all
+        - --bundle
+        - build/lake_descriptors.json
+      # The tables it emits are the ones every Protocol's publish step names.
+      reads:
+        - https://openlake.meridian.online/catalog/open.ducklake
+        - https://openlake.meridian.online/manifest.json
+        - ../../datasets/*/arcform.yaml
+      produces:
+        - build/lake_descriptors.json
 
   # ── Derive: measure x-joins coverage from THIS build, not a checked-in literal ──
   # descriptor.overrides.json declares WHAT each join is (columns, filter,
@@ -289,12 +319,11 @@ steps:
   # stale on 2026-08-13: the descriptor still said 207,099 rows over a build
   # already holding 208,246). crosswalk_join.py --write measures `rows`/`matched`
   # for each declared join and writes the result into build/stage/measured.json, a copy
-  # of the staged descriptor; the stamp step publishes it as datapackage.json.
+  # of the staged descriptor; the stamp step writes it as build/datapackage.json.
   #
   # Run with no `--write`/`--local`, the same script is the CHECK: it re-measures
-  # against the published objects instead and fails if the committed `coverage`
-  # disagrees (job `joins-run-against-their-data` in
-  # .github/workflows/descriptors.yml, which runs on every push/PR and weekly).
+  # against the published objects instead and fails if the published `coverage`
+  # disagrees.
   #
   # INTERPRETER: this step needs the duckdb Python package, and `arc run` used to
   # invoke whatever `python3` was on PATH. It was verified in a venv and in CI —
@@ -310,7 +339,7 @@ steps:
       script: scripts/crosswalk_join.py
       # The script is addressed by its bytes, so editing it is a manifest edit as well.
       # `shasum -a 256 datasets/edgar_gleif/scripts/crosswalk_join.py` prints this.
-      sha256: d16e99e888ea74206d930214d8ccf8b9ad377327a6f9026b1487a70e611eab26
+      sha256: de42f346bf0cd402fb32b7343e6b78a6bc486e8b621a24507cc8e57cdb227adf
       # Pinned to DUCKDB_VERSION in .github/workflows/descriptors.yml — keep the two in
       # step, or this step measures with a different engine than the check that verifies
       # it. The interpreter is pinned in the script's own PEP 723 block (3.12), which is
@@ -321,8 +350,10 @@ steps:
         - --write
         - --package
         - edgar_gleif
-        - --datasets-dir
-        - ../../datasets
+        # Every other dataset's descriptor, as the lake holds it: the repository commits
+        # none. emit_descriptors, above, wrote the bundle.
+        - --lake-bundle
+        - build/lake_descriptors.json
         # Reads the descriptor `describe` staged and writes the measured one beside it.
         # Writing back into describe's own file would make `describe` stale on every
         # run, by the rule in the note above export_edgar_gleif.
@@ -344,20 +375,18 @@ steps:
         - gleif=build/gleif.parquet
       # WHAT THIS STEP TOUCHES, AND WHY THE LIST IS LONGER THAN THE `--local` FLAGS.
       # The script measures each declared join against the three Parquets above, and it
-      # reads its own datapackage.json for the `x-joins` declaration. It ALSO opens
-      # every sibling descriptor: `--datasets-dir` is globbed for `*/datapackage.json`
-      # and indexed by resource name, so which object `edgar` and `gleif` resolve to is
-      # a function of all four files, not of the two this crosswalk references. A
-      # sibling that renamed a resource would change this measurement, so it is
-      # declared here rather than left invisible.
+      # reads its own staged descriptor for the `x-joins` declaration. It ALSO reads
+      # every sibling descriptor: each one in the lake bundle is indexed by resource
+      # name, so which object `edgar` and `gleif` resolve to is a function of the whole
+      # bundle, not of the two descriptors this crosswalk references. A sibling that
+      # renamed a resource would change this measurement, so the bundle is declared
+      # here rather than left invisible.
       reads:
         - build/stage/edgar_gleif.parquet
         - build/edgar.parquet
         - build/gleif.parquet
         - build/stage/described.json
-        - ../../datasets/edgar/datapackage.json
-        - ../../datasets/gleif/datapackage.json
-        - ../../datasets/naics/datapackage.json
+        - build/lake_descriptors.json
       # The measurement is written to its own file, read from the descriptor `describe`
       # emitted. Declaring the read is what makes this step re-run when `describe`
       # re-runs — the absence of that edge is why the published coverage figures went
@@ -383,10 +412,10 @@ steps:
       schema: schema.finetype.json
   # ── Self-describe: put the descriptor INSIDE the Parquet it describes ───────────
   # Someone holding https://openlake.meridian.online/library/edgar_lei.parquet
-  # cannot find the datapackage.json that describes it: it is a second file, in a
-  # source repository they have no reason to know exists, and behind an authenticating
-  # edge there is no repository to find. This step writes the finished descriptor into
-  # the file's own Parquet footer, so the object answers for itself from its URL alone:
+  # cannot find the datapackage.json that describes it: it is a second record, in a
+  # catalogue they have no reason to know exists. This step writes the finished
+  # descriptor into the file's own Parquet footer, so the object answers for itself
+  # from its URL alone:
   #   SELECT decode(value) FROM parquet_kv_metadata('<url>')
   #    WHERE decode(key) = 'datapackage.json';
   #
@@ -401,8 +430,8 @@ steps:
   # The embedded copy omits the resource `bytes` and `hash`, and the package's
   # `created`: a file cannot state its own size, because writing the value changes it,
   # and a write time moves on a publish that changed nothing else. Those stay in
-  # datapackage.json, measured against the finished object; check_descriptors.py holds
-  # the two copies to each other.
+  # build/datapackage.json, which publish stores in the lake, measured against the
+  # finished object; check_descriptors.py holds the two copies to each other.
   #
   # Everything before the footer is compared byte for byte, so the order_by above still
   # decides the data bytes and a stamp that moved one is refused with the original left
@@ -441,14 +470,15 @@ steps:
         - --out
         - build/edgar_gleif.parquet
         - --out-descriptor
-        - datapackage.json
+        - build/datapackage.json
         - --carry-created
       # It reads the staged descriptor and Parquet, writes the descriptor into a copy of
       # the Parquet's footer, then measures the stamped file and writes the new
-      # `bytes`/`hash` into the published descriptor. It is the ONLY writer of both
-      # published files, so nothing it writes was produced by an earlier step.
+      # `bytes`/`hash` into build/datapackage.json, the descriptor publish reads. It is the
+      # ONLY writer of both files publish reads, so nothing it writes was produced by an
+      # earlier step.
       #
-      # `--carry-created`: `created` in the published datapackage.json is when this data
+      # `--carry-created`: `created` in build/datapackage.json is when this data
       # first appeared. While the data pages equal the ones already published at
       # build/edgar_gleif.parquet it keeps that descriptor's `created`; it takes the one
       # `describe` just wrote only when the pages are different. The embedded footer
@@ -458,7 +488,53 @@ steps:
         - build/stage/edgar_gleif.parquet
       produces:
         - build/edgar_gleif.parquet
-        - datapackage.json
+        - build/datapackage.json
+
+  # ── Check: the built table against the lake, before it is published ─────────────
+  # check_before_publish.py runs the three checks that need both this build and what the
+  # lake holds: label agreement (strict) against every other table's descriptor in the
+  # bundle, the frictionless reference implementation over the built descriptor, and
+  # check_descriptors.py's rules read against the local Parquet. A failing check fails
+  # the run, so publish never runs. Each built descriptor keeps the path it is published
+  # at; the script reads the bytes from the local Parquet instead. It imports its
+  # sibling checks in-process and the digest pins only its own bytes, so those scripts
+  # are reads too: editing one makes this step stale.
+  # `shasum -a 256 scripts/check_before_publish.py` prints the digest.
+  - name: check_before_publish
+    op: uv@1
+    with:
+      script: ../../scripts/check_before_publish.py
+      sha256: a5ed1f3bc4ba55e6345be646491f8b417b4946ff690eb10135d32653cde9b7b5
+      deps:
+        - duckdb==2.0.0
+        - pyyaml==6.0.3
+        - frictionless==5.19.0
+      args:
+        - --datasets-dir
+        - ../../datasets
+        - --slug
+        - edgar_gleif
+        - --lake-bundle
+        - build/lake_descriptors.json
+        - --built
+        - build/datapackage.json=build/edgar_gleif.parquet
+        - --json
+        - build/check_before_publish.json
+      reads:
+        - build/lake_descriptors.json
+        - build/datapackage.json
+        - build/edgar_gleif.parquet
+        - ../../datasets/*/arcform.yaml
+        - ../../datasets/label-agreement.json
+        - ../../datasets/frictionless-rejections.json
+        - ../../datasets/licence-notices.json
+        - ../../scripts/check_descriptors.py
+        - ../../scripts/check_frictionless.py
+        - ../../scripts/check_label_agreement.py
+        - ../../scripts/emit_descriptor.py
+        - ../../scripts/stamp_descriptor.py
+      produces:
+        - build/check_before_publish.json
 
   # ── Publish: upsert the table into the open lake on (key_type, key, lei) ────────
   # One snapshot: edges the resolution adds are inserted, changed edges updated, and
@@ -479,7 +555,7 @@ steps:
       tables:
         - table: library.edgar_lei
           from: build/edgar_gleif.parquet
-          descriptor: datapackage.json
+          descriptor: build/datapackage.json
           readable_copy: library/edgar_lei.parquet
       credential:
         type: r2

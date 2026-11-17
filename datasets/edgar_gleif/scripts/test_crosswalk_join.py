@@ -679,5 +679,107 @@ class CrosswalkJoinSelfTest(unittest.TestCase):
         self.lay_left(measuredAgainst="3dc65776711ebb9a")
         self.assertOutcome(run_join(self.datasets), EXIT_ERROR, "`measuredAgainst` must be 'sha256:'")
 
+    # ------------------------------------------------- descriptors from the lake
+
+    def lake_bundle(self, *slugs: str, **changes: Any) -> Path:
+        """A lake bundle (table name to descriptor) holding each slug's descriptor, with an
+        absolute resource path, as the lake's are; the committed copies are then removed."""
+        bundle: dict[str, Any] = {}
+        for slug in slugs:
+            path = self.datasets / slug / "datapackage.json"
+            document = json.loads(path.read_text(encoding="utf-8"))
+            resource = document["resources"][0]
+            resource["path"] = str((path.parent / resource["path"]).resolve())
+            document.update(changes.get(slug, {}))
+            bundle[f"lake.{slug}"] = document
+        for slug in slugs:
+            (self.datasets / slug / "datapackage.json").unlink()
+        out = self.datasets.parent / "lake_descriptors.json"
+        out.write_text(json.dumps(bundle, indent=2) + "\n", encoding="utf-8")
+        return out
+
+    def test_lake_bundle_resolves_siblings_with_no_descriptor_committed(self) -> None:
+        """No `datapackage.json` under --datasets-dir: the reference resolves through the
+        bundle, and this package's own descriptor is the staged one, as on a first publish."""
+        self.lay_left(include_coverage=False)
+        staged = self.stage_left()
+        bundle = self.lake_bundle("right")
+        (self.datasets / "left" / "datapackage.json").unlink()
+        measured = self.datasets.parent / "stage" / "measured.json"
+        self.assertOutcome(
+            run_join(
+                self.datasets,
+                "--lake-bundle",
+                str(bundle),
+                "--write",
+                "--package",
+                "left",
+                "--descriptor",
+                f"left={staged}",
+                "--local",
+                f"left={self.datasets / 'left' / 'left.parquet'}",
+                "--out",
+                str(measured),
+            ),
+            EXIT_OK,
+            "coverage written: rows 3  matched 2",
+        )
+        written = json.loads(measured.read_text(encoding="utf-8"))
+        self.assertEqual(written["x-joins"]["joins"][0]["coverage"], {"rows": 3, "matched": 2})
+
+    def test_lake_bundle_staged_descriptor_replaces_the_lake_copy(self) -> None:
+        self.lay_left(coverage={"rows": 999, "matched": 999})
+        staged = self.stage_left(title="staged")
+        bundle = self.lake_bundle("right", "left", left={"title": "lake"})
+        measured = self.datasets.parent / "stage" / "measured.json"
+        self.assertOutcome(
+            run_join(
+                self.datasets,
+                "--lake-bundle",
+                str(bundle),
+                "--write",
+                "--package",
+                "left",
+                "--descriptor",
+                f"left={staged}",
+                "--local",
+                f"left={self.datasets / 'left' / 'left.parquet'}",
+                "--out",
+                str(measured),
+            ),
+            EXIT_OK,
+            "coverage written: rows 3  matched 2",
+        )
+        written = json.loads(measured.read_text(encoding="utf-8"))
+        self.assertEqual(written["title"], "staged", "the lake's copy was read, not the staged one")
+
+    def test_lake_bundle_checks_against_the_lake_copies(self) -> None:
+        """CHECK mode over a bundle alone: the same verdict as over committed descriptors."""
+        self.lay_left(coverage={"rows": 3, "matched": 1})
+        bundle = self.lake_bundle("right", "left")
+        self.assertOutcome(
+            run_join(self.datasets, "--lake-bundle", str(bundle)),
+            EXIT_VIOLATIONS,
+            "descriptor declares 1 matched row(s); the join finds 2",
+        )
+
+    def test_lake_bundle_refuses_a_descriptor_with_no_package_name(self) -> None:
+        bundle = self.lake_bundle("right", right={"name": ""})
+        self.assertOutcome(
+            run_join(self.datasets, "--lake-bundle", str(bundle)),
+            EXIT_ERROR,
+            "lake.right's descriptor declares no usable package `name`",
+        )
+
+    def test_lake_bundle_refuses_two_descriptors_of_one_package(self) -> None:
+        self.lay_left()
+        bundle = self.lake_bundle("right", "left", left={"name": "right"})
+        self.assertOutcome(
+            run_join(self.datasets, "--lake-bundle", str(bundle)),
+            EXIT_ERROR,
+            "more than one descriptor declares package 'right'",
+        )
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

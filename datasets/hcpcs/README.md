@@ -5,7 +5,7 @@ HCPCS Level II, the alpha-numeric codes the Centers for Medicare & Medicaid Serv
 | File | Facet | Answers |
 |---|---|---|
 | `arcform.yaml` (+ `models/`) | **Protocol** — how it's made | run `arc run` → produces the Dataset |
-| `datapackage.json` | **Descriptor** — what it is | schema, finetype labels, the code-list declaration |
+| `build/datapackage.json` | **Descriptor** — what it is (built by `arc run`, not committed: the open lake holds the published copy) | schema, finetype labels, the code-list declaration |
 | `../registry.json` (this dataset's entry) | **Address** — how it's found | stable `uid`, `cms/hcpcs`, manifest pointer |
 
 ## The Protocol
@@ -22,8 +22,9 @@ HCPCS Level II, the alpha-numeric codes the Centers for Medicare & Medicaid Serv
 8. **describe** — emit the descriptor from the Parquet, typed by finetype with `nominations.finetype.json` and `descriptor.overrides.json` applied.
 9. **check_code_list** — hold the Parquet to the shared code-list contract (`scripts/check_code_list.py`, see `docs/code-lists.md`).
 10. **validate** — gate the Parquet against `schema.finetype.json`.
-11. **stamp_descriptor** — write the published `build/hcpcs.parquet` with the finished descriptor in its footer, and `datapackage.json` beside it.
-12. **publish** — upsert `cms.hcpcs` into the open lake on `code`, with its descriptor in the lake's `meta` schema and the readable copy at `cms/hcpcs.parquet` (see *Publish*).
+11. **stamp_descriptor** — write the published `build/hcpcs.parquet` with the finished descriptor in its footer, and `build/datapackage.json` beside it.
+12. **check before publishing** — `emit_descriptors` writes every published table's descriptor, as the open lake holds it, to `build/lake_descriptors.json`. `check_before_publish` then holds the built descriptor to label agreement with them, to the frictionless reference implementation, and to `scripts/check_descriptors.py`'s rules read against the local Parquet. A failing check stops the run before publish.
+13. **publish** — upsert `cms.hcpcs` into the open lake on `code`, with its descriptor in the lake's `meta` schema and the readable copy at `cms/hcpcs.parquet` (see *Publish*).
 
 Produces `build/hcpcs.parquet`.
 
@@ -66,7 +67,7 @@ Needs the `arc` binary, `duckdb`, `uv` (for `check_code_list` and the stamp), an
 
 <!-- protocol-steps: generated from arcform.yaml by scripts/check_protocol_readme.py — do not edit this block by hand -->
 
-All 12 steps are `sql:` models or typed `op:` operators from the arcform catalog. This Protocol runs no opaque `command:`/shell step.
+All 14 steps are `sql:` models or typed `op:` operators from the arcform catalog. This Protocol runs no opaque `command:`/shell step.
 
 | # | Step | How it runs |
 |---|---|---|
@@ -81,6 +82,8 @@ All 12 steps are `sql:` models or typed `op:` operators from the arcform catalog
 | 9 | `check_code_list` | `op: uv@1` |
 | 10 | `validate` | `op: finetype_validate@1` |
 | 11 | `stamp_descriptor` | `op: uv@1` |
-| 12 | `publish` | `op: ducklake_write@1` |
+| 12 | `emit_descriptors` | `op: uv@1` |
+| 13 | `check_before_publish` | `op: uv@1` |
+| 14 | `publish` | `op: ducklake_write@1` |
 
 <!-- /protocol-steps -->
