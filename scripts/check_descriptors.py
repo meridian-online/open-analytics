@@ -53,7 +53,11 @@ And once, over the catalogue in README.md:
 
   8. catalogue     — every row of the table that states a row count is held to the
                      number of rows in the object it links to, counted from that
-                     object. A figure written in full must match exactly; a figure
+                     object. A row links its readable copy (`<name>.parquet`), and is
+                     tied to the descriptor whose resource `path` is that object; a
+                     row whose object no descriptor declares is a disagreement
+                     (`catalogue.unpublished`), so a typo cannot read as a pass.
+                     A figure written in full must match exactly; a figure
                      written to a stated precision (`3.36M`) must be what the count
                      rounds to at that precision. A published dataset the catalogue
                      omits is a disagreement too, so a row cannot be deleted to make
@@ -937,6 +941,13 @@ def check_self_description(
         expected = embedded_form(document)
     except Exception as exc:  # noqa: BLE001 - a malformed repository copy is not checkable
         raise CheckError(f"{package}: cannot derive the embedded form: {exc}") from exc
+    # A query string on a remote `path` is a cache key, not part of the address: the lake
+    # check reads each object as `<path>?v=<hash>` to get past the edge's cached copy
+    # (`emit_descriptor.py --bypass-edge`), and the object names its address without one.
+    for expected_resource in expected.get("resources") or []:
+        raw = expected_resource.get("path") if isinstance(expected_resource, dict) else None
+        if isinstance(raw, str) and re.match(r"^https?://", raw, re.IGNORECASE):
+            expected_resource["path"] = object_key(Path("."), raw)
 
     # An object stamped before the stamp stopped embedding `created` still carries one,
     # and stays published until its dataset is next republished. Holding it to the
@@ -1206,10 +1217,12 @@ def check_foreign_keys(
 # quietly stop the check.
 CATALOGUE_ROWS_COLUMN = "rows"
 
-# The link that identifies which dataset a catalogue row is about. A row is tied to
-# a package by the descriptor it links to, not by its prose label, so retitling a
-# dataset does not detach it from the bytes it is measured against.
-CATALOGUE_DESCRIPTOR_LINK = re.compile(r"\[[^\]]*\]\(([^)]*datapackage\.json)\)")
+# The link that identifies which dataset a catalogue row is about: the row's readable
+# copy, `https://openlake.meridian.online/<namespace>/<name>.parquet`, which carries the
+# descriptor in its footer. A row is tied to a package by the object it links to, not by
+# its prose label, so retitling a dataset does not detach it from the bytes it is
+# measured against. The descriptor is the one whose resource `path` is that object.
+CATALOGUE_DESCRIPTOR_LINK = re.compile(r"\[[^\]]*\]\(([^)\s]*\.parquet)\)")
 
 # A count written in full, with or without thousands separators: 2,125 · 207099.
 EXACT_FIGURE = re.compile(r"^(?:\d{1,3}(?:,\d{3})+|\d+)$")
@@ -1259,7 +1272,7 @@ class CatalogueRow:
     index: int  # 0-based index into the README's lines, for rewriting and for the message
     stated: str  # the Rows cell exactly as written
     rows_cell: int  # which cell of the row that was
-    descriptor: str  # the datapackage.json path the row links to, as written
+    link: str  # the readable copy the row links to, as written
 
 
 def split_on_unescaped_pipes(text: str) -> list[str]:
@@ -1357,8 +1370,8 @@ def parse_catalogue(readme_path: Path, text: str) -> list[CatalogueRow]:
             )
             if link is None:
                 raise CheckError(
-                    f"{readme_path}: line {body + 1} of the catalogue links to no datapackage.json, "
-                    "so there is nothing to measure its row count against"
+                    f"{readme_path}: line {body + 1} of the catalogue links to no readable copy "
+                    "(a `.parquet`), so there is nothing to measure its row count against"
                 )
             rows.append(CatalogueRow(body, cells[rows_cell].strip(), rows_cell, link))
 
@@ -1368,6 +1381,18 @@ def parse_catalogue(readme_path: Path, text: str) -> list[CatalogueRow]:
             "either missing or no longer states row counts, and either way nothing here was checked"
         )
     return rows
+
+
+def object_key(base: Path, raw: str) -> str:
+    """Where `raw`, written relative to `base`, points, in a form two spellings share.
+
+    A remote address is compared without its query string or fragment: the lake check
+    reads each object as `<path>?v=<hash>` to get past the edge's cached copy, and the
+    catalogue links the plain address. A local path is resolved.
+    """
+    if re.match(r"^[a-z][a-z0-9+.-]*://", raw, re.IGNORECASE):
+        return raw.split("#", 1)[0].split("?", 1)[0]
+    return str((base / raw).resolve())
 
 
 def object_row_count(con, path: str) -> int:
@@ -1407,7 +1432,26 @@ def check_catalogue(
         raise CheckError(f"cannot read the catalogue at {readme_path}: {exc}") from exc
 
     rows = parse_catalogue(readme_path, text)
-    by_path = {Path(key).resolve(): document for key, document in packages.items()}
+
+    # Every descriptor under the datasets directory, published `datapackage.json` and
+    # per-table `<name>.datapackage.json` alike, indexed by the object each resource names.
+    per_table = sorted(datasets_dir.glob("*/*.datapackage.json")) if datasets_dir is not None else []
+    documents: dict[Path, dict[str, Any]] = {Path(key).resolve(): document for key, document in packages.items()}
+    for descriptor_path in per_table:
+        documents.setdefault(descriptor_path.resolve(), load_descriptor(descriptor_path))
+    by_object: dict[str, Path] = {}
+    for descriptor_path, document in documents.items():
+        for resource in document.get("resources") or []:
+            raw = resource.get("path") if isinstance(resource, dict) else None
+            if not isinstance(raw, str) or not raw:
+                continue
+            key = object_key(descriptor_path.parent, raw)
+            if by_object.get(key, descriptor_path) != descriptor_path:
+                raise CheckError(
+                    f"{by_object[key]} and {descriptor_path} both declare {raw}, so a catalogue "
+                    "row linking it names no one descriptor"
+                )
+            by_object[key] = descriptor_path
 
     violations: list[Violation] = []
     lines = text.split("\n")
@@ -1416,42 +1460,41 @@ def check_catalogue(
     checked = 0
 
     for row in rows:
-        descriptor_path = (readme_path.parent / row.descriptor).resolve()
+        descriptor_path = by_object.get(object_key(readme_path.parent, row.link))
+        if descriptor_path is None:
+            if only is None:
+                violations.append(
+                    Violation(
+                        str(readme_path),
+                        row.link,
+                        "",
+                        "catalogue.unpublished",
+                        f"line {row.index + 1} links to {row.link}, and no descriptor under "
+                        f"{datasets_dir.name if datasets_dir is not None else 'datasets'}/ declares it, so "
+                        "there is no published table to measure its row count against",
+                    )
+                )
+            continue
         if only is not None and descriptor_path.parent.name not in only:
             continue
-        document = by_path.get(descriptor_path)
-        if document is None and descriptor_path.name.endswith(".datapackage.json") and descriptor_path.is_file():
-            if datasets_dir is None or not descriptor_path.is_relative_to(datasets_dir.resolve()):
-                raise CheckError(
-                    f"{readme_path}: line {row.index + 1} of the catalogue links to {row.descriptor}, "
-                    "which is outside the datasets directory, so it is not a descriptor of a dataset here"
-                )
-            # A Protocol with several tables keeps one `<name>.datapackage.json` per table beside
-            # its recipe, and the catalogue links each of them. The object checks read only
-            # `*/datapackage.json`, so a per-table descriptor is read here, for its resource.
-            document = load_descriptor(descriptor_path)
-        if document is None:
-            raise CheckError(
-                f"{readme_path}: line {row.index + 1} of the catalogue links to {row.descriptor}, "
-                "which is not a descriptor this run loaded"
-            )
+        document = documents[descriptor_path]
         listed.add(descriptor_path)
 
         resources = document.get("resources") or []
         if len(resources) != 1:
             raise CheckError(
-                f"{readme_path}: line {row.index + 1} states one row count, but {row.descriptor} "
+                f"{readme_path}: line {row.index + 1} states one row count, but {descriptor_path} "
                 f"declares {len(resources)} resource(s), so there is no one count it names"
             )
         raw_path = resources[0].get("path")
         if not raw_path:
-            raise CheckError(f"{row.descriptor}: resource declares no path")
+            raise CheckError(f"{descriptor_path}: resource declares no path")
         path, is_remote = resolve_path(descriptor_path, raw_path)
         if is_remote:
             con.execute("INSTALL httpfs")
             con.execute("LOAD httpfs")
         elif not Path(path).exists():
-            raise CheckError(f"{row.descriptor}: resource points at {path}, which does not exist")
+            raise CheckError(f"{descriptor_path}: resource points at {path}, which does not exist")
 
         count = object_row_count(con, path)
         checked += 1
@@ -1461,7 +1504,7 @@ def check_catalogue(
             violations.append(
                 Violation(
                     str(readme_path),
-                    row.descriptor,
+                    row.link,
                     "",
                     "catalogue.rows",
                     f"line {row.index + 1} states {row.stated!r}, which is not a row count this "
@@ -1486,12 +1529,11 @@ def check_catalogue(
                 if rendered not in (str(count), f"{count:,}"):
                     detail += f", which is {rendered} at the precision {row.stated} is written to"
                 violations.append(
-                    Violation(str(readme_path), row.descriptor, "", "catalogue.rows", detail)
+                    Violation(str(readme_path), row.link, "", "catalogue.rows", detail)
                 )
 
     if only is None:
         # Per-table descriptors (`datasets/<protocol>/<name>.datapackage.json`) are datasets too.
-        per_table = sorted(datasets_dir.glob("*/*.datapackage.json")) if datasets_dir is not None else []
         for descriptor_path in [*descriptor_paths, *per_table]:
             if descriptor_path.resolve() not in listed:
                 violations.append(

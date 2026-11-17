@@ -48,38 +48,30 @@ The same descriptor, without the SQL:
 python scripts/stamp_descriptor.py read https://openlake.meridian.online/census/naics_2022.parquet
 ```
 
-The embedded copy omits the resource's `bytes` and `hash` and the package's
-`created`, and only those. A file cannot state its own size or its own digest —
-writing the value changes the value — and `created` is a write time that moves on a
-publish that changed nothing else, so a file that stated it would be a different file
-every time. Those stay in this repository's copy, which is measured against the
-finished object; there `created` means when the data first appeared, and a republish
-of unchanged data keeps it. Everything else is identical, and
-[`scripts/check_descriptors.py`](scripts/check_descriptors.py) holds the two
-copies to each other.
+The embedded copy omits the resource's `bytes` and `hash` and the package's `created`, and only those. A file cannot state its own size or its own digest, because writing the value changes the value, and a file that stated its own write time would be a different file every time. The lake records all three in its `manifest.json`, and [`scripts/emit_descriptor.py`](scripts/emit_descriptor.py) joins them back onto the descriptor the lake stores: `bytes` and `hash` measured from the finished object, and `created` as the time the published file was created. A publish that writes a new file gets a new `created`, including one that changes only the descriptor. Everything else is identical, and the [lake check](.github/workflows/lake.yml) holds the stored copy and the embedded copy to each other.
 
 ## Datasets
 
-| Dataset | Rows | License | Source | Descriptor |
+| Dataset | Rows | License | Source | Readable copy |
 |---|---|---|---|---|
-| GLEIF — Legal Entity Identifiers | 3.50M | CC0-1.0 | [GLEIF](https://www.gleif.org/) | [datapackage.json](datasets/gleif/datapackage.json) |
-| SEC EDGAR — Company Tickers | 10,404 | Public domain | [SEC](https://www.sec.gov/) | [datapackage.json](datasets/edgar/datapackage.json) |
-| NAICS — Industry Classification (2022) | 2,125 | Public domain | [U.S. Census Bureau](https://www.census.gov/naics/) | [datapackage.json](datasets/naics/datapackage.json) |
-| NAICS 2017 to 2022 concordance | 1,150 | Public domain | [U.S. Census Bureau](https://www.census.gov/naics/) | [datapackage.json](datasets/naics_2017_to_2022/datapackage.json) |
-| NAICS 2022 index — business descriptions coded to industries | 20,373 | Public domain | [U.S. Census Bureau](https://www.census.gov/naics/) | [datapackage.json](datasets/naics_2022_titles/datapackage.json) |
-| EDGAR ↔ GLEIF — company-to-LEI crosswalk | 213,033 | CC0-1.0 | SEC + GLEIF | [datapackage.json](datasets/edgar_gleif/datapackage.json) |
-| HTS — Harmonized Tariff Schedule of the United States | 42,036 | Public domain | [USITC](https://hts.usitc.gov/) | [datapackage.json](datasets/hts/datapackage.json) |
-| Schedule B — U.S. Export Classification Codes | 16,727 | Public domain | [U.S. Census Bureau](https://www.census.gov/foreign-trade/schedules/b/index.html) | [datapackage.json](datasets/schedule_b/datapackage.json) |
-| FIPS — U.S. State and County Codes | 3,301 | Public domain | [U.S. Census Bureau](https://www.census.gov/library/reference/code-lists/ansi.html) | [datapackage.json](datasets/fips/datapackage.json) |
-| OurAirports — Airports with ICAO codes | 10,734 | Public domain | [OurAirports](https://ourairports.com/data/) | [datapackage.json](datasets/ourairports/datapackage.json) |
-| HCPCS Level II — Healthcare Common Procedure Coding System | 8,770 | Public domain | [CMS](https://www.cms.gov/medicare/coding-billing/healthcare-common-procedure-system) | [datapackage.json](datasets/hcpcs/datapackage.json) |
-| NDC Directory — National Drug Code | 340K | CC0-1.0 | [FDA](https://www.fda.gov/drugs/drug-approvals-and-databases/national-drug-code-directory) | [datapackage.json](datasets/ndc/datapackage.json) |
-| SOC 2018 — Standard Occupational Classification (U.S.) | 1,447 | Public domain | [BLS](https://www.bls.gov/soc/2018/home.htm) | [soc_2018.datapackage.json](datasets/soc_2018/soc_2018.datapackage.json) |
-| SOC 2018 job titles — direct match titles (U.S.) | 6,520 | Public domain | [BLS](https://www.bls.gov/soc/2018/home.htm) | [soc_2018_titles.datapackage.json](datasets/soc_2018/soc_2018_titles.datapackage.json) |
-| SOC 2010 to 2018 crosswalk (U.S.) | 900 | Public domain | [BLS](https://www.bls.gov/soc/2018/home.htm) | [soc_2010_to_2018.datapackage.json](datasets/soc_2018/soc_2010_to_2018.datapackage.json) |
-| SOC 2020 — Standard Occupational Classification (UK) | 551 | OGL v3.0 ("Source: Office for National Statistics licensed under the Open Government Licence v3.0.") | [ONS](https://www.ons.gov.uk/methodology/classificationsandstandards/standardoccupationalclassificationsoc/soc2020) | [soc_2020.datapackage.json](datasets/soc_2020/soc_2020.datapackage.json) |
-| SOC 2020 job titles — the ONS coding index (UK) | 32,439 | OGL v3.0 ("Source: Office for National Statistics licensed under the Open Government Licence v3.0.") | [ONS](https://www.ons.gov.uk/methodology/classificationsandstandards/standardoccupationalclassificationsoc/soc2020) | [soc_2020_titles.datapackage.json](datasets/soc_2020/soc_2020_titles.datapackage.json) |
-| SOC 2010 to SOC 2020 relationship (UK) | 714 | OGL v3.0 ("Source: Office for National Statistics licensed under the Open Government Licence v3.0.") | [ONS](https://www.ons.gov.uk/methodology/classificationsandstandards/standardoccupationalclassificationsoc/soc2020) | [soc_2010_to_2020.datapackage.json](datasets/soc_2020/soc_2010_to_2020.datapackage.json) |
+| GLEIF — Legal Entity Identifiers | 3.50M | CC0-1.0 | [GLEIF](https://www.gleif.org/) | [lei.parquet](https://openlake.meridian.online/gleif/lei.parquet) |
+| SEC EDGAR — Company Tickers | 10,404 | Public domain | [SEC](https://www.sec.gov/) | [company_tickers_exchange.parquet](https://openlake.meridian.online/sec/company_tickers_exchange.parquet) |
+| NAICS — Industry Classification (2022) | 2,125 | Public domain | [U.S. Census Bureau](https://www.census.gov/naics/) | [naics_2022.parquet](https://openlake.meridian.online/census/naics_2022.parquet) |
+| NAICS 2017 to 2022 concordance | 1,150 | Public domain | [U.S. Census Bureau](https://www.census.gov/naics/) | [naics_2017_to_2022.parquet](https://openlake.meridian.online/census/naics_2017_to_2022.parquet) |
+| NAICS 2022 index — business descriptions coded to industries | 20,373 | Public domain | [U.S. Census Bureau](https://www.census.gov/naics/) | [naics_2022_titles.parquet](https://openlake.meridian.online/census/naics_2022_titles.parquet) |
+| EDGAR ↔ GLEIF — company-to-LEI crosswalk | 213,033 | CC0-1.0 | SEC + GLEIF | [edgar_lei.parquet](https://openlake.meridian.online/library/edgar_lei.parquet) |
+| HTS — Harmonized Tariff Schedule of the United States | 42,036 | Public domain | [USITC](https://hts.usitc.gov/) | [hts.parquet](https://openlake.meridian.online/usitc/hts.parquet) |
+| Schedule B — U.S. Export Classification Codes | 16,727 | Public domain | [U.S. Census Bureau](https://www.census.gov/foreign-trade/schedules/b/index.html) | [schedule_b.parquet](https://openlake.meridian.online/census/schedule_b.parquet) |
+| FIPS — U.S. State and County Codes | 3,301 | Public domain | [U.S. Census Bureau](https://www.census.gov/library/reference/code-lists/ansi.html) | [fips.parquet](https://openlake.meridian.online/census/fips.parquet) |
+| OurAirports — Airports with ICAO codes | 10,734 | Public domain | [OurAirports](https://ourairports.com/data/) | [ourairports.parquet](https://openlake.meridian.online/library/ourairports.parquet) |
+| HCPCS Level II — Healthcare Common Procedure Coding System | 8,770 | Public domain | [CMS](https://www.cms.gov/medicare/coding-billing/healthcare-common-procedure-system) | [hcpcs.parquet](https://openlake.meridian.online/cms/hcpcs.parquet) |
+| NDC Directory — National Drug Code | 340K | CC0-1.0 | [FDA](https://www.fda.gov/drugs/drug-approvals-and-databases/national-drug-code-directory) | [ndc.parquet](https://openlake.meridian.online/fda/ndc.parquet) |
+| SOC 2018 — Standard Occupational Classification (U.S.) | 1,447 | Public domain | [BLS](https://www.bls.gov/soc/2018/home.htm) | [soc_2018.parquet](https://openlake.meridian.online/bls/soc_2018.parquet) |
+| SOC 2018 job titles — direct match titles (U.S.) | 6,520 | Public domain | [BLS](https://www.bls.gov/soc/2018/home.htm) | [soc_2018_titles.parquet](https://openlake.meridian.online/bls/soc_2018_titles.parquet) |
+| SOC 2010 to 2018 crosswalk (U.S.) | 900 | Public domain | [BLS](https://www.bls.gov/soc/2018/home.htm) | [soc_2010_to_2018.parquet](https://openlake.meridian.online/bls/soc_2010_to_2018.parquet) |
+| SOC 2020 — Standard Occupational Classification (UK) | 551 | OGL v3.0 ("Source: Office for National Statistics licensed under the Open Government Licence v3.0.") | [ONS](https://www.ons.gov.uk/methodology/classificationsandstandards/standardoccupationalclassificationsoc/soc2020) | [soc_2020.parquet](https://openlake.meridian.online/ons/soc_2020.parquet) |
+| SOC 2020 job titles — the ONS coding index (UK) | 32,439 | OGL v3.0 ("Source: Office for National Statistics licensed under the Open Government Licence v3.0.") | [ONS](https://www.ons.gov.uk/methodology/classificationsandstandards/standardoccupationalclassificationsoc/soc2020) | [soc_2020_titles.parquet](https://openlake.meridian.online/ons/soc_2020_titles.parquet) |
+| SOC 2010 to SOC 2020 relationship (UK) | 714 | OGL v3.0 ("Source: Office for National Statistics licensed under the Open Government Licence v3.0.") | [ONS](https://www.ons.gov.uk/methodology/classificationsandstandards/standardoccupationalclassificationsoc/soc2020) | [soc_2010_to_2020.parquet](https://openlake.meridian.online/ons/soc_2010_to_2020.parquet) |
 
 The **Rows** figures are counted from the published objects themselves on every
 run of the checks below, not maintained by hand.

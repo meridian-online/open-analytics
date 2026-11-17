@@ -1,186 +1,86 @@
-# Reads every published descriptor back against the Parquet it describes.
+# Pull-request checks. Every job on this page reads the repository and fixtures, and
+# none reads the open lake. Descriptors are not committed: the lake stores each table's
+# descriptor, and the checks that read it run in two other places.
 #
-# `self-test` runs first and proves the check can fail: it builds scratch datasets
-# with deliberate descriptor/bytes disagreements and asserts both the exit status
-# and the message. `descriptors-match-their-data` then runs the same check against
-# the live published files, and is only meaningful because the job above it passed.
+#   Before a publish, in the Protocol's own Run. `check_before_publish.py` holds the
+#   built descriptor to the built Parquet (fields, types, constraints, key, bytes,
+#   self-description, licence, licence notice), puts it through Frictionless, and holds
+#   its labels to every other table's in the lake with label agreement `--strict`. A
+#   refusal stops the Run before anything is written. A code-list Protocol also runs
+#   `check_code_list.py` on its built file.
 #
-# The same check also holds every descriptor in `datasets/` AND in `examples/` to a
-# licence rule, which reads the descriptor alone: it carries a licence identifier, and an
-# identifier with a NonCommercial clause is matched by a description that says what it
-# restricts. The demo Protocols under `examples/` publish no object, so this is the only
-# rule that reads them; before it, a descriptor there could drop its licence or its
-# restriction sentence with every job on this page green. It asserts internal consistency
-# and compares the identifier against nothing upstream, because a mirror's metadata is
-# not the licensor. Its cases are in `scripts/test_check_descriptors.py`, which the
-# `self-test` job below runs.
+#   After a publish, in `lake.yml` (push to `main`, weekly, on demand). It emits every
+#   stored descriptor and runs over them the descriptor check with the README catalogue,
+#   the engine pin, label agreement, Frictionless, the code-list contract, the declared
+#   joins, the constraint ratchet against HEAD's overrides, and a full re-hash of every
+#   served object. A finding `main` is ahead on is reported as awaiting publish; one it
+#   is not is drift, and fails the run. `scripts/lake_check.py` says how each is sorted.
 #
-# `engine-version-self-test` and `engine-version-matches-the-pin` cover a different
-# way a descriptor check can be wrong without the data being wrong at all: the engine
-# that WROTE a published object and the engine PINNED to judge it can be different
-# versions. A byte/hash comparison has no way to tell that apart from a real data
-# defect, and one shipped exactly that way — a version skew was reported as a
-# disagreement between descriptor and data, and the refusal it caused was resolved
-# by hand. The Parquet footer's own `created_by` field names the engine that wrote
-# it, so `engine-version-matches-the-pin` reads that back for every published
-# resource (of each `datasets/*/datapackage.json`, and of each per-table
-# `datasets/*/<table>.datapackage.json`) and holds it to the DuckDB its own Protocol pins (the `stamp_descriptor.py`
-# steps of its `arcform.yaml`), else to `DUCKDB_VERSION` below, naming both versions when they
-# differ and saying plainly that the disagreement is about engines, not data.
-# `engine-version-self-test` proves it first, the same way the pair above does: on a
-# scratch footer it patches byte-for-byte to disagree, and on one it leaves alone.
+# What stays here is what can be judged without the lake, and it is mostly self-tests.
+# Each builds scratch inputs with a deliberate disagreement and asserts the exit status
+# and the message, so a check that runs elsewhere is known to be able to fail:
+# `self-test` for the descriptor check, `engine-version-self-test` for the engine pin and
+# the lake's shape rule, `join-self-test` for declared joins, `code-list-self-test`,
+# `label-agreement-self-test`, `constraint-ratchet-self-test`, `frictionless-self-test`,
+# `before-publish-self-test` for the check a Run makes before it publishes,
+# `emit-descriptor-self-test` for the emitter, and `lake-check-self-test` for how the
+# lake check sorts what it finds. Two families of reasons outlive the jobs that moved:
 #
-# `ingest-self-test` sits one step earlier in the chain — not on a published object but
-# on what may enter one. It runs the crosswalk's own SQL models against scratch sources
-# and asserts that an identifier failing ISO 7064 MOD 97-10, which GLEIF does not
-# publish, stops the run instead of shipping as an identity edge. It is a self-test in
-# the same sense as the job above: one case deletes the filter from the shipped model
-# and asserts the gate behind it reddens.
+#   A descriptor is stamped into the footer of the object it describes and declares that
+#   object's sha256, so correcting a published declaration is a republish. That is why
+#   `datasets/label-agreement.json` records stated reasons and corrections, and
+#   `datasets/frictionless-rejections.json` known refusals, that close or adjudicate a
+#   difference rather than edit it away: each entry pins the exact values it covers, so
+#   a stale entry fails the check as surely as an unexplained difference does.
 #
-# The join pair below it does the same for the relationships BETWEEN packages.
-# `schema.foreignKeys` can only say a reference is total, so a partial one is
-# declared under `x-joins` instead — and a relationship no one executes is a
-# relationship no one can trust. `the join runner can fail` builds scratch packages
-# with deliberately wrong coverage figures and asserts the exit status and message;
-# `declared joins run` then runs the real declarations against the published
-# objects. Same order and same reason as the pair above.
+#   The engine that WROTE a published object and the engine PINNED to judge it can be
+#   different versions, and a byte comparison cannot tell that from a data defect. The
+#   engine check reads the footer's `created_by` and names both versions.
+#
+# The shipped `examples/` keep their descriptors, and the licence rule is the only rule
+# that reads them; `self-test` holds every shipped example to it.
+#
+# `ingest-self-test` runs the crosswalk's SQL models against scratch sources and asserts
+# that an identifier failing ISO 7064 MOD 97-10 stops the run; one case deletes the
+# filter from the shipped model and asserts the gate reddens.
 #
 # `stamp-self-test` and `description-needs-no-repository` cover the surface a consumer
-# actually reads. A published Parquet carries its own descriptor in its footer, so
-# someone holding an object URL can ask the file what it is instead of finding a second
-# file in a repository they have no reason to know about. The first proves the stamp
-# lands, survives, leaves every data byte where it was, and is refused when it does not.
-# The second is the claim that cannot be checked by reading code: it blackholes
-# `github.com` and `raw.githubusercontent.com` in `/etc/hosts`, watches the old path
-# (fetching `datapackage.json` out of the repository) stop working, and asserts the
-# object still answers. The script refuses to run — exit 2 — while a repository host is
-# still reachable, so a demonstration that quietly ran unblocked cannot pass.
+# reads. A published Parquet carries its own descriptor in its footer, so someone
+# holding an object URL can ask the file what it is. The first proves the stamp lands,
+# survives, leaves every data byte where it was, and is refused when it does not. The
+# second blackholes `github.com` and `raw.githubusercontent.com` in `/etc/hosts`,
+# watches the old path (fetching `datapackage.json` out of the repository) stop
+# working, and asserts an object served from loopback still answers. It refuses to run,
+# exit 2, while a repository host is still reachable.
 #
-# `protocol-readme-self-test` and `protocol-readme` are the first jobs here that read
-# `arcform.yaml` at all. They read it as YAML, and a YAML parse accepts every document
-# `arc` refuses for its content; before the `arc-manifest-load` pair below, nothing in
-# this workflow asked `arc`, so a Protocol change was invisible to CI — and the visible
-# half of that, a README describing a step list the manifest no longer has, went wrong
-# and stayed wrong for months. The pair has the same order and the same reason as every
-# pair above: the self-test builds scratch manifests with deliberate disagreements and
-# asserts the exit status and the message, then the check runs against the shipped
-# datasets. The manifest is PARSED, never grepped: `grep -c 'command:'
-# datasets/edgar_gleif/arcform.yaml` is 4 with no `command:` step in the file.
+# `protocol-readme-self-test` and `protocol-readme` read `arcform.yaml` as YAML and hold
+# each README's step list to its manifest. The manifest is PARSED, never grepped:
+# `grep -c 'command:' datasets/edgar_gleif/arcform.yaml` is 4 with no `command:` step.
 #
 # `arc-manifest-load-self-test` and `arc-manifest-load` ask `arc` itself.
-# `scripts/arc_manifest_load` links `arc`'s published spec loader,
-# `arc::spec::Manifest::load`, at `ARC_REV` below, hands it every `arcform.yaml` under
-# `datasets/` and `examples/`, and fails on a refusal with the loader's own message,
-# unedited. A precondition `arc` has no variant for, an operator version its catalog
-# cannot satisfy, a `with:` block an operator's schema rejects: each loads as YAML and
-# is refused here. The job needs `arc`'s toolchain and libduckdb and nothing else — it
-# runs no step, opens no connection and needs no `build/`. The walk prints how many
+# `scripts/arc_manifest_load` links `arc`'s spec loader, `arc::spec::Manifest::load`, at
+# `ARC_REV` below, hands it every `arcform.yaml` under `datasets/` and `examples/`, and
+# fails on a refusal with the loader's own message, unedited. The walk prints how many
 # manifests it loaded and refuses fewer than four under `datasets/`, eleven under
-# `examples/` or fifteen in all, because a walk over an emptied or moved subtree otherwise
-# reads exactly like full coverage. The self-test runs the built gate against scratch
-# trees and asserts the exit status and the message; each refusal it holds differs by
-# one manifest from a tree it accepts.
+# `examples/` or fifteen in all, because a walk over an emptied subtree otherwise reads
+# like full coverage.
 #
 # WHAT `arc-manifest-load` DOES NOT COVER. `Manifest::load` judges one document in
-# isolation, and three things a Protocol depends on are outside it. The step graph: a
-# `depends_on:` naming a step that does not exist loads, and the `arc` binary runs it,
-# resolving the name as an external file source and exiting 0. The SQL a `sql:` step
-# points at: the loader never opens the file, so a missing or broken model passes. And
-# whether the pipeline runs at all, which nothing on this page attempts. The self-test
-# pins the first two as accepted, so the day `arc`'s loader starts refusing either, a
-# test reddens and this paragraph is due for an edit. Three real gaps, stated rather
-# than papered over.
+# isolation. A `depends_on:` naming a step that does not exist loads, and `arc` runs it,
+# resolving the name as an external file source. A `sql:` step's model is never opened,
+# so a missing or broken one passes. The self-test pins both as accepted, so the day the
+# loader refuses either, a test reddens and this paragraph is due for an edit. Running
+# the pipeline is `protocol-tests`' job, on fixtures, for the Protocols with a tests.yaml.
 #
-# `label-agreement-self-test` and `label-agreement` are the first jobs here that read
-# more than one package at a time. Every other check on this page judges one package
-# against its own bytes, and all of them can pass while the four contradict each other
-# — `gleif.jurisdiction` declared `^[A-Z]{2}$` against `edgar_gleif`'s
-# `^[A-Z]{2}(-[A-Z0-9]{1,3})?$` and failed 371,995 of 3,377,394 rows, and the
-# disagreement lived in the space between the descriptors, which nothing read.
-# `check_label_agreement.py` groups fields by their shared `x-finetype-label` and by
-# their field name across packages, and reports every declaration that differs.
-#
-# THE SECOND JOB RUNS `--strict`, SO A DIFFERENCE WITH NO STATED REASON FAILS IT. Two
-# packages may legitimately differ where their populations differ, and no check can know
-# which, so a difference passes when `datasets/label-agreement.json` records why it is
-# legitimate, and the step summary prints each difference beside its reason. A difference
-# with no reason exits 1 and the job stays red until a reason is written for it or the
-# declaration is corrected and republished so the packages agree; the job is not deleted
-# to get a merge through. A stale stated reason reddens it too: the file pins the exact
-# values each reason excuses, so moving one of those values makes the entry stop
-# describing anything and this job fails until someone looks. A reason closes one
-# difference between those values; it never becomes a licence for the label.
-#
-# A STALE CORRECTION REDDENS IT TOO, AND A LIVE ONE BUYS NOTHING. The same file's
-# `corrections` list records the opposite verdict — this difference is a defect, here is
-# the side that is wrong, the value it must become and the act that lands it — for the
-# differences a reason would have to lie about. It closes nothing: the difference is
-# still counted and `--strict` still fails on it. The check's summary line counts the
-# corrections the list holds, and a correction, when one exists, is blocked on a
-# republish, which is structural rather than a coincidence: a descriptor is stamped
-# into the footer of the object it describes and declares that object's sha256, so
-# `descriptors-match-their-data` above reads the footer copy and a repository-only edit
-# reddens it. Correcting a published declaration is a republish, which is why this
-# repository records verdicts it cannot apply. An entry pins its declaration by a
-# pointer addressed by name rather than index, so this job fails both when the
-# declaration moves and when the fix arrives and the entry should be deleted.
-#
-# `--strict` runs here because each difference on `main` carries a stated reason, and a
-# new difference without one turns this job red at the pull request that introduces it.
-# A correction does not close a difference, since `--strict` fails on one a correction
-# adjudicates; a reason closes it, and a republish that makes the packages agree removes it.
-#
-# `constraint-ratchet-self-test` and `constraint-ratchet` read the one direction none of
-# the above can: a package against its own predecessor. `descriptors-match-their-data`
-# passes a descriptor whose constraints were loosened, because a looser constraint still
-# fits the bytes; its self-description rule reddens only while the published footer still
-# carries the old descriptor, and goes quiet once the loosened one is stamped in. The
-# ratchet reads the predecessor from git instead (`origin/main`, so the checkout fetches
-# full history) and refuses a constraint that `descriptor.overrides.json` held there and
-# the descriptor no longer carries, unless the sidecar was moved to the new value in the
-# same change. On a push to `main` the base is the tip itself, so the comparison is empty
-# and the job is only meaningful on a pull request.
-#
-# `frictionless-self-test` and `descriptors-are-accepted-by-the-reference-implementation`
-# are the first jobs here to ask the question a consumer's toolchain asks first: does
-# `frictionless` load this package at all. Every check above reads declarations back
-# against bytes, a sibling descriptor or a manifest, and all of them passed while three
-# of the four descriptors this repository ships were refused outright — v2's field object
-# is a fifteen-branch `oneOf`, one branch per type, each giving `constraints` its own
-# properties set, so `pattern` beside `"type": "integer"` is a whole-package refusal
-# rather than surplus a reader skips.
-#
-# WHICH FIELD, NOT ONLY WHICH MESSAGE. `frictionless` reports `constraint "pattern" is
-# not supported by type "date"` twice for `gleif` and names neither field, so the check
-# re-offers each field on its own in a minimal package and attributes the notes it draws
-# by name. A note the fields do not account for is reported against the package rather
-# than dropped.
-#
-# `datasets/frictionless-rejections.json` works the same way as `label-agreement.json`'s
-# `corrections`, and for the same structural reason: a descriptor is stamped into the
-# footer of the object it describes and declares that object's sha256, so a declaration
-# is republished rather than edited. An entry records a refusal that is known, pins the
-# exact notes and says which act lands the fix; it closes nothing. It reddens when the
-# refusal changes, when the declaration moves, and when the fix lands — and a refusal
-# with no entry reddens too, which is what makes the pair a gate rather than a report.
-#
-# `publish-seam` covers the other direction — that a publish declares what it
-# uploaded, and that it uploads nothing a finished Run did not produce alongside the
-# descriptor on disk — against a scratch HTTP object store and scratch B4 Run records,
-# so it is offline and runs on every pull request. `endpoints-serve-what-is-declared`
-# re-hashes every published object in full and so does NOT: it costs a download of
-# every dataset, which is defensible once a merge lands and weekly thereafter, and not
-# on each push to a branch.
+# `publish-seam` holds `publish_dataset.py` to declaring what it uploaded, against a
+# scratch HTTP object store and scratch Run records.
 name: descriptors
 
 on:
   push:
     branches: [main]
   pull_request:
-  # The descriptors are static; the files they describe are republished out of band,
-  # so a passing merge does not stay true on its own.
-  schedule:
-    - cron: "17 6 * * 1"
+  # No schedule: nothing here reads what a publish can change. lake.yml runs weekly.
   workflow_dispatch:
 
 permissions:
@@ -191,24 +91,11 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # This is the READER's pin — the version every job below installs to run its own
-  # checks, and the fallback for a Protocol that pins no DuckDB. Each dataset's footer is
-  # held to its own Protocol's stamp pin, so that pin moves when the Protocol moves onto
-  # the publish step. This literal is deliberately not reconciled here against the pin
-  # that WROTE a Protocol's published objects, and the reason is that no single literal in this repo holds
-  # that pin. The pipeline that publishes them runs elsewhere, so its literal is not
-  # readable from here at all. A second writer pin IS in this repo and is a separate
-  # literal from this one: datasets/edgar_gleif/arcform.yaml pins
-  # `uv run --with duckdb==<version>` for derive_join_coverage, which writes the
-  # `coverage` block into that dataset's datapackage.json. Bumping this env var does
-  # not move it, and nothing here reconciles the two — a real gap, stated rather
-  # than papered over.
-  #
-  # So `engine-version-matches-the-pin` does not compare literals at all. It compares
-  # this pin against what each published object's own FOOTER says wrote it, which is
-  # the one writer statement that travels with the bytes. The difference, if any, is
-  # a version skew between writer and reader, established dynamically at check time —
-  # not a claim that any two files' literals agree.
+  # The DuckDB every job below installs to run its own checks. lake.yml carries the same
+  # literal, as the reader's pin and the fallback for a Protocol that pins no DuckDB; its
+  # engine check holds each published footer's `created_by` to its own Protocol's stamp
+  # pin, the one writer statement that travels with the bytes, rather than comparing
+  # literals. Bump the two files together.
   DUCKDB_VERSION: "2.0.0"
   PYTHON_VERSION: "3.12"
   # `arcform.yaml` is read as YAML by scripts/check_protocol_readme.py. Pinned for the
@@ -217,8 +104,8 @@ env:
   PYYAML_VERSION: "6.0.3"
   # The SOC 2018 models' self-test edits its BLS fixture workbooks with openpyxl.
   OPENPYXL_VERSION: "3.1.5"
-  # The reference Frictionless implementation, which the two jobs at the foot of this
-  # page put every descriptor through. This literal is NOT reconciled against
+  # The reference Frictionless implementation, which `before-publish-self-test` and
+  # `frictionless-self-test` load; lake.yml carries the same literal. This literal is NOT reconciled against
   # `datasets/frictionless-rejections.json`'s `frictionless_version` by comparing the
   # two files: `check_frictionless.py` compares the rejections file against the version
   # that is actually IMPORTED at check time, so a bump here with no re-measurement there
@@ -240,7 +127,7 @@ env:
   ARC_RUST_TOOLCHAIN: "1.94"
   # What `protocol-tests` runs a Protocol's tests.yaml with, beside `arc` at ARC_REV: the
   # finetype release whose binary and DuckDB extension the describe and validate steps
-  # load (0.6.67, the version every committed descriptor records), the `uv` that runs the
+  # load (0.6.67, the version every published descriptor records), the `uv` that runs the
   # uv@1 steps, and DuckDB's command line, which `arc test` runs a break's SQL on.
   FINETYPE_VERSION: "0.6.67"
   UV_VERSION: "0.13.8"
@@ -323,43 +210,6 @@ jobs:
       - name: the old path dies and the object still answers
         run: python scripts/test_self_description_needs_no_repository.py
 
-  descriptors-match-their-data:
-    name: descriptors match their data
-    needs: [self-test, stamp-self-test]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-      - name: install duckdb
-        run: python -m pip install --disable-pip-version-check "duckdb==${DUCKDB_VERSION}"
-      # `--examples-dir` is named so that an `examples/` that is renamed or emptied exits 2
-      # instead of reading as no descriptors to check.
-      - name: every datapackage.json against its published Parquet, and every licence
-        shell: bash
-        run: |
-          set +e
-          python scripts/check_descriptors.py --examples-dir examples --require-self-description --json descriptor-check.json > check.log 2>&1
-          status=$?
-          set -e
-          cat check.log
-          {
-            echo '### Descriptor vs data'
-            echo
-            echo '```'
-            cat check.log
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
-          exit $status
-      - name: upload the findings
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: descriptor-check
-          path: descriptor-check.json
-          if-no-files-found: ignore
-
   engine-version-self-test:
     name: the engine-version check can fail
     runs-on: ubuntu-latest
@@ -374,41 +224,6 @@ jobs:
         run: python scripts/test_check_engine_version.py
       - name: lake shape rule and CLI against a scratch DuckLake
         run: python scripts/test_check_lake_shape.py
-
-  engine-version-matches-the-pin:
-    name: every published footer names the engine this check is pinned to
-    needs: engine-version-self-test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-      - name: install duckdb
-        run: python -m pip install --disable-pip-version-check "duckdb==${DUCKDB_VERSION}"
-      - name: every datapackage.json resource's footer against this pin
-        shell: bash
-        run: |
-          set +e
-          python scripts/check_engine_version.py --json engine-version-check.json > engine.log 2>&1
-          status=$?
-          set -e
-          cat engine.log
-          {
-            echo '### Writer engine vs reader pin'
-            echo
-            echo '```'
-            cat engine.log
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
-          exit $status
-      - name: upload the findings
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: engine-version-check
-          path: engine-version-check.json
-          if-no-files-found: ignore
 
   ingest-self-test:
     name: the ingest refuses an identifier that names nothing
@@ -435,34 +250,6 @@ jobs:
         run: python -m pip install --disable-pip-version-check "duckdb==${DUCKDB_VERSION}"
       - name: scratch packages, exit status and message
         run: python datasets/edgar_gleif/scripts/test_crosswalk_join.py
-
-  joins-run-against-their-data:
-    name: declared joins run against the published bytes
-    needs: join-self-test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-      - name: install duckdb
-        run: python -m pip install --disable-pip-version-check "duckdb==${DUCKDB_VERSION}"
-      - name: every x-joins declaration against the objects it references
-        shell: bash
-        run: |
-          set +e
-          python datasets/edgar_gleif/scripts/crosswalk_join.py > joins.log 2>&1
-          status=$?
-          set -e
-          cat joins.log
-          {
-            echo '### Declared joins vs data'
-            echo
-            echo '```'
-            cat joins.log
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
-          exit $status
 
   one-writer-per-file:
     name: a restructured Protocol declares each file it writes once
@@ -638,39 +425,6 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: scratch packages, exit status and message
         run: python scripts/test_check_label_agreement.py
-
-  label-agreement:
-    name: the packages describe one concept one way
-    needs: label-agreement-self-test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-      - name: every package's declarations against its siblings'
-        shell: bash
-        run: |
-          set +e
-          python scripts/check_label_agreement.py --strict --json label-agreement-check.json > label.log 2>&1
-          status=$?
-          set -e
-          cat label.log
-          {
-            echo '### Cross-package concept agreement'
-            echo
-            echo '```'
-            cat label.log
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
-          exit $status
-      - name: upload the findings
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: label-agreement-check
-          path: label-agreement-check.json
-          if-no-files-found: ignore
 
   # Each Protocol with a tests.yaml, run by `arc test` at ARC_REV: its real steps against
   # the fixture files committed beside it, with no network for data and no publish. A
@@ -917,43 +671,6 @@ jobs:
       - name: the year in the param, both Census URLs and the descriptor's source
         run: python datasets/schedule_b/scripts/test_protocol_year.py
 
-  # Exit 2 is NOT tolerated here: a check that found no code list to examine has not
-  # passed, so this job is red until a descriptor carrying `x-meridian-code-list` exists.
-  code-list-contract:
-    name: every hosted code list carries the core columns
-    needs: [code-list-self-test, descriptors-match-their-data]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-      - name: install duckdb
-        run: python -m pip install --disable-pip-version-check "duckdb==${DUCKDB_VERSION}"
-      - name: every datasets/*/datapackage.json that declares a code list
-        shell: bash
-        run: |
-          set +e
-          python scripts/check_code_list.py --json code-list-check.json > code-list.log 2>&1
-          status=$?
-          set -e
-          cat code-list.log
-          {
-            echo '### Code-list contract'
-            echo
-            echo '```'
-            cat code-list.log
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
-          exit $status
-      - name: upload the findings
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: code-list-check
-          path: code-list-check.json
-          if-no-files-found: ignore
-
   constraint-ratchet-self-test:
     name: the constraint ratchet can fail
     runs-on: ubuntu-latest
@@ -964,43 +681,6 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: scratch repositories, exit status and message
         run: python scripts/test_check_constraint_ratchet.py
-
-  constraint-ratchet:
-    name: no hand-held constraint is replaced by a looser emitted one
-    needs: constraint-ratchet-self-test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          # The predecessor is read from git. A shallow checkout has no origin/main,
-          # and the check exits 2 rather than pass without one.
-          fetch-depth: 0
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-      - name: every datapackage.json against the constraints its predecessor carried
-        shell: bash
-        run: |
-          set +e
-          python scripts/check_constraint_ratchet.py --base origin/main --json constraint-ratchet-check.json > ratchet.log 2>&1
-          status=$?
-          set -e
-          cat ratchet.log
-          {
-            echo '### Hand-held constraints vs predecessor'
-            echo
-            echo '```'
-            cat ratchet.log
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
-          exit $status
-      - name: upload the findings
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: constraint-ratchet-check
-          path: constraint-ratchet-check.json
-          if-no-files-found: ignore
 
   frictionless-self-test:
     name: the conformance check can fail
@@ -1015,41 +695,6 @@ jobs:
       - name: scratch packages, exit status and message
         run: python scripts/test_check_frictionless.py
 
-  descriptors-are-accepted-by-the-reference-implementation:
-    name: the reference implementation loads every descriptor
-    needs: frictionless-self-test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-      - name: install frictionless
-        run: python -m pip install --disable-pip-version-check "frictionless==${FRICTIONLESS_VERSION}"
-      - name: every datapackage.json through frictionless
-        shell: bash
-        run: |
-          set +e
-          python scripts/check_frictionless.py --json frictionless-check.json > frictionless.log 2>&1
-          status=$?
-          set -e
-          cat frictionless.log
-          {
-            echo '### Descriptors vs the reference implementation'
-            echo
-            echo '```'
-            cat frictionless.log
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
-          exit $status
-      - name: upload the findings
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: frictionless-check
-          path: frictionless-check.json
-          if-no-files-found: ignore
-
   publish-seam:
     name: a publish declares what it uploaded
     runs-on: ubuntu-latest
@@ -1061,18 +706,15 @@ jobs:
       - name: scratch object store, exit status and message
         run: python scripts/test_publish_dataset.py
 
-  endpoints-serve-what-is-declared:
-    name: endpoints serve the declared bytes and hash
-    # Not on pull_request: this downloads every published object in full to re-hash
-    # it. `bytes` is already covered per-PR by a one-byte range read in the job above;
-    # `hash` cannot be, so it is checked here — on merge, weekly, and on demand.
-    if: github.event_name != 'pull_request'
-    needs: publish-seam
+  lake-check-self-test:
+    name: the lake check sorts drift from a publish still to come
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      - name: every declared bytes and hash against the object served
-        run: python scripts/publish_dataset.py verify
+      - name: install duckdb and pyyaml
+        run: python -m pip install --disable-pip-version-check "duckdb==${DUCKDB_VERSION}" "pyyaml==${PYYAML_VERSION}"
+      - name: scratch repositories and a loopback object, exit status and sorting
+        run: python scripts/test_lake_check.py

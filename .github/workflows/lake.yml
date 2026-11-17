@@ -1,0 +1,91 @@
+# Holds what the open lake stores to itself and to `main`. Pull requests never read the
+# lake (descriptors.yml says what they check instead); this workflow does, after a merge,
+# weekly, and on demand.
+#
+# It emits every published table's descriptor from the lake into a tree laid out like
+# `datasets/` (`scripts/emit_descriptor.py --all --tree`), then `scripts/lake_check.py`
+# runs over that tree:
+#
+#   - the descriptor check (`check_descriptors.py --require-self-description`): each
+#     stored descriptor against the bytes it describes and against the copy stamped in
+#     the object's footer, the licence and licence-notice rules, foreign keys, and the
+#     README catalogue's row counts against the objects its rows link to;
+#   - the engine pin (`check_engine_version.py`): each footer's `created_by` against the
+#     DuckDB its own Protocol pins;
+#   - label agreement (`check_label_agreement.py --strict`), over `datasets/*/datapackage.json`;
+#   - Frictionless (`check_frictionless.py`) and the code-list contract (`check_code_list.py`;
+#     exit 2, no code list found, is a crash and not a pass);
+#   - every declared join (`crosswalk_join.py`), per package that declares `x-joins`;
+#   - the constraint ratchet: each stored descriptor still carries every constraint its
+#     committed overrides hold at HEAD;
+#   - a full download and re-hash of every served object against its declared `bytes`
+#     and `hash` (`publish_dataset.py verify`'s measurement). This is why the job takes
+#     minutes.
+#
+# Each finding is sorted. AWAITING PUBLISH: the table is not published yet, or the
+# repository inputs the finding compares against changed in git after the table's
+# `created` — the expected gap between a merge and its publish. Reported in the step
+# summary; the run stays green. DRIFT: the lake contradicts itself, or `main` has not
+# changed since the publish and still disagrees. The run fails. A check that crashes is
+# drift. `lake_check.py`'s docstring names the inputs each kind of finding reads.
+#
+# READING PAST THE EDGE. Every read goes to the origin, not a cached copy. The catalogue
+# is attached as `ducklake:<url>?v=<run id>`: DuckLake accepts the query string (checked
+# against DuckDB 2.0.0 on 2026-11-17), and the edge keys its cache on it, so each run
+# misses. Its data files are new keys on each publish. Each readable copy is read as
+# `<path>?v=<first 16 hex of its hash>` (`--bypass-edge`). arc writes the stable
+# catalogue and the readable copies with `cache-control: public, max-age=60`, so without
+# the query a read is at most a minute stale once an object has been published by arc.
+#
+# The versions below are descriptors.yml's: bump the two files together.
+name: lake
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lake-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DUCKDB_VERSION: "2.0.0"
+  PYTHON_VERSION: "3.12"
+  PYYAML_VERSION: "6.0.3"
+  FRICTIONLESS_VERSION: "5.19.0"
+
+jobs:
+  lake:
+    name: the lake agrees with itself and with main
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # A finding is sorted by when its inputs last changed in git, so the checkout
+          # needs full history; lake_check.py refuses a shallow one.
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: install duckdb, pyyaml and frictionless
+        run: python -m pip install --disable-pip-version-check "duckdb==${DUCKDB_VERSION}" "pyyaml==${PYYAML_VERSION}" "frictionless==${FRICTIONLESS_VERSION}"
+      - name: every published descriptor, emitted from the lake
+        run: |
+          python scripts/emit_descriptor.py --all --tree "$RUNNER_TEMP/tree" --bypass-edge \
+            --catalog "ducklake:https://openlake.meridian.online/catalog/open.ducklake?v=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --manifest "https://openlake.meridian.online/manifest.json?v=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+      - name: the lake against itself and against main
+        run: python scripts/lake_check.py --tree "$RUNNER_TEMP/tree" --repo . --json lake-check.json
+      - name: upload the findings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lake-check
+          path: lake-check.json
+          if-no-files-found: ignore
