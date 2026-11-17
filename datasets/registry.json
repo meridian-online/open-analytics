@@ -193,6 +193,16 @@
       "protocol": "datasets/naics_2017_to_2022/arcform.yaml"
     },
     {
+      "uid": "6520e0af-63ce-4958-81f9-c3431ceeef7f",
+      "schema": "census",
+      "name": "naics_2022_titles",
+      "title": "NAICS 2022 index — business descriptions coded to industries (U.S. Census Bureau)",
+      "aliases": [],
+      "manifest": "https://openlake.meridian.online/manifest.json",
+      "doi": null,
+      "protocol": "datasets/naics_2022_titles/arcform.yaml"
+    },
+    {
       "uid": "09002603-616c-4776-ba30-f7ece4b9d551",
       "schema": "library",
       "name": "ourairports",
