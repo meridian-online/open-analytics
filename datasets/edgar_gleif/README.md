@@ -300,7 +300,7 @@ against scratch packages.
   `gleif_ra_fetch` and `datapackage_describe` operators run their frozen scripts via
   `uv run`, and `derive_join_coverage` and `stamp_descriptor` are `op: uv@1` steps
   running this repo's own Python — each pinned to its script's SHA-256 and to
-  `duckdb==1.5.5`, with the interpreter pinned in the script's PEP 723 header, so
+  `duckdb==2.0.0`, with the interpreter pinned in the script's PEP 723 header, so
   neither needs a venv to exist or a global install), and `finetype` on `PATH` (the
-  describe operator shells out to it); `arc run --param as_of=YYYY-MM-DD`. At full scale the resolve step is real compute (~100M candidate
+  describe operator shells out to it), with `FINETYPE_DUCKDB_EXT` at its DuckDB 2.0 extension; `arc run --param as_of=YYYY-MM-DD`. At full scale the resolve step is real compute (~100M candidate
   pairs) — run it deliberately.
