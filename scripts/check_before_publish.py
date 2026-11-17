@@ -5,13 +5,19 @@ Three checks can only be known at the point of publishing, because each needs bo
 what this Run built and what the open lake already holds, and a fourth holds what this
 Run built to the overrides committed at HEAD:
 
-  label agreement  — `check_label_agreement.py --strict` over every
-                     `<slug>/datapackage.json`, the coverage the lake check has: the
-                     built descriptor beside every other such table's, so a field
-                     labelled one way here and another way in the lake is caught before
-                     it lands. A per-table `<name>.datapackage.json` (a Protocol that
-                     publishes several tables) is NOT compared; widening the coverage
-                     is a separate change.
+  label agreement  — `check_label_agreement.py --strict --involving <slug>` over
+                     every `<slug>/datapackage.json`: the built descriptor beside every
+                     other such table's, so a field labelled one way here and another
+                     way in the lake is caught before it lands. Only what involves the
+                     built package is judged: its own differences, and the reasons and
+                     corrections that name it. Another Protocol's differences and
+                     reasons are the lake check's, so a reason merged for a list not yet
+                     published blocks no other Protocol's publish. A reason naming a
+                     table the lake does not hold yet is awaiting, not stale, and closes
+                     the difference on the members the tree does hold; two lists merged
+                     before either publishes each pass on their own. A per-table
+                     `<name>.datapackage.json` (a Protocol that publishes several
+                     tables) is NOT compared; widening the coverage is a separate change.
   frictionless     — `check_frictionless.py --only <each built package>`: the
                      reference implementation loads each built descriptor.
   descriptors      — `check_descriptors.py --only <each built package>
@@ -349,7 +355,7 @@ def main(argv: list[str] | None = None) -> int:
         run(
             "label agreement",
             check_label_agreement.main,
-            ["--strict", "--datasets-dir", str(datasets)],
+            ["--strict", "--involving", args.slug, "--datasets-dir", str(datasets)],
             TREE / "label_agreement.json",
         ),
         run(

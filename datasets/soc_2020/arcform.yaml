@@ -258,7 +258,7 @@ steps:
     op: uv@1
     with:
       script: ../../scripts/emit_descriptor.py
-      sha256: 300a284f5a2fdc7be0ae0d1bffb5d8962860bba10382f45c84634fe073181a2e
+      sha256: 897e2c94fc2c51187f852f595d8bd61a04308ecac6a35a2f28e57c1183e2aaec
       deps:
         - duckdb==2.0.0
         - pyyaml==6.0.3
@@ -369,10 +369,11 @@ steps:
         - build/soc_2010_to_2020.datapackage.json
 
   # ── Check: the built tables against the lake, before they are published ────────
-  # check_before_publish.py runs the three checks that need both this build and what the
-  # lake holds: label agreement (strict) across the descriptors in the bundle, the
-  # frictionless reference implementation over each built descriptor, and
-  # check_descriptors.py's rules read against the local Parquet. Label agreement reads
+  # check_before_publish.py runs four checks on this build. Three read the lake too:
+  # label agreement (strict, on what involves this table) across the descriptors in the
+  # bundle, the frictionless reference implementation over each built descriptor, and
+  # check_descriptors.py's rules read against the local Parquet. The fourth holds the
+  # build to the committed overrides. Label agreement reads
   # only a Protocol's own datapackage.json, as the lake check does, so these three
   # per-table descriptors are not yet compared by it. A failing check fails the run, so
   # publish never runs. Each built descriptor keeps the path it is published
@@ -384,7 +385,7 @@ steps:
     op: uv@1
     with:
       script: ../../scripts/check_before_publish.py
-      sha256: a3d0c0d28f8e0fd380e67599243492ddbda18905b404a0056416936d579831ca
+      sha256: 53bd12b2ba03901deea8a9d559764639557ca5b7539567d10abda6b0a62e99a5
       deps:
         - duckdb==2.0.0
         - pyyaml==6.0.3

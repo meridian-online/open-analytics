@@ -243,6 +243,59 @@ class CheckBeforePublish(Scratch):
         self.assertIn("FAILED under --strict", result.stdout)
         self.assertNotIn("no longer describe", self.both(result))
 
+    # ── label agreement judges only what involves the built package ─────────────
+    def merged_siblings(self) -> None:
+        """`alpha` is in the lake; `y1` and `y2` merged with one reason pinning all three."""
+        self.protocol("alpha", [("t.alpha", "datapackage.json")])
+        self.protocol("y1", [("t.y1", "datapackage.json")])
+        self.protocol("y2", [("t.y2", "datapackage.json")])
+        self.bundle["t.alpha"] = code_list("alpha", "t.alpha")
+        values = {"alpha.description": PLAIN, "y1.description": WORD, "y2.description": WORD}
+        reason = {"field": "description", "property": "x-finetype-label", "values": values, "reason": "Two registers."}
+        (self.datasets / "label-agreement.json").write_text(json.dumps({"reasons": [reason]}, indent=2) + "\n")
+
+    def test_two_lists_merged_with_reasons_and_neither_published_each_pass_on_their_own(self) -> None:
+        for slug, other in (("y1", "y2"), ("y2", "y1")):
+            with self.subTest(slug=slug):
+                self.built = []
+                self.merged_siblings()
+                self.build(slug, "datapackage.json", code_list(slug, f"t.{slug}", description_label=WORD))
+                result, report = self.run_check(slug)
+                self.assertEqual(result.returncode, EXIT_OK, self.both(result))
+                self.assertChecks(report, label_agreement=True, frictionless=True, descriptors=True)
+                label = next(c for c in report["checks"] if c["check"] == "label agreement")
+                self.assertEqual(label["findings"]["stale_reasons"], [])
+                self.assertEqual([r["awaiting"] for r in label["findings"]["awaiting_reasons"]], [[other]])
+                self.assertIn("x-finetype-label differs [accounted for]", label["output"])
+
+    def test_a_reason_merged_for_unpublished_lists_blocks_no_other_publish(self) -> None:
+        self.merged_siblings()
+        self.build("alpha", "datapackage.json", code_list("alpha", "t.alpha"))
+        result, report = self.run_check("alpha")
+        self.assertEqual(result.returncode, EXIT_OK, self.both(result))
+        self.assertChecks(report, label_agreement=True, frictionless=True, descriptors=True)
+
+    def test_the_built_packages_own_new_difference_with_no_reason_is_still_refused(self) -> None:
+        self.merged_siblings()
+        (self.datasets / "label-agreement.json").unlink()
+        self.build("y1", "datapackage.json", code_list("y1", "t.y1", description_label=WORD))
+        result, report = self.run_check("y1")
+        self.assertEqual(result.returncode, EXIT_FAILED, self.both(result))
+        self.assertChecks(report, label_agreement=False, frictionless=True, descriptors=True)
+        self.assertIn("x-finetype-label differs [OPEN]", result.stdout)
+        self.assertIn("FAILED under --strict", result.stdout)
+
+    def test_a_stale_reason_involving_the_built_package_is_still_refused(self) -> None:
+        self.two_code_lists()
+        values = {"alpha.description": PLAIN, "beta.description": WORD}  # beta in the lake declares PLAIN
+        reason = {"field": "description", "property": "x-finetype-label", "values": values, "reason": "Stale."}
+        (self.datasets / "label-agreement.json").write_text(json.dumps({"reasons": [reason]}) + "\n")
+        self.build("alpha", "datapackage.json", code_list("alpha", "t.alpha"))
+        result, report = self.run_check()
+        self.assertEqual(result.returncode, EXIT_FAILED, self.both(result))
+        self.assertChecks(report, label_agreement=False, frictionless=True, descriptors=True)
+        self.assertIn("it pins beta.description", result.stdout)
+
     def test_override_broken_by_data(self) -> None:
         self.two_code_lists()
         # The sibling declares the same, so label agreement has nothing to say: only the data does.

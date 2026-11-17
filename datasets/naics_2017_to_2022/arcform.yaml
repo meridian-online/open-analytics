@@ -146,7 +146,7 @@ steps:
     op: uv@1
     with:
       script: ../../scripts/emit_descriptor.py
-      sha256: 300a284f5a2fdc7be0ae0d1bffb5d8962860bba10382f45c84634fe073181a2e
+      sha256: 897e2c94fc2c51187f852f595d8bd61a04308ecac6a35a2f28e57c1183e2aaec
       deps:
         - duckdb==2.0.0
         - pyyaml==6.0.3
@@ -196,10 +196,11 @@ steps:
         - build/datapackage.json
 
   # ── Check: the built table against the lake, before it is published ─────────────
-  # check_before_publish.py runs the three checks that need both this build and what the
-  # lake holds: label agreement (strict) against every other table's descriptor in the
-  # bundle, the frictionless reference implementation over the built descriptor, and
-  # check_descriptors.py's rules read against the local Parquet. A failing check fails
+  # check_before_publish.py runs four checks on this build. Three read the lake too:
+  # label agreement (strict, on what involves this table) against every other table's
+  # descriptor in the bundle, the frictionless reference implementation over the built
+  # descriptor, and check_descriptors.py's rules read against the local Parquet. The
+  # fourth holds the build to the committed overrides. A failing check fails
   # the run, so publish never runs. Each built descriptor keeps the path it is published
   # at; the script reads the bytes from the local Parquet instead. It imports its
   # sibling checks in-process and the digest pins only its own bytes, so those scripts
@@ -209,7 +210,7 @@ steps:
     op: uv@1
     with:
       script: ../../scripts/check_before_publish.py
-      sha256: a3d0c0d28f8e0fd380e67599243492ddbda18905b404a0056416936d579831ca
+      sha256: 53bd12b2ba03901deea8a9d559764639557ca5b7539567d10abda6b0a62e99a5
       deps:
         - duckdb==2.0.0
         - pyyaml==6.0.3

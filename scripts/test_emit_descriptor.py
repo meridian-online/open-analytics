@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -227,6 +228,24 @@ class Emit(unittest.TestCase):
             tree = (out / "datasets/fips/datapackage.json").read_text(encoding="utf-8")
             self.assertEqual(single, tree)
             self.assertIn("Census\u2019s", single.encode().decode())
+
+
+    def test_single_table_stdout_is_utf8_whatever_the_locale(self) -> None:
+        stored = {"census.fips": descriptor("fips", FIPS_PATH)}
+        stored["census.fips"]["description"] = "Census\u2019s codes"
+        with tempfile.TemporaryDirectory() as tmp:
+            s = Scratch(tmp, stored=stored, entries={"census/fips": ENTRIES["census/fips"]})
+            out = Path(tmp) / "single.json"
+            self.assertEqual(s.run("census.fips", "--out", str(out)).returncode, 0)
+            env = {**os.environ, "PYTHONIOENCODING": "ascii", "LC_ALL": "C", "LANG": "C", "PYTHONUTF8": "0"}
+            r = subprocess.run(
+                [sys.executable, str(EMITTER), "--catalog", f"ducklake:{s.catalog}", "--manifest", str(s.manifest),
+                 "--datasets", str(s.datasets), "census.fips"],
+                capture_output=True, check=False, env=env,
+            )
+            self.assertEqual(r.returncode, 0, r.stderr.decode("utf-8", "replace"))
+            self.assertEqual(r.stdout, out.read_bytes())
+            self.assertIn("Census\u2019s".encode("utf-8"), r.stdout)
 
 
 class LakeBundleFixtures(unittest.TestCase):

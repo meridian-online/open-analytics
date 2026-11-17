@@ -30,6 +30,7 @@ SCRIPT = Path(__file__).with_name("lake_check.py")
 JAN = datetime(2026, 1, 1, tzinfo=timezone.utc)
 FEB = datetime(2026, 2, 1, tzinfo=timezone.utc)
 MAR = datetime(2026, 3, 1, tzinfo=timezone.utc)
+APR = datetime(2026, 4, 1, tzinfo=timezone.utc)
 
 
 def commit(repo: Path, when: datetime, files: dict[str, str]) -> None:
@@ -386,13 +387,85 @@ class AdapterTest(unittest.TestCase):
         self.labelled("alpha", "representation.text.word")
         self.labelled("beta", "representation.identifier.numeric_code")
         commit(self.repo, JAN, {"datasets/label-agreement.json": "{}\n"})
-        ran, found = lc.check_labels(self.tree(), self.work)
+        ran, found = lc.check_labels(self.tree(), self.work, self.repo)
         self.assertEqual(ran.status, 1, ran.log)
         self.assertEqual(len(found), 1, [f.detail for f in found])
         self.assertEqual(sorted(s.slug for s in found[0].subjects), ["alpha", "beta"])
         self.assertEqual(self.sorted_kinds(found), [lc.DRIFT])
+        # An edit to the reasons file that names nothing of this difference leaves it drift.
         commit(self.repo, MAR, {"datasets/label-agreement.json": '{"reasons": []}\n'})
+        ran, found = lc.check_labels(self.tree(), self.work, self.repo)
+        self.assertEqual(self.sorted_kinds(found), [lc.DRIFT])
+        # Removing a reason for this field after the publish is a change on main awaiting it.
+        entry = {"field": "code", "property": "x-finetype-label", "values": {"alpha.code": "a", "beta.code": "b"}, "reason": "r"}
+        commit(self.repo, MAR, {"datasets/label-agreement.json": json.dumps({"reasons": [entry]}, indent=2) + "\n"})
+        commit(self.repo, APR, {"datasets/label-agreement.json": '{"reasons": []}\n'})
+        ran, found = lc.check_labels(self.tree(), self.work, self.repo)
         self.assertEqual(self.sorted_kinds(found), [lc.AWAITING])
+
+    def reasons_file(self, entries: list[dict]) -> str:
+        text = json.dumps({"reasons": entries}, indent=2) + "\n"
+        (self.datasets / "label-agreement.json").write_text(text, encoding="utf-8")
+        return text
+
+    def test_a_label_finding_is_dated_by_its_own_reason_entry(self) -> None:
+        """An unrelated reason edited after the publish leaves a stale reason, and its open difference, drift."""
+        self.labelled("alpha", "representation.text.word")
+        self.labelled("beta", "representation.identifier.numeric_code")
+        stale = {"field": "code", "property": "x-finetype-label", "values": {"alpha.code": "representation.text.word", "beta.code": "x"}, "reason": "Pinned to a value beta no longer declares."}
+        other = {"concept": "some.other.label", "property": "constraints.maxLength", "values": {"p.f": 1, "q.f": 2}, "reason": "Unrelated."}
+        commit(self.repo, JAN, {"datasets/label-agreement.json": self.reasons_file([stale, other])})
+        ran, found = lc.check_labels(self.tree(), self.work, self.repo)
+        self.assertEqual(ran.status, 1, ran.log)
+        self.assertEqual(sorted(f.detail.rsplit(": ", 1)[1] for f in found), ["a stated reason matches no difference", "a stated reason matches no difference", "no stated reason"])
+        code = [f for f in found if "'code'" in f.detail]
+        self.assertEqual(len(code), 2)
+        self.assertEqual(set(self.sorted_kinds(code)), {lc.DRIFT})
+
+        commit(self.repo, MAR, {"datasets/label-agreement.json": self.reasons_file([stale, {**other, "reason": "Reworded."}])})
+        ran, found = lc.check_labels(self.tree(), self.work, self.repo)
+        kinds = {f.detail: lc.sort_finding(self.repo, self.tree(), f) for f in found}
+        self.assertEqual(kinds["field 'code', x-finetype-label: a stated reason matches no difference"], lc.DRIFT)
+        self.assertEqual(kinds["field 'code', x-finetype-label: no stated reason"], lc.DRIFT)
+
+        moved = {**stale, "values": {"alpha.code": "representation.text.word", "beta.code": "y"}}
+        commit(self.repo, APR, {"datasets/label-agreement.json": self.reasons_file([moved, {**other, "reason": "Reworded."}])})
+        ran, found = lc.check_labels(self.tree(), self.work, self.repo)
+        kinds = {f.detail: lc.sort_finding(self.repo, self.tree(), f) for f in found}
+        self.assertEqual(kinds["field 'code', x-finetype-label: a stated reason matches no difference"], lc.AWAITING)
+        self.assertEqual(kinds["field 'code', x-finetype-label: no stated reason"], lc.AWAITING)
+
+    def catalogue_findings(self) -> list[lc.Finding]:
+        ran, found = lc.check_descriptors(self.tree(), self.repo, self.work, {})
+        rows = [f for f in found if "catalogue.rows" in f.detail]
+        self.assertEqual(len(rows), 1, ran.log)
+        return rows
+
+    def test_an_unrelated_readme_edit_after_the_publish_leaves_a_row_mismatch_drift(self) -> None:
+        parquet = self.package("widgets", [{"name": "n", "type": "integer"}], "SELECT 1 AS n")
+        # The descriptor names the object by the address the row links to, as a published one does.
+        descriptor = self.datasets / "widgets" / "datapackage.json"
+        document = json.loads(descriptor.read_text(encoding="utf-8"))
+        document["resources"][0]["path"] = str(parquet)
+        descriptor.write_text(json.dumps(document), encoding="utf-8")
+        shutil.copy(REPO_DATASETS / "licence-notices.json", self.datasets / "licence-notices.json")
+        example = self.repo / "examples" / "demo" / "datapackage.json"
+        example.parent.mkdir(parents=True)
+        example.write_text(json.dumps({"name": "demo", "licenses": LICENCE, "resources": []}), encoding="utf-8")
+        table = "| Dataset | Rows | Readable copy |\n|---|---|---|\n"
+        row = f"| widgets | 2 | [w]({parquet}) |\n"  # the object holds 1 row
+        commit(self.repo, JAN, {"README.md": "# Catalogue\n\n" + table + row})
+        self.assertEqual(self.sorted_kinds(self.catalogue_findings()), [lc.DRIFT])
+
+        # Prose added above the table after the publish: the row moves down, and is untouched.
+        commit(self.repo, MAR, {"README.md": "# Catalogue\n\nA new paragraph.\n\nAnother.\n\n" + table + row})
+        found = self.catalogue_findings()
+        self.assertEqual(found[0].lines, [("README.md", 9, 9)])
+        self.assertEqual(self.sorted_kinds(found), [lc.DRIFT])
+
+        # The row itself edited after the publish is main ahead of the lake.
+        commit(self.repo, APR, {"README.md": "# Catalogue\n\nA new paragraph.\n\nAnother.\n\n" + table + row.replace("| 2 |", "| 3 |")})
+        self.assertEqual(self.sorted_kinds(self.catalogue_findings()), [lc.AWAITING])
 
     def test_frictionless(self) -> None:
         import frictionless

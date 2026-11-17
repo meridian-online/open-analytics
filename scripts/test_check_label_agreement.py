@@ -892,6 +892,92 @@ LAKE_BUNDLE = Path(__file__).resolve().parent / "testdata" / "lake_descriptors.j
 SHIPPED = Path(__file__).resolve().parent.parent / "datasets" / "label-agreement.json"
 
 
+class InvolvingJudgesOnlyTheNamedPackages(ScratchTree):
+    """`--involving`, the pre-publish view: one package's publish is judged on its own.
+
+    `alpha` is in the lake; `y1` and `y2` are two lists merged on one day, each with a
+    reason pinning all three, and neither published. Each publish lays only its own list
+    over the lake, so the other is absent from its tree.
+    """
+
+    LABEL_NAME = "representation.text.entity_name"
+
+    def lst(self, slug: str, max_length: int) -> dict[str, Any]:
+        return package(slug, [field("legal_name", self.LABEL_NAME, constraints={"maxLength": max_length})])
+
+    def entry(self, values: dict[str, Any]) -> dict[str, Any]:
+        return {"concept": self.LABEL_NAME, "property": "constraints.maxLength", "values": values, "reason": "Registers differ."}
+
+    def siblings(self) -> None:
+        self.write(self.lst("alpha", 500))
+        self.reasons(self.entry({"alpha.legal_name": 500, "y1.legal_name": 200, "y2.legal_name": 300}))
+
+    def test_without_involving_the_absent_sibling_makes_the_reason_stale(self) -> None:
+        """The lake check's view is unchanged: a reason naming an absent package is stale."""
+        self.siblings()
+        self.write(self.lst("y1", 200))
+        result = self.run_check("--strict")
+        self.assertEqual(result.returncode, EXIT_DISAGREEMENT, self.both(result))
+        self.assertIn("no longer describe any difference", result.stderr)
+
+    def test_each_of_two_unpublished_siblings_passes_on_its_own(self) -> None:
+        self.siblings()
+        self.write(self.lst("y1", 200))
+        result = self.run_check("--strict", "--involving", "y1", "--json", str(self.datasets / "out.json"))
+        self.assertEqual(result.returncode, EXIT_OK, self.both(result))
+        self.assertIn("awaiting y2; closes the difference on the members present", result.stdout)
+        report = json.loads((self.datasets / "out.json").read_text(encoding="utf-8"))
+        self.assertEqual(report["stale_reasons"], [])
+        self.assertEqual([r["awaiting"] for r in report["awaiting_reasons"]], [["y2"]])
+
+        (self.datasets / "y1").joinpath("datapackage.json").unlink()
+        self.write(self.lst("y2", 300))
+        result = self.run_check("--strict", "--involving", "y2")
+        self.assertEqual(result.returncode, EXIT_OK, self.both(result))
+        self.assertIn("awaiting y1", result.stdout)
+
+    def test_the_named_packages_own_new_difference_with_no_reason_is_refused(self) -> None:
+        self.write(self.lst("alpha", 500))
+        self.write(self.lst("y1", 200))
+        result = self.run_check("--strict", "--involving", "y1")
+        self.assertEqual(result.returncode, EXIT_DISAGREEMENT, self.both(result))
+        self.assertIn("constraints.maxLength differs [OPEN]", result.stdout)
+        self.assertIn("FAILED under --strict", result.stderr)
+
+    def test_a_present_member_off_its_pin_does_not_close_the_difference(self) -> None:
+        """The partial match is exact on the members present, so it licenses nothing new."""
+        self.siblings()
+        self.write(self.lst("y1", 250))
+        result = self.run_check("--strict", "--involving", "y1")
+        self.assertEqual(result.returncode, EXIT_DISAGREEMENT, self.both(result))
+        self.assertIn("constraints.maxLength differs [OPEN]", result.stdout)
+        self.assertIn("awaiting y2; matches nothing yet", result.stdout)
+
+    def test_a_stale_reason_involving_the_named_package_is_refused(self) -> None:
+        self.write(self.lst("alpha", 500))
+        self.write(self.lst("y1", 250))
+        self.reasons(self.entry({"alpha.legal_name": 500, "y1.legal_name": 200}))
+        result = self.run_check("--involving", "y1")
+        self.assertEqual(result.returncode, EXIT_DISAGREEMENT, self.both(result))
+        self.assertIn("it pins y1.legal_name: 200", result.stderr)
+
+    def test_differences_reasons_and_corrections_of_other_packages_are_left_to_the_lake_check(self) -> None:
+        self.write(self.lst("alpha", 500))
+        self.write(self.lst("beta", 400))  # alpha and beta differ, with no reason
+        self.write(package("y1", [field("other", "representation.text.word")]))
+        self.agreement(
+            reasons=[self.entry({"alpha.legal_name": 500, "beta.legal_name": 100})],  # stale
+            corrections=[correction()],  # beta declares 400, not the pinned 200: moved
+        )
+        result = self.run_check("--strict", "--involving", "y1")
+        self.assertEqual(result.returncode, EXIT_OK, self.both(result))
+        self.assertIn(
+            "left to the lake check: 1 difference(s), 1 unmatched reason(s) and 1 correction(s)", result.stdout
+        )
+        result = self.run_check("--strict", "--involving", "beta")
+        self.assertEqual(result.returncode, EXIT_DISAGREEMENT, self.both(result))
+
+
 def lake_tree(root: Path) -> Path:
     """The lake's descriptors as a datasets/ tree, beside the agreement file this repository ships.
 

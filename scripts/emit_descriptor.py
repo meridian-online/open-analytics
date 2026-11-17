@@ -205,7 +205,12 @@ def main() -> int:
             if args.out:
                 args.out.write_text(text, encoding="utf-8")
             else:
-                sys.stdout.write(text)
+                # UTF-8 whatever the locale, and the same bytes `--out` writes: a
+                # descriptor carries non-ASCII prose, and `> datapackage.json` is the
+                # advertised use, so the console encoding must not decide the file's.
+                sys.stdout.flush()
+                sys.stdout.buffer.write(text.encode("utf-8"))
+                sys.stdout.buffer.flush()
             return 0
         wanted = {t for _, t, _ in protocol_tables(args.datasets)}
         descriptors = load_descriptors(args.catalog, args.manifest, wanted)

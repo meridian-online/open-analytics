@@ -64,11 +64,11 @@ The emitter needs `duckdb` and `pyyaml`, and no credential; `--all --bundle FILE
 | Dataset | Rows | License | Source | Readable copy |
 |---|---|---|---|---|
 | GLEIF — Legal Entity Identifiers | 3.50M | CC0-1.0 | [GLEIF](https://www.gleif.org/) | [lei.parquet](https://openlake.meridian.online/gleif/lei.parquet) |
-| SEC EDGAR — Company Tickers | 10,404 | Public domain | [SEC](https://www.sec.gov/) | [company_tickers_exchange.parquet](https://openlake.meridian.online/sec/company_tickers_exchange.parquet) |
+| SEC EDGAR — Company Tickers | 10K | Public domain | [SEC](https://www.sec.gov/) | [company_tickers_exchange.parquet](https://openlake.meridian.online/sec/company_tickers_exchange.parquet) |
 | NAICS — Industry Classification (2022) | 2,125 | Public domain | [U.S. Census Bureau](https://www.census.gov/naics/) | [naics_2022.parquet](https://openlake.meridian.online/census/naics_2022.parquet) |
 | NAICS 2017 to 2022 concordance | 1,150 | Public domain | [U.S. Census Bureau](https://www.census.gov/naics/) | [naics_2017_to_2022.parquet](https://openlake.meridian.online/census/naics_2017_to_2022.parquet) |
 | NAICS 2022 index — business descriptions coded to industries | 20,373 | Public domain | [U.S. Census Bureau](https://www.census.gov/naics/) | [naics_2022_titles.parquet](https://openlake.meridian.online/census/naics_2022_titles.parquet) |
-| EDGAR ↔ GLEIF — company-to-LEI crosswalk | 213,033 | CC0-1.0 | SEC + GLEIF | [edgar_lei.parquet](https://openlake.meridian.online/library/edgar_lei.parquet) |
+| EDGAR ↔ GLEIF — company-to-LEI crosswalk | 0.2M | CC0-1.0 | SEC + GLEIF | [edgar_lei.parquet](https://openlake.meridian.online/library/edgar_lei.parquet) |
 | HTS — Harmonized Tariff Schedule of the United States | 42,036 | Public domain | [USITC](https://hts.usitc.gov/) | [hts.parquet](https://openlake.meridian.online/usitc/hts.parquet) |
 | Schedule B — U.S. Export Classification Codes | 16,727 | Public domain | [U.S. Census Bureau](https://www.census.gov/foreign-trade/schedules/b/index.html) | [schedule_b.parquet](https://openlake.meridian.online/census/schedule_b.parquet) |
 | FIPS — U.S. State and County Codes | 3,301 | Public domain | [U.S. Census Bureau](https://www.census.gov/library/reference/code-lists/ansi.html) | [fips.parquet](https://openlake.meridian.online/census/fips.parquet) |

@@ -44,7 +44,23 @@ The repository inputs, each finding to its own:
   engine, no run record      the Protocol's `arcform.yaml` (see below)
 
 An input's time is `git log -1 --format=%cI -- <path>`, so the checkout needs full
-history. The engine pin a table is held to is the one its stamp steps resolved in the
+history. Two inputs are dated more narrowly, because both change for reasons that have
+nothing to do with the table a finding is about, and a whole-file time would let any
+such edit turn a real mismatch into "awaiting publish":
+
+  catalogue rows    the last commit that touched the row's own line in README.md
+                    (`git log -L<n>,<n>:README.md`). A published table with no row is
+                    dated by the last commit whose added or removed lines name its
+                    object (`git log -G`), which is a row's removal.
+  label agreement   the last commit that touched the reason or correction entry the
+                    finding is about (`git log -L` over the entry's lines in HEAD's
+                    `datasets/label-agreement.json`). An open difference is dated by
+                    the entries for its grouping and property, and by any commit whose
+                    added or removed lines name its key, which is a reason's removal.
+                    A difference no commit has reasoned about is dated never: drift.
+
+A line range git cannot follow, as in a checkout whose README.md differs from HEAD, is
+dated by the whole file instead. The engine pin a table is held to is the one its stamp steps resolved in the
 Run that published it, read from the lake's run record (`manifest.json`'s `run.record`,
 a relative reference resolved against the manifest's URL); a mismatch is drift. A table
 whose record is missing or unreadable is held to its Protocol's `arcform.yaml` at HEAD
@@ -62,6 +78,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -122,6 +139,82 @@ def last_change(repo: Path, paths: list[str]) -> datetime:
     return parse_time(done.stdout) or NEVER
 
 
+def first_time(repo: Path, args: list[str]) -> datetime | None:
+    """The commit time `git log -1 <args>` names first, or None when git names none or fails."""
+    done = subprocess.run(
+        ["git", "-C", str(repo), "log", "-1", "-s", "--format=%x00%cI", *args],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if done.returncode != 0:
+        return None
+    for line in done.stdout.splitlines():
+        if line.startswith("\x00"):
+            return parse_time(line[1:])
+    return NEVER
+
+
+def dated(repo: Path, finding: "Finding") -> datetime:
+    """When the repository input a finding compares the lake with last changed."""
+    if not (finding.lines or finding.mentions):
+        return last_change(repo, finding.inputs) if finding.inputs else NEVER
+    times = [NEVER]
+    for path, first, last in finding.lines:
+        moment = first_time(repo, [f"-L{first},{last}:{path}"])
+        times.append(moment if moment is not None else last_change(repo, [path]))
+    for path, pattern in finding.mentions:
+        moment = first_time(repo, [f"-G{pattern}", "--", path])
+        if moment is None:
+            raise Unrunnable(f"git log -G over {path} in {repo} failed")
+        times.append(moment)
+    return max(times)
+
+
+def basic_regex(text: str) -> str:
+    """`text` as a POSIX basic regular expression matching it literally."""
+    return "".join("\\" + ch if ch in ".[]*^$\\" else ch for ch in text)
+
+
+def entry_spans(text: str) -> dict[str, list[tuple[int, int, Any]]]:
+    """Each top-level list's elements in a JSON document, with the 1-based lines each spans."""
+    decoder = json.JSONDecoder()
+
+    def skip(at: int) -> int:
+        while at < len(text) and text[at] in " \t\r\n":
+            at += 1
+        return at
+
+    def line(at: int) -> int:
+        return text.count("\n", 0, at) + 1
+
+    spans: dict[str, list[tuple[int, int, Any]]] = {}
+    at = skip(0)
+    if text[at:at + 1] != "{":
+        return spans
+    at = skip(at + 1)
+    while at < len(text) and text[at] != "}":
+        key, at = decoder.raw_decode(text, at)
+        at = skip(skip(at) + 1)  # past the colon
+        if text[at] == "[":
+            items = []
+            at = skip(at + 1)
+            while text[at] != "]":
+                value, end = decoder.raw_decode(text, at)
+                items.append((line(at), line(end - 1), value))
+                at = skip(end)
+                if text[at] == ",":
+                    at = skip(at + 1)
+            spans[key] = items
+            at += 1
+        else:
+            _, at = decoder.raw_decode(text, at)
+        at = skip(at)
+        if text[at:at + 1] == ",":
+            at = skip(at + 1)
+    return spans
+
+
 @dataclass
 class Subject:
     """A table a finding is about: its Protocol's directory and its descriptor in the tree."""
@@ -137,6 +230,9 @@ class Finding:
     subjects: list[Subject] = field(default_factory=list)
     inputs: list[str] = field(default_factory=list)  # repository paths beyond datasets/<slug>/
     lake_only: bool = False  # the lake against itself: drift whatever git says
+    # When either is set, the finding is dated by these instead of by `inputs` whole:
+    lines: list[tuple[str, int, int]] = field(default_factory=list)  # (path, first, last) for `git log -L`
+    mentions: list[tuple[str, str]] = field(default_factory=list)  # (path, basic regex) for `git log -G`
     kind: str = ""
     published_at: str | None = None
     last_change_at: str | None = None
@@ -156,7 +252,7 @@ def sort_finding(repo: Path, tree: "Tree", finding: Finding) -> Kind:
     kinds = []
     for subject in finding.subjects:
         published = tree.created(subject.descriptor)
-        changed = last_change(repo, finding.inputs) if finding.inputs else NEVER
+        changed = dated(repo, finding)
         kinds.append(classify(subject.slug, published, changed))
         finding.published_at = published.isoformat() if published else None
         finding.last_change_at = changed.isoformat() if changed is not NEVER else None
@@ -276,14 +372,23 @@ def check_descriptors(tree: Tree, repo: Path, work: Path, links: dict[str, str])
         rule = item["rule"]
         detail = f"{rule}: {item['detail']}"
         if rule.startswith("catalogue."):
-            subject = tree.subject_for_path(item["resource"]) or tree.subject_for_object(item["resource"])
+            # The object a row links to names its table; a descriptor path (`catalogue.missing`) is one.
+            subject = tree.subject_for_object(item["resource"]) or tree.subject_for_path(item["resource"])
             if subject is None:
                 # A row linking an object the lake does not hold: awaiting its first publish
                 # when a Protocol here publishes that address, otherwise a wrong link.
                 address = item["resource"].split("?", 1)[0].split("://", 1)[-1].split("/", 1)[-1]
                 slug = links.get(address.removesuffix(".parquet"))
                 subject = Subject(slug, None) if slug else None
-            return Finding("descriptors", f"{item['resource']}: {detail}", [subject] if subject else [], ["README.md"])
+            found = Finding("descriptors", f"{item['resource']}: {detail}", [subject] if subject else [], ["README.md"])
+            row = re.match(r"line (\d+) ", str(item["detail"]))
+            if row:
+                found.lines = [("README.md", int(row.group(1)), int(row.group(1)))]
+            elif subject is not None and subject.descriptor in tree.documents:
+                resources = tree.documents[subject.descriptor].get("resources") or [{}]
+                link = str(resources[0].get("path", "")).split("?", 1)[0].split("://", 1)[-1].split("/", 1)[-1]
+                found.mentions = [("README.md", basic_regex(link or subject.descriptor))]
+            return found
         subject = tree.subject_for_path(item["package"])
         where = f"{item['package']} :: {item['resource']}: {detail}"
         if subject is None:
@@ -429,7 +534,7 @@ def check_engine(tree: Tree, work: Path, manifest_source: str) -> tuple[Ran, lis
     return ran, crashed(ran, each("engine", read_json(out).get("mismatches", []), convert)), notes
 
 
-def check_labels(tree: Tree, work: Path) -> tuple[Ran, list[Finding]]:
+def check_labels(tree: Tree, work: Path, repo: Path = ROOT) -> tuple[Ran, list[Finding]]:
     out = work / "labels.json"
     ran = run("labels", [str(SCRIPTS / "check_label_agreement.py"), "--strict", "--datasets-dir", str(tree.datasets), "--json", str(out)])
     report = read_json(out)
@@ -437,20 +542,51 @@ def check_labels(tree: Tree, work: Path) -> tuple[Ran, list[Finding]]:
     def subjects(values: dict[str, Any]) -> list[Subject]:
         return [tree.package(slug) for slug in sorted({ident.split(".", 1)[0] for ident in values})]
 
-    inputs = ["datasets/label-agreement.json"]
+    path = "datasets/label-agreement.json"
+    inputs = [path]
+    shown = subprocess.run(["git", "-C", str(repo), "show", f"HEAD:{path}"], capture_output=True, text=True, check=False)
+    try:
+        spans = entry_spans(shown.stdout) if shown.returncode == 0 else {}
+    except (ValueError, IndexError):
+        spans = {}
+
+    def grouping(kind: str) -> str:
+        return "concept" if kind == "concept" else "field"
+
+    def reason_lines(item: dict[str, Any], *, values: bool) -> list[tuple[str, int, int]]:
+        group = grouping(item["kind"])
+        return [
+            (path, first, last)
+            for first, last, entry in spans.get("reasons", [])
+            if isinstance(entry, dict)
+            and entry.get(group) == item["key"]
+            and entry.get("property") == item["property"]
+            and (not values or entry.get("values") == item["values"])
+        ]
 
     def open_difference(item: dict[str, Any]) -> Finding | None:
         if item.get("reason"):
             return None
-        return Finding("labels", f"{item['kind']} {item['key']!r}, {item['property']}: no stated reason", subjects(item["values"]), inputs)
+        found = Finding("labels", f"{item['kind']} {item['key']!r}, {item['property']}: no stated reason", subjects(item["values"]), inputs)
+        found.lines = reason_lines(item, values=False)
+        found.mentions = [(path, basic_regex(f'"{grouping(item["kind"])}": "{item["key"]}"'))]
+        return found
 
     def stale(item: dict[str, Any]) -> Finding:
-        return Finding("labels", f"{item['kind']} {item['key']!r}, {item['property']}: a stated reason matches no difference", subjects(item["values"]), inputs)
+        found = Finding("labels", f"{item['kind']} {item['key']!r}, {item['property']}: a stated reason matches no difference", subjects(item["values"]), inputs)
+        found.lines = reason_lines(item, values=True)  # none found at HEAD: the whole file dates it
+        return found
 
     def lapsed(item: dict[str, Any]) -> Finding | None:
         if item["state"] == "declared":
             return None
-        return Finding("labels", f"{item['package']} {item['pointer']}: correction {item['state']}", [tree.package(item["package"])], inputs)
+        found = Finding("labels", f"{item['package']} {item['pointer']}: correction {item['state']}", [tree.package(item["package"])], inputs)
+        found.lines = [
+            (path, first, last)
+            for first, last, entry in spans.get("corrections", [])
+            if isinstance(entry, dict) and entry.get("package") == item["package"] and entry.get("pointer") == item["pointer"]
+        ]
+        return found
 
     found = [
         *each("labels", report.get("differences", []), open_difference),
@@ -610,7 +746,7 @@ def main(argv: list[str] | None = None) -> int:
             steps = {
                 "descriptors": lambda: check_descriptors(tree, repo, work, protocol_tables(repo)),
                 "engine": lambda: engine_with_notes(check_engine(tree, work, args.manifest)),
-                "labels": lambda: check_labels(tree, work),
+                "labels": lambda: check_labels(tree, work, repo),
                 "frictionless": lambda: check_frictionless(tree, work),
                 "code_list": lambda: check_code_list(tree, work),
             }
