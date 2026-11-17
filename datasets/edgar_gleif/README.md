@@ -209,8 +209,6 @@ The last step publishes `library.edgar_lei` into the open lake (<https://openlak
 
 `library.edgar_lei` is already in the lake, so before a live publish check that the rebuilt table still has the live table's shape: `python scripts/check_lake_shape.py --catalog https://openlake.meridian.online/catalog/open.ducklake --table library.edgar_lei --parquet datasets/edgar_gleif/build/edgar_gleif.parquet` from the repository root must print `shape ok`. Publish the crosswalk after `edgar` and `gleif`, since it reads their published copies. [`docs/publishing.md`](../../docs/publishing.md) says what else a publisher needs first.
 
-Do not publish from `main` yet: the DuckDB pins in `arcform.yaml` (`engine_version` and the `uv@1` steps' `duckdb==`) still name 1.x, and they move to 2.0 with the descriptor in the next change.
-
 ## Boundaries (deliberate)
 
 - The arcform **engine** and the **operator catalog** live in the `arcform` repo; this

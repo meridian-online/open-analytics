@@ -148,10 +148,12 @@ Unlike EDGAR and GLEIF, the crosswalk already has one writer per file, so a warm
 
 **Its second pull request is a rebuild, not a restamp.** Moving its pins to DuckDB 2.0 needs a forced run, which fetches every source again and re-runs the Splink resolution over about 100 million candidate pairs, on a new `as_of`. Publish the crosswalk after EDGAR and GLEIF, since it fetches their published copies, so that rebuild and its descriptor belong to the session that publishes it. The resolution then measures its joins against the EDGAR and GLEIF objects just published, which clears the due-a-rebuild reports their republishes raise.
 
+edgar_gleif published on 2026-11-17, from its second pull request's branch, after EDGAR and GLEIF had republished that day. `arc run --force --param as_of=2026-11-17` with no credential fetched every source again and re-ran the resolution in six minutes, and the shape check printed `shape ok: library.edgar_lei 14 columns, rows 212319 -> 213033`. The joins measured against the EDGAR and GLEIF objects just published: GLEIF's stays complete (all 213,033 rows), EDGAR's partial (6,357 of 189,204). `as_of` is set on every row. Then `arc run --publish` with the same `as_of` skipped every other step as fresh and committed snapshot 16 (run `20261117-013652-1dc191a8`, `library.edgar_lei +1401 ~211632 -687`), with nearly every row updated because `as_of` moved. The readable copy at `library/edgar_lei.parquet` served the descriptor's `bytes` and `hash` from the origin, and the catalogue and both views over the table served the same 213,033 rows. Every label held; `bytes`, `hash`, the row counts, the joins' figures and four finetype confidences moved.
+
 ## What is left
 
-- **edgar_gleif moves last.** edgar and gleif each publish from their second pull request (see their sections above). edgar_gleif has its publish step and keeps serving what it has, through the rebased catalogue and its readable copy, until the session that rebuilds it on DuckDB 2.0 publishes it; infra's publish is stopped, and the engine check holds its footers to the pin it moves.
-- **infra's publish scripts and workflow are deleted** once all of them have moved. Until then they refuse to run.
+- **Every open Protocol has moved.** edgar_gleif was the last, on 2026-11-17 (see its section above). Each publishes by `arc run` alone, on DuckDB 2.0, and the engine check holds its footers to that pin.
+- **infra's publish scripts and workflow can be deleted**, now that all of them have moved. Until they are, they refuse to run.
 - **The website reads the catalogue** instead of `manifest.json`, at which point the manifest and its stale fields retire. The SOC dataset pages come with that work.
 
 ### Moving a Protocol onto the step

@@ -65,7 +65,7 @@ copies to each other.
 | GLEIF — Legal Entity Identifiers | 3.50M | CC0-1.0 | [GLEIF](https://www.gleif.org/) | [datapackage.json](datasets/gleif/datapackage.json) |
 | SEC EDGAR — Company Tickers | 10,404 | Public domain | [SEC](https://www.sec.gov/) | [datapackage.json](datasets/edgar/datapackage.json) |
 | NAICS — Industry Classification (2022) | 2,125 | Public domain | [U.S. Census Bureau](https://www.census.gov/naics/) | [datapackage.json](datasets/naics/datapackage.json) |
-| EDGAR ↔ GLEIF — company-to-LEI crosswalk | 212,319 | CC0-1.0 | SEC + GLEIF | [datapackage.json](datasets/edgar_gleif/datapackage.json) |
+| EDGAR ↔ GLEIF — company-to-LEI crosswalk | 213,033 | CC0-1.0 | SEC + GLEIF | [datapackage.json](datasets/edgar_gleif/datapackage.json) |
 | HTS — Harmonized Tariff Schedule of the United States | 42,036 | Public domain | [USITC](https://hts.usitc.gov/) | [datapackage.json](datasets/hts/datapackage.json) |
 | Schedule B — U.S. Export Classification Codes | 16,727 | Public domain | [U.S. Census Bureau](https://www.census.gov/foreign-trade/schedules/b/index.html) | [datapackage.json](datasets/schedule_b/datapackage.json) |
 | FIPS — U.S. State and County Codes | 3,301 | Public domain | [U.S. Census Bureau](https://www.census.gov/library/reference/code-lists/ansi.html) | [datapackage.json](datasets/fips/datapackage.json) |
