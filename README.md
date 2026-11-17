@@ -14,7 +14,7 @@ SELECT * FROM meridian.gleif.lei LIMIT 10;
 
 A dataset's address is `<namespace>/<name>`: `gleif/lei`, `sec/company_tickers_exchange`, `census/naics_2022`, `census/naics_2017_to_2022`, `census/naics_2022_titles`, `census/schedule_b`, `census/fips`, `usitc/hts`, `cms/hcpcs`, `fda/ndc`, `library/edgar_lei`, `library/ourairports`, `bls/soc_2018`, `bls/soc_2018_titles`, `bls/soc_2010_to_2018`, `ons/soc_2020`, `ons/soc_2020_titles` and `ons/soc_2010_to_2020`, which are the SQL names `meridian.gleif.lei` and so on and the file URLs `https://openlake.meridian.online/<namespace>/<name>.parquet`. The old flat files stay readable but are frozen at the move and no longer refreshed, so read current data from the new URLs. The old SQL names (`source.gleif`, `source.edgar`, `source.naics`, `crosswalk.edgar_gleif`) keep working as views for a window after the move, then retire along with the old flat files.
 
-Attaching the catalogue needs DuckDB 2.0 or later. The SOC datasets are published into the lake by their own Protocol's last step, and the other eight move to that step one at a time; [`docs/publishing.md`](docs/publishing.md) says how a Protocol publishes, and how the lake was cut over to it on 2026-11-14.
+Attaching the catalogue needs DuckDB 2.0 or later. Every dataset is published into the lake by its own Protocol's last step; [`docs/publishing.md`](docs/publishing.md) says how a Protocol publishes, the path a change takes from a branch to the lake, and how the lake was cut over to it on 2026-11-14.
 
 Or read a single file directly, on any DuckDB:
 
@@ -50,6 +50,15 @@ python scripts/stamp_descriptor.py read https://openlake.meridian.online/census/
 
 The embedded copy omits the resource's `bytes` and `hash` and the package's `created`, and only those. A file cannot state its own size or its own digest, because writing the value changes the value, and a file that stated its own write time would be a different file every time. The lake records all three in its `manifest.json`, and [`scripts/emit_descriptor.py`](scripts/emit_descriptor.py) joins them back onto the descriptor the lake stores: `bytes` and `hash` measured from the finished object, and `created` as the time the published file was created. A publish that writes a new file gets a new `created`, including one that changes only the descriptor. Everything else is identical, and the [lake check](.github/workflows/lake.yml) holds the stored copy and the embedded copy to each other.
 
+This repository commits no descriptor for a published dataset: the lake stores each one. To get a dataset's full `datapackage.json`, with `bytes`, `hash` and `created`, in one command:
+
+```sh
+curl -O https://meridian.online/datasets/census/fips/datapackage.json    # from the website, built from the lake
+python scripts/emit_descriptor.py census.fips > datapackage.json        # from a checkout, reading the lake
+```
+
+The emitter needs `duckdb` and `pyyaml`, and no credential; `--all --bundle FILE` writes every table's descriptor to one file. In SQL, with the catalogue attached as above, the stored copy is `SELECT descriptor FROM meridian.meta.descriptors WHERE table_name = 'census.fips'`. [`docs/publishing.md`](docs/publishing.md#where-a-descriptor-lives) says where each copy lives.
+
 ## Datasets
 
 | Dataset | Rows | License | Source | Readable copy |
@@ -78,8 +87,8 @@ run of the checks below, not maintained by hand.
 
 HTS, Schedule B, HCPCS Level II and the NDC directory are code lists: every level of their hierarchy is a row with its parent, and all four lead with the same ten core columns, which `scripts/check_code_list.py` holds them to. [`docs/code-lists.md`](docs/code-lists.md) is the guide for building the next one: the contract, how a code-list Protocol is laid out, how its release is recorded, and the decisions behind each list.
 
-Each dataset carries a [Data Package](https://datapackage.org/) descriptor
-(`datasets/<name>/datapackage.json`) with the canonical download URL, byte
+Each dataset carries a [Data Package](https://datapackage.org/) descriptor,
+stored in the lake (see above), with the canonical download URL, byte
 size, SHA-256 hash, and a Table Schema. Column types and constraints come from
 [finetype](https://github.com/meridian-online/finetype): `x-finetype-label` carries
 each column's semantic type, and a column finetype inferred from the published data
@@ -101,12 +110,12 @@ Crosswalk datasets additionally declare their relationships as Frictionless
 (0–1, or a pointer to a per-row column), `x-evidence` (the match method,
 blocking rules and precision), and `x-package` (the URL of the foreign
 dataset's descriptor, since a Frictionless `reference.resource` resolves only
-within a package). See
-[`datasets/edgar_gleif`](datasets/edgar_gleif/datapackage.json).
+within a package). See `datasets/edgar_gleif`'s
+[`descriptor.overrides.json`](datasets/edgar_gleif/descriptor.overrides.json), which declares its joins to EDGAR and GLEIF as `x-joins` instead and says why.
 
 ## Checks
 
-`scripts/check_descriptors.py` reads every `datasets/*/datapackage.json` back
+`scripts/check_descriptors.py` reads every descriptor back
 against the file at its `resources[].path`, **and reads the description the file
 itself carries back against both**, and exits non-zero on any disagreement — a declared field the Parquet does not have, a Parquet column the
 descriptor does not declare, a Frictionless `type` the physical type cannot be
@@ -117,15 +126,15 @@ declared with incompatible types, or a row count in the catalogue above that
 disagrees with the object that row links to. Foreign keys resolve across every package in
 this repository, so the cross-package references described above are checked
 rather than skipped. A constraint keyword the script does not evaluate is an
-error, not a pass.
+error, not a pass. It runs in two places, since no descriptor is committed: before each publish, in the Protocol's own Run (`scripts/check_before_publish.py`), on the built descriptor against the Parquet just built; and in the lake check, on every descriptor emitted from the lake against the object served.
 
 The self-described half is checked by the same rules: a footer descriptor that
-disagrees with this repository's copy, declares a field the file does not have,
+disagrees with the stored copy, declares a field the file does not have,
 declares a type its column contradicts, declares a primary key its rows do not
 honour, or states the file's own `bytes`, is a disagreement. A difference in prose
 alone (a `description`, `title` or `$comment`) is reported as pending and does not
 fail: the footer only changes when the object is republished, and a corrected
-sentence in this repository is not a false claim about the bytes. An object at a
+sentence in an override is not a false claim about the bytes. An object at a
 dataset's current address that carries no description is a refusal too: CI runs
 the check with `--require-self-description`, because every dataset at its current
 address is published through the stamp step.
@@ -277,7 +286,7 @@ constraint the sidecar held at `--base` (default `origin/main`) that the descrip
 longer carries unless the sidecar was moved to the new value in the same change, and it
 lists every field that changed — columns added or removed, each `constraints` key,
 `x-finetype-confidence` — whether or not it refuses. It reads the predecessor from git
-rather than from the published object's footer because a restamp moves the footer.
+rather than from the published object's footer because a restamp moves the footer. With no descriptor committed, its refusal runs before each publish, in `scripts/check_before_publish.py`: the built descriptor against the sidecar as it stood at the last commit before the lake table's `created`, which is why that check needs the full git history. The lake check holds each stored descriptor to the constraints `HEAD`'s sidecar declares.
 
 ```sh
 pip install duckdb pyyaml
@@ -310,11 +319,7 @@ repository host is still reachable, because a blocked-host demonstration that
 quietly ran unblocked would pass forever and prove nothing. CI blackholes those
 hosts in `/etc/hosts` after checkout and runs it there.
 
-Everything above `verify` runs on every push and pull request, and weekly, from
-[`.github/workflows/descriptors.yml`](.github/workflows/descriptors.yml).
-`verify` re-hashes every file, so it runs on merge, weekly and on demand rather
-than per pull request — `bytes` is covered per pull request by a one-byte range
-read, and `hash` cannot be.
+No pull-request job reads the lake. [`.github/workflows/descriptors.yml`](.github/workflows/descriptors.yml) runs every checker's self-test, `arc test`, the model tests and the README step lists on each pull request. The checks that read a descriptor against the lake run in two places: before each publish, in the Protocol's Run, and in [`.github/workflows/lake.yml`](.github/workflows/lake.yml), on every push to `main`, weekly and on demand, which also runs `verify` over every served object. The lake check fails when the lake contradicts itself, and reports as awaiting publish what `main` has merged and not yet published.
 
 ## Request a dataset
 
@@ -329,9 +334,6 @@ corrections are published in place.
 
 - Per-dataset build recipes: the pipeline that turns each official source
   release into the published Parquet, so every byte is reproducible.
-- Descriptors generated as part of the publish pipeline. Today the schema half
-  is produced with finetype and checked in by hand, and `bytes` and `hash` are
-  written by a hand-run `publish_dataset.py restamp` against the endpoint.
 
 ## License
 
