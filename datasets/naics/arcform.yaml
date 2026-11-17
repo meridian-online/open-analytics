@@ -24,6 +24,9 @@
 # by the NAICS index (../naics_2022_titles) and concordance (../naics_2017_to_2022), so
 # a change to how this Protocol reads Census's workbook reaches both.
 #
+# TESTS. tests.yaml beside this file holds the Protocol's tests, which `arc test` runs
+# against the cut-down Census workbook in testdata/, with no network and no publish.
+#
 # ONE WRITER PER FILE. The export and describe write to build/stage/; the stamp alone
 # writes the published build/naics.parquet and build/datapackage.json.
 #
