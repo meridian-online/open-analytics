@@ -658,7 +658,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        protocol: [fips, ourairports, naics_2022_titles]
+        protocol: [fips, ourairports, naics_2022_titles, naics_2017_to_2022]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable

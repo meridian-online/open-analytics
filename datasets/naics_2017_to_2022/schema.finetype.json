@@ -1,0 +1,56 @@
+{
+  "$comment": "Self-derived finetype drift contract for census/naics_2017_to_2022, checked by the in-engine finetype_validate@1 gate (the model-free `ft_validate` DuckDB table macro). ft_validate MELTS every column to VARCHAR, so this contract uses ONLY the string-surviving JSON-Schema keywords. ENFORCED: the six-digit `pattern` on from_code and to_code, the shape descriptor.overrides.json publishes; the closed `enum` on from_edition, to_edition and release; and `minLength`/`maxLength` envelopes on the titles. NOT ENFORCED, by design: NULLs (invisible to ft_validate) and object-level `required` (documentation only); the edition crosswalk contract in ../../contracts/check_crosswalk.sql refuses a NULL code, edition or release. Free-text fields carry LOOSE length envelopes with headroom. Derived from build/stage/naics_2017_to_2022.parquet on Census's files of 2026-11-17: a pass-through on today's rows, a fail-closed tripwire for future drift (a code that is not six digits, another edition, a release other than the edition).",
+  "$id": "finetype://naics_2017_to_2022.parquet",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "census/naics_2017_to_2022",
+  "type": "object",
+  "properties": {
+    "from_code": {
+      "type": "string",
+      "minLength": 6,
+      "maxLength": 6,
+      "pattern": "^[0-9]{6}$"
+    },
+    "from_description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "to_code": {
+      "type": "string",
+      "minLength": 6,
+      "maxLength": 6,
+      "pattern": "^[0-9]{6}$"
+    },
+    "to_description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "from_edition": {
+      "type": "string",
+      "enum": [
+        "2017"
+      ]
+    },
+    "to_edition": {
+      "type": "string",
+      "enum": [
+        "2022"
+      ]
+    },
+    "release": {
+      "type": "string",
+      "enum": [
+        "2022"
+      ]
+    }
+  },
+  "required": [
+    "from_code",
+    "to_code",
+    "from_edition",
+    "to_edition",
+    "release"
+  ]
+}

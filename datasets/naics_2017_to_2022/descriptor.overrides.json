@@ -1,0 +1,105 @@
+{
+  "name": "naics_2017_to_2022",
+  "title": "NAICS 2017 to 2022 concordance",
+  "description": "The U.S. Census Bureau's own concordance from the 2017 North American Industry Classification System to the 2022 edition, at the six-digit national industry level, for bridging data still coded to 2017, such as County Business Patterns through 2023: one row per pairing of a 2017 industry with a 2022 industry, as Census publishes it. A 2017 industry Census split appears once for each 2022 industry it went to, its title naming the piece that went there (Anthracite Mining - anthracite surface mining), and a 2022 industry formed from several 2017 industries once for each of them; Census gives no weights for apportioning counts between them. Every 2022 code is a national industry in census/naics_2022, which the run checks against the code list it builds from Census's descriptions workbook; the 2017 edition is not hosted, so the 2017 codes are checked by their shape only. Census's 2022 to 2017 file holds the same pairings, so this table serves both directions. Census's files are U.S. Government works in the public domain.",
+  "homepage": "https://meridian.online/datasets/census/naics_2017_to_2022",
+  "licenses": [
+    {
+      "name": "other-pd",
+      "title": "Public domain (U.S. Census Bureau)",
+      "path": "https://www.census.gov/about/policies/open-gov/open-data.html"
+    }
+  ],
+  "sources": [
+    {
+      "title": "North American Industry Classification System — U.S. Census Bureau",
+      "path": "https://www.census.gov/naics/"
+    },
+    {
+      "title": "2017 NAICS to 2022 NAICS concordance (2017_to_2022_NAICS.xlsx) — U.S. Census Bureau",
+      "path": "https://www.census.gov/naics/concordances/2017_to_2022_NAICS.xlsx"
+    },
+    {
+      "title": "2022 NAICS descriptions (2022_NAICS_Descriptions.xlsx) — U.S. Census Bureau",
+      "path": "https://www.census.gov/naics/2022NAICS/2022_NAICS_Descriptions.xlsx"
+    }
+  ],
+  "contributors": [
+    {
+      "path": "https://www.census.gov/naics/",
+      "roles": [
+        "author"
+      ],
+      "title": "U.S. Census Bureau"
+    },
+    {
+      "path": "https://meridian.online",
+      "roles": [
+        "publisher",
+        "wrangler"
+      ],
+      "title": "Meridian"
+    }
+  ],
+  "resource": {
+    "name": "naics_2017_to_2022",
+    "path": "https://openlake.meridian.online/census/naics_2017_to_2022.parquet"
+  },
+  "x-meridian-crosswalk": {
+    "from": "2017",
+    "to": "2022",
+    "toCodeList": "census/naics_2022"
+  },
+  "fields": {
+    "from_code": {
+      "description": "A six-digit national industry code of the 2017 NAICS (212113).",
+      "constraints": {
+        "minLength": 6,
+        "maxLength": 6,
+        "pattern": "^[0-9]{6}$"
+      }
+    },
+    "from_description": {
+      "description": "The 2017 industry's title as Census prints it in the concordance, with spaces trimmed from its ends. Where Census split a 2017 industry, the title is followed by ' - ' and the piece of it that went to this 2022 industry (Anthracite Mining - anthracite surface mining). Text is kept as printed, Census's misspelling 'excpet' in 531120's title included, which Census's 2022 to 2017 file corrects."
+    },
+    "to_code": {
+      "description": "A six-digit national industry code of the 2022 NAICS, a code in census/naics_2022 (212114).",
+      "constraints": {
+        "minLength": 6,
+        "maxLength": 6,
+        "pattern": "^[0-9]{6}$"
+      }
+    },
+    "to_description": {
+      "description": "The 2022 industry's title as Census prints it in the concordance, with spaces trimmed from its ends. It is kept as printed, so it can differ from the code's title in census/naics_2022 (531120's reads 'excpet' here and 'except' there)."
+    },
+    "from_edition": {
+      "description": "The edition from_code belongs to: always 2017.",
+      "constraints": {
+        "enum": [
+          "2017"
+        ]
+      }
+    },
+    "to_edition": {
+      "description": "The edition to_code belongs to: always 2022.",
+      "constraints": {
+        "enum": [
+          "2022"
+        ]
+      }
+    },
+    "release": {
+      "description": "The NAICS edition the concordance bridges to, 2022. Census's concordance states no release or revision date of its own.",
+      "constraints": {
+        "enum": [
+          "2022"
+        ]
+      }
+    }
+  },
+  "primaryKey": [
+    "from_code",
+    "to_code"
+  ]
+}
