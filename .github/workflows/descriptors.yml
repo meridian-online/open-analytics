@@ -273,6 +273,19 @@ jobs:
       - name: the stamp lands, the data does not move, the read asks for one URL
         run: python scripts/test_stamp_descriptor.py
 
+  emit-descriptor-self-test:
+    name: a descriptor is emitted from the lake and the manifest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: install duckdb and pyyaml
+        run: python -m pip install --disable-pip-version-check "duckdb==${DUCKDB_VERSION}" "pyyaml==${PYYAML_VERSION}"
+      - name: the descriptor round-trips, a missing entry is refused, the tree is laid out
+        run: python scripts/test_emit_descriptor.py
+
   description-needs-no-repository:
     name: the description comes back with the repository blocked
     needs: stamp-self-test
