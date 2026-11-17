@@ -728,6 +728,41 @@ class CrosswalkJoinSelfTest(unittest.TestCase):
         written = json.loads(measured.read_text(encoding="utf-8"))
         self.assertEqual(written["x-joins"]["joins"][0]["coverage"], {"rows": 3, "matched": 2})
 
+    def test_lake_bundle_accepts_the_measured_packages_own_slug_on_its_first_publish(self) -> None:
+        """The bundle holds only the referenced table: the staged descriptor is the only one
+        of `left`, because the lake does not hold it yet."""
+        self.lay_left(include_coverage=False)
+        staged = self.stage_left()
+        bundle = self.lake_bundle("right")
+        (self.datasets / "left" / "datapackage.json").unlink()
+        measured = self.datasets.parent / "stage" / "measured.json"
+        self.assertOutcome(
+            run_join(
+                self.datasets, "--lake-bundle", str(bundle), "--write", "--package", "left",
+                "--descriptor", f"left={staged}",
+                "--local", f"left={self.datasets / 'left' / 'left.parquet'}",
+                "--out", str(measured),
+            ),
+            EXIT_OK,
+            "coverage written: rows 3  matched 2",
+        )
+        written = json.loads(measured.read_text(encoding="utf-8"))
+        self.assertEqual(written["x-joins"]["joins"][0]["coverage"], {"rows": 3, "matched": 2})
+
+    def test_lake_bundle_refuses_an_unknown_slug_that_package_does_not_name(self) -> None:
+        """First-publish leniency is for the measured package only, not any slug."""
+        self.lay_left(include_coverage=False)
+        staged = self.stage_left()
+        bundle = self.lake_bundle("right")
+        self.assertOutcome(
+            run_join(
+                self.datasets, "--lake-bundle", str(bundle), "--write", "--package", "right",
+                "--descriptor", f"left={staged}",
+            ),
+            EXIT_ERROR,
+            "--descriptor names no dataset 'left'",
+        )
+
     def test_lake_bundle_refuses_a_descriptor_slug_it_does_not_hold(self) -> None:
         """A misspelt slug must not leave `--package` measuring the lake's copy."""
         self.lay_left(include_coverage=False)

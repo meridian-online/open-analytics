@@ -341,7 +341,7 @@ steps:
       script: scripts/crosswalk_join.py
       # The script is addressed by its bytes, so editing it is a manifest edit as well.
       # `shasum -a 256 datasets/edgar_gleif/scripts/crosswalk_join.py` prints this.
-      sha256: dbf1c66c848817a940e70c27ac24576599bb1b8c1c546f91c0da68baf8e32632
+      sha256: 135973944fd6a7459bfd51f9cc86ad4beb22e2f21d1daef322387fc1315d4e05
       # Pinned to DUCKDB_VERSION in .github/workflows/descriptors.yml — keep the two in
       # step, or this step measures with a different engine than the check that verifies
       # it. The interpreter is pinned in the script's own PEP 723 block (3.12), which is
@@ -456,7 +456,7 @@ steps:
       script: ../../scripts/stamp_descriptor.py
       # `shasum -a 256 scripts/stamp_descriptor.py` prints this. Every manifest that
       # stamps pins the same script by these bytes, so editing it is an edit to each.
-      sha256: 8bc022565e3e0892518bcfedb18f28973293e7012c8a6830716559980e28400d
+      sha256: c36284fd200d76a6e5f3da9e3051a9dd8fe057df99603ed80e79043ef6dbb5a1
       # This step imports duckdb, and until now ran under whatever bare `python3` was on
       # PATH — the same exposure `derive_join_coverage` was already carrying when it
       # failed three retries mid-republish on a machine whose `python3` had no duckdb.
@@ -484,8 +484,8 @@ steps:
       # ONLY writer of both files publish reads, so nothing it writes was produced by an
       # earlier step.
       #
-      # `--carry-created-from`: `created` in build/datapackage.json is when this data
-      # first appeared. When the stamped file is the object the lake already serves (its
+      # `--carry-created-from`: `created` in build/datapackage.json is when the published
+      # file was created. When the stamped file is the object the lake already serves (its
       # hash equals the lake copy's in build/lake_descriptors.json) it keeps the lake's
       # `created`; otherwise, a first publish included, it takes the one `describe` just
       # wrote. The embedded footer never carries it.

@@ -151,8 +151,8 @@ steps:
   # in place. Re-running the step is a no-op to the byte.
   #
   # `--carry-created-from` keeps the `created` the lake's copy states when the stamped
-  # file is the object the lake already serves, so `created` stays when this data first
-  # appeared; anything else, a first publish included, takes the one `describe` wrote.
+  # file is the object the lake already serves; anything else, a first publish included,
+  # takes the one `describe` wrote.
   #
   # `op: uv@1` rather than a bare `python3`: the readback imports duckdb, and a
   # `python3` without it failed the step. uv resolves the interpreter and the package
@@ -164,7 +164,7 @@ steps:
     with:
       script: ../../scripts/stamp_descriptor.py
       # `shasum -a 256 scripts/stamp_descriptor.py` prints this.
-      sha256: 8bc022565e3e0892518bcfedb18f28973293e7012c8a6830716559980e28400d
+      sha256: c36284fd200d76a6e5f3da9e3051a9dd8fe057df99603ed80e79043ef6dbb5a1
       # Pinned to the DuckDB that engine_version names. The stamp
       # rewrites no data page, so this need not be the DuckDB that wrote the Parquet.
       deps:

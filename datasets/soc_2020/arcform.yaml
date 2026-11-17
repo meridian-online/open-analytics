@@ -279,13 +279,13 @@ steps:
   # resource `bytes` and `hash` and the package's `created`. They run after the steps
   # that shape a table, because each embeds its FINISHED descriptor.
   # `--carry-created-from` keeps the `created` the lake's copy states when the stamped
-  # file is the object the lake already serves, so `created` stays when this data first
-  # appeared; anything else, a first publish included, takes the one `describe` wrote.
+  # file is the object the lake already serves; anything else, a first publish included,
+  # takes the one `describe` wrote.
   - name: stamp_soc_2020
     op: uv@1
     with:
       script: ../../scripts/stamp_descriptor.py
-      sha256: 8bc022565e3e0892518bcfedb18f28973293e7012c8a6830716559980e28400d
+      sha256: c36284fd200d76a6e5f3da9e3051a9dd8fe057df99603ed80e79043ef6dbb5a1
       deps:
         - duckdb==2.0.0
       args:
@@ -314,7 +314,7 @@ steps:
     op: uv@1
     with:
       script: ../../scripts/stamp_descriptor.py
-      sha256: 8bc022565e3e0892518bcfedb18f28973293e7012c8a6830716559980e28400d
+      sha256: c36284fd200d76a6e5f3da9e3051a9dd8fe057df99603ed80e79043ef6dbb5a1
       deps:
         - duckdb==2.0.0
       args:
@@ -343,7 +343,7 @@ steps:
     op: uv@1
     with:
       script: ../../scripts/stamp_descriptor.py
-      sha256: 8bc022565e3e0892518bcfedb18f28973293e7012c8a6830716559980e28400d
+      sha256: c36284fd200d76a6e5f3da9e3051a9dd8fe057df99603ed80e79043ef6dbb5a1
       deps:
         - duckdb==2.0.0
       args:

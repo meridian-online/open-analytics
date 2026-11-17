@@ -21,7 +21,7 @@ Schedule B, the U.S. Census Bureau's classification of exported goods: every ten
 7. **package** (`models/package.sql`) — add the search `corpus`, hand off the terminal table.
 8. **export** — write the unstamped zstd Parquet to `build/stage/`, ordered by `code`.
 9. **describe** — emit the staged descriptor from the Parquet, typed by finetype with `nominations.finetype.json` and `descriptor.overrides.json` applied.
-10. **derive_join_coverage** — measure the NAICS join against the published `census/naics_2022` object (below).
+10. **derive_join_coverage** — measure the NAICS join against the published `census/naics_2022` object (below). Join coverage is re-measured on every run, because the lake descriptors it resolves the join through are re-read each time.
 11. **check_code_list** — hold the Parquet to the shared code-list contract (`scripts/check_code_list.py`): the core columns, a parent one level up for every row, `depth` as the level's position.
 12. **validate** — gate the Parquet against `schema.finetype.json`.
 13. **stamp_descriptor** — write the finished descriptor into the Parquet's footer, and write the published `build/schedule_b.parquet` and `build/datapackage.json`. It is the only writer of both.

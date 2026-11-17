@@ -230,7 +230,7 @@ steps:
     op: uv@1
     with:
       script: ../edgar_gleif/scripts/crosswalk_join.py
-      sha256: dbf1c66c848817a940e70c27ac24576599bb1b8c1c546f91c0da68baf8e32632
+      sha256: 135973944fd6a7459bfd51f9cc86ad4beb22e2f21d1daef322387fc1315d4e05
       deps:
         - duckdb==2.0.0
       args:
@@ -301,7 +301,7 @@ steps:
     op: uv@1
     with:
       script: ../../scripts/stamp_descriptor.py
-      sha256: 8bc022565e3e0892518bcfedb18f28973293e7012c8a6830716559980e28400d
+      sha256: c36284fd200d76a6e5f3da9e3051a9dd8fe057df99603ed80e79043ef6dbb5a1
       deps:
         - duckdb==2.0.0
       args:

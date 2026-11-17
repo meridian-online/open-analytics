@@ -98,8 +98,10 @@ The repository commits no descriptor, so a Protocol passes `--lake-bundle FILE`
 instead: `emit_descriptor.py --all --bundle`'s output, table name to the descriptor the
 open lake holds. Each is filed under its package `name`, which is its dataset's slug,
 and `--descriptor SLUG=PATH` still replaces one. A slug the bundle does not hold is
-refused, as one with no descriptor under `--datasets-dir` is: a misspelt slug would
-otherwise measure the lake's copy and write it out as this build's.
+accepted only when `--package` names it too, which is the Protocol's own table on its
+first publish; any other is refused, as one with no descriptor under `--datasets-dir`
+is, since a misspelt slug would otherwise measure the lake's copy and write it out as
+this build's.
 
 Exit codes, distinct because a status alone cannot tell a refusal from a crash:
 
@@ -639,8 +641,12 @@ def _main(args: argparse.Namespace, duckdb: Any, local_overrides: dict[str, str]
             print(f"crosswalk join: --descriptor expects SLUG=PATH, got {item!r}", file=sys.stderr)
             return EXIT_ERROR
         if slug not in {path.parent.name for path in descriptor_paths}:
-            print(f"crosswalk join: --descriptor names no dataset {slug!r} in {source}", file=sys.stderr)
-            return EXIT_ERROR
+            if not (args.lake_bundle and slug in (args.package or [])):
+                print(f"crosswalk join: --descriptor names no dataset {slug!r} in {source}", file=sys.stderr)
+                return EXIT_ERROR
+            # The Protocol's own table on its first publish: the lake does not hold it yet.
+            descriptor_paths.append(bundle_dir / slug / "datapackage.json")
+            descriptor_paths.sort()
         descriptor_overrides[slug] = Path(raw_path)
     if args.out and not args.write:
         print("crosswalk join: --out only means something with --write", file=sys.stderr)

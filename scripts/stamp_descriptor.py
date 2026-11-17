@@ -67,9 +67,11 @@ states; a stamp over different pages takes the fresh one `describe` wrote.
 is `emit_descriptor.py --all --bundle`'s output, table name to the descriptor the lake
 holds. When the stamped file is byte for byte the object the lake already serves (its
 `hash` equals the lake copy's), the lake's `created` is kept. Otherwise, or when the
-lake holds no such table yet (a first publish), the fresh `created` stands. A stamp
-over the same data pages with a changed descriptor is a different object, so it takes
-the fresh one: the lake's bundle names the published object's hash, not its pages'.
+lake holds no such table yet (a first publish), the fresh `created` stands. Here
+`created` is when the published file was created, and the comparison is of the whole
+file, footer included: a republish that changes only the descriptor rewrites the file,
+so it takes a new `created` even though no data page moved. The lake's bundle names the
+published object's hash, not its pages'.
 
     stamp_descriptor.py stamp --descriptor datapackage.json --parquet build/x.parquet
     stamp_descriptor.py stamp --descriptor stage/measured.json --parquet stage/x.parquet
@@ -729,8 +731,10 @@ def build_parser() -> argparse.ArgumentParser:
     stamp.add_argument(
         "--carry-created-from",
         metavar="BUNDLE",
-        help="keep the lake's `created` for --table when the stamped file is the object the lake serves; "
-        "BUNDLE is emit_descriptor.py --all --bundle output. A table the lake does not hold takes the fresh one",
+        help="keep the lake's `created` for --table when the stamped file, footer included, is byte for byte the "
+        "object the lake serves: `created` is then when the published file was created, so a descriptor-only "
+        "republish takes a new one. BUNDLE is emit_descriptor.py --all --bundle output. A table the lake does not "
+        "hold takes the fresh one",
     )
     stamp.add_argument("--table", metavar="NS.NAME", help="the lake table --carry-created-from reads")
     stamp.add_argument(
