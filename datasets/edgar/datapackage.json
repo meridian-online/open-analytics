@@ -17,7 +17,7 @@
       "title": "Meridian"
     }
   ],
-  "created": "2026-10-30T23:53:00Z",
+  "created": "2026-11-16T23:55:45Z",
   "description": "The U.S. Securities and Exchange Commission's company-tickers file from its EDGAR system: one row per ticker symbol, with the Central Index Key (CIK), EDGAR conformed company name and exchange it is associated with. A company with several listed securities has several rows — 1RT Acquisition Corp. (CIK 2054272) has ONCH, ONCHU and ONCHW — so CIK alone is not a key. The SEC updates the file to support EDGAR searches and does not guarantee its accuracy or scope: it is a ticker list, not a register of every company with securities registered with the SEC.",
   "homepage": "https://meridian.online/datasets/edgar",
   "licenses": [
@@ -30,9 +30,9 @@
   "name": "edgar",
   "resources": [
     {
-      "bytes": 279570,
+      "bytes": 278528,
       "format": "parquet",
-      "hash": "sha256:d87b01fa7fbc160b45fe2ddfc54692d4dcd62c1e458b067969c8e62ab257213f",
+      "hash": "sha256:c9ad5a7d87de9389e25c3f1bbc44fe08411aa3cc61433cb8f4a05bff4996c5a0",
       "mediatype": "application/vnd.apache.parquet",
       "name": "edgar",
       "path": "https://openlake.meridian.online/sec/company_tickers_exchange.parquet",
@@ -62,17 +62,13 @@
           },
           {
             "constraints": {
-              "pattern": "^(?:[A-Z]{1,7}(?:[./-][A-Z]{1,4})?|[0-9]{1,6})$|^[A-Z]{4}\\.$"
+              "pattern": "^(?:[A-Z]{1,7}(?:[./-][A-Z]{1,4})?|[0-9]{1,6})$"
             },
             "description": "Exchange ticker symbol for the registrant's security.",
             "name": "ticker",
             "type": "string",
             "x-finetype-confidence": 0.9,
-            "x-finetype-label": "finance.securities.ticker",
-            "x-finetype-pattern-fit": {
-              "canonical": "^(?:[A-Z]{1,7}(?:[./-][A-Z]{1,4})?|[0-9]{1,6})$",
-              "outcome": "widened"
-            }
+            "x-finetype-label": "finance.securities.ticker"
           },
           {
             "constraints": {
@@ -83,7 +79,7 @@
             "description": "Listing venue for the ticker (e.g. NYSE, Nasdaq, CBOE, OTC, TXSE — the Texas Stock Exchange).",
             "name": "exchange",
             "type": "string",
-            "x-finetype-confidence": 0.9417,
+            "x-finetype-confidence": 1.0,
             "x-finetype-enum-domain": {
               "cohesion": 0.800000011920929,
               "distinct": 5,
@@ -95,7 +91,7 @@
                 "TXSE"
               ],
               "open": true,
-              "rows": 10259
+              "rows": 10241
             },
             "x-finetype-label": "representation.text.word"
           },
