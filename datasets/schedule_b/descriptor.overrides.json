@@ -61,7 +61,7 @@
     ]
   },
   "x-joins": {
-    "$comment": "How to join Schedule B's NAICS codes to census/naics_2022, and how far the join reaches. It is NOT a `schema.foreignKeys` entry: a foreign key asserts that every value on the left exists on the right, and some of Census's NAICS codes on Schedule B lines are not codes of the 2022 edition. `coverage` does not live in this file: `crosswalk_join.py --write` measures it from the build and writes it into the generated `datapackage.json`.",
+    "$comment": "How to join Schedule B's NAICS codes to census/naics_2022, and how far the join reaches. It is NOT a `schema.foreignKeys` entry: a foreign key asserts that every value on the left exists on the right, and some of Census's NAICS codes on Schedule B lines are not codes of the 2022 edition. `coverage` does not live in this file: `crosswalk_join.py --write` measures it from the build and writes it into the built descriptor, which publish stores in the lake.",
     "joins": [
       {
         "cardinality": "partial — measured at build. The unmatched lines carry a code that is not a 2022 NAICS code: an industry code ending in X (33641X, 1121XX), which Census's layout does not define and which reads, from the codes' shape, as digits left unspecified, or one of the codes 910000, 930000 and 990000, which Census gives to lines such as waste and scrap, used goods and chapter 98's special provisions.",
@@ -72,7 +72,7 @@
           "naics"
         ],
         "name": "naics",
-        "package": "https://github.com/meridian-online/open-analytics/blob/main/datasets/naics/datapackage.json",
+        "package": "https://meridian.online/datasets/census/naics_2022/datapackage.json",
         "reference": {
           "fields": [
             "code"
@@ -85,7 +85,7 @@
         }
       }
     ],
-    "verifiedBy": "datasets/edgar_gleif/scripts/crosswalk_join.py — the same script both writes and checks `coverage`. Run with `--write`, right after `describe`, it measures the join above against this build's own Parquet and writes `coverage` into datapackage.json (arcform.yaml step `derive_join_coverage`). Run with no flags, it re-measures against the published objects instead and fails if the committed `coverage` disagrees."
+    "verifiedBy": "datasets/edgar_gleif/scripts/crosswalk_join.py — the same script both writes and checks `coverage`. Run with `--write`, right after `describe`, it measures the join above against this build's own Parquet and writes `coverage` into the built descriptor (arcform.yaml step `derive_join_coverage`). Run with no flags, it re-measures against the published objects instead and fails if the published `coverage` disagrees."
   },
   "fields": {
     "code": {

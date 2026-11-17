@@ -183,10 +183,12 @@ steps:
   # The repository commits no descriptor: the lake's meta.descriptors and manifest.json
   # hold the one stored copy, and emit_descriptor.py joins the two back into each
   # table's full descriptor and writes them all to one bundle, table name to descriptor.
-  # The check below compares this build against it, and derive_join_coverage resolves
-  # the tables this one joins to from it. It reads the public catalogue and manifest,
-  # with no credential, and declares both as remote reads, so arc runs it on every run.
-  # One file, so `arc test` can fixture this step by name.
+  # It runs before the stamp, which keeps the lake's `created` when it writes the object
+  # the lake already serves, and before derive_join_coverage, which resolves the tables
+  # this one joins to from it; the check before publish compares this build against it.
+  # It reads the public catalogue and manifest, with no credential, and declares both as
+  # remote reads, so arc runs it on every run. One file, so `arc test` can fixture this
+  # step by name.
   # `shasum -a 256 scripts/emit_descriptor.py` prints the digest.
   - name: emit_descriptors
     op: uv@1
@@ -228,7 +230,7 @@ steps:
     op: uv@1
     with:
       script: ../edgar_gleif/scripts/crosswalk_join.py
-      sha256: de42f346bf0cd402fb32b7343e6b78a6bc486e8b621a24507cc8e57cdb227adf
+      sha256: dbf1c66c848817a940e70c27ac24576599bb1b8c1c546f91c0da68baf8e32632
       deps:
         - duckdb==2.0.0
       args:
@@ -292,18 +294,22 @@ steps:
   # As edgar_gleif's does: it reads the measured descriptor and the staged Parquet,
   # writes the descriptor into a copy of the Parquet's footer, and re-measures `bytes`
   # and `hash` into build/datapackage.json, the descriptor publish reads. The embedded
-  # copy omits `bytes`, `hash` and `created`. `--carry-created` keeps the last build's
-  # `created` while the data pages are the ones already at build/schedule_b.parquet.
+  # copy omits `bytes`, `hash` and `created`. `--carry-created-from` keeps the lake's
+  # `created` while the stamped file is the object the lake already serves.
   # `shasum -a 256 scripts/stamp_descriptor.py` prints the digest.
   - name: stamp_descriptor
     op: uv@1
     with:
       script: ../../scripts/stamp_descriptor.py
-      sha256: a9356ac8d5412d94a940ebeef1e2508eaed6b77f1d923ada88edbacccf9d9b81
+      sha256: 8bc022565e3e0892518bcfedb18f28973293e7012c8a6830716559980e28400d
       deps:
         - duckdb==2.0.0
       args:
         - stamp
+        - --carry-created-from
+        - build/lake_descriptors.json
+        - --table
+        - census.schedule_b
         - --descriptor
         - build/stage/measured.json
         - --parquet
@@ -312,8 +318,8 @@ steps:
         - build/schedule_b.parquet
         - --out-descriptor
         - build/datapackage.json
-        - --carry-created
       reads:
+        - build/lake_descriptors.json
         - build/stage/measured.json
         - build/stage/schedule_b.parquet
       produces:

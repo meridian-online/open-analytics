@@ -141,46 +141,15 @@ steps:
       parquet: build/hts.parquet
       schema: schema.finetype.json
 
-  # ── Self-describe: put the descriptor INSIDE the Parquet it describes ───────────
-  # As NAICS's does: the object answers for itself from its URL alone, the embedded
-  # copy omits the resource `bytes` and `hash` and the package's `created`, and the
-  # step runs last because it embeds the FINISHED descriptor.
-  #
-  # `op: uv@1` rather than a bare `python3`: the readback imports duckdb, and a
-  # `python3` without it failed the step. uv resolves the interpreter and the package
-  # itself. It rewrites, in place, the Parquet `export_hts` wrote and the
-  # build/datapackage.json `describe` wrote, so each of those files has two writers; giving
-  # each one writer, as edgar_gleif and the code lists do, is a separate restructure.
-  - name: stamp_descriptor
-    op: uv@1
-    with:
-      script: ../../scripts/stamp_descriptor.py
-      # `shasum -a 256 scripts/stamp_descriptor.py` prints this.
-      sha256: a9356ac8d5412d94a940ebeef1e2508eaed6b77f1d923ada88edbacccf9d9b81
-      # Pinned to the DuckDB that engine_version names. The stamp
-      # rewrites no data page, so this need not be the DuckDB that wrote the Parquet.
-      deps:
-        - duckdb==2.0.0
-      args:
-        - stamp
-        - --descriptor
-        - build/datapackage.json
-        - --parquet
-        - build/hts.parquet
-      reads:
-        - build/datapackage.json
-        - build/hts.parquet
-      produces:
-        - build/datapackage.json
-        - build/hts.parquet
-
   # ── Lake: every published table's descriptor, as the open lake holds it ─────────
   # The repository commits no descriptor: the lake's meta.descriptors and manifest.json
   # hold the one stored copy, and emit_descriptor.py joins the two back into each
   # table's full descriptor and writes them all to one bundle, table name to descriptor.
-  # The check below compares this build against it. It reads the public catalogue and
-  # manifest, with no credential, and declares both as remote reads, so arc runs it on
-  # every run. One file, so `arc test` can fixture this step by name.
+  # It runs before the stamp, which keeps the lake's `created` when it writes the object
+  # the lake already serves; the check before publish compares this build against it. It
+  # reads the public catalogue and manifest, with no credential, and declares both as
+  # remote reads, so arc runs it on every run. One file, so `arc test` can fixture this
+  # step by name.
   # `shasum -a 256 scripts/emit_descriptor.py` prints the digest.
   - name: emit_descriptors
     op: uv@1
@@ -201,6 +170,48 @@ steps:
         - ../../datasets/*/arcform.yaml
       produces:
         - build/lake_descriptors.json
+
+  # ── Self-describe: put the descriptor INSIDE the Parquet it describes ───────────
+  # As NAICS's does: the object answers for itself from its URL alone, the embedded
+  # copy omits the resource `bytes` and `hash` and the package's `created`, and the
+  # step is the last that shapes the descriptor, because it embeds the FINISHED one;
+  # only the checks before publish follow it.
+  # `--carry-created-from` keeps the `created` the lake's copy states when the stamped
+  # file is the object the lake already serves, so `created` stays when this data first
+  # appeared; anything else, a first publish included, takes the one `describe` wrote.
+  #
+  # `op: uv@1` rather than a bare `python3`: the readback imports duckdb, and a
+  # `python3` without it failed the step. uv resolves the interpreter and the package
+  # itself. It rewrites, in place, the Parquet `export_hts` wrote and the
+  # build/datapackage.json `describe` wrote, so each of those files has two writers; giving
+  # each one writer, as edgar_gleif and the code lists do, is a separate restructure.
+  - name: stamp_descriptor
+    op: uv@1
+    with:
+      script: ../../scripts/stamp_descriptor.py
+      # `shasum -a 256 scripts/stamp_descriptor.py` prints this.
+      sha256: 8bc022565e3e0892518bcfedb18f28973293e7012c8a6830716559980e28400d
+      # Pinned to the DuckDB that engine_version names. The stamp
+      # rewrites no data page, so this need not be the DuckDB that wrote the Parquet.
+      deps:
+        - duckdb==2.0.0
+      args:
+        - stamp
+        - --carry-created-from
+        - build/lake_descriptors.json
+        - --table
+        - usitc.hts
+        - --descriptor
+        - build/datapackage.json
+        - --parquet
+        - build/hts.parquet
+      reads:
+        - build/lake_descriptors.json
+        - build/datapackage.json
+        - build/hts.parquet
+      produces:
+        - build/datapackage.json
+        - build/hts.parquet
 
   # ── Check: the built table against the lake, before it is published ─────────────
   # check_before_publish.py runs the three checks that need both this build and what the

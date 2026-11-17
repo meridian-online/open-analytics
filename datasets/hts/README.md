@@ -21,7 +21,7 @@ The Harmonized Tariff Schedule of the United States, issued by the U.S. Internat
 7. **check_code_list** — hold the Parquet to the shared code-list contract (`scripts/check_code_list.py`): the core columns, a parent one level up for every row, `depth` as the level's position.
 8. **validate** — gate the Parquet against `schema.finetype.json`.
 9. **stamp_descriptor** — write the finished descriptor into the Parquet's own footer.
-10. **check before publishing** — `emit_descriptors` writes every published table's descriptor, as the open lake holds it, to `build/lake_descriptors.json`. `check_before_publish` then holds the built descriptor to label agreement with them, to the frictionless reference implementation, and to `scripts/check_descriptors.py`'s rules read against the local Parquet. A failing check stops the run before publish.
+10. **check before publishing** — `emit_descriptors` writes every published table's descriptor, as the open lake holds it, to `build/lake_descriptors.json`. It runs before the stamp, which keeps the lake's `created` when it writes the object the lake already serves. `check_before_publish` then holds the built descriptor to label agreement with them, to the frictionless reference implementation, and to `scripts/check_descriptors.py`'s rules read against the local Parquet. A failing check stops the run before publish.
 11. **publish** — upsert `usitc.hts` into the open lake on `code`, with its descriptor in the lake's `meta` schema and the readable copy at `usitc/hts.parquet` (see *Publish*).
 
 Produces `build/hts.parquet`.
@@ -66,8 +66,8 @@ All 14 steps are `sql:` models or typed `op:` operators from the arcform catalog
 | 8 | `describe` | `op: datapackage_describe@1` |
 | 9 | `check_code_list` | `op: uv@1` |
 | 10 | `validate` | `op: finetype_validate@1` |
-| 11 | `stamp_descriptor` | `op: uv@1` |
-| 12 | `emit_descriptors` | `op: uv@1` |
+| 11 | `emit_descriptors` | `op: uv@1` |
+| 12 | `stamp_descriptor` | `op: uv@1` |
 | 13 | `check_before_publish` | `op: uv@1` |
 | 14 | `publish` | `op: ducklake_write@1` |
 

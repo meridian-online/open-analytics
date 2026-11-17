@@ -23,7 +23,7 @@ The U.S. Census Bureau's 2022 NAICS index file as a title index: one row per ind
 7. **check_inputs**, **check_titles** — hold the index to the shared job-title index contract (`../../contracts/check_titles.sql`, see `docs/code-lists.md`): every code a national industry of the code list, every key present and unique, one release.
 8. **validate** — gate the Parquet against `schema.finetype.json`.
 9. **stamp_descriptor** — write the published `build/naics_2022_titles.parquet` with the finished descriptor in its footer, and `build/datapackage.json` beside it.
-10. **check before publishing** — `emit_descriptors` writes every published table's descriptor, as the open lake holds it, to `build/lake_descriptors.json`. `check_before_publish` then holds the built descriptor to label agreement with them, to the frictionless reference implementation, and to `scripts/check_descriptors.py`'s rules read against the local Parquet. A failing check stops the run before publish.
+10. **check before publishing** — `emit_descriptors` writes every published table's descriptor, as the open lake holds it, to `build/lake_descriptors.json`. It runs before the stamp, which keeps the lake's `created` when it writes the object the lake already serves. `check_before_publish` then holds the built descriptor to label agreement with them, to the frictionless reference implementation, and to `scripts/check_descriptors.py`'s rules read against the local Parquet. A failing check stops the run before publish.
 11. **publish** — write `census.naics_2022_titles` into the open lake, with its descriptor in the lake's `meta` schema and the readable copy at `census/naics_2022_titles.parquet` (see *Publish*).
 
 Produces `build/naics_2022_titles.parquet`.
@@ -44,8 +44,8 @@ All 14 steps are `sql:` models or typed `op:` operators from the arcform catalog
 | 8 | `check_inputs` | `sql: models/check_inputs.sql` |
 | 9 | `check_titles` | `sql: ../../contracts/check_titles.sql` |
 | 10 | `validate` | `op: finetype_validate@1` |
-| 11 | `stamp_descriptor` | `op: uv@1` |
-| 12 | `emit_descriptors` | `op: uv@1` |
+| 11 | `emit_descriptors` | `op: uv@1` |
+| 12 | `stamp_descriptor` | `op: uv@1` |
 | 13 | `check_before_publish` | `op: uv@1` |
 | 14 | `publish` | `op: ducklake_write@1` |
 

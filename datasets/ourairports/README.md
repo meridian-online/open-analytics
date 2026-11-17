@@ -23,7 +23,7 @@ OurAirports' airports that carry an ICAO code, the four-letter code air traffic 
 7. **check_code_list** — hold the Parquet to the shared code-list contract (`scripts/check_code_list.py`, see `docs/code-lists.md`).
 8. **validate** — gate the Parquet against `schema.finetype.json`.
 9. **stamp_descriptor** — write the published `build/ourairports.parquet` with the finished descriptor in its footer, and `build/datapackage.json` beside it.
-10. **check before publishing** — `emit_descriptors` writes every published table's descriptor, as the open lake holds it, to `build/lake_descriptors.json`. `check_before_publish` then holds the built descriptor to label agreement with them, to the frictionless reference implementation, and to `scripts/check_descriptors.py`'s rules read against the local Parquet. A failing check stops the run before publish.
+10. **check before publishing** — `emit_descriptors` writes every published table's descriptor, as the open lake holds it, to `build/lake_descriptors.json`. It runs before the stamp, which keeps the lake's `created` when it writes the object the lake already serves. `check_before_publish` then holds the built descriptor to label agreement with them, to the frictionless reference implementation, and to `scripts/check_descriptors.py`'s rules read against the local Parquet. A failing check stops the run before publish.
 11. **publish** — upsert `library.ourairports` into the open lake on `code`, with its descriptor in the lake's `meta` schema and the readable copy at `library/ourairports.parquet` (see *Publish*).
 
 Produces `build/ourairports.parquet`.
@@ -47,8 +47,8 @@ All 17 steps are `sql:` models or typed `op:` operators from the arcform catalog
 | 11 | `describe` | `op: datapackage_describe@1` |
 | 12 | `check_code_list` | `op: uv@1` |
 | 13 | `validate` | `op: finetype_validate@1` |
-| 14 | `stamp_descriptor` | `op: uv@1` |
-| 15 | `emit_descriptors` | `op: uv@1` |
+| 14 | `emit_descriptors` | `op: uv@1` |
+| 15 | `stamp_descriptor` | `op: uv@1` |
 | 16 | `check_before_publish` | `op: uv@1` |
 | 17 | `publish` | `op: ducklake_write@1` |
 

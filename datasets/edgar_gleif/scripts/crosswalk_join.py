@@ -97,7 +97,9 @@ Where the descriptors come from. By default every `<datasets-dir>/*/datapackage.
 The repository commits no descriptor, so a Protocol passes `--lake-bundle FILE`
 instead: `emit_descriptor.py --all --bundle`'s output, table name to the descriptor the
 open lake holds. Each is filed under its package `name`, which is its dataset's slug,
-and `--descriptor SLUG=PATH` still replaces one, or adds one the lake does not hold yet.
+and `--descriptor SLUG=PATH` still replaces one. A slug the bundle does not hold is
+refused, as one with no descriptor under `--datasets-dir` is: a misspelt slug would
+otherwise measure the lake's copy and write it out as this build's.
 
 Exit codes, distinct because a status alone cannot tell a refusal from a crash:
 
@@ -625,7 +627,7 @@ def _main(args: argparse.Namespace, duckdb: Any, local_overrides: dict[str, str]
     else:
         descriptor_paths = sorted(args.datasets_dir.glob("*/datapackage.json"))
         source = str(args.datasets_dir)
-    if not descriptor_paths and not (args.lake_bundle and args.descriptor):
+    if not descriptor_paths:
         what = "descriptor in" if args.lake_bundle else "datasets/*/datapackage.json under"
         print(f"crosswalk join: no {what} {source}", file=sys.stderr)
         return EXIT_ERROR
@@ -637,13 +639,9 @@ def _main(args: argparse.Namespace, duckdb: Any, local_overrides: dict[str, str]
             print(f"crosswalk join: --descriptor expects SLUG=PATH, got {item!r}", file=sys.stderr)
             return EXIT_ERROR
         if slug not in {path.parent.name for path in descriptor_paths}:
-            if not args.lake_bundle:
-                print(f"crosswalk join: --descriptor names no dataset {slug!r} under {source}", file=sys.stderr)
-                return EXIT_ERROR
-            # A table the lake does not hold yet, as on its first publish.
-            descriptor_paths.append(bundle_dir / slug / "datapackage.json")
+            print(f"crosswalk join: --descriptor names no dataset {slug!r} in {source}", file=sys.stderr)
+            return EXIT_ERROR
         descriptor_overrides[slug] = Path(raw_path)
-    descriptor_paths.sort()
     if args.out and not args.write:
         print("crosswalk join: --out only means something with --write", file=sys.stderr)
         return EXIT_ERROR

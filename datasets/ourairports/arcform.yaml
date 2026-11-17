@@ -192,39 +192,15 @@ steps:
       parquet: build/stage/ourairports.parquet
       schema: schema.finetype.json
 
-  # ── Self-describe: write the published Parquet with its descriptor inside ───────
-  - name: stamp_descriptor
-    op: uv@1
-    with:
-      script: ../../scripts/stamp_descriptor.py
-      sha256: a9356ac8d5412d94a940ebeef1e2508eaed6b77f1d923ada88edbacccf9d9b81
-      deps:
-        - duckdb==2.0.0
-      args:
-        - stamp
-        - --descriptor
-        - build/stage/described.json
-        - --parquet
-        - build/stage/ourairports.parquet
-        - --out
-        - build/ourairports.parquet
-        - --out-descriptor
-        - build/datapackage.json
-        - --carry-created
-      reads:
-        - build/stage/described.json
-        - build/stage/ourairports.parquet
-      produces:
-        - build/ourairports.parquet
-        - build/datapackage.json
-
   # ── Lake: every published table's descriptor, as the open lake holds it ─────────
   # The repository commits no descriptor: the lake's meta.descriptors and manifest.json
   # hold the one stored copy, and emit_descriptor.py joins the two back into each
   # table's full descriptor and writes them all to one bundle, table name to descriptor.
-  # The check below compares this build against it. It reads the public catalogue and
-  # manifest, with no credential, and declares both as remote reads, so arc runs it on
-  # every run. One file, so `arc test` can fixture this step by name.
+  # It runs before the stamp, which keeps the lake's `created` when it writes the object
+  # the lake already serves; the check before publish compares this build against it. It
+  # reads the public catalogue and manifest, with no credential, and declares both as
+  # remote reads, so arc runs it on every run. One file, so `arc test` can fixture this
+  # step by name.
   # `shasum -a 256 scripts/emit_descriptor.py` prints the digest.
   - name: emit_descriptors
     op: uv@1
@@ -245,6 +221,39 @@ steps:
         - ../../datasets/*/arcform.yaml
       produces:
         - build/lake_descriptors.json
+
+  # ── Self-describe: write the published Parquet with its descriptor inside ───────
+  # `--carry-created-from` keeps the `created` the lake's copy states when the stamped
+  # file is the object the lake already serves, so `created` stays when this data first
+  # appeared; anything else, a first publish included, takes the one `describe` wrote.
+  - name: stamp_descriptor
+    op: uv@1
+    with:
+      script: ../../scripts/stamp_descriptor.py
+      sha256: 8bc022565e3e0892518bcfedb18f28973293e7012c8a6830716559980e28400d
+      deps:
+        - duckdb==2.0.0
+      args:
+        - stamp
+        - --carry-created-from
+        - build/lake_descriptors.json
+        - --table
+        - library.ourairports
+        - --descriptor
+        - build/stage/described.json
+        - --parquet
+        - build/stage/ourairports.parquet
+        - --out
+        - build/ourairports.parquet
+        - --out-descriptor
+        - build/datapackage.json
+      reads:
+        - build/lake_descriptors.json
+        - build/stage/described.json
+        - build/stage/ourairports.parquet
+      produces:
+        - build/ourairports.parquet
+        - build/datapackage.json
 
   # ── Check: the built table against the lake, before it is published ─────────────
   # check_before_publish.py runs the three checks that need both this build and what the

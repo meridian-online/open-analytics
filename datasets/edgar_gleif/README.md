@@ -100,21 +100,24 @@ What those steps do, in phases:
     the footer of a copy of the staged Parquet, so the object answers for itself from
     its URL alone, and publish both: `build/edgar_gleif.parquet` and `build/datapackage.json`,
     the latter carrying the stamped file's `bytes`/`hash`. `op: uv@1` running
-    `../../scripts/stamp_descriptor.py`. It runs last because it embeds the FINISHED
-    descriptor, and everything before the footer is compared byte for byte — a stamp
+    `../../scripts/stamp_descriptor.py`. It is the last step that shapes the descriptor,
+    because it embeds the FINISHED one, and everything before the footer is compared byte for byte — a stamp
     that moved one data byte is refused with the original left in place.
 
-    **Each file has one writer, so a warm `arc run` with nothing changed re-runs no
-    step.** The stamp is the only step that writes the two published files; the export,
+    **Each file has one writer, so a warm `arc run` with nothing changed rebuilds
+    nothing before the coverage step.** `emit_descriptors` reads the live lake, so it
+    runs every time, and the steps that read its bundle (the coverage step, the stamp
+    and the check) run after it and write the same bytes again; publish then commits
+    nothing. The stamp is the only step that writes the two published files; the export,
     `describe` and the coverage step write into `build/stage/`. When two steps declared
     the same file, the later one rewrote the earlier one's output, arcform saw that
     output no longer match what its step had written, and the run re-did the export,
     `describe`, the coverage, the validation and the stamp on every invocation — and
     wrote a different Parquet each time, because `describe` stamps `created` from the
     wall clock. The footer no longer carries `created`, and in `build/datapackage.json` it
-    means *when this data first appeared*: a republish over the same data pages keeps
-    it. `scripts/test_manifest_one_writer.py` holds the manifest to one writer per file.
-11. **check before publishing** — `emit_descriptors` writes every published table's descriptor, as the open lake holds it, to `build/lake_descriptors.json`. It runs before the coverage step, which resolves the tables this one joins to from the same bundle. `check_before_publish` then holds the built descriptor to label agreement with them, to the frictionless reference implementation, and to `scripts/check_descriptors.py`'s rules read against the local Parquet. A failing check stops the run before publish.
+    means *when this data first appeared*: a stamp that writes the object the lake
+    already serves keeps the lake's `created`. `scripts/test_manifest_one_writer.py` holds the manifest to one writer per file.
+11. **check before publishing** — `emit_descriptors` writes every published table's descriptor, as the open lake holds it, to `build/lake_descriptors.json`. It runs before the coverage step, which resolves the tables this one joins to from the same bundle, and before the stamp, which keeps the lake's `created` when it writes the object the lake already serves. `check_before_publish` then holds the built descriptor to label agreement with them, to the frictionless reference implementation, and to `scripts/check_descriptors.py`'s rules read against the local Parquet. A failing check stops the run before publish.
 12. **publish** — upsert `library.edgar_lei` into the open lake on (`key_type`, `key`, `lei`), with its descriptor in the lake's `meta` schema and the readable copy at `library/edgar_lei.parquet` (see *Publish*).
 
 ## The identifier

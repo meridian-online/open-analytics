@@ -99,6 +99,37 @@ steps:
   # when they typed it — which is the claim that cannot be trusted here.
   - name: stamp_version
     command: "python3 ../../scripts/stamp_finetype_version.py --descriptor build/datapackage.json"
+
+  # ── Lake: every published table's descriptor, as the open lake holds it ─────────
+  # The repository commits no descriptor: the lake's meta.descriptors and manifest.json
+  # hold the one stored copy, and emit_descriptor.py joins the two back into each
+  # table's full descriptor and writes them all to one bundle, table name to descriptor.
+  # It runs before the stamp, which keeps the lake's `created` when it writes the object
+  # the lake already serves; the check before publish compares this build against it. It
+  # reads the public catalogue and manifest, with no credential, and declares both as
+  # remote reads, so arc runs it on every run. One file, so `arc test` can fixture this
+  # step by name.
+  # `shasum -a 256 scripts/emit_descriptor.py` prints the digest.
+  - name: emit_descriptors
+    op: uv@1
+    with:
+      script: ../../scripts/emit_descriptor.py
+      sha256: 300a284f5a2fdc7be0ae0d1bffb5d8962860bba10382f45c84634fe073181a2e
+      deps:
+        - duckdb==2.0.0
+        - pyyaml==6.0.3
+      args:
+        - --all
+        - --bundle
+        - build/lake_descriptors.json
+      # The tables it emits are the ones every Protocol's publish step names.
+      reads:
+        - https://openlake.meridian.online/catalog/open.ducklake
+        - https://openlake.meridian.online/manifest.json
+        - ../../datasets/*/arcform.yaml
+      produces:
+        - build/lake_descriptors.json
+
   # ── Self-describe: put the descriptor INSIDE the Parquet it describes ───────────
   # Someone holding https://openlake.meridian.online/gleif/lei.parquet
   # cannot find the datapackage.json that describes it: it is a second record, in a
@@ -108,7 +139,8 @@ steps:
   #   SELECT decode(value) FROM parquet_kv_metadata('<url>')
   #    WHERE decode(key) = 'datapackage.json';
   #
-  # It runs LAST because it embeds the FINISHED descriptor, and it re-measures the
+  # It is the last step that shapes the descriptor, because it embeds the FINISHED
+  # descriptor; only the checks before publish follow it. It re-measures the
   # resource `bytes` and `hash` because stamping lengthens the file past the figures
   # describe took off the unstamped build.
   #
@@ -126,6 +158,10 @@ steps:
   # decides the data bytes and a stamp that moved one is refused with the original left
   # in place. Re-running the step is a no-op to the byte.
   #
+  # `--carry-created-from` keeps the `created` the lake's copy states when the stamped
+  # file is the object the lake already serves, so `created` stays when this data first
+  # appeared; anything else, a first publish included, takes the one `describe` wrote.
+  #
   # `op: uv@1` rather than a bare `python3`: the readback imports duckdb, and a
   # `python3` without it failed the step. uv resolves the interpreter and the package
   # itself. It rewrites, in place, the Parquet `export_gleif` wrote and the
@@ -136,18 +172,23 @@ steps:
     with:
       script: ../../scripts/stamp_descriptor.py
       # `shasum -a 256 scripts/stamp_descriptor.py` prints this.
-      sha256: a9356ac8d5412d94a940ebeef1e2508eaed6b77f1d923ada88edbacccf9d9b81
+      sha256: 8bc022565e3e0892518bcfedb18f28973293e7012c8a6830716559980e28400d
       # Pinned to the DuckDB that engine_version names. The stamp
       # rewrites no data page, so this need not be the DuckDB that wrote the Parquet.
       deps:
         - duckdb==2.0.0
       args:
         - stamp
+        - --carry-created-from
+        - build/lake_descriptors.json
+        - --table
+        - gleif.lei
         - --descriptor
         - build/datapackage.json
         - --parquet
         - build/gleif.parquet
       reads:
+        - build/lake_descriptors.json
         - build/datapackage.json
         - build/gleif.parquet
       produces:
@@ -190,34 +231,6 @@ steps:
       compression: zstd
       row_group_size: 20000
       order_by: "token, lei"
-
-  # ── Lake: every published table's descriptor, as the open lake holds it ─────────
-  # The repository commits no descriptor: the lake's meta.descriptors and manifest.json
-  # hold the one stored copy, and emit_descriptor.py joins the two back into each
-  # table's full descriptor and writes them all to one bundle, table name to descriptor.
-  # The check below compares this build against it. It reads the public catalogue and
-  # manifest, with no credential, and declares both as remote reads, so arc runs it on
-  # every run. One file, so `arc test` can fixture this step by name.
-  # `shasum -a 256 scripts/emit_descriptor.py` prints the digest.
-  - name: emit_descriptors
-    op: uv@1
-    with:
-      script: ../../scripts/emit_descriptor.py
-      sha256: 300a284f5a2fdc7be0ae0d1bffb5d8962860bba10382f45c84634fe073181a2e
-      deps:
-        - duckdb==2.0.0
-        - pyyaml==6.0.3
-      args:
-        - --all
-        - --bundle
-        - build/lake_descriptors.json
-      # The tables it emits are the ones every Protocol's publish step names.
-      reads:
-        - https://openlake.meridian.online/catalog/open.ducklake
-        - https://openlake.meridian.online/manifest.json
-        - ../../datasets/*/arcform.yaml
-      produces:
-        - build/lake_descriptors.json
 
   # ── Check: the built table against the lake, before it is published ─────────────
   # check_before_publish.py runs the three checks that need both this build and what the
