@@ -40,11 +40,11 @@
 
 -- The compatibility forms of NFKD that occur in company names, folded as NFKD folds them:
 -- full-width ASCII (ＩＨＩ), superscript and subscript digits (IQ², H₂O), º and ª, the
--- Roman numerals, ™, ℠, № and the vulgar fractions. DuckDB has no NFKD; strip_accents
--- below does the rest of what it does here, folding accents. Then the Latin letters
--- neither folds that occur in GLEIF's names (Ł, Ø, Đ, Ð, ı, Ħ, Ŧ, ƫ, ĸ, Ə, Æ, Œ, ß, Þ, Ŋ)
--- and the ligatures ﬁ and ﬂ, spelt as ASCII: left alone, Ørsted A/S would read as a
--- word mixing scripts and lose its key.
+-- Roman numerals, ™, ℠, №, the vulgar fractions and the ligatures ﬁ and ﬂ. DuckDB has no
+-- NFKD; strip_accents below does the rest of what it does here, folding accents. Then
+-- the Latin letters neither folds that occur in GLEIF's names (Ł, Ø, Đ, Ð, ı, Ħ, Ŧ, ƫ, ĸ,
+-- Ə, Æ, Œ, ß, Þ, Ŋ), spelt as ASCII: left alone, Ørsted A/S would read as a word mixing
+-- scripts and lose its key.
 CREATE OR REPLACE MACRO name_fold(name) AS (
   list_reduce(
     [['Ⅻ', 'XII'], ['Ⅺ', 'XI'], ['Ⅹ', 'X'], ['Ⅸ', 'IX'], ['Ⅷ', 'VIII'], ['Ⅶ', 'VII'], ['Ⅵ', 'VI'],
