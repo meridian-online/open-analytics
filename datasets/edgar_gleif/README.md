@@ -25,7 +25,7 @@ happened to the sentence it replaces, and for months.
 
 <!-- protocol-steps: generated from arcform.yaml by scripts/check_protocol_readme.py — do not edit this block by hand -->
 
-All 26 steps are `sql:` models or typed `op:` operators from the arcform catalog. This Protocol runs no opaque `command:`/shell step.
+All 28 steps are `sql:` models or typed `op:` operators from the arcform catalog. This Protocol runs no opaque `command:`/shell step.
 
 | # | Step | How it runs |
 |---|---|---|
@@ -44,17 +44,19 @@ All 26 steps are `sql:` models or typed `op:` operators from the arcform catalog
 | 13 | `fetch_ncen_2025q3` | `op: http_fetch@1` |
 | 14 | `extract_ncen_2025q3` | `op: archive_extract@1` |
 | 15 | `load` | `sql: models/load.sql` |
-| 16 | `resolve` | `op: splink_resolve@1` |
-| 17 | `tier` | `sql: models/tier.sql` |
-| 18 | `package` | `sql: models/package.sql` |
-| 19 | `export_edgar_gleif` | `op: parquet_export@1` |
-| 20 | `describe` | `op: datapackage_describe@1` |
-| 21 | `emit_descriptors` | `op: uv@1` |
-| 22 | `derive_join_coverage` | `op: uv@1` |
-| 23 | `validate` | `op: finetype_validate@1` |
-| 24 | `stamp_descriptor` | `op: uv@1` |
-| 25 | `check_before_publish` | `op: uv@1` |
-| 26 | `publish` | `op: ducklake_write@1` |
+| 16 | `splink_inputs` | `sql: models/splink_inputs.sql` |
+| 17 | `score_pairs` | `op: splink@1` |
+| 18 | `resolved` | `sql: models/resolved.sql` |
+| 19 | `tier` | `sql: models/tier.sql` |
+| 20 | `package` | `sql: models/package.sql` |
+| 21 | `export_edgar_gleif` | `op: parquet_export@1` |
+| 22 | `describe` | `op: datapackage_describe@1` |
+| 23 | `emit_descriptors` | `op: uv@1` |
+| 24 | `derive_join_coverage` | `op: uv@1` |
+| 25 | `validate` | `op: finetype_validate@1` |
+| 26 | `stamp_descriptor` | `op: uv@1` |
+| 27 | `check_before_publish` | `op: uv@1` |
+| 28 | `publish` | `op: ducklake_write@1` |
 
 <!-- /protocol-steps -->
 
@@ -74,8 +76,12 @@ What those steps do, in phases:
    `key_type` (cik | series | class) from the SEC identifier scheme, and drop an N-CEN
    LEI when the check-digit arithmetic rejects it **and** GLEIF does not publish it.
    Both arms, not the arithmetic alone — see *The identifier*.
-4. **resolve** — probabilistic name match for the operating-company tail, via the
-   `splink_resolve` operator (frozen Fellegi-Sunter model, precision-first).
+4. **resolve** — probabilistic name match for the operating-company tail, precision-first,
+   in three steps: `splink_inputs` normalises both names and derives the blocking keys,
+   `score_pairs` (arc's general `splink@1` operator) scores the blocked pairs with the
+   frozen Fellegi-Sunter model in `models/edgar_gleif_model.json`, Splink's own settings
+   JSON, and `resolved` picks one LEI per EDGAR row and sets its status. The model and
+   both SQL halves live here, in the Protocol, not in the operator.
 5. **tier** — combine `authoritative` ∪ `confirmed` ∪ `candidate`; a deterministic
    edge always wins over a name match for the same key.
 6. **package** — enrich from the sources, stamp `as_of`, materialise the terminal edge
@@ -220,8 +226,8 @@ The last step publishes `library.edgar_lei` into the open lake (<https://openlak
 ## Boundaries (deliberate)
 
 - The arcform **engine** and the **operator catalog** live in the `arcform` repo; this
-  Protocol only *references* operators by `name@version` (e.g. `splink_resolve@1`). The
-  operators embed their frozen script bytes (`resolve.py`, `describe.py`, the dlt
+  Protocol only *references* operators by `name@version` (e.g. `splink@1`). The
+  operators embed their frozen script bytes (`splink.py`, `describe.py`, the dlt
   paginator), so `@1` addresses an exact, reproducible implementation — the path-call
   the `resolve`/`describe`/fetch steps used before is retired.
 - **Describe** — `build/datapackage.json` is **emitted**, not hand-authored. The `describe`
@@ -284,7 +290,7 @@ pair of objects. When `edgar` or `gleif` is republished and this crosswalk is no
 the referenced package declares a different `hash`, and the check reports the join
 as due a rebuild instead of failing it: the crosswalk is still true of the inputs it
 was built from, and re-measuring it against newer ones would only be satisfied by
-the four-hour `resolve` run. While the referenced package still declares the
+the four-hour resolve run. While the referenced package still declares the
 recorded hash, the join is measured and a disagreement fails, as before. A
 descriptor written before `measuredAgainst` existed carries none, and is measured
 against what is served until its next build writes one.
@@ -299,16 +305,16 @@ against scratch packages.
 - **Full SEC-entity universe (wired).** `fetch_cik_lookup` (http_fetch) +
   `build_sec_entities` (`models/sec_entities.sql`) + `export_sec_entities`
   (parquet_export) build the ~1.05M-filer resolution left side (cik-lookup + former
-  names), and `splink_resolve`'s blocking is
+  names), and the blocking keys `models/splink_inputs.sql` derives are
   tuned for it (compound keys, stopword handling, **country as a blocking dimension** —
   only ~355k of 3.36M GLEIF entities are US). Individuals (insider Form 3/4/5 filers)
   are left in but carry no LEI, so they never match — the **output is entity-only by
   construction** (no PII published).
-- **Run**: needs the `arc` binary, `uv` on `PATH` (the `splink_resolve`,
+- **Run**: needs the `arc` binary, `uv` on `PATH` (the `splink`,
   `gleif_ra_fetch` and `datapackage_describe` operators run their frozen scripts via
   `uv run`, and `emit_descriptors`, `derive_join_coverage`, `stamp_descriptor` and
   `check_before_publish` are `op: uv@1` steps running this repo's own Python — each
   pinned to its script's SHA-256 and to `duckdb==2.0.0`, with the interpreter pinned in the script's PEP 723 header, so
   neither needs a venv to exist or a global install), and `finetype` on `PATH` (the
-  describe operator shells out to it), with `FINETYPE_DUCKDB_EXT` at its DuckDB 2.0 extension; `arc run --param as_of=YYYY-MM-DD`. At full scale the resolve step is real compute (~100M candidate
+  describe operator shells out to it), with `FINETYPE_DUCKDB_EXT` at its DuckDB 2.0 extension; `arc run --param as_of=YYYY-MM-DD`. At full scale the `score_pairs` step is real compute (~100M candidate
   pairs) — run it deliberately.
