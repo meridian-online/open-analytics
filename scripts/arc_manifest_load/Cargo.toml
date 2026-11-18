@@ -6,8 +6,10 @@
 # channel and its crates.io name belongs to an unrelated crate; `arc`'s own stability
 # note tells a consumer inside the organisation to pin a git revision. brightfield loads
 # these same manifests through its own pinned `arc`, and two pins that drift can give two
-# answers to "is this manifest valid". This one is ahead of brightfield's, because the
-# Protocols here set `ducklake_write@1`'s `on_descriptor_change`, which older revisions refuse.
+# answers to "is this manifest valid", so the workflow's `arc-manifest-load-brightfield`
+# job builds a copy of this crate at brightfield's pin and loads every manifest again.
+# The Protocols here set `ducklake_write@1`'s `on_descriptor_change`, which older
+# revisions refuse.
 #
 # BUMPING: move three literals together, the `arc` rev below, `ARC_REV` in
 # .github/workflows/descriptors.yml, and Cargo.lock (`cargo update -p arcform`). The workflow's `arc-manifest-load` job refuses a Cargo.lock

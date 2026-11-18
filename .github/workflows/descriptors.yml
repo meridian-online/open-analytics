@@ -74,6 +74,19 @@
 # `examples/` or fifteen in all, because a walk over an emptied subtree otherwise reads
 # like full coverage.
 #
+# `arc-manifest-load-brightfield` loads the same manifests a second time, with the `arc`
+# Brightfield's main pins. Brightfield ships these Protocols and its nightly loads this
+# repository's main with its own pinned `arc`, so a manifest only a newer `arc` accepts
+# turns Brightfield's main red the moment it merges here. The job reads the arcform
+# revision from Brightfield's main Cargo.lock at run time, points a copy of the loader
+# at it (`scripts/brightfield_arc_pin.py`, self-tested by `brightfield-arc-pin-self-test`)
+# and walks the tree again. A refusal fails with both revisions named: the fix is a
+# Brightfield pull request that bumps its pin, opened alongside the change here. When
+# the two revisions are equal the job passes at once, since `arc-manifest-load` has
+# already answered. Because the revision is read from Brightfield's main, a Brightfield
+# pin change can redden this job on an unchanged branch; that is the same disagreement,
+# found from the other side.
+#
 # WHAT `arc-manifest-load` DOES NOT COVER. `Manifest::load` judges one document in
 # isolation. A `depends_on:` naming a step that does not exist loads, and `arc` runs it,
 # resolving the name as an external file source. A `sql:` step's model is never opened,
@@ -123,9 +136,10 @@ env:
   FRICTIONLESS_VERSION: "5.19.0"
   # The `arc` revision `arc-manifest-load` links, by git rev because `arc` has no
   # release channel. brightfield loads these same manifests through its own `arc`, and
-  # two pins that drift can give two answers to whether a manifest is valid; this one is
-  # ahead of brightfield's because every Protocol here sets `ducklake_write@1`'s
-  # `on_descriptor_change`, which older revisions refuse. It is also the `arc` that
+  # two pins that drift can give two answers to whether a manifest is valid, which is
+  # why `arc-manifest-load-brightfield` loads them again at brightfield's pin. Every
+  # Protocol here sets `ducklake_write@1`'s `on_descriptor_change`, which older
+  # revisions refuse. It is also the `arc` that
   # `protocol-tests` builds, and a publisher's `arc` must be this revision or later. scripts/arc_manifest_load/Cargo.toml carries the rev once and says how to
   # move all three literals together; `arc-manifest-load` refuses a Cargo.lock whose
   # arcform sources are not all at this rev, and `--locked` refuses a Cargo.toml the lock
@@ -424,6 +438,118 @@ jobs:
             cat arc-manifest-load.log
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+          exit $status
+
+  brightfield-arc-pin-self-test:
+    name: the Brightfield pin reader can fail
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: scratch locks and manifests, exit status and message
+        run: python scripts/test_brightfield_arc_pin.py
+
+  arc-manifest-load-brightfield:
+    name: every manifest loads through the arc Brightfield's main pins
+    needs: [arc-manifest-load-self-test, brightfield-arc-pin-self-test]
+    runs-on: ubuntu-latest
+    env:
+      # A copy of the loader crate inside the workspace, so rust-cache can key on it.
+      AT_PIN: ${{ github.workspace }}/build/arc-manifest-load-brightfield
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: the arc revision Brightfield's main pins
+        id: pin
+        shell: bash
+        run: |
+          set -euo pipefail
+          lock="$RUNNER_TEMP/brightfield.Cargo.lock"
+          curl -fsSL -o "$lock" \
+            https://raw.githubusercontent.com/meridian-online/brightfield/main/Cargo.lock
+          rev=$(python scripts/brightfield_arc_pin.py rev "$lock")
+          echo "rev=$rev" >> "$GITHUB_OUTPUT"
+          echo "Brightfield's main pins arc at $rev; this repository's ARC_REV is $ARC_REV"
+          if [ "$rev" = "$ARC_REV" ]; then
+            echo "same=true" >> "$GITHUB_OUTPUT"
+            echo "### Brightfield pins arc at ARC_REV (\`$rev\`); arc-manifest-load has already loaded every manifest with it" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: a copy of the loader at Brightfield's revision
+        if: steps.pin.outputs.same != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$AT_PIN"
+          cp -R scripts/arc_manifest_load/Cargo.toml scripts/arc_manifest_load/Cargo.lock \
+            scripts/arc_manifest_load/src "$AT_PIN/"
+          python scripts/brightfield_arc_pin.py retarget "$AT_PIN/Cargo.toml" "${{ steps.pin.outputs.rev }}"
+      - uses: dtolnay/rust-toolchain@stable
+        if: steps.pin.outputs.same != 'true'
+        with:
+          toolchain: ${{ env.ARC_RUST_TOOLCHAIN }}
+      - uses: Swatinem/rust-cache@v2
+        if: steps.pin.outputs.same != 'true'
+        with:
+          workspaces: build/arc-manifest-load-brightfield
+          shared-key: arc-manifest-load-brightfield
+      - name: install libduckdb
+        if: steps.pin.outputs.same != 'true'
+        run: |
+          set -euo pipefail
+          curl -fsSL -o "$RUNNER_TEMP/libduckdb.tar.gz" \
+            "https://github.com/duckdb/duckdb/releases/download/${ARC_LIBDUCKDB_VERSION}/duckdb-shared-libs-linux-amd64.tar.gz"
+          mkdir -p "$HOME/libduckdb"
+          tar -xzf "$RUNNER_TEMP/libduckdb.tar.gz" -C "$HOME/libduckdb"
+          {
+            echo "DUCKDB_LIB_DIR=$HOME/libduckdb"
+            echo "DUCKDB_INCLUDE_DIR=$HOME/libduckdb"
+            echo "LD_LIBRARY_PATH=$HOME/libduckdb${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+          } >> "$GITHUB_ENV"
+      # Not `--locked`: the copied lock still names ARC_REV, and this build is what moves
+      # its arcform entries to Brightfield's revision. The check after it holds the lock
+      # it wrote to that revision and no other.
+      - name: build the loader at Brightfield's revision
+        if: steps.pin.outputs.same != 'true'
+        shell: bash
+        working-directory: build/arc-manifest-load-brightfield
+        run: |
+          set -euo pipefail
+          bf="${{ steps.pin.outputs.rev }}"
+          if ! cargo build; then
+            echo "::error::the manifest loader does not build against the arc Brightfield's main pins ($bf); this repository's ARC_REV is $ARC_REV"
+            exit 1
+          fi
+          got=$(python "$GITHUB_WORKSPACE/scripts/brightfield_arc_pin.py" rev Cargo.lock)
+          if [ "$got" != "$bf" ]; then
+            echo "::error::the loader built against arc $got, not Brightfield's pin $bf"
+            exit 1
+          fi
+      - name: every datasets/ and examples/ manifest through Brightfield's arc
+        if: steps.pin.outputs.same != 'true'
+        shell: bash
+        run: |
+          bf="${{ steps.pin.outputs.rev }}"
+          set +e
+          "$AT_PIN/target/debug/arc-manifest-load" "$GITHUB_WORKSPACE" > arc-manifest-load-brightfield.log 2>&1
+          status=$?
+          set -e
+          cat arc-manifest-load-brightfield.log
+          {
+            echo "### Every manifest through the arc Brightfield's main pins, \`$bf\`"
+            echo
+            echo "This repository's ARC_REV is \`$ARC_REV\`."
+            echo
+            echo '```'
+            cat arc-manifest-load-brightfield.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$status" -ne 0 ]; then
+            echo "::error::Brightfield's main pins arc at $bf, which refuses a manifest that arc at this repository's ARC_REV ($ARC_REV) may accept. Brightfield loads this repository's main, so merging this turns Brightfield's main red: open the Brightfield pull request that bumps its arc pin alongside this one, merge it first, then re-run this job."
+          fi
           exit $status
 
   label-agreement-self-test:
