@@ -1,6 +1,6 @@
 {
   "title": "EDGAR \u2194 GLEIF \u2014 company-to-LEI crosswalk",
-  "description": "A resolved crosswalk linking SEC EDGAR registrants (CIK / ticker / fund series) to their GLEIF Legal Entity Identifier (LEI) \u2014 one row per link between an EDGAR identifier and an LEI, each carrying its provenance tier, method and confidence. Authoritative edges come from official SEC/GLEIF registration (no guessing); the operating-company tail is linked by probabilistic name resolution (Fellegi-Sunter / Splink): exact normalized-name matches are confirmed (98% of them agree with GLEIF's own SEC registrations where those name the filer), while name-only fuzzy matches are surfaced as candidates rather than auto-confirmed. A point-in-time snapshot, with an as-of date on every row.",
+  "description": "A resolved crosswalk linking SEC EDGAR registrants (CIK / ticker / fund series) to their GLEIF Legal Entity Identifier (LEI) \u2014 one row per link between an EDGAR identifier and an LEI, each carrying its provenance tier, method and confidence. Authoritative edges come from official SEC/GLEIF registration (no guessing); the operating-company tail is linked by probabilistic name resolution (Fellegi-Sunter / Splink): exact normalized-name matches are confirmed (98% of them agree with GLEIF's own SEC registrations, measured on the filers those name, whose name matches the crosswalk replaces with the registration), while name-only fuzzy matches are surfaced as candidates rather than auto-confirmed. A point-in-time snapshot, with an as-of date on every row.",
   "homepage": "https://meridian.online/datasets/edgar_gleif",
   "licenses": [
     {
@@ -72,7 +72,7 @@
       "description": "How the edge was established. Authoritative: sec-registration (GLEIF RA000665) or sec-ncen (SEC Form N-CEN). Probabilistic: exact_name (identical normalized company name) or jaro_winkler (fuzzy name)."
     },
     "tier": {
-      "description": "Provenance tier, in precedence order: authoritative (deterministic SEC/GLEIF registration \u2014 no guessing), confirmed (exact normalized-name Splink match; 98% agree with GLEIF's own SEC registrations where those name the filer), candidate (name-only fuzzy match, surfaced NOT asserted), ambiguous (one exact name matched more than one entity). A deterministic edge always wins over a name match for the same key. The type on this field is declared, not inferred: `nominations.finetype.json` beside this descriptor nominates `representation.text.word` and says why, so the field carries `x-finetype-nominated` and no confidence. Inferred, the label is a draw: finetype returned it on 193 of 300 independent 100-value samples of this column and datetime.component.month_name on 107."
+      "description": "Provenance tier, in precedence order: authoritative (deterministic SEC/GLEIF registration \u2014 no guessing), confirmed (exact normalized-name Splink match; 98% agree with GLEIF's own SEC registrations, measured on the filers those name, whose name matches the crosswalk replaces with the registration), candidate (name-only fuzzy match, surfaced NOT asserted), ambiguous (one exact name matched more than one entity). A deterministic edge always wins over a name match for the same key. The type on this field is declared, not inferred: `nominations.finetype.json` beside this descriptor nominates `representation.text.word` and says why, so the field carries `x-finetype-nominated` and no confidence. Inferred, the label is a draw: finetype returned it on 193 of 300 independent 100-value samples of this column and datetime.component.month_name on 107."
     },
     "confidence": {
       "description": "Edge confidence in [0, 1]: 1.0 for authoritative edges; the Fellegi-Sunter posterior match probability under the frozen resolution model for probabilistic edges."
@@ -136,7 +136,7 @@
             "RETIRED"
           ],
           "method": "Fellegi-Sunter probabilistic record linkage (Splink), frozen model, for the operating-company tail; official SEC/GLEIF registration for authoritative edges",
-          "precision": "exact normalized-name matches auto-confirmed; name-only fuzzy matches surfaced as candidate, not confirmed. Measured in November 2026 against GLEIF's own SEC registrations (RA000665), on the filers they name: 98% of exact-name confirmations and 20% of fuzzy candidates are the registered LEI",
+          "precision": "exact normalized-name matches auto-confirmed; name-only fuzzy matches surfaced as candidate, not confirmed. Measured in November 2026 against GLEIF's own SEC registrations (RA000665), on the filers they name: 98% of exact-name confirmations and 20% of fuzzy candidates are the registered LEI. The crosswalk replaces those filers' name matches with the registration, so the published name-matched rows are other filers; scripts/measure_precision.sql reproduces the figures",
           "status": "per-row (see the tier column)",
           "tie_break": "the same legal form, then ISSUED > LAPSED > RETIRED, then US jurisdiction, then the lower LEI"
         },

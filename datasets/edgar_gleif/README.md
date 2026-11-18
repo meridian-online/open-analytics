@@ -97,6 +97,11 @@ What those steps do, in phases:
    edges they changed, 100 moved to another confirmed LEI (THE MOSAIC COMPANY in place of
    an entity named Mosaic), 113 fell to candidate, most with an LLC or LP on one side and
    a corporation on the other, 8 became ambiguous and 7 left the crosswalk.
+   `scripts/measure_precision.sql` holds the matcher to GLEIF's own SEC registrations on
+   the filers they name: 98% of exact-name confirmations and 20% of fuzzy candidates are
+   the registered LEI. The crosswalk replaces those filers' name matches with the
+   registration, so the figure is the matcher's precision where the answer is known, not
+   a measurement of the published name-matched rows.
 5. **tier** — combine `authoritative` ∪ `confirmed` ∪ `candidate`; a deterministic
    edge always wins over a name match for the same key.
 6. **package** — enrich from the sources, stamp `as_of`, materialise the terminal edge
