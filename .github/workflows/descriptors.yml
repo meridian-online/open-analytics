@@ -130,7 +130,7 @@ env:
   # move all three literals together; `arc-manifest-load` refuses a Cargo.lock whose
   # arcform sources are not all at this rev, and `--locked` refuses a Cargo.toml the lock
   # does not match.
-  ARC_REV: "d2ef25df67a81dcab3414c22cca2654e156ff734"
+  ARC_REV: "f5f3f071bd10c04a20aafb4619f637c61127760a"
   # The toolchain and the DuckDB C library arcform's own CI builds `arc` with at
   # `ARC_REV`, and they move with it. The loader calls no DuckDB function; it links the
   # library because `arc` does. This is a separate literal from `DUCKDB_VERSION`, which
