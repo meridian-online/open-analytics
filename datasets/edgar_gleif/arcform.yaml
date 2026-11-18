@@ -195,8 +195,8 @@ steps:
     sql: models/splink_inputs.sql
 
   - name: score_pairs
-    # The full-corpus scoring is the long step (hours), so retry is pinned to 1: a cap
-    # stops the engine re-attempting it after a mid-run failure or timeout.
+    # Retry is pinned to 1, as the full-corpus scoring step's always was: a failure here
+    # is the model or the inputs, which a second attempt does not change.
     op: splink@1
     with:
       inputs:
