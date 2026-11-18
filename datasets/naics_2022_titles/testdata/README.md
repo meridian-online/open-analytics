@@ -7,7 +7,7 @@ Cut-down copies of the two Census workbooks the Protocol fetches, downloaded on 
 | `naics_index.xlsx` | `fetch_index`, Census's `2022_NAICS_Index_File.xlsx` | 19 entries: 111110 (1), 111120 (all 8), 221114 (all 3, one of them ending in spaces), 621399 (4, among them one with a curly apostrophe and one with a double space), 813410 (3, among them `Veterans'  membership organizations`); and three of Census's 25 `******` cross-references |
 | `naics_descriptions.xlsx` | `fetch_naics`, Census's `2022_NAICS_Descriptions.xlsx` | 28 rows: those five national industries and every code above them, the sector range 31-33, and 541120 with its ancestors, a national industry with no index entries |
 
-The lake fixtures were emitted from the open lake on 2026-11-17 with `python scripts/emit_descriptor.py --all --bundle <file>`, from the repository root, with `census.naics_2022` replaced on 2026-11-18 by the descriptor its Protocol builds on the code-list contract, as the lake will hold it once that build is published, and need regenerating when a table they hold is republished with different declarations:
+The lake fixtures were emitted from the open lake on 2026-11-17 with `python scripts/emit_descriptor.py --all --bundle <file>`, from the repository root, with `census.naics_2022` replaced on 2026-11-18 by the descriptor its Protocol builds on the code-list contract, which the lake has published since snapshot 19, and need regenerating when a table they hold is republished with different declarations:
 
 | Fixture | Stands in for | Kept |
 |---|---|---|

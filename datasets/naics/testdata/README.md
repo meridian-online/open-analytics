@@ -6,7 +6,7 @@ A cut-down copy of the Census workbook the Protocol fetches, downloaded on 2026-
 |---|---|---|
 | `naics_descriptions.xlsx` | `fetch_naics`, Census's `2022_NAICS_Descriptions.xlsx` | 37 rows: the 28 of `../../naics_2022_titles/testdata/naics_descriptions.xlsx` (five national industries with index entries, 541120, every code above them, and the sector range 31-33), and the chains 311 to 311111 under 31-33 and 441 to 441110 under 44-45, with the range 44-45 itself. Two industry groups, 3111 and 8134, have no paragraph of their own |
 
-The lake fixtures are the bundle `python scripts/emit_descriptor.py --all --bundle <file>` emitted from the open lake on 2026-11-17, from the repository root, with `census.naics_2022` replaced by the descriptor this Protocol builds on the code-list contract, as the lake will hold it once that build is published. They need regenerating when a table they hold is republished with different declarations:
+The lake fixtures are the bundle `python scripts/emit_descriptor.py --all --bundle <file>` emitted from the open lake on 2026-11-17, from the repository root, with `census.naics_2022` replaced by the descriptor this Protocol builds on the code-list contract, which the lake has published since snapshot 19. They need regenerating when a table they hold is republished with different declarations:
 
 | Fixture | Stands in for | Kept |
 |---|---|---|
