@@ -34,7 +34,7 @@ All 28 steps are `sql:` models or typed `op:` operators from the arcform catalog
 | 3 | `fetch_cik_lookup` | `op: http_fetch@1` |
 | 4 | `build_sec_entities` | `sql: models/sec_entities.sql` |
 | 5 | `export_sec_entities` | `op: parquet_export@1` |
-| 6 | `fetch_gleif_sec_registrations` | `op: gleif_ra_fetch@1` |
+| 6 | `fetch_gleif_sec_registrations` | `op: dlt@1` |
 | 7 | `fetch_ncen_2026q2` | `op: http_fetch@1` |
 | 8 | `extract_ncen_2026q2` | `op: archive_extract@1` |
 | 9 | `fetch_ncen_2026q1` | `op: http_fetch@1` |
@@ -331,7 +331,7 @@ against scratch packages.
   are left in but carry no LEI, so they never match — the **output is entity-only by
   construction** (no PII published).
 - **Run**: needs the `arc` binary, `uv` on `PATH` (the `splink`,
-  `gleif_ra_fetch` and `datapackage_describe` operators run their frozen scripts via
+  `dlt` and `datapackage_describe` operators run their frozen scripts via
   `uv run`, and `emit_descriptors`, `derive_join_coverage`, `stamp_descriptor` and
   `check_before_publish` are `op: uv@1` steps running this repo's own Python — each
   pinned to its script's SHA-256 and to `duckdb==2.0.0`, with the interpreter pinned in the script's PEP 723 header, so

@@ -39,6 +39,7 @@ No case touches the network.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -139,9 +140,22 @@ class Fixture:
             ),
             encoding="utf-8",
         )
-        (self.build / "gleif_ra_sec.csv").write_text(
-            "lei,registered_as,category\n"
-            + "".join(f"{lei},{key},{category}\n" for key, lei, category in self.ra_sec),
+        # GLEIF's lei-records as the `dlt@1` fetch writes them, one JSON object per line,
+        # cut to the three fields models/load.sql takes from each.
+        (self.build / "gleif_ra_sec.jsonl").write_text(
+            "".join(
+                json.dumps(
+                    {
+                        "type": "lei-records",
+                        "id": lei,
+                        "attributes": {"lei": lei, "entity": {"registeredAs": key, "category": category}},
+                    },
+                    sort_keys=True,
+                    separators=(",", ":"),
+                )
+                + "\n"
+                for key, lei, category in self.ra_sec
+            ),
             encoding="utf-8",
         )
         for quarter, table, rows_ in (
