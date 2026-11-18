@@ -520,7 +520,7 @@ jobs:
           set -euo pipefail
           bf="${{ steps.pin.outputs.rev }}"
           if ! cargo build; then
-            echo "::error::the manifest loader does not build against the arc Brightfield's main pins ($bf); this repository's ARC_REV is $ARC_REV"
+            echo "::error::the manifest loader does not build against the arc Brightfield's main pins ($bf); this repository's ARC_REV is $ARC_REV. If Brightfield's pin is the newer, ARC_REV and the toolchain and libduckdb that move with it may need to follow it here."
             exit 1
           fi
           got=$(python "$GITHUB_WORKSPACE/scripts/brightfield_arc_pin.py" rev Cargo.lock)
@@ -548,7 +548,7 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           if [ "$status" -ne 0 ]; then
-            echo "::error::Brightfield's main pins arc at $bf, which refuses a manifest that arc at this repository's ARC_REV ($ARC_REV) may accept. Brightfield loads this repository's main, so merging this turns Brightfield's main red: open the Brightfield pull request that bumps its arc pin alongside this one, merge it first, then re-run this job."
+            echo "::error::Brightfield's main pins arc at $bf, and it refuses a manifest here; this repository's ARC_REV is $ARC_REV. Brightfield loads this repository's main, so it is red until the two agree. When ARC_REV is the newer, open the Brightfield pull request that bumps its arc pin alongside this one, merge it first, then re-run this job. When Brightfield's pin is the newer, the manifest or ARC_REV moves here."
           fi
           exit $status
 
