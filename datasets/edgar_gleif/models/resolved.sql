@@ -3,10 +3,13 @@
 --
 -- Ties on match probability go to the entity with the same legal form (`fname`, so WD 40
 -- CO takes WD-40 Company over WD-40 COMPANY LIMITED), then to the better registration
--- (ISSUED > LAPSED > RETIRED), then to a US jurisdiction, then to the lower LEI. Precision first: only an exact
--- normalised-name match is `confirmed` (a name-only fuzzy match is ~55% precise, so it
--- is a `candidate`), and an exact name still tied with another entity after the
--- tie-break is `ambiguous`.
+-- (ISSUED > LAPSED > RETIRED), then to a US jurisdiction, then to the lower LEI.
+--
+-- Precision first: only an exact normalised-name match is `confirmed`, and a name-only
+-- fuzzy match is a `candidate`. Measured in November 2026 against GLEIF's own SEC
+-- registrations (RA000665), on the filers they name, 98% of exact-name confirmations and
+-- 20% of fuzzy candidates were the registered LEI. An exact name still tied with another
+-- entity after the tie-break is `ambiguous`.
 CREATE OR REPLACE TABLE resolved_edges AS
 WITH oriented AS (
   SELECT CASE WHEN source_dataset_l = 'edgar' THEN uid_l ELSE uid_r END AS e_uid,
