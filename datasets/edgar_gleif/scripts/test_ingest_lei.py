@@ -27,10 +27,12 @@ rather than trusting that the two are independent.
 The arithmetic is pinned against an independent implementation — expand to digits, one
 big integer, mod 97 — because a checksum that agrees only with itself is not a checksum.
 
-Not covered, named rather than implied: `arc run` itself. The fetch, export, resolve,
-validate and describe steps are arcform operators whose code lives in another repo, and
-the resolve step is a multi-hour job; the fixtures stand in for their outputs. What is
-covered is every `sql:` model the manifest names, byte for byte as shipped.
+Not covered, named rather than implied: `arc run` itself. The fetch, export,
+score_pairs, validate and describe steps are arcform operators whose code lives in
+another repo; the fixtures stand in for their outputs. `score_pairs` (op: splink@1) is
+stood in for by a scratch `build/scored_pairs.parquet` in its output shape, so the
+resolver's own SQL, `models/resolved.sql`, runs under test. What is covered is every
+`sql:` model the manifest names, byte for byte as shipped.
 
 No case touches the network.
 """
@@ -100,9 +102,9 @@ class Fixture:
         self.ncen_registrant: list[tuple[str, str]] = [("1000001", LEI_TRUST)]
         self.ncen_series: list[tuple[str, str]] = [("S000000001", LEI_SERIES)]
         self.ra_sec: list[tuple[str, str, str]] = [("1000002", LEI_RA, "FUND")]
-        self.resolved: list[tuple[str, str, str, str, float]] = [
-            ("1000003", LEI_OPCO, "exact_name", "confirmed", 0.99)
-        ]
+        # The pairs the scorer keeps: (EDGAR cik, GLEIF lei, match probability).
+        # models/resolved.sql derives each edge's method and status from them.
+        self.scored: list[tuple[str, str, float]] = [("1000003", LEI_OPCO, 0.99)]
         self.gleif: list[str] = [LEI_TRUST, LEI_SERIES, LEI_OPCO, LEI_RA, LEI_LEGACY]
 
     def model(self, name: str) -> Path:
@@ -127,15 +129,6 @@ class Fixture:
         con.execute(
             "COPY (SELECT * FROM (VALUES (1000003, 'SCRATCH', 'NYSE'), (1000001, 'TRUST', 'NASDAQ')) "
             f"t(cik, ticker, exchange)) TO '{self.build / 'edgar.parquet'}' (FORMAT parquet)"
-        )
-        resolved = ", ".join(
-            f"({literal(cik)}, {literal(lei)}, {literal(method)}, {literal(status)}, {probability})"
-            for cik, lei, method, status, probability in self.resolved
-        )
-        con.execute(
-            "COPY (SELECT * FROM (VALUES " + resolved + ") "
-            "t(cik, lei, method, status, match_probability)) "
-            f"TO '{self.build / 'resolved.parquet'}' (FORMAT parquet)"
         )
         con.close()
 
@@ -162,6 +155,33 @@ class Fixture:
                 header + "".join(f"{key}\t{lei}\n" for key, lei in rows_), encoding="utf-8"
             )
 
+    def score_pairs(self, con) -> None:
+        """Stand in for the `score_pairs` step (op: splink@1), after splink_inputs.sql.
+
+        Writes build/scored_pairs.parquet in splink@1's output shape, one pair per
+        `self.scored` entry, EDGAR on the left. An LEI GLEIF does not publish cannot come
+        out of a real scorer, whose right side is GLEIF's own rows; the gate exists for
+        when something upstream is broken, so such an LEI is added to `gleif_src` (the
+        scorer's input) and not to `gleif` (what the gate checks against), which is the
+        broken upstream the gate must catch.
+        """
+        for _, lei, _ in self.scored:
+            con.execute(
+                "INSERT INTO gleif_src SELECT ?, 'SCRATCH ENTITY', 'US-DE', 'US', 'ISSUED', 'SCRATCH ENTITY' "
+                "WHERE NOT EXISTS (SELECT 1 FROM gleif_src WHERE uid = ?)",
+                [lei, lei],
+            )
+        con.execute("CREATE OR REPLACE TEMP TABLE scored (cik VARCHAR, lei VARCHAR, p DOUBLE)")
+        con.executemany("INSERT INTO scored VALUES (?, ?, ?)", self.scored)
+        con.execute(
+            "COPY (SELECT e.uid AS uid_l, s.lei AS uid_r, 'edgar' AS source_dataset_l, "
+            "'gleif' AS source_dataset_r, log2(s.p / (1 - s.p)) AS match_weight, "
+            "s.p AS match_probability "
+            "FROM scored s JOIN edgar_src e ON e.cik = s.cik "
+            "ORDER BY source_dataset_l, source_dataset_r, uid_l, uid_r) "
+            "TO 'build/scored_pairs.parquet' (FORMAT parquet)"
+        )
+
     def run(self):
         """Run every shipped model in manifest order; return the terminal rows."""
         import duckdb
@@ -182,6 +202,8 @@ class Fixture:
                     # Stands in for the `export_sec_entities` parquet_export operator,
                     # the one hand-off between two models that is not itself a model.
                     con.execute("COPY sec_entities TO 'build/sec_entities.parquet' (FORMAT parquet)")
+                if model.name == "splink_inputs.sql":
+                    self.score_pairs(con)
             rows = con.execute(
                 "SELECT key_type, key, lei, method, tier FROM edgar_gleif_out ORDER BY key_type, key, lei"
             ).fetchall()
@@ -276,7 +298,7 @@ class IngestLeiSelfTest(unittest.TestCase):
         self.assertRunFails(LEI_INVENTED)
 
     def test_the_resolver_route_stops_the_run(self) -> None:
-        self.fixture.resolved.append(("1000004", LEI_TRANSCRIBED, "exact_name", "confirmed", 0.97))
+        self.fixture.scored.append(("1000004", LEI_TRANSCRIBED, 0.97))
         self.assertRunFails(LEI_TRANSCRIBED)
 
     def test_an_unreadable_identifier_stops_the_run(self) -> None:
@@ -285,13 +307,15 @@ class IngestLeiSelfTest(unittest.TestCase):
         A character outside [0-9A-Z] makes `lei_mod97` NULL, and `NULL <> 1` is NULL,
         which a WHERE clause drops — the row would ship. That is what `IS DISTINCT
         FROM` in the gate is for. (A NULL identifier folds to 0 and either operator
-        catches it, so a NULL alone does not exercise this.)
+        catches it, so a NULL alone does not exercise this. Nor can a NULL reach the
+        gate by the resolver route: splink@1 refuses a NULL unique id, and
+        models/resolved.sql joins each pair to its GLEIF row on it.)
         """
-        for lei in (LEI_MALFORMED, None):
+        for lei in (LEI_MALFORMED,):
             with self.subTest(lei=lei):
                 fixture = Fixture()
                 self.addCleanup(fixture.destroy)
-                fixture.resolved.append(("1000004", lei, "exact_name", "confirmed", 0.97))
+                fixture.scored.append(("1000004", lei, 0.97))
                 with self.assertRaises(Exception) as caught:
                     fixture.run()
                 self.assertIn("fails ISO 7064 MOD 97-10", str(caught.exception))
