@@ -530,8 +530,44 @@ class AdapterTest(unittest.TestCase):
         self.assertEqual({(s.slug, s.descriptor) for f in rules for s in f.subjects}, {("gadgets", "gadgets/gadget_parts.datapackage.json")})
         self.assertTrue(all(f.detail.startswith("gadgets/gadget_parts.datapackage.json :: ") for f in rules))
         self.assertEqual({lc.sort_finding(self.repo, self.tree(), f) for f in rules}, {lc.DRIFT})
-        # The licence notice rule already read it in the first run; it is not reported twice.
-        self.assertEqual([f for f in found if "licence.notice" in f.detail and "packages" in f.detail], [])
+
+    def per_table_run_reporting(self, status: int, items: list[dict]) -> tuple[lc.Ran, list[lc.Finding]]:
+        """`check_per_table_descriptors` with the descriptor check replaced by one that reports `items`."""
+        self.package("gadgets", [{"name": "n", "type": "integer"}], "SELECT 1 AS n", table="gadget_parts")
+        tree = self.tree()
+        original = lc.run
+
+        def run(check: str, argv: list[str]) -> lc.Ran:
+            out = Path(argv[argv.index("--json") + 1])
+            out.write_text(json.dumps({"violations": items, "pending": []}), encoding="utf-8")
+            return lc.Ran(check, status, "")
+
+        lc.run = run
+        self.addCleanup(setattr, lc, "run", original)
+        return lc.check_per_table_descriptors(tree, self.work, tree.per_table())
+
+    def item(self, rule: str) -> dict:
+        package = str(self.work / "packages" / "gadget_parts" / "datapackage.json")
+        return {"package": package, "resource": "(package)", "field": "", "rule": rule, "detail": "d"}
+
+    def test_a_per_table_run_failing_on_a_licence_notice_alone_is_no_finding(self) -> None:
+        # The first run reads the licence notice rule over per-table descriptors already,
+        # and reports it against licence-notices.json; the second must neither repeat it
+        # nor call its exit 1 a crash.
+        self.package("widgets", [{"name": "n", "type": "integer"}], "SELECT 1 AS n")
+        ran, found = self.per_table_run_reporting(1, [self.item("licence.notice")])
+        self.assertEqual(ran.status, 1)
+        self.assertEqual(found, [])
+
+    def test_a_per_table_run_keeps_every_other_finding_beside_a_notice(self) -> None:
+        ran, found = self.per_table_run_reporting(1, [self.item("licence.notice"), self.item("schema.fields")])
+        self.assertEqual([f.detail for f in found], ["gadgets/gadget_parts.datapackage.json :: (package): schema.fields: d"])
+        self.assertEqual([(s.slug, s.descriptor) for s in found[0].subjects], [("gadgets", "gadgets/gadget_parts.datapackage.json")])
+
+    def test_a_per_table_run_that_exits_1_reporting_nothing_is_a_crash(self) -> None:
+        ran, found = self.per_table_run_reporting(1, [])
+        self.assertEqual(len(found), 1)
+        self.assertIn("no finding this script can attribute", found[0].detail)
 
     def test_frictionless_reads_a_per_table_descriptor(self) -> None:
         import frictionless

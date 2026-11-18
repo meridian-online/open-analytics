@@ -513,14 +513,20 @@ def check_per_table_descriptors(tree: Tree, work: Path, names: list[str]) -> tup
     )
     report = read_json(out)
 
-    def convert(item: dict[str, Any]) -> Finding | None:
-        if str(item["rule"]).startswith("licence.notice"):
-            return None
+    def notice(item: Any) -> bool:
+        return isinstance(item, dict) and str(item.get("rule", "")).startswith("licence.notice")
+
+    def convert(item: dict[str, Any]) -> Finding:
         subject = tree.subject_for_checked_path(item["package"])
         where = f"{subject.descriptor if subject else item['package']} :: {item['resource']}: {item['rule']}: {item['detail']}"
         return Finding("descriptors", where, [subject] if subject else [], lake_only=True)
 
-    return ran, crashed(ran, each("descriptors", [*report.get("violations", []), *report.get("pending", [])], convert))
+    reported = [*report.get("violations", []), *report.get("pending", [])]
+    found = each("descriptors", [item for item in reported if not notice(item)], convert)
+    if ran.status == 1 and reported and not found:
+        # Every finding was a licence notice, which the first run reports: not a crash.
+        return ran, []
+    return ran, crashed(ran, found)
 
 
 def packages_view(tree: Tree, work: Path) -> Path:
