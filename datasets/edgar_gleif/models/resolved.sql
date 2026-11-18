@@ -1,8 +1,9 @@
 -- Choose one GLEIF entity per EDGAR row from the pairs `score_pairs` scored, and give
 -- each edge its method and status. Writes build/resolved.parquet, which tier.sql reads.
 --
--- Ties on match probability go to the better registration (ISSUED > LAPSED > RETIRED),
--- then to a US jurisdiction, then to the lower LEI. Precision first: only an exact
+-- Ties on match probability go to the entity with the same legal form (`fname`, so WD 40
+-- CO takes WD-40 Company over WD-40 COMPANY LIMITED), then to the better registration
+-- (ISSUED > LAPSED > RETIRED), then to a US jurisdiction, then to the lower LEI. Precision first: only an exact
 -- normalised-name match is `confirmed` (a name-only fuzzy match is ~55% precise, so it
 -- is a `candidate`), and an exact name still tied with another entity after the
 -- tie-break is `ambiguous`.
@@ -19,7 +20,8 @@ joined AS (
          o.match_weight, o.match_probability,
          CASE g.reg_status WHEN 'ISSUED' THEN 0 WHEN 'LAPSED' THEN 1
                            WHEN 'RETIRED' THEN 2 ELSE 3 END AS reg_rank,
-         (g.jurisdiction LIKE 'US%') AS is_us
+         (g.jurisdiction LIKE 'US%') AS is_us,
+         (e.fname = g.fname) AS same_form
   FROM oriented o
   JOIN edgar_src e ON e.uid = o.e_uid
   JOIN gleif_src g ON g.uid = o.g_uid
@@ -27,8 +29,8 @@ joined AS (
 ranked AS (
   SELECT *,
     row_number() OVER (PARTITION BY e_uid
-      ORDER BY match_probability DESC, reg_rank ASC, is_us DESC, lei) AS rn,
-    count(*) OVER (PARTITION BY e_uid, match_probability, reg_rank, is_us) AS n_equiv
+      ORDER BY match_probability DESC, same_form DESC, reg_rank ASC, is_us DESC, lei) AS rn,
+    count(*) OVER (PARTITION BY e_uid, match_probability, same_form, reg_rank, is_us) AS n_equiv
   FROM joined
 )
 SELECT cik, ticker, company_name, lei, legal_name, jurisdiction, reg_status,

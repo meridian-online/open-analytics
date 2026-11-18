@@ -449,7 +449,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        protocol: [fips, ourairports, naics, naics_2022_titles, naics_2017_to_2022]
+        protocol: [fips, ourairports, naics, naics_2022_titles, naics_2017_to_2022, edgar_gleif]
     steps:
       - uses: actions/checkout@v4
         with:

@@ -1,0 +1,223 @@
+# The edgar_gleif Protocol's tests, run by `arc test` from this folder (see README.md).
+#
+# Fixtures, in testdata/ (see testdata/README.md): real rows of each source, cut down to
+# seven listed companies, one fund registrant from N-CEN and one fund series from GLEIF's
+# SEC registrations. The GLEIF fixture holds each company's own registration beside the
+# near-misses GLEIF also holds under its name (a company's retirement trusts, a lapsed
+# foreign registration, a subsidiary abroad, the Boeing Way, LLC and Greek Coca-Cola
+# bottlers the crosswalk used to offer), so a test that passes has chosen the right one
+# of several plausible LEIs. The four N-CEN fetches share one zip.
+#
+# score_pairs runs Splink for real on the fixture, except in the orientation test, which
+# gives it the pairs it scored with half of them turned round.
+#
+# The lake: every test gives emit_descriptors testdata/lake_descriptors.json, the open
+# lake's descriptors as `python scripts/emit_descriptor.py --all --bundle` emitted them,
+# so no test reads the network. finetype infers the descriptor from the rows it reads,
+# and on the fixture's ten rows it labels key_type a date, which the full table never
+# gets, so the label check would fail on the fixture's own descriptor. The tests that run
+# describe on the fixture therefore give check_before_publish its fixture too, a stand-in
+# report, and the last test runs the check for real: describe's fixture there is the
+# lake's own descriptor of this table, testdata/described.json, which the stamp writes
+# into the Parquet built from the fixture.
+
+- name: a company GLEIF names with a leading The is confirmed to its own LEI
+  risk: Boeing, Coca-Cola, Disney and every other company GLEIF writes as "The ..." publish with no LEI or a wrong one
+  fixtures: &fixtures
+    emit_descriptors: testdata/lake_descriptors.json
+    check_before_publish: testdata/check_before_publish.json
+    fetch_edgar: testdata/edgar.parquet
+    fetch_gleif: testdata/gleif.parquet
+    fetch_cik_lookup: testdata/cik_lookup.txt
+    fetch_gleif_sec_registrations: testdata/gleif_ra_sec.csv
+    fetch_ncen_2026q2: testdata/ncen.zip
+    fetch_ncen_2026q1: testdata/ncen.zip
+    fetch_ncen_2025q4: testdata/ncen.zip
+    fetch_ncen_2025q3: testdata/ncen.zip
+  params: &params
+    as_of: "2026-11-18"
+  checks:
+    - >-
+      SELECT * FROM (VALUES ('12927', 'RVHJWBXLJ1RFUBSY1F30'), ('21344', 'UWJKFUJFZ02DKWI3RY53'),
+        ('1744489', '549300GZKULIZ0WOW665')) v(cik, lei)
+      WHERE NOT EXISTS (SELECT 1 FROM edgar_gleif_out o WHERE o.key_type = 'cik' AND o.key = v.cik
+                        AND o.lei = v.lei AND o.method = 'exact_name' AND o.tier = 'confirmed')
+    # The edge the published row carries is the only one each filer has.
+    - SELECT key, lei FROM edgar_gleif_out WHERE key IN ('12927', '21344', '1744489') AND lei NOT IN ('RVHJWBXLJ1RFUBSY1F30', 'UWJKFUJFZ02DKWI3RY53', '549300GZKULIZ0WOW665')
+    # Every name EDGAR gives Disney under its CIK reaches the same LEI.
+    - SELECT company_name, lei, status FROM resolved_edges WHERE cik = '1744489' AND (lei <> '549300GZKULIZ0WOW665' OR status <> 'confirmed')
+
+- name: a tie between entities sharing a name goes to the same legal form, then the better registration
+  risk: a listed company takes the LEI of a namesake abroad, a lapsed copy of itself or its subsidiary
+  fixtures: *fixtures
+  params: *params
+  checks:
+    # WD 40 CO is both WD-40 Company (US, lapsed) and WD-40 COMPANY LIMITED (UK, issued):
+    # the same form wins over the better registration, and leaves no tie.
+    - >-
+      SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM resolved_edges WHERE company_name = 'WD 40 CO'
+        AND lei = '549300UZHTN0CNKBOB19' AND method = 'exact_name' AND status = 'confirmed')
+    # COCA COLA CO is THE COCA-COLA COMPANY twice, issued in the US and lapsed in
+    # Australia: the issued registration wins.
+    - >-
+      SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM resolved_edges WHERE company_name = 'COCA COLA CO'
+        AND lei = 'UWJKFUJFZ02DKWI3RY53' AND status = 'confirmed')
+    # APPLE INC is Apple Inc. (US, issued), Apple Ltd (Cayman, lapsed) and APPLE CORP
+    # LIMITED (India, lapsed).
+    - >-
+      SELECT company_name, lei FROM resolved_edges WHERE cik = '320193'
+        AND (lei <> 'HWUPKR0MPOU8FGXBT394' OR status <> 'confirmed')
+
+- name: an exact name GLEIF registers twice alike is ambiguous
+  risk: the crosswalk confirms one of two identically registered entities as though the name settled which
+  fixtures: *fixtures
+  params: *params
+  checks:
+    # GLEIF holds two issued US-DE registrations named ENVIRI CORPORATION.
+    - >-
+      SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM resolved_edges WHERE company_name = 'ENVIRI CORP'
+        AND method = 'exact_name' AND status = 'ambiguous')
+    - >-
+      SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM edgar_gleif_out WHERE key_type = 'cik'
+        AND key = '2104052' AND tier = 'ambiguous')
+
+- name: a name that is close but not equal is only a candidate
+  risk: a fuzzy name match publishes as confirmed, though about half of them are the wrong entity
+  fixtures: *fixtures
+  params: *params
+  checks:
+    # COLUMBUS CIRCLE CAPITAL CORP II scores 0.99 against Columbus Circle Capital Corp I,
+    # a different SPAC; ENVIRI II CORP scores 0.80 against ENVIRI CORPORATION.
+    - >-
+      SELECT * FROM (VALUES ('COLUMBUS CIRCLE CAPITAL CORP II', '5299006WPUCKP6KOIM37'),
+        ('ENVIRI II CORP', '529900MZ4Y5ZEP5SXR17')) v(company_name, lei)
+      WHERE NOT EXISTS (SELECT 1 FROM resolved_edges r WHERE r.company_name = v.company_name
+        AND r.lei = v.lei AND r.method = 'jaro_winkler' AND r.status = 'candidate')
+    - SELECT company_name, status FROM resolved_edges WHERE method = 'jaro_winkler' AND status <> 'candidate'
+    - >-
+      SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM edgar_gleif_out WHERE key_type = 'cik'
+        AND key = '2088805' AND tier = 'candidate')
+
+- name: a pair scored with GLEIF on the left resolves as one with EDGAR on the left
+  risk: Splink writes a pair the other way round and the crosswalk takes an LEI for a CIK, or drops the pair
+  fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
+    check_before_publish: testdata/check_before_publish.json
+    fetch_edgar: testdata/edgar.parquet
+    fetch_gleif: testdata/gleif.parquet
+    fetch_cik_lookup: testdata/cik_lookup.txt
+    fetch_gleif_sec_registrations: testdata/gleif_ra_sec.csv
+    fetch_ncen_2026q2: testdata/ncen.zip
+    fetch_ncen_2026q1: testdata/ncen.zip
+    fetch_ncen_2025q4: testdata/ncen.zip
+    fetch_ncen_2025q3: testdata/ncen.zip
+    score_pairs: testdata/scored_pairs_mixed_orientation.parquet
+  params: *params
+  checks:
+    - SELECT * FROM (SELECT count(*) AS n FROM resolved_edges) WHERE n <> 10
+    - >-
+      SELECT company_name, lei, method, status FROM resolved_edges
+      EXCEPT
+      SELECT * FROM (VALUES
+        ('WD 40 CO', '549300UZHTN0CNKBOB19', 'exact_name', 'confirmed'),
+        ('BOEING CO', 'RVHJWBXLJ1RFUBSY1F30', 'exact_name', 'confirmed'),
+        ('WALT DISNEY CO', '549300GZKULIZ0WOW665', 'exact_name', 'confirmed'),
+        ('T. ROWE PRICE EXCHANGE-TRADED FUNDS, INC.', '549300XZPUK24E1UMH17', 'exact_name', 'confirmed'),
+        ('COLUMBUS CIRCLE CAPITAL CORP II', '5299006WPUCKP6KOIM37', 'jaro_winkler', 'candidate'),
+        ('ENVIRI CORP', '529900MZ4Y5ZEP5SXR17', 'exact_name', 'ambiguous'),
+        ('ENVIRI II CORP', '529900MZ4Y5ZEP5SXR17', 'jaro_winkler', 'candidate'),
+        ('COCA COLA CO', 'UWJKFUJFZ02DKWI3RY53', 'exact_name', 'confirmed'),
+        ('APPLE INC', 'HWUPKR0MPOU8FGXBT394', 'exact_name', 'confirmed'),
+        ('APPLE INC.', 'HWUPKR0MPOU8FGXBT394', 'exact_name', 'confirmed'))
+
+# The name key, case by case: each check returns the pairs the key gets wrong. The
+# macros splink_inputs.sql defines stay in the run's database, so a check calls them
+# directly. Each case is a way EDGAR and GLEIF write one entity differently, or two
+# entities alike, measured on the full corpus when the rule was written.
+- name: the name key agrees where EDGAR and GLEIF write one entity differently, and not where they are two
+  risk: a listed company misses its LEI over how a source spells its name, or is confirmed to a different entity of a similar name
+  fixtures: *fixtures
+  params: *params
+  checks:
+    # A leading article.
+    - >-
+      SELECT * FROM (VALUES ('BOEING CO', 'THE BOEING COMPANY'), ('COCA COLA CO', 'THE COCA-COLA COMPANY'),
+        ('Walt Disney Co', 'THE WALT DISNEY COMPANY'), ('GOLDMAN SACHS GROUP INC', 'THE GOLDMAN SACHS GROUP, INC.')) v(a, b)
+      WHERE name_key(a) IS DISTINCT FROM name_key(b)
+    # THE inside a name, or inside a word, is kept; a name that is only THE has no key.
+    - >-
+      SELECT * FROM (VALUES ('BANK OF THE OZARKS', 'BANK OF THE OZARKS'), ('THEMIS MEDICAL CORP', 'THEMIS MEDICAL'),
+        ('The', ''), ('', ''), ('  ', ''), (NULL, '')) v(name, k)
+      WHERE name_key(name) IS DISTINCT FROM k
+    # EDGAR's state and listing tags.
+    - >-
+      SELECT * FROM (VALUES ('FEDERAL SIGNAL CORP /DE/', 'Federal Signal Corporation'),
+        ('CITIZENS FINANCIAL GROUP INC/RI', 'CITIZENS FINANCIAL GROUP, INC.'), ('Glencore plc/ADR', 'GLENCORE PLC'),
+        ('COSTCO WHOLESALE CORP /NEW', 'COSTCO WHOLESALE CORPORATION')) v(a, b)
+      WHERE name_key(a) IS DISTINCT FROM name_key(b)
+    # Stacked legal forms are all dropped.
+    - >-
+      SELECT * FROM (VALUES ('PETROCHINA CO LTD', 'PetroChina Company Limited'), ('TREX CO INC', 'Trex Corp Inc.')) v(a, b)
+      WHERE name_key(a) IS DISTINCT FROM name_key(b)
+    # HOLDINGS and GROUP still tell a parent from its subsidiary.
+    - >-
+      SELECT * FROM (VALUES ('SIRIUS XM HOLDINGS INC.', 'SIRIUS XM INC.'), ('Warner Music Group Corp.', 'WARNER MUSIC INC.')) v(a, b)
+      WHERE name_key(a) = name_key(b)
+    - SELECT 1 WHERE name_key('Cigna Group') IS DISTINCT FROM name_key('THE CIGNA GROUP')
+    # & CO is part of the name.
+    - >-
+      SELECT * FROM (VALUES ('WELLS FARGO & COMPANY/MN', 'WELLS FARGO & COMPANY'),
+        ('BECTON DICKINSON & CO', 'BECTON, DICKINSON AND COMPANY')) v(a, b)
+      WHERE name_key(a) IS DISTINCT FROM name_key(b)
+    - SELECT 1 WHERE name_key('MORGAN STANLEY') = name_key('MORGAN STANLEY & CO. LLC')
+    # An LLC or LP is not its namesake corporation, and agrees with itself dotted.
+    - >-
+      SELECT * FROM (VALUES ('CABOT CORP', 'CABOT CO, LLC'), ('JBG SMITH Properties', 'JBG SMITH PROPERTIES LP'),
+        ('CubeSmart', 'CUBESMART, L.P.')) v(a, b)
+      WHERE name_key(a) = name_key(b)
+    - >-
+      SELECT * FROM (VALUES ('Lazard Group LLC', 'LAZARD GROUP L.L.C.'),
+        ('PLAINS ALL AMERICAN PIPELINE LP', 'PLAINS ALL AMERICAN PIPELINE, L.P.')) v(a, b)
+      WHERE name_key(a) IS DISTINCT FROM name_key(b)
+    # &, + and AND agree; dotted and undotted initials agree, unless they open the name.
+    - >-
+      SELECT * FROM (VALUES ('PACIFIC GAS & ELECTRIC Co', 'PACIFIC GAS AND ELECTRIC COMPANY'),
+        ('Travel & Leisure Co.', 'TRAVEL + LEISURE CO.'), ('TELEFONICA S A', 'TELEFONICA SA'),
+        ('CEMEX SAB DE CV', 'CEMEX, S.A.B. DE C.V.'), ('BANK OF N T BUTTERFIELD', 'BANK OF N.T. BUTTERFIELD'),
+        ('J M SMUCKER Co', 'THE J. M. SMUCKER COMPANY')) v(a, b)
+      WHERE name_key(a) IS DISTINCT FROM name_key(b)
+    - >-
+      SELECT * FROM (VALUES ('KB Financial Group Inc.', 'K & B FINANCIAL GROUP, INC.'), ('GAP INC', 'G.A.P.'),
+        ('CTS CORP', 'C.T.S.')) v(a, b)
+      WHERE name_key(a) = name_key(b)
+    # Accents and compatibility forms fold; a translation beside the name is dropped; the
+    # Japanese legal form is a legal form.
+    - >-
+      SELECT * FROM (VALUES ('Awale Resources Ltd', 'Awalé Resources Limited'),
+        ('AMTD Digital Inc.', 'AMTD Digital Inc. 尚乘數字科技集團'), ('KDDI CORP', 'KDDI株式会社'),
+        ('IHI Corporation/ADR', '株式会社ＩＨＩ'), ('IQ2 Development GmbH', 'IQ² Development GmbH')) v(a, b)
+      WHERE name_key(a) IS DISTINCT FROM name_key(b)
+    # A word mixing scripts leaves the name with no key, so BP PLC cannot meet it.
+    - >-
+      SELECT * FROM (VALUES ('BPエナジージャパン株式会社'), ('株式会社ＩＨＩインフラスクエア')) v(name)
+      WHERE name_key(name) <> ''
+    # The tie-break key keeps the legal form, in one spelling.
+    - >-
+      SELECT * FROM (VALUES ('WD 40 CO', 'WD-40 Company', true), ('WD 40 CO', 'WD-40 COMPANY LIMITED', false),
+        ('TORO CORP.', 'THE TORO COMPANY', false)) v(a, b, same)
+      WHERE (form_key(a) = form_key(b)) IS DISTINCT FROM same
+
+- name: a build carrying the lake's descriptor passes the check before publish
+  risk: the check before publish refuses every build of this Protocol, or passes one it should not
+  fixtures:
+    emit_descriptors: testdata/lake_descriptors.json
+    describe: testdata/described.json
+    fetch_edgar: testdata/edgar.parquet
+    fetch_gleif: testdata/gleif.parquet
+    fetch_cik_lookup: testdata/cik_lookup.txt
+    fetch_gleif_sec_registrations: testdata/gleif_ra_sec.csv
+    fetch_ncen_2026q2: testdata/ncen.zip
+    fetch_ncen_2026q1: testdata/ncen.zip
+    fetch_ncen_2025q4: testdata/ncen.zip
+    fetch_ncen_2025q3: testdata/ncen.zip
+  params: *params

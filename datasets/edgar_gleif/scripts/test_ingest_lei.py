@@ -2,7 +2,7 @@
 """Self-test for the identifier gate in the crosswalk ingest — proves it can fail.
 
 Cases here run the SQL models THIS REPO SHIPS, read off disk, against scratch fixtures
-standing in for the fetch and export operators. Most run all four models in the order
+standing in for the fetch and export operators. Most run every `sql:` model in the order
 `arcform.yaml` declares them; `test_the_arithmetic_agrees_with_an_independent_one` and
 `test_a_malformed_value_is_not_accepted_as_valid` execute only the macro at the head of
 `models/load.sql`, because the arithmetic needs no pipeline around it to be wrong.
@@ -167,7 +167,9 @@ class Fixture:
         """
         for _, lei, _ in self.scored:
             con.execute(
-                "INSERT INTO gleif_src SELECT ?, 'SCRATCH ENTITY', 'US-DE', 'US', 'ISSUED', 'SCRATCH ENTITY' "
+                "INSERT INTO gleif_src BY NAME SELECT ? AS uid, 'SCRATCH ENTITY' AS raw_name, "
+                "'US-DE' AS jurisdiction, 'US' AS country, 'ISSUED' AS reg_status, "
+                "'SCRATCH ENTITY' AS nname, 'SCRATCH ENTITY' AS fname "
                 "WHERE NOT EXISTS (SELECT 1 FROM gleif_src WHERE uid = ?)",
                 [lei, lei],
             )
