@@ -222,25 +222,28 @@ class AdapterTest(unittest.TestCase):
     def tearDown(self) -> None:
         self._tmp.cleanup()
 
-    def package(self, slug: str, fields: list[dict], select_sql: str, **extra: object) -> Path:
+    def package(self, slug: str, fields: list[dict], select_sql: str, table: str | None = None, **extra: object) -> Path:
+        """A descriptor and its Parquet: `<slug>/datapackage.json`, or `<slug>/<table>.datapackage.json` given `table`."""
         import duckdb
 
+        name = table or slug
         folder = self.datasets / slug
-        folder.mkdir()
-        parquet = folder / f"{slug}.parquet"
+        folder.mkdir(exist_ok=True)
+        parquet = folder / f"{name}.parquet"
         con = duckdb.connect()
         con.execute(f"COPY ({select_sql}) TO '{parquet}' (FORMAT parquet)")
         con.close()
         document = {
-            "name": slug,
-            "title": slug,
-            "description": f"The {slug} table.",
+            "name": name,
+            "title": name,
+            "description": f"The {name} table.",
             "created": "2026-02-01T00:00:00Z",
             "licenses": LICENCE,
-            "resources": [{"name": slug, "format": "parquet", "path": parquet.name, "schema": {"fields": fields}}],
+            "resources": [{"name": name, "format": "parquet", "path": parquet.name, "schema": {"fields": fields}}],
             **extra,
         }
-        (folder / "datapackage.json").write_text(json.dumps(document, indent=2), encoding="utf-8")
+        filename = f"{table}.datapackage.json" if table else "datapackage.json"
+        (folder / filename).write_text(json.dumps(document, indent=2), encoding="utf-8")
         return parquet
 
     def tree(self) -> lc.Tree:
@@ -506,6 +509,96 @@ class AdapterTest(unittest.TestCase):
         self.assertIn("core-columns", found[0].detail)
         self.assertEqual({s.slug for f in found for s in f.subjects}, {"widgets"})
         self.assertEqual(set(self.sorted_kinds(found)), {lc.DRIFT})
+
+
+    # A Protocol that publishes several tables writes `<slug>/<table>.datapackage.json` and
+    # no `<slug>/datapackage.json`; each check reads it as a package of its own.
+
+    def test_descriptors_reads_a_per_table_descriptor(self) -> None:
+        widgets = self.package("widgets", [{"name": "n", "type": "integer"}], "SELECT 1 AS n")
+        parts = self.package("gadgets", [{"name": "n", "type": "integer"}, {"name": "ghost", "type": "string"}], "SELECT 1 AS n", table="gadget_parts")
+        shutil.copy(REPO_DATASETS / "licence-notices.json", self.datasets / "licence-notices.json")
+        example = self.repo / "examples" / "demo" / "datapackage.json"
+        example.parent.mkdir(parents=True)
+        example.write_text(json.dumps({"name": "demo", "licenses": LICENCE, "resources": []}), encoding="utf-8")
+        readme = "| Dataset | Rows | Readable copy |\n|---|---|---|\n" f"| widgets | 1 | [w]({widgets}) |\n| parts | 1 | [p]({parts}) |\n"
+        commit(self.repo, MAR, {"README.md": readme, "datasets/gadgets/README.md": "edited after the publish\n"})
+        ran, found = lc.check_descriptors(self.tree(), self.repo, self.work, {})
+        self.assertEqual(ran.status, 1, ran.log)
+        rules = [f for f in found if "schema.fields" in f.detail]
+        self.assertTrue(rules, ran.log)
+        self.assertEqual({(s.slug, s.descriptor) for f in rules for s in f.subjects}, {("gadgets", "gadgets/gadget_parts.datapackage.json")})
+        self.assertTrue(all(f.detail.startswith("gadgets/gadget_parts.datapackage.json :: ") for f in rules))
+        self.assertEqual({lc.sort_finding(self.repo, self.tree(), f) for f in rules}, {lc.DRIFT})
+
+    def per_table_run_reporting(self, status: int, items: list[dict]) -> tuple[lc.Ran, list[lc.Finding]]:
+        """`check_per_table_descriptors` with the descriptor check replaced by one that reports `items`."""
+        self.package("gadgets", [{"name": "n", "type": "integer"}], "SELECT 1 AS n", table="gadget_parts")
+        tree = self.tree()
+        original = lc.run
+
+        def run(check: str, argv: list[str]) -> lc.Ran:
+            out = Path(argv[argv.index("--json") + 1])
+            out.write_text(json.dumps({"violations": items, "pending": []}), encoding="utf-8")
+            return lc.Ran(check, status, "")
+
+        lc.run = run
+        self.addCleanup(setattr, lc, "run", original)
+        return lc.check_per_table_descriptors(tree, self.work, tree.per_table())
+
+    def item(self, rule: str) -> dict:
+        package = str(self.work / "packages" / "gadget_parts" / "datapackage.json")
+        return {"package": package, "resource": "(package)", "field": "", "rule": rule, "detail": "d"}
+
+    def test_a_per_table_run_failing_on_a_licence_notice_alone_is_no_finding(self) -> None:
+        # The first run reads the licence notice rule over per-table descriptors already,
+        # and reports it against licence-notices.json; the second must neither repeat it
+        # nor call its exit 1 a crash.
+        self.package("widgets", [{"name": "n", "type": "integer"}], "SELECT 1 AS n")
+        ran, found = self.per_table_run_reporting(1, [self.item("licence.notice")])
+        self.assertEqual(ran.status, 1)
+        self.assertEqual(found, [])
+
+    def test_a_per_table_run_keeps_every_other_finding_beside_a_notice(self) -> None:
+        ran, found = self.per_table_run_reporting(1, [self.item("licence.notice"), self.item("schema.fields")])
+        self.assertEqual([f.detail for f in found], ["gadgets/gadget_parts.datapackage.json :: (package): schema.fields: d"])
+        self.assertEqual([(s.slug, s.descriptor) for s in found[0].subjects], [("gadgets", "gadgets/gadget_parts.datapackage.json")])
+
+    def test_a_per_table_run_that_exits_1_reporting_nothing_is_a_crash(self) -> None:
+        ran, found = self.per_table_run_reporting(1, [])
+        self.assertEqual(len(found), 1)
+        self.assertIn("no finding this script can attribute", found[0].detail)
+
+    def test_frictionless_reads_a_per_table_descriptor(self) -> None:
+        import frictionless
+
+        self.package("widgets", [{"name": "n", "type": "integer"}], "SELECT 1 AS n")
+        self.package("gadgets", [{"name": "n", "type": "integer", "constraints": {"pattern": "^[0-9]+$"}}], "SELECT 1 AS n", table="gadget_parts")
+        (self.datasets / "frictionless-rejections.json").write_text(
+            json.dumps({"frictionless_version": frictionless.__version__, "rejections": []}), encoding="utf-8"
+        )
+        commit(self.repo, JAN, {"datasets/frictionless-rejections.json": "{}\n"})
+        ran, found = lc.check_frictionless(self.tree(), self.work)
+        self.assertEqual(ran.status, 1, ran.log)
+        self.assertTrue(found)
+        self.assertEqual({(s.slug, s.descriptor) for f in found for s in f.subjects}, {("gadgets", "gadgets/gadget_parts.datapackage.json")})
+        self.assertEqual(set(self.sorted_kinds(found)), {lc.DRIFT})
+
+    def test_code_list_reads_a_per_table_descriptor(self) -> None:
+        self.package("gadgets", [{"name": "n", "type": "integer"}], "SELECT 1 AS n", table="gadget_parts", **{"x-meridian-code-list": {"levels": ["one"]}})
+        commit(self.repo, MAR, {"datasets/gadgets/README.md": "edited after the publish\n"})
+        ran, found = lc.check_code_list(self.tree(), self.work)
+        self.assertEqual(ran.status, 1, ran.log)
+        self.assertTrue(found)
+        self.assertTrue(all(f.detail.startswith("gadgets/gadget_parts.datapackage.json: code-list: core-columns") for f in found), found)
+        self.assertEqual({(s.slug, s.descriptor) for f in found for s in f.subjects}, {("gadgets", "gadgets/gadget_parts.datapackage.json")})
+        self.assertEqual(set(self.sorted_kinds(found)), {lc.DRIFT})
+
+    def test_a_per_table_name_that_is_another_package_cannot_run(self) -> None:
+        self.package("widgets", [{"name": "n", "type": "integer"}], "SELECT 1 AS n")
+        self.package("gadgets", [{"name": "n", "type": "integer"}], "SELECT 1 AS n", table="widgets")
+        with self.assertRaisesRegex(lc.Unrunnable, "already that package"):
+            lc.check_code_list(self.tree(), self.work)
 
 
 class UnreadableItemTest(unittest.TestCase):
