@@ -296,12 +296,6 @@ steps:
         - table: census.naics_2022
           from: build/naics.parquet
           descriptor: build/datapackage.json
-          # The code-list contract put ten columns first, so the live table, which held
-          # code, title, level, description and corpus, changes shape and is replaced
-          # whole: every row shows as deleted and reinserted in the change feed, and the
-          # earlier snapshot keeps the old shape. Take this out once that publish is done,
-          # so a later reorder is refused rather than replaced.
-          on_schema_change: replace
           on_descriptor_change: fail
           readable_copy: census/naics_2022.parquet
       credential:
