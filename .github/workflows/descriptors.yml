@@ -80,8 +80,10 @@
 # turns Brightfield's main red the moment it merges here. The job reads the arcform
 # revision from Brightfield's main Cargo.lock at run time, points a copy of the loader
 # at it (`scripts/brightfield_arc_pin.py`, self-tested by `brightfield-arc-pin-self-test`)
-# and walks the tree again. A refusal fails with both revisions named: the fix is a
-# Brightfield pull request that bumps its pin, opened alongside the change here. When
+# and walks the tree again. A refusal fails with both revisions named. When ARC_REV is
+# the newer, the fix is a Brightfield pull request that bumps its pin, opened alongside
+# the change here and merged first; when Brightfield's pin is the newer, ARC_REV (with
+# its toolchain and libduckdb) or the manifest moves here. When
 # the two revisions are equal the job passes at once, since `arc-manifest-load` has
 # already answered. Because the revision is read from Brightfield's main, a Brightfield
 # pin change can redden this job on an unchanged branch; that is the same disagreement,
