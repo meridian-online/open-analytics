@@ -200,7 +200,8 @@
     # The Latin letters NFKD leaves alone are spelt as ASCII, not read as another script.
     - >-
       SELECT * FROM (VALUES ('Ørsted A/S', 'ORSTED AS'), ('A.P. Møller - Mærsk A/S', 'A P MOLLER MAERSK AS'),
-        ('Consultronix Spółka Akcyjna', 'CONSULTRONIX SPOLKA AKCYJNA'), ('Straße Bau GmbH', 'STRASSE BAU GMBH')) v(name, k)
+        ('Consultronix Spółka Akcyjna', 'CONSULTRONIX SPOLKA AKCYJNA'), ('Straße Bau GmbH', 'STRASSE BAU GMBH'),
+        ('Ħamrun Spartans Ltd', 'HAMRUN SPARTANS')) v(name, k)
       WHERE name_key(name) IS DISTINCT FROM k
     # A word mixing scripts leaves the name with no key, so BP PLC cannot meet it.
     - >-

@@ -32,7 +32,7 @@
 -- LIMITED.
 --
 -- These rules were measured with a Python implementation. These macros give the same
--- keys as it on every name in the EDGAR and GLEIF inputs, except the 60,296 holding a
+-- keys as it on every name in the EDGAR and GLEIF inputs, except the 60,323 holding a
 -- Latin letter NFKD does not fold (Ø, Ł, Æ, ß and the rest): Python left those words
 -- mixing scripts and the name with no key, and the macros spell them as ASCII. The
 -- macros stay in the database, so tests.yaml holds each rule to its cases by calling
@@ -42,16 +42,18 @@
 -- full-width ASCII (ＩＨＩ), superscript and subscript digits (IQ², H₂O), º and ª, the
 -- Roman numerals, ™, ℠, № and the vulgar fractions. DuckDB has no NFKD; strip_accents
 -- below does the rest of what it does here, folding accents. Then the Latin letters
--- neither folds (Ł, Ø, Đ, Ð, ı, Æ, Œ, ß, Þ), spelt as ASCII: left alone, Ørsted A/S
--- would read as a word mixing scripts and lose its key.
+-- neither folds that occur in GLEIF's names (Ł, Ø, Đ, Ð, ı, Ħ, Ŧ, ƫ, ĸ, Ə, Æ, Œ, ß, Þ, Ŋ)
+-- and the ligatures ﬁ and ﬂ, spelt as ASCII: left alone, Ørsted A/S would read as a
+-- word mixing scripts and lose its key.
 CREATE OR REPLACE MACRO name_fold(name) AS (
   list_reduce(
     [['Ⅻ', 'XII'], ['Ⅺ', 'XI'], ['Ⅹ', 'X'], ['Ⅸ', 'IX'], ['Ⅷ', 'VIII'], ['Ⅶ', 'VII'], ['Ⅵ', 'VI'],
      ['Ⅴ', 'V'], ['Ⅳ', 'IV'], ['Ⅲ', 'III'], ['Ⅱ', 'II'], ['Ⅰ', 'I'], ['™', 'TM'], ['℠', 'SM'],
      ['№', 'No'], ['¼', '1 4'], ['½', '1 2'], ['¾', '3 4'],
-     ['Æ', 'AE'], ['æ', 'ae'], ['Œ', 'OE'], ['œ', 'oe'], ['ẞ', 'SS'], ['ß', 'ss'], ['Þ', 'TH'], ['þ', 'th']],
+     ['Æ', 'AE'], ['æ', 'ae'], ['Œ', 'OE'], ['œ', 'oe'], ['ẞ', 'SS'], ['ß', 'ss'], ['Þ', 'TH'], ['þ', 'th'],
+     ['Ŋ', 'NG'], ['ŋ', 'ng'], ['ﬁ', 'fi'], ['ﬂ', 'fl']],
     lambda acc, pair: replace(acc, pair[1], pair[2]),
-    translate(translate(coalesce(name, ''), 'ŁłØøĐđÐðı', 'LlOoDdDdi'),
+    translate(translate(coalesce(name, ''), 'ŁłØøĐđÐðıĦħŦŧƫĸƏə', 'LlOoDdDdiHhTttkEe'),
       '！＂＃＄％＆＇（）＊＋，－．／０１２３４５６７８９：；＜＝＞？＠ＡＢＣＤＥＦＧＨＩＪＫＬＭＮＯＰＱＲＳＴＵＶＷＸＹＺ［＼］＾＿｀ａｂｃｄｅｆｇｈｉｊｋｌｍｎｏｐｑｒｓｔｕｖｗｘｙｚ｛｜｝～⁰¹²³⁴⁵⁶⁷⁸⁹₀₁₂₃₄₅₆₇₈₉ºª',
       '!"#$%&''()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstuvwxyz{|}~01234567890123456789oa'))
 );
