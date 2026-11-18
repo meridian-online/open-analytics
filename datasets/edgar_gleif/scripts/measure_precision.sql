@@ -7,16 +7,21 @@
 -- The population is the filers RA000665 registers by CIK. tier.sql replaces their name
 -- matches with the registration, so no published name-matched row belongs to it: the
 -- figure is the matcher's precision where the answer is known, not a count of published
--- rows. In November 2026: exact_name confirmed 0.982 on 4,719 rows, jaro_winkler
--- candidate 0.198 on 891.
+-- rows. It counts edges, one per filer and LEI as the crosswalk publishes them, so a
+-- filer with several tickers or former names matching one LEI counts once. In November
+-- 2026: exact_name confirmed 0.983 on 4,484 edges, jaro_winkler candidate 0.198 on 835.
 WITH ra AS (
   SELECT DISTINCT CAST(CAST(registered_as AS BIGINT) AS VARCHAR) AS cik, lei
   FROM read_csv('build/gleif_ra_sec.csv', header = true, all_varchar = true)
   WHERE regexp_full_match(registered_as, '[0-9]+')
+),
+edges AS (
+  SELECT DISTINCT cik, lei, method, status
+  FROM read_parquet('build/resolved.parquet')
+  WHERE cik IN (SELECT cik FROM ra)
 )
-SELECT r.method, r.status, count(*) AS rows_with_registration,
-       round(avg(CAST(EXISTS (SELECT 1 FROM ra x WHERE x.cik = r.cik AND x.lei = r.lei) AS INTEGER)), 3) AS share_registered_lei
-FROM read_parquet('build/resolved.parquet') r
-WHERE r.cik IN (SELECT cik FROM ra)
+SELECT e.method, e.status, count(*) AS edges,
+       round(avg(CAST(EXISTS (SELECT 1 FROM ra x WHERE x.cik = e.cik AND x.lei = e.lei) AS INTEGER)), 3) AS share_registered_lei
+FROM edges e
 GROUP BY ALL
-ORDER BY r.method, r.status;
+ORDER BY e.method, e.status;
