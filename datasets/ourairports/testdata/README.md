@@ -40,7 +40,7 @@ So the table built from the fixture has 22 rows.
 
 To cut new fixtures, keep the header line and copy whole lines from the downloaded files; do not write them back through a CSV tool, which changes OurAirports' quoting. When a CSV fixture changes, put its new `git hash-object` sha and size in `tree.json`, and the new tree's sha in `commit.json`'s `commit.tree.sha`, or verify refuses it. The tree's sha is git's hash of `tree <length>` NUL and, for each entry in name order, `<mode> <path>` NUL and the entry's 20-byte sha: in a git repository, `git mktree --missing` over the entries prints it.
 
-The lake fixtures were emitted from the open lake on 2026-11-17 with `python scripts/emit_descriptor.py --all --bundle <file>`, from the repository root, and need regenerating when a table they hold is republished with different declarations:
+The lake fixtures were emitted from the open lake on 2026-11-17 with `python scripts/emit_descriptor.py --all --bundle <file>`, from the repository root, with `census.naics_2022` replaced on 2026-11-18 by the descriptor its Protocol builds on the code-list contract, as the lake will hold it once that build is published, and need regenerating when a table they hold is republished with different declarations:
 
 | Fixture | Stands in for | Kept |
 |---|---|---|

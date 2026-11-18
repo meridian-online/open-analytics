@@ -5,8 +5,9 @@
 --
 -- One row per index entry; `entry_id` is `<code>|<title>` because Census gives no id of
 -- its own, as for BLS's titles. `code_description` is the code's `title` in
--- census/naics_2022 (that list's `description` is Census's paragraph about the
--- industry, not its name), so a lookup needs no second join. `release` is the edition:
+-- census/naics_2022, Census's name for the industry (that list's `description` holds
+-- the same title, and its `definition` Census's paragraph), so a lookup needs no second
+-- join. `release` is the edition:
 -- Census's index file states no date of its own (see the manifest's header).
 CREATE OR REPLACE TABLE naics_2022_titles_out AS
 SELECT

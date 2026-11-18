@@ -18,7 +18,7 @@ The paths a step writes are read from the manifest as a document: a step's
 keeps it), and the `dest:` / `out:` of that block. A manifest that lists a path in a
 comment declares nothing.
 
-Only the manifests in `ONE_WRITER` are held to this. `edgar`, `gleif` and `naics`
+Only the manifests in `ONE_WRITER` are held to this. `edgar` and `gleif`
 still have their stamp step rewrite the file their export wrote, and fixing that is
 their own change; they join this list when it lands.
 
@@ -37,7 +37,7 @@ import yaml
 DATASETS = Path(__file__).resolve().parent.parent / "datasets"
 
 # Manifests that have been restructured so each file they write has one writer.
-ONE_WRITER = ("edgar_gleif", "schedule_b", "hcpcs", "ndc", "soc_2018", "soc_2020", "fips", "ourairports", "naics_2022_titles", "naics_2017_to_2022")
+ONE_WRITER = ("edgar_gleif", "schedule_b", "naics", "hcpcs", "ndc", "soc_2018", "soc_2020", "fips", "ourairports", "naics_2022_titles", "naics_2017_to_2022")
 
 # The `with:` keys that name a file an operator writes.
 WRITTEN_BY_OPERATOR = ("dest", "out")

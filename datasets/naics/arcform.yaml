@@ -18,6 +18,18 @@
 # credential outside this folder and export it for the publishing command only. Readers
 # need DuckDB 2.0 or later. It reads only what stamp_descriptor wrote, so it runs after it.
 #
+# CODE LIST. The table is a code list under the contract in docs/code-lists.md: five
+# levels, sector to national industry, each row pointing at its parent, and
+# `check_code_list` holds the built file to it. load.sql is also run, by relative path,
+# by the NAICS index (../naics_2022_titles) and concordance (../naics_2017_to_2022), so
+# a change to how this Protocol reads Census's workbook reaches both.
+#
+# TESTS. tests.yaml beside this file holds the Protocol's tests, which `arc test` runs
+# against the cut-down Census workbook in testdata/, with no network and no publish.
+#
+# ONE WRITER PER FILE. The export and describe write to build/stage/; the stamp alone
+# writes the published build/naics.parquet and build/datapackage.json.
+#
 # Produces: build/naics.parquet  →  published as census.naics_2022
 name: naics
 engine: duckdb
@@ -45,11 +57,13 @@ steps:
       headers:
         User-Agent: "Meridian Protocol (open-analytics; research@meridian.online)"
 
-  # ── Load + normalise: strip the trilateral 'T' marker, derive level, null blanks ─
-  # Reads the .xlsx directly (DuckDB `excel` extension, `read_xlsx`).
+  # ── Load: the ladder, from the workbook ──────────────────────────────────────────
+  # Reads the .xlsx directly (DuckDB `excel` extension, `read_xlsx`): levels, parents,
+  # ancestors, description_full, the trilateral 'T' stripped, blank paragraphs NULL.
   - name: load
     sql: models/load.sql
     depends_on: [build/naics_desc.xlsx]
+    produces: [naics]
 
   # ── Package: materialise the terminal table (adds the search corpus) ─────────────
   - name: package
@@ -64,34 +78,58 @@ steps:
     op: parquet_export@1
     with:
       input: naics_out
-      dest: build/naics.parquet
+      dest: build/stage/naics.parquet
       compression: zstd
       order_by: "code"
 
-  # ── Describe: EMIT build/datapackage.json from the built Parquet ─────────────────
+  # ── Describe: EMIT the descriptor from the built Parquet ─────────────────────────
   # finetype types every column nominations.finetype.json does not declare;
   # descriptor.overrides.json overlays the curated half
   # (identity, licenses, sources, per-field prose, primaryKey). Hard-fails on drift.
   - name: describe
     op: datapackage_describe@1
     with:
-      parquet: build/naics.parquet
+      parquet: build/stage/naics.parquet
       overrides: descriptor.overrides.json
       # The columns whose type is declared rather than inferred. finetype takes each one
       # as given, carries its label's bounds, marks it x-finetype-nominated and states no
       # confidence for it; the file says why each was declared.
       nominations: nominations.finetype.json
-      out: build/datapackage.json
+      out: build/stage/described.json
+
+  # ── Check: the code-list contract ───────────────────────────────────────────────
+  # scripts/check_code_list.py holds the built file to the contract's core columns and
+  # its ladder (docs/code-lists.md). `shasum -a 256 scripts/check_code_list.py` prints
+  # the digest.
+  - name: check_code_list
+    op: uv@1
+    with:
+      script: ../../scripts/check_code_list.py
+      sha256: a6d4fd3c42aca53591f7f94bfef625f9c4f503b2d4331b64bea8103db88f7102
+      deps:
+        - duckdb==2.0.0
+      args:
+        - --parquet
+        - build/stage/naics.parquet
+        - --levels
+        - sector,subsector,industry_group,naics_industry,national_industry
+        - --json
+        - build/code_list_check.json
+      reads:
+        - build/stage/naics.parquet
+      produces:
+        - build/code_list_check.json
 
   # ── Validate: GATE the built Parquet against the self-derived finetype contract ──
   # finetype_validate (CHECK-ONLY) checks the terminal Parquet against schema.finetype.json
   # (self-derived from THIS Parquet — see its $comment). Pass-through today, fail-closed
-  # drift tripwire for future Runs; writes nothing, so build/naics.parquet is untouched.
+  # drift tripwire for future Runs; writes nothing.
   - name: validate
     op: finetype_validate@1
     with:
-      parquet: build/naics.parquet
+      parquet: build/stage/naics.parquet
       schema: schema.finetype.json
+
   # ── Lake: every published table's descriptor, as the open lake holds it ─────────
   # The repository commits no descriptor: the lake's meta.descriptors and manifest.json
   # hold the one stored copy, and emit_descriptor.py joins the two back into each
@@ -156,9 +194,8 @@ steps:
   #
   # `op: uv@1` rather than a bare `python3`: the readback imports duckdb, and a
   # `python3` without it failed the step. uv resolves the interpreter and the package
-  # itself. It rewrites, in place, the Parquet `export_naics` wrote and the
-  # build/datapackage.json `describe` wrote, so each of those files has two writers; giving
-  # each one writer, as edgar_gleif and the code lists do, is a separate restructure.
+  # itself. It reads the staged Parquet and descriptor and alone writes the published
+  # build/naics.parquet and build/datapackage.json, so each file has one writer.
   - name: stamp_descriptor
     op: uv@1
     with:
@@ -176,16 +213,20 @@ steps:
         - --table
         - census.naics_2022
         - --descriptor
-        - build/datapackage.json
+        - build/stage/described.json
         - --parquet
+        - build/stage/naics.parquet
+        - --out
         - build/naics.parquet
+        - --out-descriptor
+        - build/datapackage.json
       reads:
         - build/lake_descriptors.json
-        - build/datapackage.json
-        - build/naics.parquet
+        - build/stage/described.json
+        - build/stage/naics.parquet
       produces:
-        - build/datapackage.json
         - build/naics.parquet
+        - build/datapackage.json
 
   # ── Check: the built table against the lake, before it is published ─────────────
   # check_before_publish.py runs four checks on this build. Three read the lake too:
@@ -255,6 +296,12 @@ steps:
         - table: census.naics_2022
           from: build/naics.parquet
           descriptor: build/datapackage.json
+          # The code-list contract put ten columns first, so the live table, which held
+          # code, title, level, description and corpus, changes shape and is replaced
+          # whole: every row shows as deleted and reinserted in the change feed, and the
+          # earlier snapshot keeps the old shape. Take this out once that publish is done,
+          # so a later reorder is refused rather than replaced.
+          on_schema_change: replace
           on_descriptor_change: fail
           readable_copy: census/naics_2022.parquet
       credential:
