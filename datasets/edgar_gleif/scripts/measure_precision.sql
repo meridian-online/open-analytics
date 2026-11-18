@@ -12,7 +12,11 @@
 -- 2026: exact_name confirmed 0.983 on 4,484 edges, jaro_winkler candidate 0.198 on 835.
 WITH ra AS (
   SELECT DISTINCT CAST(CAST(registered_as AS BIGINT) AS VARCHAR) AS cik, lei
-  FROM read_csv('build/gleif_ra_sec.csv', header = true, all_varchar = true)
+  FROM (
+    SELECT json_extract_string(json, '$.attributes.lei') AS lei,
+           json_extract_string(json, '$.attributes.entity.registeredAs') AS registered_as
+    FROM read_ndjson_objects('build/gleif_ra_sec.jsonl')
+  )
   WHERE regexp_full_match(registered_as, '[0-9]+')
 ),
 edges AS (

@@ -29,7 +29,7 @@
     fetch_edgar: testdata/edgar.parquet
     fetch_gleif: testdata/gleif.parquet
     fetch_cik_lookup: testdata/cik_lookup.txt
-    fetch_gleif_sec_registrations: testdata/gleif_ra_sec.csv
+    fetch_gleif_sec_registrations: testdata/gleif_ra_sec.jsonl
     fetch_ncen_2026q2: testdata/ncen.zip
     fetch_ncen_2026q1: testdata/ncen.zip
     fetch_ncen_2025q4: testdata/ncen.zip
@@ -106,7 +106,7 @@
     fetch_edgar: testdata/edgar.parquet
     fetch_gleif: testdata/gleif.parquet
     fetch_cik_lookup: testdata/cik_lookup.txt
-    fetch_gleif_sec_registrations: testdata/gleif_ra_sec.csv
+    fetch_gleif_sec_registrations: testdata/gleif_ra_sec.jsonl
     fetch_ncen_2026q2: testdata/ncen.zip
     fetch_ncen_2026q1: testdata/ncen.zip
     fetch_ncen_2025q4: testdata/ncen.zip
@@ -221,7 +221,7 @@
     fetch_edgar: testdata/edgar.parquet
     fetch_gleif: testdata/gleif.parquet
     fetch_cik_lookup: testdata/cik_lookup.txt
-    fetch_gleif_sec_registrations: testdata/gleif_ra_sec.csv
+    fetch_gleif_sec_registrations: testdata/gleif_ra_sec.jsonl
     fetch_ncen_2026q2: testdata/ncen.zip
     fetch_ncen_2026q1: testdata/ncen.zip
     fetch_ncen_2025q4: testdata/ncen.zip
