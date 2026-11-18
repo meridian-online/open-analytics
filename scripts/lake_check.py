@@ -6,17 +6,30 @@ The lake workflow runs this on a push to `main`, weekly, and on demand, over a t
 repository's `datasets/` with every published table's descriptor written in from the lake.
 It runs the checks that read the lake over that tree:
 
-  descriptors   check_descriptors.py --require-self-description, with the README catalogue
+  descriptors   check_descriptors.py --require-self-description, with the README catalogue;
+                then again over the per-table packages (see below), without it
   engine        check_engine_version.py
   labels        check_label_agreement.py --strict
-  frictionless  check_frictionless.py
-  code_list     check_code_list.py
+  frictionless  check_frictionless.py, over the package view
+  code_list     check_code_list.py, over the package view
   joins         crosswalk_join.py, once per package that declares `x-joins`
   ratchet       each stored descriptor against the constraints its committed overrides
                 hold at HEAD (check_constraint_ratchet.py's `ignored` rule; there is no
                 predecessor descriptor in git to hold it to any more)
   verify        every declared `bytes` and `hash` against the object served, a full
                 download of each (publish_dataset.py verify, over per-table descriptors too)
+
+THE PACKAGE VIEW. The descriptor check's rules 1 to 7 and licence rule, Frictionless
+and the code-list check read only `*/datapackage.json`, and a Protocol that publishes
+several tables stores each as `<slug>/<table>.datapackage.json`. So every stored
+descriptor is also laid out as `packages/<package>/datapackage.json` in the scratch
+directory, a per-table one as package `<table>`, as `check_before_publish.py` lays out a
+build. Frictionless and the code-list check read the whole view; the descriptor check
+reads it with `--only` each per-table package and `--no-catalogue`, and leaves its
+licence notice findings to the first run, which already read those descriptors. A
+finding about a package is attributed to the descriptor it was laid out from. Two
+descriptors that would be one package stop the run (exit 2). Label agreement reads
+`datasets/` alone.
 
 and sorts every finding into one of two kinds.
 
@@ -270,6 +283,8 @@ class Tree:
     def __init__(self, datasets: Path) -> None:
         self.datasets = datasets
         self.documents: dict[str, dict[str, Any]] = {}
+        self.packages: Path | None = None  # set by `lay_out_packages`
+        self.by_package: dict[str, str] = {}
         for path in sorted({*datasets.glob("*/datapackage.json"), *datasets.glob("*/*.datapackage.json")}):
             self.documents[path.relative_to(datasets).as_posix()] = json.loads(path.read_text(encoding="utf-8"))
 
@@ -297,6 +312,72 @@ class Tree:
     def package(self, slug: str) -> Subject:
         rel = f"{slug}/datapackage.json"
         return Subject(slug, rel if rel in self.documents else None)
+
+    def per_table(self) -> list[str]:
+        """The per-table descriptors (`<slug>/<name>.datapackage.json`), as package names."""
+        return sorted(package_name(rel) for rel in self.documents if not rel.endswith("/" + PACKAGE_FILE))
+
+    def lay_out_packages(self, work: Path) -> Path:
+        """`work/packages/`: one `<package>/datapackage.json` per descriptor; return the directory.
+
+        The descriptor, Frictionless and code-list checks read only `*/datapackage.json`,
+        so a Protocol's per-table `<name>.datapackage.json` is laid out as package
+        `<name>`, as `check_before_publish.py` lays out a build. Every descriptor is
+        there, so a foreign key resolves against the whole lake and Frictionless holds the
+        whole rejections file. A relative resource path is linked beside the copy, so it
+        reads the same file; the lake's own paths are URLs.
+        """
+        packages = work / "packages"
+        if packages.exists():
+            shutil.rmtree(packages)
+        self.by_package = {}
+        for rel in self.documents:
+            name = package_name(rel)
+            if name in self.by_package:
+                raise Unrunnable(f"{rel} is checked as package {name!r}, and {self.by_package[name]} is already that package")
+            self.by_package[name] = rel
+        for name, rel in self.by_package.items():
+            source = self.datasets / rel
+            folder = packages / name
+            folder.mkdir(parents=True)
+            shutil.copyfile(source, folder / PACKAGE_FILE)
+            for resource in self.documents[rel].get("resources") or []:
+                raw = resource.get("path") if isinstance(resource, dict) else None
+                if not isinstance(raw, str) or not raw or "://" in raw or Path(raw).is_absolute():
+                    continue
+                target = source.parent / raw
+                link = folder / raw
+                if target.exists() and not link.exists():
+                    link.parent.mkdir(parents=True, exist_ok=True)
+                    link.symlink_to(target.resolve())
+        self.packages = packages
+        return packages
+
+    def subject_for_package(self, name: str) -> Subject | None:
+        """The subject a package in the laid-out view names."""
+        rel = self.by_package.get(name)
+        return Subject(rel.split("/", 1)[0], rel) if rel else None
+
+    def subject_for_checked_path(self, path: str) -> Subject | None:
+        """`subject_for_path`, for a path in the tree or in the laid-out package view."""
+        if self.packages is not None:
+            try:
+                name = Path(path).resolve().relative_to(self.packages.resolve()).parts[0]
+            except (ValueError, IndexError):
+                name = None
+            if name is not None:
+                return self.subject_for_package(name)
+        return self.subject_for_path(path)
+
+
+PACKAGE_FILE = "datapackage.json"
+PER_TABLE_SUFFIX = ".datapackage.json"
+
+
+def package_name(rel: str) -> str:
+    """The package a descriptor is checked as: its Protocol's slug, or a per-table file's own name."""
+    slug, filename = rel.split("/", 1)
+    return slug if filename == PACKAGE_FILE else filename.removesuffix(PER_TABLE_SUFFIX)
 
 
 def protocol_tables(repo: Path) -> dict[str, str]:
@@ -399,8 +480,52 @@ def check_descriptors(tree: Tree, repo: Path, work: Path, links: dict[str, str])
             return Finding("descriptors", where, [subject], ["datasets/licence-notices.json"])
         return Finding("descriptors", where, [subject], lake_only=True)
 
-    found = each("descriptors", [*report.get("violations", []), *report.get("pending", [])], convert)
-    return ran, crashed(ran, found)
+    found = crashed(ran, each("descriptors", [*report.get("violations", []), *report.get("pending", [])], convert))
+    names = tree.per_table()
+    if not names:
+        return ran, found
+    per_table_ran, per_table_found = check_per_table_descriptors(tree, work, names)
+    log = f"{ran.log}\n\n===== descriptors, per-table (exit {per_table_ran.status})\n{per_table_ran.log}"
+    return Ran("descriptors", max(ran.status, per_table_ran.status), log), [*found, *per_table_found]
+
+
+def check_per_table_descriptors(tree: Tree, work: Path, names: list[str]) -> tuple[Ran, list[Finding]]:
+    """Rules 1 to 7 and the licence rule on each per-table descriptor, read as a package of its own.
+
+    The run above reads only `*/datapackage.json` for those rules, so this one reads the
+    package view with `--only` each per-table package. The catalogue and the licence
+    notice rule already read the per-table descriptors in the run above, so the
+    catalogue is skipped here and a notice finding is left to that run.
+    """
+    packages = packages_view(tree, work)
+    out = work / "descriptors_per_table.json"
+    ran = run(
+        "descriptors",
+        [
+            str(SCRIPTS / "check_descriptors.py"),
+            "--datasets-dir", str(packages),
+            *(arg for name in names for arg in ("--only", name)),
+            "--require-self-description",
+            "--no-catalogue",
+            "--notice-table", str(tree.datasets / "licence-notices.json"),
+            "--json", str(out),
+        ],
+    )
+    report = read_json(out)
+
+    def convert(item: dict[str, Any]) -> Finding | None:
+        if str(item["rule"]).startswith("licence.notice"):
+            return None
+        subject = tree.subject_for_checked_path(item["package"])
+        where = f"{subject.descriptor if subject else item['package']} :: {item['resource']}: {item['rule']}: {item['detail']}"
+        return Finding("descriptors", where, [subject] if subject else [], lake_only=True)
+
+    return ran, crashed(ran, each("descriptors", [*report.get("violations", []), *report.get("pending", [])], convert))
+
+
+def packages_view(tree: Tree, work: Path) -> Path:
+    """The laid-out package view (`Tree.lay_out_packages`), made once per run."""
+    return tree.packages if tree.packages is not None else tree.lay_out_packages(work)
 
 
 PUBLIC_MANIFEST = "https://openlake.meridian.online/manifest.json"
@@ -599,25 +724,38 @@ def check_labels(tree: Tree, work: Path, repo: Path = ROOT) -> tuple[Ran, list[F
 
 
 def check_frictionless(tree: Tree, work: Path) -> tuple[Ran, list[Finding]]:
+    """Every descriptor, per-table ones included, through the reference implementation."""
     out = work / "frictionless.json"
-    ran = run("frictionless", [str(SCRIPTS / "check_frictionless.py"), "--datasets-dir", str(tree.datasets), "--json", str(out)])
+    packages = packages_view(tree, work)
+    ran = run(
+        "frictionless",
+        [
+            str(SCRIPTS / "check_frictionless.py"),
+            "--datasets-dir", str(packages),
+            "--rejections", str(tree.datasets / "frictionless-rejections.json"),
+            "--json", str(out),
+        ],
+    )
 
     def convert(fault: str) -> Finding:
-        slug = fault.split(":", 1)[0]
-        subject = tree.package(slug) if (tree.datasets / slug).is_dir() else None
+        subject = tree.subject_for_package(fault.split(":", 1)[0])
         return Finding("frictionless", fault, [subject] if subject else [], ["datasets/frictionless-rejections.json"])
 
     return ran, crashed(ran, each("frictionless", read_json(out).get("faults", []), convert))
 
 
 def check_code_list(tree: Tree, work: Path) -> tuple[Ran, list[Finding]]:
+    """Every descriptor declaring `x-meridian-code-list`, per-table ones included, against the contract."""
     out = work / "code_list.json"
-    ran = run("code_list", [str(SCRIPTS / "check_code_list.py"), "--datasets-dir", str(tree.datasets), "--json", str(out)])
+    packages = packages_view(tree, work)
+    ran = run("code_list", [str(SCRIPTS / "check_code_list.py"), "--datasets-dir", str(packages), "--json", str(out)])
     files = read_json(out).get("files") or {}
-    pairs = [{"slug": slug, "line": line} for slug, lines in files.items() for line in lines]
+    pairs = [{"package": name, "line": line} for name, lines in files.items() for line in lines]
 
     def convert(pair: dict[str, Any]) -> Finding:
-        return Finding("code_list", f"{pair['slug']}: {pair['line']}", [tree.package(pair["slug"])], lake_only=True)
+        subject = tree.subject_for_package(pair["package"])
+        where = subject.descriptor if subject else pair["package"]
+        return Finding("code_list", f"{where}: {pair['line']}", [subject] if subject else [], lake_only=True)
 
     return ran, crashed(ran, each("code_list", pairs, convert))
 

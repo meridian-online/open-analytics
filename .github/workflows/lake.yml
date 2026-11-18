@@ -11,14 +11,16 @@
 #     stamped in the object's footer, with the licence rule and foreign keys; the licence
 #     notice rule over every stored descriptor; and the README catalogue's row counts
 #     against the objects its rows link to. The six per-table SOC descriptors
-#     (`soc_2018/*.datapackage.json`, `soc_2020/*.datapackage.json`) get the catalogue and
-#     licence notice rules only, as before descriptors left the repository;
+#     (`soc_2018/*.datapackage.json`, `soc_2020/*.datapackage.json`) are held to the same
+#     rules, each read as a package of its own;
 #   - the engine pin (`check_engine_version.py`): each footer's `created_by` against the
 #     DuckDB the Run that published it pinned for its stamp steps, read from the lake's
 #     run record;
 #   - label agreement (`check_label_agreement.py --strict`), Frictionless
 #     (`check_frictionless.py`) and the code-list contract (`check_code_list.py`; exit 2,
-#     no code list found, is a crash and not a pass), each over `datasets/*/datapackage.json`;
+#     no code list found, is a crash and not a pass). Label agreement reads
+#     `datasets/*/datapackage.json`; the other two read every descriptor, per-table ones
+#     included;
 #   - every declared join (`crosswalk_join.py`), per package that declares `x-joins`;
 #   - the constraint ratchet: each stored descriptor still carries every constraint its
 #     committed overrides hold at HEAD;
