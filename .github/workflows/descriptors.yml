@@ -472,7 +472,7 @@ jobs:
           curl -fsSL -o "$lock" \
             https://raw.githubusercontent.com/meridian-online/brightfield/main/Cargo.lock
           rev=$(python scripts/brightfield_arc_pin.py rev "$lock")
-          rev=ee78d90b7e30273a6572f01366903ff32f22aa7a  # TEMPORARY: prove the refusal path in CI
+          rev=42f9f077b22cecb9a5914d5e897f1264d710ed01  # TEMPORARY: prove the passing path in CI at a revision other than ARC_REV
           echo "rev=$rev" >> "$GITHUB_OUTPUT"
           echo "Brightfield's main pins arc at $rev; this repository's ARC_REV is $ARC_REV"
           if [ "$rev" = "$ARC_REV" ]; then

@@ -9,6 +9,7 @@ dependency line there turns these red rather than the gate job at run time.
 
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
 import sys
@@ -19,8 +20,10 @@ from pathlib import Path
 SCRIPT = Path(__file__).with_name("brightfield_arc_pin.py")
 CRATE = Path(__file__).with_name("arc_manifest_load")
 
-A = "f5f3f071bd10c04a20aafb4619f637c61127760a"
-B = "d2ef25df67a81dcab3414c22cca2654e156ff734"
+# A is a revision the loader is not pinned to; B is read from the loader's own pin, so a
+# bump of ARC_REV does not need an edit here.
+B = re.search(r'^arc = .* rev = "([0-9a-f]{40})"', (CRATE / "Cargo.toml").read_text(), re.M).group(1)
+A = "f5f3f071bd10c04a20aafb4619f637c61127760a" if B != "f5f3f071bd10c04a20aafb4619f637c61127760a" else "0" * 40
 
 
 def lock_entry(name: str, rev: str) -> str:
@@ -90,7 +93,6 @@ class Retarget(unittest.TestCase):
 
     def test_the_real_manifest_is_moved_to_the_new_rev(self) -> None:
         before = self.toml.read_text()
-        self.assertIn(f'rev = "{B}"', before, "the loader's pin moved; update B here")
         result = run("retarget", str(self.toml), A)
         self.assertEqual(result.returncode, 0, result.stderr)
         after = self.toml.read_text()
