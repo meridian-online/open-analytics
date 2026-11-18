@@ -138,7 +138,7 @@
           "method": "Fellegi-Sunter probabilistic record linkage (Splink), frozen model, for the operating-company tail; official SEC/GLEIF registration for authoritative edges",
           "precision": "exact normalized-name matches auto-confirmed (~95% precision, spot-checked); name-only fuzzy matches surfaced as candidate, not confirmed",
           "status": "per-row (see the tier column)",
-          "tie_break": "ISSUED > LAPSED > RETIRED, then US jurisdiction"
+          "tie_break": "the same legal form, then ISSUED > LAPSED > RETIRED, then US jurisdiction, then the lower LEI"
         },
         "fields": [
           "lei"
