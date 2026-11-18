@@ -1,0 +1,9 @@
+{
+  "$comment": "Stands in for check_before_publish's report in the tests, whose descriptor finetype infers from the fixture rows and labels key_type a date, which the full table never gets. See tests.yaml.",
+  "slug": "edgar_gleif",
+  "packages": [
+    "edgar_gleif"
+  ],
+  "passed": null,
+  "checks": []
+}

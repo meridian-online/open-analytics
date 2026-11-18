@@ -6,7 +6,7 @@ orthogonal facets:
 
 | File | Facet | Answers |
 |---|---|---|
-| `arcform.yaml` (+ `models/`, `descriptor.overrides.json`, `scripts/test_ingest_lei.py`) | **Protocol** — how it's made | run `arc run` → produces the Dataset **and** its descriptor; the test runs the models against scratch sources and pins what they refuse |
+| `arcform.yaml` (+ `models/`, `descriptor.overrides.json`, `tests.yaml`, `scripts/test_ingest_lei.py`) | **Protocol** — how it's made | run `arc run` → produces the Dataset **and** its descriptor; `arc test` runs the Protocol on real rows cut down in `testdata/` and holds the LEI each filer gets; the self-test runs the models against scratch sources and pins what they refuse |
 | `build/datapackage.json` | **Descriptor** — what it is (built by `arc run`, not committed: the open lake holds the published copy) | schema, finetype labels, `x-joins`/evidence — **emitted** by the `describe` step (staged) and published by the stamp step, no longer hand-authored |
 | `scripts/crosswalk_join.py` (+ `test_crosswalk_join.py`) | **Proof** — that the join runs | executes every declared `x-joins` against the published objects and checks the coverage each one claims |
 | `../registry.json` (this dataset's entry) | **Address** — how it's found | stable `uid`, `library.edgar_lei` (alias `crosswalk.edgar_gleif`), manifest pointer |
@@ -82,6 +82,26 @@ What those steps do, in phases:
    frozen Fellegi-Sunter model in `models/edgar_gleif_model.json`, Splink's own settings
    JSON, and `resolved` picks one LEI per EDGAR row and sets its status. The model and
    both SQL halves live here, in the Protocol, not in the operator.
+
+   The name key is the only signal the model compares, and an exact-name confirmation
+   rests on it alone, so `models/splink_inputs.sql` writes it as DuckDB macros
+   (`name_key`, and `form_key` for the tie-break) with one comment per rule: a leading
+   THE is dropped (GLEIF writes THE BOEING COMPANY where EDGAR writes BOEING CO), as are
+   EDGAR's `/DE/`-style tags, every trailing legal form of a stack (CO LTD), and 株式会社;
+   accents and full-width letters fold; LP and LLC are kept, because a same-named LP or
+   LLC is usually a different entity from the listed corporation. A tie between GLEIF
+   entities sharing a name key goes first to the one with the same legal form, so WD 40
+   CO takes WD-40 Company over WD-40 COMPANY LIMITED, then to the better registration,
+   a US jurisdiction and the lower LEI. On the corpus of November 2026 the rules raised
+   confirmed edges for filers with a ticker from 5,077 to 5,701. Of the 228 confirmed
+   edges they changed, 100 moved to another confirmed LEI (THE MOSAIC COMPANY in place of
+   an entity named Mosaic), 113 fell to candidate, most with an LLC or LP on one side and
+   a corporation on the other, 8 became ambiguous and 7 left the crosswalk.
+   `scripts/measure_precision.sql` holds the matcher to GLEIF's own SEC registrations on
+   the filers they name: 98% of exact-name confirmations and 20% of fuzzy candidates are
+   the registered LEI. The crosswalk replaces those filers' name matches with the
+   registration, so the figure is the matcher's precision where the answer is known, not
+   a measurement of the published name-matched rows.
 5. **tier** — combine `authoritative` ∪ `confirmed` ∪ `candidate`; a deterministic
    edge always wins over a name match for the same key.
 6. **package** — enrich from the sources, stamp `as_of`, materialise the terminal edge
@@ -290,7 +310,7 @@ pair of objects. When `edgar` or `gleif` is republished and this crosswalk is no
 the referenced package declares a different `hash`, and the check reports the join
 as due a rebuild instead of failing it: the crosswalk is still true of the inputs it
 was built from, and re-measuring it against newer ones would only be satisfied by
-the four-hour resolve run. While the referenced package still declares the
+a full resolve run. While the referenced package still declares the
 recorded hash, the join is measured and a disagreement fails, as before. A
 descriptor written before `measuredAgainst` existed carries none, and is measured
 against what is served until its next build writes one.
@@ -316,5 +336,11 @@ against scratch packages.
   `check_before_publish` are `op: uv@1` steps running this repo's own Python — each
   pinned to its script's SHA-256 and to `duckdb==2.0.0`, with the interpreter pinned in the script's PEP 723 header, so
   neither needs a venv to exist or a global install), and `finetype` on `PATH` (the
-  describe operator shells out to it), with `FINETYPE_DUCKDB_EXT` at its DuckDB 2.0 extension; `arc run --param as_of=YYYY-MM-DD`. At full scale the `score_pairs` step is real compute (~100M candidate
-  pairs) — run it deliberately.
+  describe operator shells out to it), with `FINETYPE_DUCKDB_EXT` at its DuckDB 2.0 extension; `arc run --param as_of=YYYY-MM-DD`. At full scale the three resolve steps took 26 seconds on an M-series Mac in November 2026.
+- **Tests**: `arc test` from this folder runs `tests.yaml` against the fixtures in
+  `testdata/` (see `testdata/README.md`), with Splink scoring them for real: each
+  company GLEIF names with a leading The confirmed to its own LEI, the legal-form and
+  registration tie-breaks, an exact name GLEIF registers twice left ambiguous, a close
+  name left a candidate, pairs scored with GLEIF on the left, the name key case by
+  case, and the check before publish run for real. CI runs them in the
+  `protocol-tests` job.
