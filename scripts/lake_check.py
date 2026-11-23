@@ -815,9 +815,14 @@ def check_ratchet(tree: Tree, repo: Path) -> list[Finding]:
             continue  # no overrides committed for this table, so nothing is held by hand
         try:
             held = ratchet.held_by(ratchet.parse_json(shown.stdout, f"{sidecar} at HEAD"), sidecar)
+        except ratchet.CheckError as exc:
+            found.append(Finding("ratchet", f"{rel}: {exc}"))  # the sidecar, the repository alone
+            continue
+        try:
             fields = ratchet.fields_of(document, rel)
         except ratchet.CheckError as exc:
-            found.append(Finding("ratchet", f"{rel}: {exc}"))
+            # The lake's own stored descriptor cannot be read: the lake against itself.
+            found.append(Finding("ratchet", f"{rel}: {exc}", [Subject(slug, rel)], lake_only=True))
             continue
         refused, _ = ratchet.refusals(rel, None, fields, held)
         for item in refused:

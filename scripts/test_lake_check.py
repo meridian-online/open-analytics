@@ -628,6 +628,26 @@ class UnreadableItemTest(unittest.TestCase):
         self.assertEqual(len(lc.crashed(ran, found)), 2)
 
 
+class RatchetSortTest(unittest.TestCase):
+    def test_an_unreadable_stored_descriptor_is_drift_and_an_unreadable_sidecar_is_not(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            repo = scratch_repo(root)
+            sidecar = "datasets/widgets/descriptor.overrides.json"
+            commit(repo, JAN, {sidecar: '{"fields": {}}\n'})
+            tree_dir = write_tree(root, FEB, {"path": "x.parquet", "schema": {"fields": [{"type": "integer"}]}})
+            tree = lc.Tree(tree_dir / "datasets")
+            found = lc.check_ratchet(tree, repo)
+            self.assertEqual(len(found), 1)
+            self.assertIn("declares no name", found[0].detail)
+            self.assertEqual(lc.sort_finding(repo, tree, found[0]), lc.DRIFT)
+            commit(repo, MAR, {sidecar: '{"fields": ["code"]}\n'})
+            found = lc.check_ratchet(tree, repo)
+            self.assertEqual(len(found), 1)
+            self.assertIn("not an object", found[0].detail)
+            self.assertEqual(lc.sort_finding(repo, tree, found[0]), lc.MAIN)
+
+
 class IssueTextTest(unittest.TestCase):
     """The bodies of the alert issue and the weekly report issue."""
 

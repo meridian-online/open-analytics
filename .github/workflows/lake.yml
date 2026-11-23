@@ -159,7 +159,9 @@ jobs:
               await github.rest.issues.update({ owner, repo, issue_number: issue.number, state: "closed" });
             }
       # The drift report: where main and the lake disagree, rewritten each run, whether or
-      # not the run found drift. A run that never sorted its findings leaves it alone.
+      # not the run found drift. A run that never sorted its findings, or in which a check
+      # crashed and so reported none of its own, leaves it alone: it would drop what the
+      # crashed check would have reported, or close the issue on nothing.
       - name: update the weekly report issue
         if: always()
         uses: actions/github-script@v7
@@ -168,6 +170,7 @@ jobs:
             const fs = require("fs");
             if (!fs.existsSync("lake-check.json") || !fs.existsSync("lake-report.md")) return;
             const found = JSON.parse(fs.readFileSync("lake-check.json", "utf8"));
+            if (found.drift.some((f) => f.crash)) return;
             const count = found.main_disagrees.length + found.awaiting_publish.length;
             const { owner, repo } = context.repo;
             const label = "lake-report";
