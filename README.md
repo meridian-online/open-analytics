@@ -314,7 +314,7 @@ repository host is still reachable, because a blocked-host demonstration that
 quietly ran unblocked would pass forever and prove nothing. CI blackholes those
 hosts in `/etc/hosts` after checkout and runs it there.
 
-No pull-request job reads the lake. [`.github/workflows/descriptors.yml`](.github/workflows/descriptors.yml) runs every checker's self-test, `arc test`, the model tests and the README step lists on each pull request. The checks that read a descriptor against the lake run in two places: before each publish, in the Protocol's Run, and in [`.github/workflows/lake.yml`](.github/workflows/lake.yml), on every push to `main`, weekly and on demand, which also runs `verify` over every served object. The lake check fails when the lake contradicts itself, and reports as awaiting publish what `main` has merged and not yet published.
+No pull-request job reads the lake. [`.github/workflows/descriptors.yml`](.github/workflows/descriptors.yml) runs every checker's self-test, `arc test`, the model tests and the README step lists on each pull request. The checks that read a descriptor against the lake run in two places: before each publish, in the Protocol's Run, and in [`.github/workflows/lake.yml`](.github/workflows/lake.yml), weekly and on demand but never on a push, which also runs `verify` over every served object. The lake check fails when the lake contradicts itself, and opens an alert issue labelled `lake-drift`. Where `main` disagrees with the lake, such as a catalogue row count a republish moved, or has merged what is not yet published, it reports in a weekly issue labelled `lake-report` and fails nothing.
 
 ## Request a dataset
 

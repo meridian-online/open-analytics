@@ -73,17 +73,24 @@ class ClassifyTest(unittest.TestCase):
     def test_inputs_changed_after_the_publish_are_awaiting_publish(self) -> None:
         self.assertEqual(lc.classify("widgets", FEB, MAR), lc.AWAITING)
 
-    def test_inputs_unchanged_since_the_publish_are_drift(self) -> None:
-        self.assertEqual(lc.classify("widgets", FEB, JAN), lc.DRIFT)
+    def test_inputs_unchanged_since_the_publish_are_main_disagreeing(self) -> None:
+        self.assertEqual(lc.classify("widgets", FEB, JAN), lc.MAIN)
 
-    def test_a_finding_with_no_table_is_drift(self) -> None:
-        """A crash, or a repository-only disagreement: no publish can close it."""
+    def test_a_crash_is_drift_and_a_repository_only_finding_is_main_disagreeing(self) -> None:
+        """A crash leaves the lake unchecked, so it alarms; a finding about the repository alone does not."""
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             repo = scratch_repo(root)
             commit(repo, JAN, {"README.md": "x\n"})
             tree = lc.Tree(write_tree(root, FEB, {"path": "x.parquet"}) / "datasets")
-            self.assertEqual(lc.sort_finding(repo, tree, lc.Finding("labels", "exit 2")), lc.DRIFT)
+            self.assertEqual(lc.sort_finding(repo, tree, lc.Finding("labels", "exit 2", crash=True)), lc.DRIFT)
+            self.assertEqual(lc.sort_finding(repo, tree, lc.Finding("descriptors", "examples/demo: licence")), lc.MAIN)
+
+    def test_a_check_that_fails_without_a_finding_is_a_crash(self) -> None:
+        found = lc.crashed(lc.Ran("labels", 2, "Traceback"), [])
+        self.assertEqual(len(found), 1)
+        self.assertTrue(found[0].crash)
+        self.assertTrue(lc.each("labels", [{"unexpected": "shape"}], lambda item: lc.Finding("labels", item["key"]))[0].crash)
 
 
 class InputsTest(unittest.TestCase):
@@ -110,13 +117,13 @@ class InputsTest(unittest.TestCase):
     def test_a_catalogue_finding_ignores_the_protocol_directory(self) -> None:
         commit(self.repo, JAN, {"README.md": "| rows |\n"})
         commit(self.repo, MAR, {"datasets/widgets/arcform.yaml": "steps: []\n"})
-        self.assertEqual(self.sort(lc.Finding("descriptors", "catalogue.rows", [self.subject], ["README.md"])), lc.DRIFT)
+        self.assertEqual(self.sort(lc.Finding("descriptors", "catalogue.rows", [self.subject], ["README.md"])), lc.MAIN)
 
     def test_a_label_finding_reads_the_reasons_file_alone(self) -> None:
         reasons = ["datasets/label-agreement.json"]
         commit(self.repo, JAN, {"datasets/label-agreement.json": "{}\n"})
         commit(self.repo, MAR, {"datasets/widgets/README.md": "edited\n"})
-        self.assertEqual(self.sort(lc.Finding("labels", "no stated reason", [self.subject], reasons)), lc.DRIFT)
+        self.assertEqual(self.sort(lc.Finding("labels", "no stated reason", [self.subject], reasons)), lc.MAIN)
         commit(self.repo, MAR, {"datasets/label-agreement.json": '{"reasons": []}\n'})
         self.assertEqual(self.sort(lc.Finding("labels", "no stated reason", [self.subject], reasons)), lc.AWAITING)
 
@@ -124,7 +131,7 @@ class InputsTest(unittest.TestCase):
         sidecar = ["datasets/widgets/descriptor.overrides.json"]
         commit(self.repo, JAN, {sidecar[0]: "{}\n"})
         commit(self.repo, MAR, {"datasets/widgets/README.md": "edited\n"})
-        self.assertEqual(self.sort(lc.Finding("ratchet", "ignored", [self.subject], sidecar)), lc.DRIFT)
+        self.assertEqual(self.sort(lc.Finding("ratchet", "ignored", [self.subject], sidecar)), lc.MAIN)
         commit(self.repo, MAR, {sidecar[0]: '{"fields": {}}\n'})
         self.assertEqual(self.sort(lc.Finding("ratchet", "ignored", [self.subject], sidecar)), lc.AWAITING)
 
@@ -158,7 +165,10 @@ class EndToEndTest(unittest.TestCase):
             digest = "sha256:" + hashlib.sha256(self.BODY).hexdigest()
             tree = write_tree(self.root, FEB, {"path": server.url, "bytes": declared_bytes, "hash": digest})
             done = subprocess.run(
-                [sys.executable, str(SCRIPT), "--tree", str(tree), "--repo", str(self.repo), "--json", str(out), "--check", "verify"],
+                [
+                    sys.executable, str(SCRIPT), "--tree", str(tree), "--repo", str(self.repo), "--json", str(out), "--check", "verify",
+                    "--alert", str(self.root / "alert.md"), "--report", str(self.root / "report.md"),
+                ],
                 capture_output=True,
                 text=True,
                 check=False,
@@ -172,7 +182,11 @@ class EndToEndTest(unittest.TestCase):
         self.assertEqual(len(report[lc.DRIFT]), 1, report)
         self.assertEqual(report[lc.AWAITING], [])
         self.assertIn(f"declares {len(self.BODY) + 1:,} bytes", report[lc.DRIFT][0]["detail"])
-        self.assertIn("1 drift, 0 awaiting publish", done.stdout)
+        self.assertIn("1 drift, 0 main disagrees, 0 awaiting publish", done.stdout)
+        alert = (self.root / "alert.md").read_text(encoding="utf-8")
+        self.assertIn("Drift (1)", alert)
+        self.assertIn(f"declares {len(self.BODY) + 1:,} bytes", alert)
+        self.assertIn("Main disagrees with the lake (0)", (self.root / "report.md").read_text(encoding="utf-8"))
 
     def test_the_same_disagreement_after_a_commit_to_the_protocol_is_still_drift(self) -> None:
         """The served object contradicts the lake's own record; no commit on `main` can close that."""
@@ -337,7 +351,7 @@ class AdapterTest(unittest.TestCase):
         self.assertEqual(found[0].inputs, ["datasets/widgets/arcform.yaml"])
         self.assertEqual(notes, ["engine: widgets/datapackage.json is held to its Protocol's pin at HEAD, because the manifest names no run record for it"])
         commit(self.repo, JAN, {"datasets/widgets/arcform.yaml": self.STAMP.format("1.0.0")})
-        self.assertEqual(self.sorted_kinds(found), [lc.DRIFT])
+        self.assertEqual(self.sorted_kinds(found), [lc.MAIN])
         commit(self.repo, MAR, {"datasets/widgets/arcform.yaml": self.STAMP.format("9.9.9")})
         self.assertEqual(self.sorted_kinds(found), [lc.AWAITING])
 
@@ -394,11 +408,11 @@ class AdapterTest(unittest.TestCase):
         self.assertEqual(ran.status, 1, ran.log)
         self.assertEqual(len(found), 1, [f.detail for f in found])
         self.assertEqual(sorted(s.slug for s in found[0].subjects), ["alpha", "beta"])
-        self.assertEqual(self.sorted_kinds(found), [lc.DRIFT])
-        # An edit to the reasons file that names nothing of this difference leaves it drift.
+        self.assertEqual(self.sorted_kinds(found), [lc.MAIN])
+        # An edit to the reasons file that names nothing of this difference leaves main disagreeing.
         commit(self.repo, MAR, {"datasets/label-agreement.json": '{"reasons": []}\n'})
         ran, found = lc.check_labels(self.tree(), self.work, self.repo)
-        self.assertEqual(self.sorted_kinds(found), [lc.DRIFT])
+        self.assertEqual(self.sorted_kinds(found), [lc.MAIN])
         # Removing a reason for this field after the publish is a change on main awaiting it.
         entry = {"field": "code", "property": "x-finetype-label", "values": {"alpha.code": "a", "beta.code": "b"}, "reason": "r"}
         commit(self.repo, MAR, {"datasets/label-agreement.json": json.dumps({"reasons": [entry]}, indent=2) + "\n"})
@@ -412,7 +426,7 @@ class AdapterTest(unittest.TestCase):
         return text
 
     def test_a_label_finding_is_dated_by_its_own_reason_entry(self) -> None:
-        """An unrelated reason edited after the publish leaves a stale reason, and its open difference, drift."""
+        """An unrelated reason edited after the publish leaves a stale reason, and its open difference, main disagreeing."""
         self.labelled("alpha", "representation.text.word")
         self.labelled("beta", "representation.identifier.numeric_code")
         stale = {"field": "code", "property": "x-finetype-label", "values": {"alpha.code": "representation.text.word", "beta.code": "x"}, "reason": "Pinned to a value beta no longer declares."}
@@ -423,13 +437,13 @@ class AdapterTest(unittest.TestCase):
         self.assertEqual(sorted(f.detail.rsplit(": ", 1)[1] for f in found), ["a stated reason matches no difference", "a stated reason matches no difference", "no stated reason"])
         code = [f for f in found if "'code'" in f.detail]
         self.assertEqual(len(code), 2)
-        self.assertEqual(set(self.sorted_kinds(code)), {lc.DRIFT})
+        self.assertEqual(set(self.sorted_kinds(code)), {lc.MAIN})
 
         commit(self.repo, MAR, {"datasets/label-agreement.json": self.reasons_file([stale, {**other, "reason": "Reworded."}])})
         ran, found = lc.check_labels(self.tree(), self.work, self.repo)
         kinds = {f.detail: lc.sort_finding(self.repo, self.tree(), f) for f in found}
-        self.assertEqual(kinds["field 'code', x-finetype-label: a stated reason matches no difference"], lc.DRIFT)
-        self.assertEqual(kinds["field 'code', x-finetype-label: no stated reason"], lc.DRIFT)
+        self.assertEqual(kinds["field 'code', x-finetype-label: a stated reason matches no difference"], lc.MAIN)
+        self.assertEqual(kinds["field 'code', x-finetype-label: no stated reason"], lc.MAIN)
 
         moved = {**stale, "values": {"alpha.code": "representation.text.word", "beta.code": "y"}}
         commit(self.repo, APR, {"datasets/label-agreement.json": self.reasons_file([moved, {**other, "reason": "Reworded."}])})
@@ -460,7 +474,7 @@ class AdapterTest(unittest.TestCase):
         self.assertEqual(len(rows), 1, ran.log)
         return rows
 
-    def test_an_unrelated_readme_edit_after_the_publish_leaves_a_row_mismatch_drift(self) -> None:
+    def test_an_unrelated_readme_edit_after_the_publish_leaves_a_row_mismatch_main_disagreeing(self) -> None:
         parquet = self.package("widgets", [{"name": "n", "type": "integer"}], "SELECT 1 AS n")
         # The descriptor names the object by the address the row links to, as a published one does.
         descriptor = self.datasets / "widgets" / "datapackage.json"
@@ -474,13 +488,13 @@ class AdapterTest(unittest.TestCase):
         table = "| Dataset | Rows | Readable copy |\n|---|---|---|\n"
         row = f"| widgets | 2 | [w]({parquet}) |\n"  # the object holds 1 row
         commit(self.repo, JAN, {"README.md": "# Catalogue\n\n" + table + row})
-        self.assertEqual(self.sorted_kinds(self.catalogue_findings()), [lc.DRIFT])
+        self.assertEqual(self.sorted_kinds(self.catalogue_findings()), [lc.MAIN])
 
         # Prose added above the table after the publish: the row moves down, and is untouched.
         commit(self.repo, MAR, {"README.md": "# Catalogue\n\nA new paragraph.\n\nAnother.\n\n" + table + row})
         found = self.catalogue_findings()
         self.assertEqual(found[0].lines, [("README.md", 9, 9)])
-        self.assertEqual(self.sorted_kinds(found), [lc.DRIFT])
+        self.assertEqual(self.sorted_kinds(found), [lc.MAIN])
 
         # The row itself edited after the publish is main ahead of the lake.
         commit(self.repo, APR, {"README.md": "# Catalogue\n\nA new paragraph.\n\nAnother.\n\n" + table + row.replace("| 2 |", "| 3 |")})
@@ -498,7 +512,7 @@ class AdapterTest(unittest.TestCase):
         self.assertEqual(ran.status, 1, ran.log)
         self.assertTrue(found)
         self.assertEqual({s.slug for f in found for s in f.subjects}, {"widgets"})
-        self.assertEqual(set(self.sorted_kinds(found)), {lc.DRIFT})
+        self.assertEqual(set(self.sorted_kinds(found)), {lc.MAIN})
 
     def test_code_list(self) -> None:
         self.package("widgets", [{"name": "n", "type": "integer"}], "SELECT 1 AS n", **{"x-meridian-code-list": {"levels": ["one"]}})
@@ -582,7 +596,7 @@ class AdapterTest(unittest.TestCase):
         self.assertEqual(ran.status, 1, ran.log)
         self.assertTrue(found)
         self.assertEqual({(s.slug, s.descriptor) for f in found for s in f.subjects}, {("gadgets", "gadgets/gadget_parts.datapackage.json")})
-        self.assertEqual(set(self.sorted_kinds(found)), {lc.DRIFT})
+        self.assertEqual(set(self.sorted_kinds(found)), {lc.MAIN})
 
     def test_code_list_reads_a_per_table_descriptor(self) -> None:
         self.package("gadgets", [{"name": "n", "type": "integer"}], "SELECT 1 AS n", table="gadget_parts", **{"x-meridian-code-list": {"levels": ["one"]}})
@@ -612,6 +626,58 @@ class UnreadableItemTest(unittest.TestCase):
         self.assertIn("cannot read", found[1].detail)
         ran = lc.Ran("labels", 1, "")
         self.assertEqual(len(lc.crashed(ran, found)), 2)
+
+
+class RatchetSortTest(unittest.TestCase):
+    def test_an_unreadable_stored_descriptor_is_drift_and_an_unreadable_sidecar_is_not(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            repo = scratch_repo(root)
+            sidecar = "datasets/widgets/descriptor.overrides.json"
+            commit(repo, JAN, {sidecar: '{"fields": {}}\n'})
+            tree_dir = write_tree(root, FEB, {"path": "x.parquet", "schema": {"fields": [{"type": "integer"}]}})
+            tree = lc.Tree(tree_dir / "datasets")
+            found = lc.check_ratchet(tree, repo)
+            self.assertEqual(len(found), 1)
+            self.assertIn("declares no name", found[0].detail)
+            self.assertEqual(lc.sort_finding(repo, tree, found[0]), lc.DRIFT)
+            commit(repo, MAR, {sidecar: '{"fields": ["code"]}\n'})
+            found = lc.check_ratchet(tree, repo)
+            self.assertEqual(len(found), 1)
+            self.assertIn("not an object", found[0].detail)
+            self.assertEqual(lc.sort_finding(repo, tree, found[0]), lc.MAIN)
+
+
+class IssueTextTest(unittest.TestCase):
+    """The bodies of the alert issue and the weekly report issue."""
+
+    def catalogue(self) -> lc.Finding:
+        finding = lc.Finding("descriptors", "README.md line 12: catalogue.rows", [lc.Subject("naics", "naics/datapackage.json")], ["README.md"])
+        finding.kind = lc.MAIN
+        return finding
+
+    def test_the_report_names_the_catalogue_fix_only_when_a_row_count_disagrees(self) -> None:
+        with_row = lc.report_text([self.catalogue()], [])
+        self.assertIn("--write-catalogue", with_row)
+        self.assertIn("Main disagrees with the lake (1)", with_row)
+        self.assertIn("catalogue.rows", with_row)
+        label = lc.Finding("labels", "no stated reason", [lc.Subject("a", None)], ["datasets/label-agreement.json"])
+        self.assertNotIn("--write-catalogue", lc.report_text([label], []))
+
+    def test_the_alert_lists_drift_and_not_the_report(self) -> None:
+        drift = lc.Finding("verify", "widgets :: widgets: declares 1 bytes", [lc.Subject("widgets", "widgets/datapackage.json")], lake_only=True)
+        alert = lc.alert_text([drift])
+        self.assertIn("Drift (1)", alert)
+        self.assertIn("declares 1 bytes", alert)
+        self.assertNotIn("Main disagrees", alert)
+
+    def test_a_body_too_long_for_an_issue_is_cut_and_says_so(self) -> None:
+        many = [lc.Finding("labels", "x" * 1000, [lc.Subject("a", None)], ["r"]) for _ in range(100)]
+        body = lc.report_text(many, [])
+        self.assertLessEqual(len(body), lc.ISSUE_LIMIT + 200)
+        self.assertIn("Cut to fit an issue", body)
+        self.assertEqual(body.count("```") % 2, 0, "a cut inside a code block closes it")
+        self.assertEqual(lc.capped("short\n"), "short\n")
 
 
 class WorkflowPinsTest(unittest.TestCase):

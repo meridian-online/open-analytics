@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Hold what the open lake stores to itself and to `main`, and sort what disagrees.
 
-The lake workflow runs this on a push to `main`, weekly, and on demand, over a tree that
+The lake workflow runs this weekly and on demand, never on a push, over a tree that
 `emit_descriptor.py --all --tree DIR --bypass-edge` laid out: `DIR/datasets/` is the
 repository's `datasets/` with every published table's descriptor written in from the lake.
 It runs the checks that read the lake over that tree:
@@ -31,7 +31,7 @@ finding about a package is attributed to the descriptor it was laid out from. Tw
 descriptors that would be one package stop the run (exit 2). Label agreement reads
 `datasets/` alone.
 
-and sorts every finding into one of two kinds.
+and sorts every finding into one of three kinds. Only drift fails the run.
 
   drift             the lake contradicts itself, whatever `main` did since: a served
                     object whose bytes or hash differ from its stored descriptor, a
@@ -39,12 +39,19 @@ and sorts every finding into one of two kinds.
                     copy stamped in its footer, a footer written by an engine other than
                     the one its Protocol pinned when the table was published, a code list
                     that breaks the contract, a declared join that fails. Also a check
-                    that crashed, and a finding about `examples/`. The run fails.
+                    that crashed or reported what this script cannot read, since then
+                    nothing says the lake is sound. A reader can see each of these, so
+                    the run fails and the workflow raises an alert.
   awaiting_publish  a finding that compares the lake with a repository input, when that
                     input changed in git after the table's `created`, or a table that is
-                    not published yet. Reported; the run stays green. This is the
-                    expected gap between a merge and its publish. The same finding with
-                    the input unchanged since the publish is drift.
+                    not published yet: the expected gap between a merge and its publish.
+                    Reported; the run stays green.
+  main_disagrees    the same comparison with the input unchanged since the publish, such
+                    as a README row count a republish moved past its rounding, and a
+                    finding about the repository alone (`examples/`, an unreadable
+                    sidecar). `main` is behind the lake, or wrong on its own; a publish
+                    did not cause it to be wrong to a reader of the lake. Reported in the
+                    weekly report and fixed in a batch; the run stays green.
 
 The repository inputs, each finding to its own:
 
@@ -70,7 +77,7 @@ such edit turn a real mismatch into "awaiting publish":
                     `datasets/label-agreement.json`). An open difference is dated by
                     the entries for its grouping and property, and by any commit whose
                     added or removed lines name its key, which is a reason's removal.
-                    A difference no commit has reasoned about is dated never: drift.
+                    A difference no commit has reasoned about is dated never: main disagrees.
 
 Line dating reads HEAD's lines, so a checkout whose README.md or reasons file differs
 from HEAD, or a range git cannot follow, is dated by the whole file instead. The engine pin a table is held to is the one its stamp steps resolved in the
@@ -81,9 +88,14 @@ instead, and a mismatch is sorted by when that file changed; the step summary na
 each such table in its notes.
 
     lake_check.py --tree DIR --repo . --json FILE [--manifest URL] [--check NAME ...]
+                  [--alert FILE] [--report FILE]
 
-Exit codes: 0 no drift (awaiting-publish findings may be listed); 1 drift; 2 this
-script could not run (no tree, no git history).
+`--alert` writes the drift as Markdown, the body of the alert issue the workflow opens
+when the run fails; `--report` writes the other two kinds, the body of the weekly report
+issue. Each is written whether or not it has anything in it.
+
+Exit codes: 0 no drift (the other two kinds may be listed); 1 drift; 2 this script
+could not run (no tree, no git history).
 """
 
 from __future__ import annotations
@@ -114,7 +126,8 @@ EXIT_ERROR = 2
 CHECKS = ("descriptors", "engine", "labels", "frictionless", "code_list", "joins", "ratchet", "verify")
 AWAITING = "awaiting_publish"
 DRIFT = "drift"
-Kind = Literal["awaiting_publish", "drift"]
+MAIN = "main_disagrees"
+Kind = Literal["awaiting_publish", "drift", "main_disagrees"]
 
 
 class Unrunnable(Exception):
@@ -122,10 +135,13 @@ class Unrunnable(Exception):
 
 
 def classify(slug: str | None, published_at: datetime | None, last_change_at: datetime) -> Kind:
-    """`awaiting_publish` when the table is not published, or its inputs changed after `published_at`."""
+    """`awaiting_publish` when the table is not published, or its inputs changed after `published_at`.
+
+    Otherwise `main_disagrees`: the input was as it is now when the table was published.
+    """
     if slug is None or published_at is None:
         return AWAITING
-    return AWAITING if last_change_at > published_at else DRIFT
+    return AWAITING if last_change_at > published_at else MAIN
 
 
 def parse_time(text: str | None) -> datetime | None:
@@ -245,6 +261,7 @@ class Finding:
     subjects: list[Subject] = field(default_factory=list)
     inputs: list[str] = field(default_factory=list)  # repository paths beyond datasets/<slug>/
     lake_only: bool = False  # the lake against itself: drift whatever git says
+    crash: bool = False  # a check that failed without a finding, or one this script cannot read: drift
     # When either is set, the finding is dated by these instead of by `inputs` whole:
     lines: list[tuple[str, int, int]] = field(default_factory=list)  # (path, first, last) for `git log -L`
     mentions: list[tuple[str, str]] = field(default_factory=list)  # (path, extended regex) for `git log -G`
@@ -256,14 +273,17 @@ class Finding:
 def sort_finding(repo: Path, tree: "Tree", finding: Finding) -> Kind:
     """Classify `finding`, recording the times it was judged on.
 
-    The lake against itself is drift. So is a finding with no table: a crash, or a
-    disagreement about the repository alone, which no publish can close. A finding that
-    compares the lake with repository inputs is sorted by `classify`, and one about
-    several tables is awaiting a publish when any one of them is.
+    The lake against itself is drift, and so is a crash. A finding with no table is a
+    disagreement about the repository alone, which no publish can close: `main`
+    disagrees. A finding that compares the lake with repository inputs is sorted by
+    `classify`, and one about several tables is awaiting a publish when any one of them is.
     """
-    if finding.lake_only or not finding.subjects:
+    if finding.lake_only or finding.crash:
         finding.kind = DRIFT
         return DRIFT
+    if not finding.subjects:
+        finding.kind = MAIN
+        return MAIN
     kinds = []
     for subject in finding.subjects:
         published = tree.created(subject.descriptor)
@@ -273,7 +293,7 @@ def sort_finding(repo: Path, tree: "Tree", finding: Finding) -> Kind:
         finding.last_change_at = changed.isoformat() if changed is not NEVER else None
         if kinds[-1] == AWAITING:
             break
-    finding.kind = AWAITING if AWAITING in kinds else DRIFT
+    finding.kind = AWAITING if AWAITING in kinds else MAIN
     return finding.kind
 
 
@@ -407,7 +427,7 @@ def crashed(ran: Ran, parsed: list[Finding]) -> list[Finding]:
     if ran.status == 0 or (ran.status == 1 and parsed):
         return parsed
     tail = "\n".join(ran.log.splitlines()[-5:])
-    return [*parsed, Finding(ran.check, f"exit {ran.status} with no finding this script can attribute:\n{tail}")]
+    return [*parsed, Finding(ran.check, f"exit {ran.status} with no finding this script can attribute:\n{tail}", crash=True)]
 
 
 def each(check: str, items: Any, convert: Any) -> list[Finding]:
@@ -422,7 +442,7 @@ def each(check: str, items: Any, convert: Any) -> list[Finding]:
             result = convert(item)
         except (KeyError, TypeError, ValueError, AttributeError, IndexError) as exc:
             text = json.dumps(item, ensure_ascii=False, default=str)
-            found.append(Finding(check, f"a reported item this script cannot read ({exc!r}): {text[:500]}"))
+            found.append(Finding(check, f"a reported item this script cannot read ({exc!r}): {text[:500]}", crash=True))
             continue
         if result is not None:
             found.append(result)
@@ -622,7 +642,7 @@ def check_engine(tree: Tree, work: Path, manifest_source: str) -> tuple[Ran, lis
         manifest = read_source(manifest_source)
     except (OSError, ValueError) as exc:
         return Ran("engine", EXIT_ERROR, f"cannot read the manifest {manifest_source}: {exc}"), [
-            Finding("engine", f"cannot read the manifest {manifest_source}: {exc}")
+            Finding("engine", f"cannot read the manifest {manifest_source}: {exc}", crash=True)
         ], []
     engine = work / "engine"
     laid: dict[str, tuple[Subject, Snapshot]] = {}
@@ -795,9 +815,14 @@ def check_ratchet(tree: Tree, repo: Path) -> list[Finding]:
             continue  # no overrides committed for this table, so nothing is held by hand
         try:
             held = ratchet.held_by(ratchet.parse_json(shown.stdout, f"{sidecar} at HEAD"), sidecar)
+        except ratchet.CheckError as exc:
+            found.append(Finding("ratchet", f"{rel}: {exc}"))  # the sidecar, the repository alone
+            continue
+        try:
             fields = ratchet.fields_of(document, rel)
         except ratchet.CheckError as exc:
-            found.append(Finding("ratchet", f"{rel}: {exc}"))
+            # The lake's own stored descriptor cannot be read: the lake against itself.
+            found.append(Finding("ratchet", f"{rel}: {exc}", [Subject(slug, rel)], lake_only=True))
             continue
         refused, _ = ratchet.refusals(rel, None, fields, held)
         for item in refused:
@@ -835,7 +860,45 @@ def check_verify(tree: Tree) -> list[Finding]:
 # ------------------------------------------------------------------ the report
 
 
-def summary(drift: list[Finding], awaiting: list[Finding], statuses: dict[str, Any], notes: list[str] | None = None) -> str:
+DRIFT_TITLE = "Drift ({n}): the lake contradicts itself, and the run fails"
+MAIN_TITLE = "Main disagrees with the lake ({n}): fixed on `main` in a batch, not failed on"
+AWAITING_TITLE = "Awaiting publish ({n}): merged and not yet published, not failed on"
+
+# What fixes a README row count that `main_disagrees`: the counts rewritten from the lake.
+CATALOGUE_FIX = (
+    "A README row count is rewritten from the lake's own count, not by hand:\n\n"
+    "```sh\n"
+    "python scripts/emit_descriptor.py --all --tree /tmp/oa-tree --bypass-edge\n"
+    "python scripts/check_descriptors.py --datasets-dir /tmp/oa-tree/datasets --readme README.md --write-catalogue\n"
+    "```\n"
+)
+
+
+def section(title: str, items: list[Finding]) -> list[str]:
+    lines = ["", f"#### {title.format(n=len(items))}", ""]
+    if not items:
+        lines.append("None.")
+    for item in items:
+        when = f" (published {item.published_at}, inputs last changed {item.last_change_at})" if item.inputs and item.subjects else ""
+        lines.append(f"- **{item.check}**{when}")
+        lines.append("")
+        lines.append("  ```")
+        lines.extend(f"  {line}" for line in item.detail.splitlines())
+        lines.append("  ```")
+    return lines
+
+
+def is_catalogue(finding: Finding) -> bool:
+    return finding.check == "descriptors" and "README.md" in finding.inputs
+
+
+def summary(
+    drift: list[Finding],
+    awaiting: list[Finding],
+    statuses: dict[str, Any],
+    notes: list[str] | None = None,
+    main_disagrees: list[Finding] | None = None,
+) -> str:
     lines = ["### Lake check", ""]
     lines.append("| check | exit |")
     lines.append("|---|---|")
@@ -843,18 +906,51 @@ def summary(drift: list[Finding], awaiting: list[Finding], statuses: dict[str, A
     if notes:
         lines += ["", f"#### Notes ({len(notes)}) — read these, they are not findings", ""]
         lines.extend(f"- {note}" for note in notes)
-    for title, items in ((f"Drift ({len(drift)}) — the run fails", drift), (f"Awaiting publish ({len(awaiting)}) — reported, not failed on", awaiting)):
-        lines += ["", f"#### {title}", ""]
-        if not items:
-            lines.append("None.")
-        for item in items:
-            when = f" (published {item.published_at}, inputs last changed {item.last_change_at})" if item.inputs and item.subjects else ""
-            lines.append(f"- **{item.check}**{when}")
-            lines.append("")
-            lines.append("  ```")
-            lines.extend(f"  {line}" for line in item.detail.splitlines())
-            lines.append("  ```")
+    lines += section(DRIFT_TITLE, drift)
+    lines += section(MAIN_TITLE, main_disagrees or [])
+    lines += section(AWAITING_TITLE, awaiting)
     return "\n".join(lines) + "\n"
+
+
+# GitHub refuses an issue body over 65,536 characters; the workflow adds the run's link.
+ISSUE_LIMIT = 60_000
+
+
+def capped(text: str) -> str:
+    """`text`, cut to fit an issue body, saying so: the full list is in the run's step summary."""
+    if len(text) <= ISSUE_LIMIT:
+        return text
+    cut = text[:ISSUE_LIMIT].rsplit("\n", 1)[0]
+    if cut.count("```") % 2:
+        cut += "\n  ```"
+    return cut + "\n\n(Cut to fit an issue. Every finding is in the run's step summary and its `lake-check` artifact.)\n"
+
+
+def alert_text(drift: list[Finding]) -> str:
+    """The alert issue's body: what a reader of the lake can see is wrong."""
+    lines = [
+        "The weekly lake check found the open lake contradicting itself. A reader of the lake can see each "
+        "finding below: a served file that is not the one its descriptor declares, a descriptor that disagrees "
+        "with its own bytes or footer, a footer from the wrong engine, a broken code list or join, or a check "
+        "that could not run. Fix the lake, usually by republishing the table, then run `gh workflow run lake.yml`; "
+        "a green run closes this issue.",
+    ]
+    lines += section(DRIFT_TITLE, drift)
+    return capped("\n".join(lines) + "\n")
+
+
+def report_text(main_disagrees: list[Finding], awaiting: list[Finding]) -> str:
+    """The weekly report issue's body: where `main` and the lake differ, for a batch fix."""
+    lines = [
+        "Where `main` and the open lake disagree, as of the latest weekly lake check. None of these fails a run "
+        "or blocks a merge: each is fixed on `main` in a batch, or closed by the publish it waits for. "
+        "This issue is rewritten by each run and closed by a run that finds none.",
+    ]
+    if any(is_catalogue(f) for f in main_disagrees):
+        lines += ["", CATALOGUE_FIX.rstrip("\n")]
+    lines += section(MAIN_TITLE, main_disagrees)
+    lines += section(AWAITING_TITLE, awaiting)
+    return capped("\n".join(lines) + "\n")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -864,6 +960,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--json", type=Path, help="write every finding, sorted, as JSON")
     ap.add_argument("--manifest", default=PUBLIC_MANIFEST, help="the lake's manifest.json, a URL or a path, for each table's run record")
     ap.add_argument("--check", action="append", choices=CHECKS, help="run only this check (repeatable; default every one)")
+    ap.add_argument("--alert", type=Path, help="write the drift as Markdown, the alert issue's body")
+    ap.add_argument("--report", type=Path, help="write the other findings as Markdown, the weekly report issue's body")
     args = ap.parse_args(argv)
     wanted = args.check or list(CHECKS)
     repo = args.repo.resolve()
@@ -924,7 +1022,8 @@ def main(argv: list[str] | None = None) -> int:
 
     drift = [f for f in findings if f.kind == DRIFT]
     awaiting = [f for f in findings if f.kind == AWAITING]
-    text = summary(drift, awaiting, statuses, notes)
+    behind = [f for f in findings if f.kind == MAIN]
+    text = summary(drift, awaiting, statuses, notes, behind)
     print("\n" + text)
     if os.environ.get("GITHUB_STEP_SUMMARY"):
         with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as handle:
@@ -932,14 +1031,24 @@ def main(argv: list[str] | None = None) -> int:
     if args.json:
         args.json.write_text(
             json.dumps(
-                {"checks": statuses, DRIFT: [asdict(f) for f in drift], AWAITING: [asdict(f) for f in awaiting], "notes": notes},
+                {
+                    "checks": statuses,
+                    DRIFT: [asdict(f) for f in drift],
+                    MAIN: [asdict(f) for f in behind],
+                    AWAITING: [asdict(f) for f in awaiting],
+                    "notes": notes,
+                },
                 indent=2,
                 ensure_ascii=False,
             )
             + "\n",
             encoding="utf-8",
         )
-    print(f"lake check: {len(drift)} drift, {len(awaiting)} awaiting publish")
+    if args.alert:
+        args.alert.write_text(alert_text(drift), encoding="utf-8")
+    if args.report:
+        args.report.write_text(report_text(behind, awaiting), encoding="utf-8")
+    print(f"lake check: {len(drift)} drift, {len(behind)} main disagrees, {len(awaiting)} awaiting publish")
     return EXIT_DRIFT if drift else EXIT_OK
 
 

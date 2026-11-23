@@ -10,13 +10,14 @@
 #   refusal stops the Run before anything is written. A code-list Protocol also runs
 #   `check_code_list.py` on its built file.
 #
-#   After a publish, in `lake.yml` (push to `main`, weekly, on demand). It emits every
+#   After a publish, in `lake.yml` (weekly and on demand, never on a push). It emits every
 #   stored descriptor and runs over them the descriptor check with the README catalogue,
 #   the engine pin, label agreement, Frictionless, the code-list contract, the declared
 #   joins, the constraint ratchet against HEAD's overrides, and a full re-hash of every
-#   served object. The lake contradicting itself is drift and fails the run; a finding
-#   against a repository input `main` has changed since the publish is reported as
-#   awaiting publish. `scripts/lake_check.py` says how each is sorted.
+#   served object. The lake contradicting itself is drift: the run fails and opens an
+#   alert issue. A finding against a repository input is reported, in the weekly report
+#   issue, as main disagreeing with the lake or as awaiting publish, and fails nothing.
+#   `scripts/lake_check.py` says how each is sorted.
 #
 #   The ratchet's other half is refused in the Run by `check_before_publish.py`, where
 #   a descriptor is regenerated now: a built descriptor that lost a constraint the

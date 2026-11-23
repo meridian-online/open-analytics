@@ -1,6 +1,7 @@
 # Holds what the open lake stores to itself and to `main`. Pull requests never read the
-# lake (descriptors.yml says what they check instead); this workflow does, after a merge,
-# weekly, and on demand.
+# lake (descriptors.yml says what they check instead), and neither does a push to `main`:
+# this workflow runs weekly and on demand, so a merge or a republish never turns `main`'s
+# runs red. After a publish, start it with `gh workflow run lake.yml`.
 #
 # It emits every published table's descriptor from the lake into a tree laid out like
 # `datasets/` (`scripts/emit_descriptor.py --all --tree`), then `scripts/lake_check.py`
@@ -28,16 +29,29 @@
 #     declared `bytes` and `hash` (`publish_dataset.py verify`'s measurement). This is
 #     why the job takes minutes.
 #
-# Each finding is sorted. DRIFT: the lake contradicts itself (verify, a stored
-# descriptor against its bytes or its footer, the engine against the pin of the Run that published it, the
-# code-list contract, a declared join), whatever `main` did since; a check that crashes;
-# or a finding that compares the lake with a repository input that has not changed
-# since the publish. The run fails. AWAITING PUBLISH: a table not published yet, or a
-# finding against a repository input (a catalogue row, a licence notice, a label
-# agreement reason, a Frictionless rejection, an overrides sidecar) that changed in git
-# after the table's `created`, the expected gap between a merge and its publish.
-# Reported in the step summary; the run stays green. `lake_check.py`'s docstring names
-# each finding's input.
+# Each finding is sorted into one of three kinds.
+#
+#   DRIFT: the lake contradicts itself (verify, a stored descriptor against its bytes or
+#   its footer, the engine against the pin of the Run that published it, the code-list
+#   contract, a declared join), whatever `main` did since, or a check that crashed. A
+#   reader of the lake can see each, so the run fails, and the run opens an alert issue
+#   labelled `lake-drift` (or comments on the open one). A green run closes it.
+#
+#   MAIN DISAGREES: a finding against a repository input (a catalogue row, a licence
+#   notice, a label agreement reason, a Frictionless rejection, an overrides sidecar)
+#   that has not changed since the table's `created`, such as a README row count a
+#   republish moved past its rounding; or a finding about the repository alone. It is a
+#   drift report: the run stays green, and the findings go to the weekly report issue
+#   labelled `lake-report`, rewritten each run and closed by a run with nothing to
+#   report, to be fixed on `main` in a batch. A README row count is rewritten with
+#   `check_descriptors.py --write-catalogue`, which the report quotes.
+#
+#   AWAITING PUBLISH: the same comparison with the input changed in git after the
+#   table's `created`, or a table not published yet: the expected gap between a merge
+#   and its publish. Reported in the step summary and the weekly report; the run stays
+#   green.
+#
+# `lake_check.py`'s docstring names each finding's input.
 #
 # `description-needs-no-repository` is not here: it serves a scratch object from
 # loopback and reads no lake object, so it stays on pull requests (descriptors.yml).
@@ -54,14 +68,14 @@
 name: lake
 
 on:
-  push:
-    branches: [main]
   schedule:
     - cron: "17 6 * * 1"
   workflow_dispatch:
 
+# Read the repository; write issues only for the alert and the weekly report.
 permissions:
   contents: read
+  issues: write
 
 concurrency:
   group: lake-${{ github.ref }}
@@ -75,7 +89,7 @@ env:
 
 jobs:
   lake:
-    name: the lake agrees with itself and with main
+    name: the lake agrees with itself, and where main disagrees
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -96,6 +110,7 @@ jobs:
       - name: the lake against itself and against main
         run: |
           python scripts/lake_check.py --tree "$RUNNER_TEMP/tree" --repo . --json lake-check.json \
+            --alert lake-alert.md --report lake-report.md \
             --manifest "https://openlake.meridian.online/manifest.json?v=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
       - name: upload the findings
         if: always()
@@ -104,3 +119,81 @@ jobs:
           name: lake-check
           path: lake-check.json
           if-no-files-found: ignore
+      # A run that fails is the lake contradicting itself, or a check that could not run
+      # at all: open the alert issue, or comment on the one already open.
+      - name: open or update the alert issue
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require("fs");
+            const label = "lake-drift";
+            const run = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const sorted = fs.existsSync("lake-check.json") && fs.existsSync("lake-alert.md") && JSON.parse(fs.readFileSync("lake-check.json", "utf8")).drift.length > 0;
+            const found = sorted ? fs.readFileSync("lake-alert.md", "utf8") : "The lake check failed without sorting a finding as drift, so nothing says the lake is sound. The run's log says which step failed.\n";
+            const body = `${found}\nRun: ${run}\nCommit: ${context.sha}\n`;
+            const { owner, repo } = context.repo;
+            // An issue created with a label that does not exist yet may lose it, and the
+            // next run would then find no open issue to update: make the label first.
+            const ensure = async (name, color) => {
+              try { await github.rest.issues.getLabel({ owner, repo, name }); }
+              catch (e) { if (e.status !== 404) throw e; await github.rest.issues.createLabel({ owner, repo, name, color }); }
+            };
+            const open = await github.rest.issues.listForRepo({ owner, repo, state: "open", labels: label });
+            if (open.data.length) {
+              await github.rest.issues.createComment({ owner, repo, issue_number: open.data[0].number, body });
+            } else {
+              await ensure(label, "b60205");
+              await github.rest.issues.create({ owner, repo, title: "The open lake contradicts itself", body, labels: [label] });
+            }
+      - name: close the alert issue
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const run = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+            const open = await github.rest.issues.listForRepo({ owner, repo, state: "open", labels: "lake-drift" });
+            for (const issue of open.data) {
+              await github.rest.issues.createComment({ owner, repo, issue_number: issue.number, body: `The lake check is green again: ${run}` });
+              await github.rest.issues.update({ owner, repo, issue_number: issue.number, state: "closed" });
+            }
+      # The drift report: where main and the lake disagree, rewritten each run, whether or
+      # not the run found drift. A run that never sorted its findings, or in which a check
+      # crashed and so reported none of its own, leaves it alone: it would drop what the
+      # crashed check would have reported, or close the issue on nothing.
+      - name: update the weekly report issue
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require("fs");
+            if (!fs.existsSync("lake-check.json") || !fs.existsSync("lake-report.md")) return;
+            const found = JSON.parse(fs.readFileSync("lake-check.json", "utf8"));
+            if (found.drift.some((f) => f.crash)) return;
+            const count = found.main_disagrees.length + found.awaiting_publish.length;
+            const { owner, repo } = context.repo;
+            const label = "lake-report";
+            const run = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+            // An issue created with a label that does not exist yet may lose it, and the
+            // next run would then find no open issue to update: make the label first.
+            const ensure = async (name, color) => {
+              try { await github.rest.issues.getLabel({ owner, repo, name }); }
+              catch (e) { if (e.status !== 404) throw e; await github.rest.issues.createLabel({ owner, repo, name, color }); }
+            };
+            const open = await github.rest.issues.listForRepo({ owner, repo, state: "open", labels: label });
+            if (count === 0) {
+              for (const issue of open.data) {
+                await github.rest.issues.createComment({ owner, repo, issue_number: issue.number, body: `Nothing to report: ${run}` });
+                await github.rest.issues.update({ owner, repo, issue_number: issue.number, state: "closed" });
+              }
+              return;
+            }
+            const title = `Lake report: main disagrees with the lake ${found.main_disagrees.length}, awaiting publish ${found.awaiting_publish.length}`;
+            const body = `${fs.readFileSync("lake-report.md", "utf8")}\nRun: ${run}\nCommit: ${context.sha}\n`;
+            if (open.data.length) {
+              await github.rest.issues.update({ owner, repo, issue_number: open.data[0].number, title, body });
+            } else {
+              await ensure(label, "fbca04");
+              await github.rest.issues.create({ owner, repo, title, body, labels: [label] });
+            }
