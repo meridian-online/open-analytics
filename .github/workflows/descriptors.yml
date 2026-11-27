@@ -656,6 +656,23 @@ jobs:
       - name: the shipped models, against a scratch build directory
         run: python scripts/test_soc_2020_models.py
 
+  # The Natural Earth Protocol's SQL models, run over a small shapefile the test writes
+  # with DuckDB's spatial extension: each country's key (ISO_A3_EH, or ADM0_A3 where ISO
+  # gives none), the outlines as GeoJSON text, each name key resolved at its strongest
+  # source, a key two countries tie on dropped, and the load's and aliases' refusals.
+  naturalearth-models:
+    name: the Natural Earth models key every country and resolve every name
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: install duckdb
+        run: python -m pip install --disable-pip-version-check "duckdb==${DUCKDB_VERSION}"
+      - name: the shipped models, against a scratch build directory
+        run: python scripts/test_naturalearth_models.py
+
   # The title-index and crosswalk contracts the SOC Protocols run as SQL steps, each rule
   # tried against small in-memory tables: the passing case and one failing case per rule.
   contracts-sql:

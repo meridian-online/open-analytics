@@ -14,7 +14,8 @@
 -- iso_a2 takes ISO_A2_EH the same way, and is NULL where Natural Earth has no code.
 --
 -- The run fails on a missing or repeated key, an iso_a2 that is not two capitals, or a
--- shape that is empty or invalid.
+-- shape that is missing or empty. Shapes are not tested for validity: Natural Earth's
+-- 1:110m outlines are drawn as published.
 
 INSTALL spatial;
 LOAD spatial;

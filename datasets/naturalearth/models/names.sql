@@ -12,8 +12,9 @@
 -- "france" is France, though New Caledonia's SOVEREIGNT is France too, and "ao" is
 -- Angola's code, though it is also Austria's name in Vietnamese. A key two countries
 -- carry at the same best rank means either, and is dropped: country_names_dropped lists
--- each, and the step prints them. The run fails on an alias whose iso_a3 is not a
--- country here, or an alias repeated.
+-- each, and the step prints them. The run fails on an alias or iso_a3 left blank, an
+-- alias whose iso_a3 is not a country here, an alias without a reason, or an alias
+-- repeated.
 
 CREATE OR REPLACE TABLE ne_aliases AS
 WITH a AS (
@@ -23,6 +24,8 @@ WITH a AS (
 )
 SELECT
   CASE
+    WHEN coalesce(trim(a.alias), '') = '' OR coalesce(trim(a.iso_a3), '') = ''
+      THEN error('aliases.csv: a row has no alias or no iso_a3: ' || coalesce(a.alias, '') || ',' || coalesce(a.iso_a3, ''))
     WHEN a.iso_a3 NOT IN (SELECT iso_a3 FROM ne_countries)
       THEN error('aliases.csv: ' || a.alias || ' names ' || a.iso_a3 || ', which is not a Natural Earth country')
     WHEN coalesce(trim(a.reason), '') = ''
