@@ -1,0 +1,330 @@
+# The `naturalearth` Protocol — the reproducible *definition* of how Natural Earth's
+# countries at 1:110m are ingested, as two tables: the countries with their shapes
+# (naturalearth/countries_110m) and the spellings of their names and codes, each folded
+# to a key that means one country (naturalearth/country_names). `arc run` executes this
+# manifest; one Run → one version of each. See ./README.md.
+#
+# CONFIG ONLY. Every step is a first-class `sql:` model or a typed `op:` operator (the
+# arcform catalog). The fetch is http_fetch and the unzip archive_extract; the SQL reads
+# the shapefile with DuckDB's spatial extension and builds each table; the COPYs are
+# parquet_export; datapackage_describe emits each descriptor; finetype_validate gates
+# each table; and stamp_descriptor writes each published Parquet with its descriptor in
+# the footer. Operator code lives in the arcform repo, not here.
+#
+# ONE WRITER PER FILE. The exports and describes work on build/stage/; each table's
+# stamp step alone writes its published build/<table>.parquet and its
+# build/<table>.datapackage.json. Each table's descriptor inputs sit beside this file
+# under the same prefix (<table>.overrides.json, .nominations.finetype.json,
+# .schema.finetype.json).
+#
+# THE RELEASE. Natural Earth serves its current release at a fixed URL. load.sql reads
+# the release from the archive's VERSION.txt and fails the run unless it is 5.1.1, the
+# release both descriptors name, so a new release is taken by a person, who updates the
+# descriptors and that check together.
+#
+# PUBLISH. The last step, `publish` (ducklake_write), writes the two tables into the
+# shared open lake as one snapshot: the catalog, the data files and each table's
+# readable Parquet copy on R2 (public at https://openlake.meridian.online/). With all
+# three R2 variables set, from .env or the environment, EVERY `arc run` publishes into
+# the live lake; `arc run --publish` only makes a missing credential fail the run instead
+# of publishing into build/lake/. For local work keep .env absent and the variables unset.
+# Keep the credential outside this folder and export it for the publishing command only.
+# Readers need DuckDB 2.0 or later. It reads only what the stamp steps wrote, so it runs
+# after them.
+#
+# Produces: build/countries_110m.parquet   →  naturalearth/countries_110m
+#           build/country_names.parquet    →  naturalearth/country_names
+name: naturalearth
+engine: duckdb
+# Kept in step with ../soc_2018, which pins the DuckDB that arc links (2.0), the writer of its published Parquet.
+engine_version: ">=2.0"
+db: build/naturalearth.db
+# The R2 write credential, if a .env is present (see .env.example); the process environment also counts.
+dotenv: [.env]
+
+defaults:
+  retry:
+    max_attempts: 3
+    backoff_sec: 2.0
+
+steps:
+  # ── Fetch: Natural Earth's 1:110m admin-0 countries, as a zipped shapefile ──────
+  - name: fetch_countries
+    op: http_fetch@1
+    with:
+      url: https://naciscdn.org/naturalearth/110m/cultural/ne_110m_admin_0_countries.zip
+      out: build/naturalearth/ne_110m_admin_0_countries.zip
+      headers:
+        User-Agent: "Meridian Protocol (open-analytics; research@meridian.online)"
+
+  - name: extract_countries
+    op: archive_extract@1
+    with:
+      archive: build/naturalearth/ne_110m_admin_0_countries.zip
+      members:
+        - ne_110m_admin_0_countries.shp
+        - ne_110m_admin_0_countries.shx
+        - ne_110m_admin_0_countries.dbf
+        - ne_110m_admin_0_countries.prj
+        - ne_110m_admin_0_countries.cpg
+        - ne_110m_admin_0_countries.VERSION.txt
+      dest: build/naturalearth/countries
+
+  # ── Load: one row per country, keyed on iso_a3, and the release ─────────────────
+  # Fails the run on a release other than 5.1.1, a missing or repeated key, or an empty
+  # shape. See the model's header.
+  - name: load
+    sql: models/load.sql
+    depends_on:
+      - build/naturalearth/countries/ne_110m_admin_0_countries.shp
+      - build/naturalearth/countries/ne_110m_admin_0_countries.shx
+      - build/naturalearth/countries/ne_110m_admin_0_countries.dbf
+      - build/naturalearth/countries/ne_110m_admin_0_countries.prj
+      - build/naturalearth/countries/ne_110m_admin_0_countries.cpg
+      - build/naturalearth/countries/ne_110m_admin_0_countries.VERSION.txt
+    produces: [ne_release, ne_countries]
+
+  # ── Build: one model per table ──────────────────────────────────────────────────
+  # The countries with their shapes as GeoJSON text; the spellings of each country's
+  # names and codes, folded to keys, with aliases.csv's added (prints each key dropped
+  # because two countries carry it).
+  - name: countries
+    sql: models/countries.sql
+    produces: [countries_110m_out]
+
+  - name: names
+    sql: models/names.sql
+    depends_on: [aliases.csv]
+    produces: [ne_aliases, ne_spellings, ne_name_claims, country_names_dropped, country_names_out]
+
+  # ── Export: write the Parquet the later steps read ──────────────────────────────
+  # Each order_by is the table's primary key, a total order → reproducible bytes.
+  - name: export_countries_110m
+    op: parquet_export@1
+    with:
+      input: countries_110m_out
+      dest: build/stage/countries_110m.parquet
+      compression: zstd
+      order_by: "iso_a3"
+
+  - name: export_country_names
+    op: parquet_export@1
+    with:
+      input: country_names_out
+      dest: build/stage/country_names.parquet
+      compression: zstd
+      order_by: "name_key"
+
+  # ── Describe: EMIT each descriptor from its built Parquet ───────────────────────
+  - name: describe_countries_110m
+    op: datapackage_describe@1
+    with:
+      parquet: build/stage/countries_110m.parquet
+      overrides: countries_110m.overrides.json
+      nominations: countries_110m.nominations.finetype.json
+      out: build/stage/countries_110m.described.json
+
+  - name: describe_country_names
+    op: datapackage_describe@1
+    with:
+      parquet: build/stage/country_names.parquet
+      overrides: country_names.overrides.json
+      nominations: country_names.nominations.finetype.json
+      out: build/stage/country_names.described.json
+
+  # ── Validate: GATE each Parquet against its self-derived finetype contract ──────
+  - name: validate_countries_110m
+    op: finetype_validate@1
+    with:
+      parquet: build/stage/countries_110m.parquet
+      schema: countries_110m.schema.finetype.json
+
+  - name: validate_country_names
+    op: finetype_validate@1
+    with:
+      parquet: build/stage/country_names.parquet
+      schema: country_names.schema.finetype.json
+
+  # ── Lake: every published table's descriptor, as the open lake holds it ─────────
+  # The repository commits no descriptor: the lake's meta.descriptors and manifest.json
+  # hold the one stored copy, and emit_descriptor.py joins the two back into each
+  # table's full descriptor and writes them all to one bundle, table name to descriptor.
+  # It runs before the stamp, which keeps the lake's `created` when it writes the object
+  # the lake already serves; the check before publish compares this build against it. It
+  # reads the public catalogue and manifest, with no credential, and declares both as
+  # remote reads, so arc runs it on every run. One file, so `arc test` can fixture this
+  # step by name.
+  # `shasum -a 256 scripts/emit_descriptor.py` prints the digest.
+  - name: emit_descriptors
+    op: uv@1
+    with:
+      script: ../../scripts/emit_descriptor.py
+      sha256: 897e2c94fc2c51187f852f595d8bd61a04308ecac6a35a2f28e57c1183e2aaec
+      deps:
+        - duckdb==2.0.0
+        - pyyaml==6.0.3
+      args:
+        - --all
+        - --bundle
+        - build/lake_descriptors.json
+      # The tables it emits are the ones every Protocol's publish step names.
+      reads:
+        - https://openlake.meridian.online/catalog/open.ducklake
+        - https://openlake.meridian.online/manifest.json
+        - ../../datasets/*/arcform.yaml
+      produces:
+        - build/lake_descriptors.json
+
+  # ── Self-describe: write each published Parquet with its descriptor inside ──────
+  # Each object answers for itself from its URL alone; the embedded copy omits the
+  # resource `bytes` and `hash` and the package's `created`. They run after the steps
+  # that shape a table, because each embeds its FINISHED descriptor.
+  # `--carry-created-from` keeps the `created` the lake's copy states when the stamped
+  # file is the object the lake already serves; anything else, a first publish included,
+  # takes the one `describe` wrote.
+  - name: stamp_countries_110m
+    op: uv@1
+    with:
+      script: ../../scripts/stamp_descriptor.py
+      sha256: c36284fd200d76a6e5f3da9e3051a9dd8fe057df99603ed80e79043ef6dbb5a1
+      deps:
+        - duckdb==2.0.0
+      args:
+        - stamp
+        - --carry-created-from
+        - build/lake_descriptors.json
+        - --table
+        - naturalearth.countries_110m
+        - --descriptor
+        - build/stage/countries_110m.described.json
+        - --parquet
+        - build/stage/countries_110m.parquet
+        - --out
+        - build/countries_110m.parquet
+        - --out-descriptor
+        - build/countries_110m.datapackage.json
+      reads:
+        - build/lake_descriptors.json
+        - build/stage/countries_110m.described.json
+        - build/stage/countries_110m.parquet
+      produces:
+        - build/countries_110m.parquet
+        - build/countries_110m.datapackage.json
+
+  - name: stamp_country_names
+    op: uv@1
+    with:
+      script: ../../scripts/stamp_descriptor.py
+      sha256: c36284fd200d76a6e5f3da9e3051a9dd8fe057df99603ed80e79043ef6dbb5a1
+      deps:
+        - duckdb==2.0.0
+      args:
+        - stamp
+        - --carry-created-from
+        - build/lake_descriptors.json
+        - --table
+        - naturalearth.country_names
+        - --descriptor
+        - build/stage/country_names.described.json
+        - --parquet
+        - build/stage/country_names.parquet
+        - --out
+        - build/country_names.parquet
+        - --out-descriptor
+        - build/country_names.datapackage.json
+      reads:
+        - build/lake_descriptors.json
+        - build/stage/country_names.described.json
+        - build/stage/country_names.parquet
+      produces:
+        - build/country_names.parquet
+        - build/country_names.datapackage.json
+
+  # ── Check: the built tables against the lake, before they are published ────────
+  # check_before_publish.py runs four checks on this build. Three read the lake too:
+  # label agreement (strict, on what involves this table) across the descriptors in the
+  # bundle, the frictionless reference implementation over each built descriptor, and
+  # check_descriptors.py's rules read against the local Parquet. The fourth holds the
+  # build to the committed overrides. Label agreement reads
+  # only a Protocol's own datapackage.json, as the lake check does, so these
+  # two per-table descriptors are not yet compared by it. A failing check fails the run, so
+  # publish never runs. Each built descriptor keeps the path it is published
+  # at; the script reads the bytes from the local Parquet instead. It imports its
+  # sibling checks in-process and the digest pins only its own bytes, so those scripts
+  # are reads too: editing one makes this step stale.
+  # `shasum -a 256 scripts/check_before_publish.py` prints the digest.
+  - name: check_before_publish
+    op: uv@1
+    with:
+      script: ../../scripts/check_before_publish.py
+      sha256: 53bd12b2ba03901deea8a9d559764639557ca5b7539567d10abda6b0a62e99a5
+      deps:
+        - duckdb==2.0.0
+        - pyyaml==6.0.3
+        - frictionless==5.19.0
+      args:
+        - --datasets-dir
+        - ../../datasets
+        - --slug
+        - naturalearth
+        - --lake-bundle
+        - build/lake_descriptors.json
+        - --built
+        - build/countries_110m.datapackage.json=build/countries_110m.parquet
+        - --built
+        - build/country_names.datapackage.json=build/country_names.parquet
+        - --json
+        - build/check_before_publish.json
+      reads:
+        - build/lake_descriptors.json
+        - build/countries_110m.datapackage.json
+        - build/countries_110m.parquet
+        - build/country_names.datapackage.json
+        - build/country_names.parquet
+        - ../../datasets/*/arcform.yaml
+        - ../../datasets/label-agreement.json
+        - ../../datasets/frictionless-rejections.json
+        - ../../datasets/licence-notices.json
+        - ../../scripts/check_descriptors.py
+        - ../../scripts/check_constraint_ratchet.py
+        - ../../scripts/check_frictionless.py
+        - ../../scripts/check_label_agreement.py
+        - ../../scripts/emit_descriptor.py
+        - ../../scripts/stamp_descriptor.py
+      produces:
+        - build/check_before_publish.json
+
+  # ── Publish: the two tables into the open lake, one snapshot ───────────────────
+  # Runs on every `arc run`. With R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY and R2_ACCOUNT_ID
+  # all set, every run publishes live; otherwise into build/lake/, and `arc run --publish`
+  # fails instead.
+  - name: publish
+    op: ducklake_write@1
+    with:
+      public_base: https://openlake.meridian.online/
+      catalog: catalog/open.ducklake
+      data_path: lake/
+      runs: runs/
+      manifest: manifest.json
+      local_catalog: build/lake/open.ducklake
+      # on_descriptor_change: fail refuses the publish, writing nothing, when a field's FineType
+      # label moved against the descriptor the lake holds and the field is not nominated;
+      # every other difference is reported.
+      tables:
+        - table: naturalearth.countries_110m
+          from: build/countries_110m.parquet
+          descriptor: build/countries_110m.datapackage.json
+          on_descriptor_change: fail
+          readable_copy: naturalearth/countries_110m.parquet
+        - table: naturalearth.country_names
+          from: build/country_names.parquet
+          descriptor: build/country_names.datapackage.json
+          on_descriptor_change: fail
+          readable_copy: naturalearth/country_names.parquet
+      credential:
+        type: r2
+        bucket: meridian-open
+        env:
+          key_id: R2_ACCESS_KEY_ID
+          secret: R2_SECRET_ACCESS_KEY
+          account_id: R2_ACCOUNT_ID

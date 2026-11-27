@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "resources": {
+    "country_names": {
+      "name_key": {
+        "label": "representation.text.plain_text",
+        "why": "A spelling of a country's name or code, folded to lower case without accents (united kingdom, cote d'ivoire, gbr), in any of Natural Earth's languages. Inferred, finetype labels it a street suffix from its sample; it is text a reader folds a column to and joins on."
+      },
+      "iso_a3": {
+        "label": "geography.location.country_code",
+        "why": "The country a key means, as countries_110m's iso_a3, so it carries the same label. Inferred it is `unknown`."
+      }
+    }
+  }
+}

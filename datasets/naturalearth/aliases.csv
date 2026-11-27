@@ -1,0 +1,6 @@
+alias,iso_a3,reason
+usa,USA,"The common abbreviation for the United States of America, which Natural Earth's name fields do not carry; its ISO code is USA, so this alias and the code agree."
+us,USA,"The common two-letter abbreviation for the United States, which is also its ISO 3166-1 alpha-2 code."
+uk,GBR,"The common abbreviation for the United Kingdom. ISO assigns UK no country (the United Kingdom's alpha-2 code is GB), but UK is reserved for it and is how most data writes it."
+rsa,ZAF,"Republic of South Africa, the abbreviation South Africa uses in sport and on its vehicles; its ISO code is ZAF."
+eire,IRL,"Éire, Ireland's name in Irish and in its constitution, which Natural Earth's name fields do not carry. Accent-folded, as every key is."

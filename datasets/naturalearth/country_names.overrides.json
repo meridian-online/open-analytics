@@ -1,0 +1,65 @@
+{
+  "name": "country_names",
+  "title": "Country names and codes, folded to keys — Natural Earth",
+  "description": "Every spelling of a country's name or code that Natural Earth's 1:110m countries carry, folded to a key, with the country it means: one row per key, so a column of country names or codes in other data can be joined to naturalearth/countries_110m by folding it the same way, strip_accents(lower(trim(x))) in DuckDB, and joining on name_key. The spellings are each country's ISO codes, its names in English (NAME, NAME_LONG, FORMAL_EN, ADMIN, NAME_ALT), its names in the 26 languages Natural Earth gives (NAME_AR to NAME_ZHT), the country it belongs to (SOVEREIGNT), and a short list of common abbreviations Meridian adds, each with its reason (usa, us, uk, rsa, eire). A key resolves to the country that carries it from the strongest of those sources, in that order with Meridian's list first, so 'france' is France though New Caledonia belongs to France, and 'ao' is Angola's code though it is also Austria's name in Vietnamese; a key two countries carry from the same strongest source would mean either, and is left out. Natural Earth's data is in the public domain; Meridian prepared this table from Natural Earth's files, and Natural Earth does not endorse it. Made with Natural Earth.",
+  "homepage": "https://meridian.online/datasets/naturalearth/country_names",
+  "licenses": [
+    {
+      "name": "other-pd",
+      "title": "Public domain (Natural Earth)",
+      "path": "https://www.naturalearthdata.com/about/terms-of-use/"
+    }
+  ],
+  "sources": [
+    {
+      "title": "Admin 0 – Countries, 1:110m cultural vectors — Natural Earth",
+      "path": "https://www.naturalearthdata.com/downloads/110m-cultural-vectors/110m-admin-0-countries/"
+    },
+    {
+      "title": "ne_110m_admin_0_countries.zip, release 5.1.1 — Natural Earth",
+      "path": "https://naciscdn.org/naturalearth/110m/cultural/ne_110m_admin_0_countries.zip"
+    }
+  ],
+  "contributors": [
+    {
+      "path": "https://www.naturalearthdata.com/",
+      "roles": [
+        "author"
+      ],
+      "title": "Natural Earth (North American Cartographic Information Society)"
+    },
+    {
+      "path": "https://meridian.online",
+      "roles": [
+        "publisher",
+        "wrangler"
+      ],
+      "title": "Meridian"
+    }
+  ],
+  "resource": {
+    "name": "country_names",
+    "path": "https://openlake.meridian.online/naturalearth/country_names.parquet"
+  },
+  "primaryKey": [
+    "name_key"
+  ],
+  "fields": {
+    "name_key": {
+      "description": "A spelling of a country's name or code, lower-cased, trimmed and accent-stripped (united kingdom, cote d'ivoire, gb, gbr, deutschland). Fold a column the same way, strip_accents(lower(trim(x))), and join on this.",
+      "constraints": {
+        "required": true,
+        "minLength": 1
+      }
+    },
+    "iso_a3": {
+      "description": "The country the key means, as naturalearth/countries_110m's iso_a3.",
+      "constraints": {
+        "required": true,
+        "minLength": 3,
+        "maxLength": 3,
+        "pattern": "^[A-Z]{3}$"
+      }
+    }
+  }
+}
