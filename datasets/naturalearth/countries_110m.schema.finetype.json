@@ -1,0 +1,51 @@
+{
+  "$comment": "Self-derived finetype drift contract for naturalearth/countries_110m, checked by the in-engine finetype_validate@1 gate (the model-free `ft_validate` DuckDB table macro). ft_validate MELTS every column to VARCHAR, so this contract uses ONLY the string-surviving JSON-Schema keywords. ENFORCED: the `pattern` on iso_a3 and iso_a2, the shapes countries_110m.overrides.json publishes; the closed `enum` on continent; a pattern that holds geom to a GeoJSON Polygon or MultiPolygon object; and `minLength`/`maxLength` envelopes on the text. NOT ENFORCED, by design: NULLs (invisible to ft_validate) and object-level `required` (documentation only). Derived from build/stage/countries_110m.parquet on Natural Earth's release 5.1.1: a pass-through on today's rows, a fail-closed tripwire for future drift (a -99 left in a code, a geometry of another kind, a new continent).",
+  "$id": "finetype://countries_110m.parquet",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "naturalearth/countries_110m",
+  "type": "object",
+  "properties": {
+    "iso_a3": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 3,
+      "pattern": "^[A-Z]{3}$"
+    },
+    "iso_a2": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 2,
+      "pattern": "^[A-Z]{2}$"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "continent": {
+      "type": "string",
+      "enum": [
+        "Africa",
+        "Antarctica",
+        "Asia",
+        "Europe",
+        "North America",
+        "Oceania",
+        "Seven seas (open ocean)",
+        "South America"
+      ]
+    },
+    "geom": {
+      "type": "string",
+      "minLength": 32,
+      "maxLength": 200000,
+      "pattern": "^\\{\"type\":\"(Polygon|MultiPolygon)\",\"coordinates\":\\[.+\\]\\}$"
+    }
+  },
+  "required": [
+    "iso_a3",
+    "name",
+    "continent",
+    "geom"
+  ]
+}

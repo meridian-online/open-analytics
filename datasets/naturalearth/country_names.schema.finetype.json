@@ -1,0 +1,24 @@
+{
+  "$comment": "Self-derived finetype drift contract for naturalearth/country_names, checked by the in-engine finetype_validate@1 gate (the model-free `ft_validate` DuckDB table macro). ft_validate MELTS every column to VARCHAR, so this contract uses ONLY the string-surviving JSON-Schema keywords. ENFORCED: the `pattern` on iso_a3, the shape country_names.overrides.json publishes, and a `minLength`/`maxLength` envelope on name_key, loose since a key can be a name in any of Natural Earth's languages. NOT ENFORCED, by design: NULLs (invisible to ft_validate), uniqueness, and object-level `required` (documentation only). Derived from build/stage/country_names.parquet on Natural Earth's release 5.1.1.",
+  "$id": "finetype://country_names.parquet",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "naturalearth/country_names",
+  "type": "object",
+  "properties": {
+    "name_key": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "iso_a3": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 3,
+      "pattern": "^[A-Z]{3}$"
+    }
+  },
+  "required": [
+    "name_key",
+    "iso_a3"
+  ]
+}

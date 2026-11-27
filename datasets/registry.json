@@ -11,7 +11,8 @@
     "ons": "Datasets issued by the Office for National Statistics.",
     "library": "Meridian's curated set: core datasets with no issuing organisation, and data Meridian makes itself.",
     "source": "Held for the compatibility views at the old names `source.gleif`, `source.edgar` and `source.naics`.",
-    "crosswalk": "Held for the compatibility view at the old name `crosswalk.edgar_gleif`."
+    "crosswalk": "Held for the compatibility view at the old name `crosswalk.edgar_gleif`.",
+    "naturalearth": "Datasets issued by Natural Earth, the public-domain map dataset of the North American Cartographic Information Society."
   },
   "namespaces": {
     "gleif": {
@@ -75,6 +76,11 @@
       "kind": "held",
       "issuer": "Office for National Statistics",
       "claimed": false
+    },
+    "naturalearth": {
+      "kind": "held",
+      "issuer": "Natural Earth (North American Cartographic Information Society)",
+      "claimed": false
     }
   },
   "reserved": [
@@ -91,6 +97,7 @@
     "epoch_ai",
     "bls",
     "ons",
+    "naturalearth",
     "main",
     "source",
     "crosswalk",
@@ -291,6 +298,26 @@
       "manifest": "https://openlake.meridian.online/manifest.json",
       "doi": null,
       "protocol": "datasets/soc_2020/arcform.yaml"
+    },
+    {
+      "uid": "3345bee7-9f6c-4bdf-ab64-d27b1df78abc",
+      "schema": "naturalearth",
+      "name": "countries_110m",
+      "title": "Countries at 1:110m — Natural Earth",
+      "aliases": [],
+      "manifest": "https://openlake.meridian.online/manifest.json",
+      "doi": null,
+      "protocol": "datasets/naturalearth/arcform.yaml"
+    },
+    {
+      "uid": "3d96ed99-6db6-4f03-a86c-7e60f919d92a",
+      "schema": "naturalearth",
+      "name": "country_names",
+      "title": "Country names and codes, folded to keys — Natural Earth",
+      "aliases": [],
+      "manifest": "https://openlake.meridian.online/manifest.json",
+      "doi": null,
+      "protocol": "datasets/naturalearth/arcform.yaml"
     }
   ]
 }

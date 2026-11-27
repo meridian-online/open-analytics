@@ -1,0 +1,87 @@
+{
+  "name": "countries_110m",
+  "title": "Countries at 1:110m — Natural Earth",
+  "description": "Natural Earth's countries at 1:110m scale (admin_0_countries, release 5.1.1): one row per country or territory Natural Earth draws, 177 in all, with its ISO 3166-1 codes, its name, its continent and its outline as GeoJSON text, so a map can draw it with no spatial extension and no network. 1:110m is the small-scale generalisation meant for a world map; small islands and microstates are left out. Join a column of names to it through naturalearth/country_names. Where ISO's code is disputed or missing Natural Earth's ISO_A3 is -99, and the code is taken from its ISO_A3_EH, the code it gives a map to use (FRA for France, NOR for Norway); Northern Cyprus, Somaliland and Kosovo have no ISO code, and carry Natural Earth's own ADM0_A3 (CYN, SOL, KOS). Borders are Natural Earth's de facto view, not a statement by Meridian on any dispute. Natural Earth's data is in the public domain; Meridian prepared this table from Natural Earth's files, and Natural Earth does not endorse it. Made with Natural Earth.",
+  "homepage": "https://meridian.online/datasets/naturalearth/countries_110m",
+  "licenses": [
+    {
+      "name": "other-pd",
+      "title": "Public domain (Natural Earth)",
+      "path": "https://www.naturalearthdata.com/about/terms-of-use/"
+    }
+  ],
+  "sources": [
+    {
+      "title": "Admin 0 – Countries, 1:110m cultural vectors — Natural Earth",
+      "path": "https://www.naturalearthdata.com/downloads/110m-cultural-vectors/110m-admin-0-countries/"
+    },
+    {
+      "title": "ne_110m_admin_0_countries.zip, release 5.1.1 — Natural Earth",
+      "path": "https://naciscdn.org/naturalearth/110m/cultural/ne_110m_admin_0_countries.zip"
+    }
+  ],
+  "contributors": [
+    {
+      "path": "https://www.naturalearthdata.com/",
+      "roles": [
+        "author"
+      ],
+      "title": "Natural Earth (North American Cartographic Information Society)"
+    },
+    {
+      "path": "https://meridian.online",
+      "roles": [
+        "publisher",
+        "wrangler"
+      ],
+      "title": "Meridian"
+    }
+  ],
+  "resource": {
+    "name": "countries_110m",
+    "path": "https://openlake.meridian.online/naturalearth/countries_110m.parquet"
+  },
+  "primaryKey": [
+    "iso_a3"
+  ],
+  "fields": {
+    "iso_a3": {
+      "description": "The country's three-letter code, the key: ISO 3166-1 alpha-3 (GBR, FRA), from Natural Earth's ISO_A3_EH. The three countries ISO gives no code carry Natural Earth's ADM0_A3 instead: CYN for Northern Cyprus, SOL for Somaliland, KOS for Kosovo.",
+      "constraints": {
+        "required": true,
+        "minLength": 3,
+        "maxLength": 3,
+        "pattern": "^[A-Z]{3}$"
+      }
+    },
+    "iso_a2": {
+      "description": "The country's ISO 3166-1 alpha-2 code (GB, FR), from Natural Earth's ISO_A2_EH; XK for Kosovo, which ISO reserves for it. NULL for Northern Cyprus and Somaliland, which have none.",
+      "constraints": {
+        "minLength": 2,
+        "maxLength": 2,
+        "pattern": "^[A-Z]{2}$"
+      }
+    },
+    "name": {
+      "description": "Natural Earth's short name for the country, as a map labels it (United Kingdom, Côte d'Ivoire, Dem. Rep. Congo), with its accents."
+    },
+    "continent": {
+      "description": "Natural Earth's continent for the country. 'Seven seas (open ocean)' is the French Southern and Antarctic Lands.",
+      "constraints": {
+        "enum": [
+          "Africa",
+          "Antarctica",
+          "Asia",
+          "Europe",
+          "North America",
+          "Oceania",
+          "Seven seas (open ocean)",
+          "South America"
+        ]
+      }
+    },
+    "geom": {
+      "description": "The country's outline as GeoJSON text, a Polygon or MultiPolygon geometry object in longitude and latitude (WGS 84, EPSG:4326), as Natural Earth draws it at 1:110m. Read it as text, or with the spatial extension's ST_GeomFromGeoJSON."
+    }
+  }
+}

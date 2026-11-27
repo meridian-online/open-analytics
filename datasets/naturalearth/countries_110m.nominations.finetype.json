@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "resources": {
+    "countries_110m": {
+      "iso_a3": {
+        "label": "geography.location.country_code",
+        "why": "The country's ISO 3166-1 alpha-3 code (GBR, FRA), or Natural Earth's ADM0_A3 for the three countries ISO gives none. Inferred, finetype labels it an IATA airport code, since airport codes are also three capitals; it is a country code."
+      },
+      "iso_a2": {
+        "label": "geography.location.country_code",
+        "why": "The country's ISO 3166-1 alpha-2 code (GB, FR). Inferred it is already a country code; nominated so that a sample that reads otherwise on a later build does not move it."
+      }
+    }
+  }
+}
