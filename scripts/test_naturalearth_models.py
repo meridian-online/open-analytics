@@ -37,12 +37,14 @@ MODELS = [PROTOCOL / "models" / name for name in ("load.sql", "countries.sql", "
 LANGS = ["AR", "BN", "DE", "EN", "ES", "FA", "FR", "EL", "HE", "HI", "HU", "ID", "IT", "JA",
          "KO", "NL", "PL", "PT", "RU", "SV", "TR", "UK", "UR", "VI", "ZH", "ZHT"]
 COLUMNS = ["ADMIN", "NAME", "NAME_LONG", "FORMAL_EN", "NAME_ALT", "SOVEREIGNT", "ADM0_A3",
-           "ISO_A3_EH", "ISO_A2_EH", "CONTINENT"] + [f"NAME_{lang}" for lang in LANGS]
+           "ISO_A3", "ISO_A2", "ISO_A3_EH", "ISO_A2_EH", "CONTINENT"] + [f"NAME_{lang}" for lang in LANGS]
 
 
-def country(iso_a3_eh, adm0_a3, iso_a2_eh, name, sovereignt=None, continent="Europe", x=0, **names):
+def country(iso_a3_eh, adm0_a3, iso_a2_eh, name, sovereignt=None, continent="Europe", x=0, iso_a3=None, iso_a2=None, **names):
+    """A row as Natural Earth gives it. ISO_A3 and ISO_A2 default to the _EH codes; France's are -99."""
     row: dict[str, str | None] = {c: None for c in COLUMNS}
     row.update(ADMIN=name, NAME=name, NAME_LONG=name, SOVEREIGNT=sovereignt or name, ADM0_A3=adm0_a3,
+               ISO_A3=iso_a3 or iso_a3_eh, ISO_A2=iso_a2 or iso_a2_eh,
                ISO_A3_EH=iso_a3_eh, ISO_A2_EH=iso_a2_eh, CONTINENT=continent, NAME_EN=name)
     row.update(names)
     row["wkt"] = f"POLYGON(({x} 0, {x + 1} 0, {x + 1} 1, {x} 1, {x} 0))"
@@ -50,7 +52,7 @@ def country(iso_a3_eh, adm0_a3, iso_a2_eh, name, sovereignt=None, continent="Eur
 
 
 COUNTRIES = [
-    country("FRA", "FRA", "FR", "France", NAME_DE="Frankreich"),
+    country("FRA", "FRA", "FR", "France", iso_a3="-99", iso_a2="-99", NAME_DE="Frankreich"),
     country("NCL", "NCL", "NC", "New Caledonia", sovereignt="France", continent="Oceania", x=2),
     country("AGO", "AGO", "AO", "Angola", continent="Africa", x=4, NAME_ES="Gemelo"),
     country("AUT", "AUT", "AT", "Austria", x=6, NAME_VI="Áo", NAME_DE="Österreich"),
@@ -123,7 +125,8 @@ class ModelsTest(unittest.TestCase):
         self.assertEqual(len({k for k, _ in keys}), len(keys))
         self.assertNotIn(None, [k for k, _ in keys])
         found = dict(keys)
-        self.assertEqual(found["FRA"], "FR")
+        self.assertEqual(found["FRA"], "FR", "France's ISO_A3 and ISO_A2 are -99; the keys come from the _EH codes")
+        self.assertNotIn("-99", found)
         self.assertEqual(found["KOS"], "XK", "Kosovo has no ISO_A3, so it takes ADM0_A3 and keeps XK")
         self.assertIsNone(found["CYN"], "Northern Cyprus has no ISO_A2, so iso_a2 is NULL, not -99")
 

@@ -41,7 +41,9 @@ keyed AS (
   SELECT
     CASE WHEN ISO_A3_EH IS NOT NULL AND ISO_A3_EH <> '-99' THEN ISO_A3_EH ELSE ADM0_A3 END AS iso_a3,
     CASE WHEN ISO_A2_EH IS NOT NULL AND ISO_A2_EH <> '-99' THEN ISO_A2_EH END AS iso_a2,
-    *
+    -- Natural Earth's own ISO_A3 and ISO_A2 (-99 for France) are left out: DuckDB's
+    -- names ignore case, so they would stand beside the keys above under the same names.
+    * EXCLUDE (ISO_A3, ISO_A2)
   FROM raw
 ),
 checked AS (
